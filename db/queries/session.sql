@@ -80,4 +80,4 @@ WHERE s.cookie_hash = sqlc.arg(cookie_hash)
 SELECT id FROM sessions
 WHERE tenant_id = sqlc.arg(tenant_id)
   AND revoked_at IS NOT NULL
-  AND revoked_at > now() - sqlc.arg(revoked_window)::interval;
+  AND revoked_at > now() - sqlc.arg(revoked_window)::text::interval;

@@ -8,8 +8,6 @@ package gen
 import (
 	"context"
 	"time"
-
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const createSession = `-- name: CreateSession :one
@@ -253,12 +251,12 @@ const recentlyRevokedSessions = `-- name: RecentlyRevokedSessions :many
 SELECT id FROM sessions
 WHERE tenant_id = $1
   AND revoked_at IS NOT NULL
-  AND revoked_at > now() - $2::interval
+  AND revoked_at > now() - $2::text::interval
 `
 
 type RecentlyRevokedSessionsParams struct {
 	TenantID      string
-	RevokedWindow pgtype.Interval
+	RevokedWindow string
 }
 
 // Gate snapshot denylist. Bounded by the longest access-token TTL: a

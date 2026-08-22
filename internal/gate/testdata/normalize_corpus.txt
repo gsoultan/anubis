@@ -1,0 +1,26 @@
+# Shared adversarial path-normalisation corpus (ADR-0006).
+# input<TAB>expected-output-or-REJECT
+/a/b/c	/a/b/c
+/a//b///c	/a/b/c
+/a/./b	/a/b
+/a/b/../c	/a/c
+/a/../..	REJECT
+/..	REJECT
+/a/b/	/a/b/
+/	/
+/a/%41	/a/A
+/%2e%2e/etc/passwd	REJECT
+/a/%2e%2e/b	REJECT
+/a%2fb	/a/b
+/a/%252e%252e/b	REJECT
+/a/b%00	REJECT
+/a;jsessionid=x/b	REJECT
+/a\\b	REJECT
+/a/%	REJECT
+/a/%zz	REJECT
+/a/b?x=1	/a/b
+/a/b#frag	/a/b
+relative/path	REJECT
+/a/%c0%af/b	REJECT
+/café	/café
+/a/%20b	/a/ b

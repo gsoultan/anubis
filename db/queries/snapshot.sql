@@ -36,7 +36,7 @@ WHERE p.tenant_id = sqlc.arg(tenant_id) AND p.deprecated_at IS NULL;
 
 -- name: SnapshotPermissions :many
 SELECT p.key, p.risk, p.min_assurance, p.requires_amr,
-       extract(epoch FROM p.max_auth_age)::bigint AS max_auth_age_secs
+       COALESCE(extract(epoch FROM p.max_auth_age), 0)::bigint AS max_auth_age_secs
 FROM permissions p
 WHERE p.tenant_id = sqlc.arg(tenant_id) AND p.deprecated_at IS NULL;
 
