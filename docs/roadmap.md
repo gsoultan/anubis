@@ -4,12 +4,21 @@
 
 | Layer | State |
 | :--- | :--- |
-| **Database schema** | ✅ Built, benchmarked, validated — 10 migrations |
-| **Authorization engine** | ✅ Implemented as `authorize()`, 15 test cases passing |
+| **Database schema** | ✅ Built, benchmarked, validated — 20 migrations |
+| **Authorization engine** | ✅ `authorize()` + `authorize_explain()`, suites passing |
 | **Schema-enforced invariants** | ✅ 9 guards, all verified rejecting illegal writes |
-| **Go application layer** | ⬜ Not started |
-| **Transports (HTTP/gRPC)** | ⬜ Not started |
-| **Client SDK** | ⬜ Not started |
+| **Go application layer** | ✅ repositories→usecases→services→endpoints→transports (ADR-0008/0009) |
+| **Transports (Connect/gRPC/HTTP)** | ✅ Connect RPC (serves gRPC + gRPC-Web too) + stdlib OIDC/gate surface |
+| **Client SDK** | ✅ `pkg/anubis` (zero-dep verifier + middleware) · TS client in `ui/src/lib` |
+
+Phases 0–3 are implemented and e2e-tested (login/MFA/device flows, refresh
+rotation with theft detection, logout×3 with back-channel, introspect/revoke,
+authorize/explain/scope-switch, admin plane, audit hash chain). Phase 4
+partially (self-registration, consents, erasure request; crypto-shredding key
+management still open). Phase 5 ✅ (API keys). Phase 6 ✅ (TOTP + device keys;
+step-up via amr/auth_time). Phase 7 ✅ (gate + snapshot + shared normalisation
+corpus + fuzz). Phase 8 partially (gRPC via Connect on day one; key prepare/
+promote lifecycle; Envoy ext_authz and revocation streaming remain).
 
 Everything in [api.md](api.md) is **specification**, not shipped code.
 

@@ -26,6 +26,9 @@ export default defineConfig({
     strictPort: true,
     proxy: {
       '/v1': { target: `http://localhost:${process.env['ANUBIS_API_PORT'] ?? 7448}`, changeOrigin: true },
+      // Connect RPC surface (same-origin in dev beats CORS entirely).
+      '/anubis.v1.': { target: `http://localhost:${process.env['ANUBIS_API_PORT'] ?? 7448}`, changeOrigin: true },
+      '/.well-known': { target: `http://localhost:${process.env['ANUBIS_API_PORT'] ?? 7448}`, changeOrigin: true },
     },
   },
   preview: { port: PORT + 1, strictPort: true },

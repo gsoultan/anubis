@@ -10,8 +10,10 @@ assurance, administration model and data-retention rules per population.
 
 > Anubis weighs the heart at the gate. This service does the same for requests.
 
-**Status:** database layer designed, implemented, benchmarked and validated.
-Application layer not yet started. See [docs/roadmap.md](docs/roadmap.md).
+**Status:** database layer validated (20 migrations); Go application layer
+running — Connect RPC + go-kit, PASETO tokens, browser SSO (PKCE), admin
+plane, forward-auth gate from a REPEATABLE READ snapshot. See
+[docs/roadmap.md](docs/roadmap.md).
 
 ---
 

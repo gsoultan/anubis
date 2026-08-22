@@ -29,3 +29,12 @@ version+sha256 checksum — must stay compatible with scripts/db.sh).
 - Ports 7447 console / 7448 api / 7449 db, defined in scripts/lib/common.sh.
 - Refresh reuse ⇒ revoke family + session, and that event must alert.
 - Dev DB via Apple Container: scripts/db.sh; bench/rebuild.sh is the DB suite.
+
+## Application layer (shipped in this build)
+Phases 0–7 implemented and live-verified; e2e suite in test/e2e (integration
+tag) covers login uniformity, refresh theft (incl. successor death — the
+revocations must commit OUTSIDE the failed claim tx), authorize/explain,
+logout, gate decisions, rate limiting. Enforcement: scripts/check/* wired in
+.gitlab-ci.yml. Bootstrap: `anubisd bootstrap` seeds tenant/realm/admin/
+apps/anubis.admin role (pattern anubis:*). Gate snapshot differential parity
+with authorize() still to add as an automated test.
