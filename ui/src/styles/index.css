@@ -1,0 +1,274 @@
+/* ===========================================================================
+   CASCADE LAYER ORDER — must precede every @import.
+   theme → base → mantine → components → utilities. Mantine must sit AFTER the
+   Tailwind preflight it needs to survive (base resets button backgrounds), and
+   BEFORE our components and utilities so `className="p-0"` wins without
+   !important. Use styles.layer.css — the plain build is unlayered, and
+   unlayered rules beat all layered ones regardless of order.
+   =========================================================================== */
+@layer theme, base, mantine, components, utilities;
+
+@import '@mantine/core/styles.layer.css';
+@import '@mantine/notifications/styles.layer.css';
+@import '@mantine/dates/styles.layer.css';
+@import '@mantine/code-highlight/styles.layer.css';
+@import 'tailwindcss';
+
+/* ===========================================================================
+   DESIGN TOKENS — two schemes, one vocabulary.
+   ===========================================================================
+   Every component reads ONLY these variables; nothing below the token blocks
+   may name a raw color. That single rule is what makes light mode a token
+   swap instead of a redesign. Tinted borders/fills in components are derived
+   with color-mix() from the same tokens, so they re-tint per scheme for free.
+   =========================================================================== */
+:root {
+  --r-xs: 4px;  --r-sm: 6px;  --r-md: 8px;  --r-lg: 12px;
+  --ease: cubic-bezier(.32, .72, 0, 1);
+  --t-fast: 120ms var(--ease);
+  --t-mid:  180ms var(--ease);
+}
+
+:root[data-mantine-color-scheme='dark'] {
+  --s-base:     #0b0d11;
+  --s-sunken:   #090a0d;
+  --s-raised:   #13161c;
+  --s-overlay:  #1a1e25;   /* hover + active fills */
+  --s-hover:    #20242d;
+
+  --line:        #262b34;
+  --line-soft:   #1d212a;
+  --line-strong: #39404d;
+
+  --ink:   #edeff4;
+  --ink-2: #aab1bf;
+  --ink-3: #767e8d;
+  --ink-4: #4e5560;
+
+  --gold:      #e3ad3c;
+  --gold-glow: #e3ad3c1f;
+  --gold-chip-bg:   #17130a;
+  --gold-chip-line: #3a2f14;
+
+  /* Verdict palette. Reserved for meaning; nothing decorative may use it. */
+  --allow: #3ddc97;  --allow-bg: #3ddc9714;
+  --deny:  #ff6b6b;  --deny-bg:  #ff6b6b14;
+  --warn:  #f3c14a;  --warn-bg:  #f3c14a14;
+  --info:  #6aa9ff;  --info-bg:  #6aa9ff14;
+  --grape: #b98cff;
+
+  --tooltip-bg: #1a1e25;
+  --tooltip-ink: #edeff4;
+  --panel-shadow: none;
+  --overlay-tint: #05060a;
+}
+
+:root[data-mantine-color-scheme='light'] {
+  --s-base:     #f5f6f8;
+  --s-sunken:   #edeff3;
+  --s-raised:   #ffffff;
+  --s-overlay:  #eef1f5;
+  --s-hover:    #e7eaf0;
+
+  --line:        #e3e6ec;
+  --line-soft:   #edf0f4;
+  --line-strong: #cdd3dd;
+
+  --ink:   #1c2230;
+  --ink-2: #4a5468;
+  --ink-3: #79839a;
+  --ink-4: #aeb6c6;
+
+  /* Bright gold fails contrast on white, so light mode runs a deeper cut of
+     the same hue for text and icons. */
+  --gold:      #9a7412;
+  --gold-glow: #9a74121a;
+  --gold-chip-bg:   #faf5e6;
+  --gold-chip-line: #e7d9ae;
+
+  --allow: #0f9d63;  --allow-bg: #0f9d6312;
+  --deny:  #d92d2d;  --deny-bg:  #d92d2d10;
+  --warn:  #b3690a;  --warn-bg:  #f59e0b14;
+  --info:  #2f63d8;  --info-bg:  #2f63d812;
+  --grape: #6d3fc4;
+
+  --tooltip-bg: #242a38;   /* dark tooltip on light UI — the readable default */
+  --tooltip-ink: #f2f4f8;
+  --panel-shadow: 0 1px 2px rgb(16 24 40 / .06);
+  --overlay-tint: #101623;
+}
+
+@theme {
+  --color-base:    var(--s-base);
+  --color-raised:  var(--s-raised);
+  --color-overlay: var(--s-overlay);
+  --color-line:    var(--line);
+  --color-ink:     var(--ink);
+  --color-ink2:    var(--ink-2);
+  --color-ink3:    var(--ink-3);
+  --color-gold:    var(--gold);
+  --color-allow:   var(--allow);
+  --color-deny:    var(--deny);
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+@layer base {
+  html, body, #root { height: 100%; }
+  body {
+    background: var(--s-base);
+    color: var(--ink);
+    overscroll-behavior-y: none;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    font-feature-settings: 'cv02','cv03','cv04','ss01';
+    transition: background 200ms var(--ease), color 200ms var(--ease);
+  }
+
+  .tnum { font-variant-numeric: tabular-nums; }
+
+  ::-webkit-scrollbar { width: 9px; height: 9px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background: var(--line-strong); border-radius: 99px;
+    border: 2px solid var(--s-base);
+  }
+  ::-webkit-scrollbar-thumb:hover { background: var(--ink-4); }
+
+  ::selection { background: var(--gold-glow); color: var(--ink); }
+
+  *:focus-visible {
+    outline: 2px solid var(--gold);
+    outline-offset: 2px;
+    border-radius: var(--r-xs);
+  }
+}
+
+@layer components {
+  /* ---- typography ------------------------------------------------------ */
+  .t-display { font-size: 26px; line-height: 1.15; font-weight: 620; letter-spacing: -.022em; }
+  .t-h1      { font-size: 18px; line-height: 1.3;  font-weight: 600; letter-spacing: -.015em; }
+  .t-h2      { font-size: 14px; line-height: 1.4;  font-weight: 600; letter-spacing: -.008em; }
+  .t-body    { font-size: 13px; line-height: 1.55; }
+  .t-sm      { font-size: 12.5px; line-height: 1.5; color: var(--ink-2); }
+  .t-xs      { font-size: 11px; line-height: 1.45; color: var(--ink-3); }
+  .t-label {
+    font-size: 10px; line-height: 1; font-weight: 600;
+    letter-spacing: .07em; text-transform: uppercase; color: var(--ink-3);
+  }
+  .t-num { font-size: 26px; line-height: 1.1; font-weight: 600; letter-spacing: -.02em;
+           font-variant-numeric: tabular-nums; }
+
+  /* ---- surfaces -------------------------------------------------------- */
+  .panel {
+    background: var(--s-raised);
+    border: 1px solid var(--line);
+    border-radius: var(--r-md);
+    box-shadow: var(--panel-shadow);
+  }
+  .panel-inset {
+    background: var(--s-sunken);
+    border: 1px solid var(--line-soft);
+    border-radius: var(--r-sm);
+  }
+  .panel-hover { transition: border-color var(--t-fast), background var(--t-fast); }
+  .panel-hover:hover { border-color: var(--line-strong); background: var(--s-overlay); }
+
+  /* ---- identifiers ----------------------------------------------------- */
+  .chip {
+    display: inline-flex; align-items: center;
+    font-family: var(--font-mono); font-size: 11px; line-height: 1;
+    letter-spacing: -.02em; padding: 3.5px 7px; border-radius: var(--r-xs);
+    background: var(--s-sunken); border: 1px solid var(--line-soft);
+    color: var(--ink-2); white-space: nowrap;
+  }
+  .chip-gold {
+    color: var(--gold);
+    border-color: var(--gold-chip-line);
+    background: var(--gold-chip-bg);
+  }
+
+  /* ---- verdicts -------------------------------------------------------- */
+  .v-allow { color: var(--allow); }
+  .v-deny  { color: var(--deny); }
+  .v-pill {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 3px 8px 3px 6px; border-radius: 99px;
+    font-size: 11px; font-weight: 600; letter-spacing: -.005em;
+  }
+  .v-pill-allow {
+    background: var(--allow-bg); color: var(--allow);
+    border: 1px solid color-mix(in srgb, var(--allow) 24%, transparent);
+  }
+  .v-pill-deny {
+    background: var(--deny-bg); color: var(--deny);
+    border: 1px solid color-mix(in srgb, var(--deny) 24%, transparent);
+  }
+  .v-pill-idle { background: var(--s-sunken); color: var(--ink-3); border: 1px solid var(--line-soft); }
+
+  /* ---- decision-trace gates -------------------------------------------- */
+  .gate {
+    position: relative; display: flex; flex-direction: column; gap: 3px;
+    padding: 8px 10px; border-radius: var(--r-sm);
+    border: 1px solid var(--line-soft); background: var(--s-sunken);
+    transition: border-color var(--t-fast), background var(--t-fast);
+    min-width: 0;
+  }
+  .gate-pass {
+    border-color: color-mix(in srgb, var(--allow) 22%, transparent);
+    background: linear-gradient(180deg, color-mix(in srgb, var(--allow) 6%, transparent), transparent);
+  }
+  .gate-fail {
+    border-color: color-mix(in srgb, var(--deny) 30%, transparent);
+    background: linear-gradient(180deg, color-mix(in srgb, var(--deny) 9%, transparent), transparent);
+  }
+  .gate-skip { opacity: .45; }
+  .gate::after {
+    content: ''; position: absolute; top: 50%; right: -9px;
+    width: 8px; height: 1px; background: var(--line);
+  }
+  .gate:last-child::after { display: none; }
+
+  /* ---- nav ------------------------------------------------------------- */
+  .nav-item {
+    position: relative; display: flex; align-items: center; gap: 9px;
+    padding: 7px 10px; border-radius: var(--r-sm);
+    color: var(--ink-2); font-size: 13px; font-weight: 450;
+    transition: color var(--t-fast), background var(--t-fast);
+  }
+  .nav-item:hover { color: var(--ink); background: var(--s-raised); }
+  .nav-item[data-active] { color: var(--ink); background: var(--s-overlay); font-weight: 550; }
+  .nav-item[data-active]::before {
+    content: ''; position: absolute; left: -8px; top: 50%; translate: 0 -50%;
+    width: 2px; height: 15px; border-radius: 99px; background: var(--gold);
+  }
+
+  /* ---- tables ---------------------------------------------------------- */
+  .tbl { width: 100%; border-collapse: separate; border-spacing: 0; }
+  .tbl thead th {
+    position: sticky; top: 0; z-index: 1;
+    background: var(--s-raised);
+    padding: 9px 14px; text-align: left;
+    border-bottom: 1px solid var(--line);
+    font-size: 10px; font-weight: 600; letter-spacing: .07em;
+    text-transform: uppercase; color: var(--ink-3); white-space: nowrap;
+  }
+  .tbl tbody td {
+    padding: 12px 14px; font-size: 13px;
+    border-bottom: 1px solid var(--line-soft); vertical-align: middle;
+  }
+  .tbl tbody tr { transition: background var(--t-fast); }
+  .tbl tbody tr:hover { background: var(--s-overlay); }
+  .tbl tbody tr:last-child td { border-bottom: none; }
+  .tbl .num { text-align: right; font-variant-numeric: tabular-nums; }
+
+  /* ---- motion ---------------------------------------------------------- */
+  .rise { animation: rise 240ms var(--ease) both; }
+  @keyframes rise { from { opacity: 0; translate: 0 6px } to { opacity: 1; translate: 0 } }
+  .fade { animation: fade 180ms var(--ease) both; }
+  @keyframes fade { from { opacity: 0 } to { opacity: 1 } }
+
+  @media (prefers-reduced-motion: reduce) {
+    .rise, .fade { animation: none; }
+    * { transition-duration: 1ms !important; }
+  }
+}

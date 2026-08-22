@@ -1,0 +1,47 @@
+{
+  "name": "anubis-console",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "../scripts/ui.sh",
+    "build": "tsr generate && tsc --noEmit && bun run scripts/build-bun.ts",
+    "build:vite": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit",
+    "routes": "tsr generate",
+    "preview": "bun run --bun vite preview"
+  },
+  "dependencies": {
+    "@mantine/code-highlight": "^9.5.1",
+    "@mantine/core": "^9.5.1",
+    "@mantine/dates": "^9.5.1",
+    "@mantine/hooks": "^9.5.1",
+    "@mantine/notifications": "^9.5.1",
+    "@tabler/icons-react": "^3.46.0",
+    "@tanstack/react-form": "^1.33.5",
+    "@tanstack/react-query": "^5.101.4",
+    "@tanstack/react-query-devtools": "^5.101.4",
+    "@tanstack/react-router": "^1.170.31",
+    "@tanstack/react-virtual": "^3.14.10",
+    "dayjs": "^1.11.19",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "zustand": "^5.0.15"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.3",
+    "@tanstack/router-cli": "^1.167.32",
+    "@tanstack/router-plugin": "^1.168.34",
+    "@types/node": "^26.2.0",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "@vitejs/plugin-react": "^6.1.0",
+    "bun-plugin-tailwind": "^0.1.2",
+    "postcss": "^8.5.6",
+    "postcss-preset-mantine": "^1.18.0",
+    "postcss-simple-vars": "^7.0.1",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^7.0.2",
+    "vite": "^8.2.2"
+  }
+}

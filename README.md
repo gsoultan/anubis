@@ -1,93 +1,169 @@
-# anubis
+# Anubis
 
+Single sign-on and identity & access management as a backend-only microservice.
+Other applications authenticate and authorise against it over HTTP or gRPC.
 
+Serves **all** identity populations from one service — internal employees,
+external business partners (suppliers, vendors, contractors) and public users
+(job applicants, customers) — with different authentication policy, identity
+assurance, administration model and data-retention rules per population.
 
-## Getting started
+> Anubis weighs the heart at the gate. This service does the same for requests.
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+**Status:** database layer designed, implemented, benchmarked and validated.
+Application layer not yet started. See [docs/roadmap.md](docs/roadmap.md).
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
+---
 
-## Add your files
+## What it does
 
-- [ ] [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-- [ ] [Add files using the command line](https://docs.gitlab.com/ee/gitlab-basics/add-file.html#add-a-file-using-the-command-line) or push an existing Git repository with the following command:
+| Capability | Detail |
+| :--- | :--- |
+| **Sign in** | Password, device-bound biometric key, API key, TOTP — one pluggable credential model |
+| **Tokens** | Short-lived signed access token + opaque rotating refresh token with theft detection |
+| **Sign out** | Local (one device), global (all devices), and back-channel (notifies every app) |
+| **Authorise** | Multi-axis scoped RBAC — organisation, application, department, work office, partner company, product, customer, and any dimension added later |
+| **Populations** | Employees, partners and public users in one tenant, isolated by realm, with per-realm auth policy, assurance levels and retention |
+| **Delegated admin** | Partners administer their own users; escalation paths closed in the schema |
+| **Protect paths** | Route policies enforced in-app (SDK), at the gateway (nginx/Traefik/Envoy), or by a sidecar |
+| **Audit** | Hash-chained, append-only, partitioned by month |
+
+## The constraint that shapes everything
+
+**No third-party libraries**, interpreted precisely — see [ADR-0002](docs/adr/0002-dependency-policy.md):
+
+- **Cryptographic primitives** — never hand-rolled, always the Go standard library
+- **Protocol and format layers** — hand-written (PASETO, TOTP, session handling)
+- **Infrastructure drivers** — accepted as exceptions (`pgx`, Redis client)
+
+Go 1.26's standard library makes this genuinely achievable. Anubis has
+**zero third-party cryptography**.
+
+## Quick start
+
+Requires [Apple Container](https://github.com/apple/container), [Bun](https://bun.sh)
+1.3+, and Go 1.26+ (once the API exists).
+
+```bash
+scripts/dev.sh          # database + api (when built) + console
+```
+
+| Script | Purpose |
+| :--- | :--- |
+| `scripts/dev.sh` | Whole environment. `--no-db`, `--ui-only`. |
+| `scripts/ui.sh` | Console only, port 7447 |
+| `scripts/api.sh` | API only, port 7448 (no-ops until the Go module exists) |
+| `scripts/db.sh` | `up · down · status · migrate · baseline · reset · recreate · psql` |
+| `scripts/build.sh` | Build every workspace |
+| `bench/rebuild.sh` | Migrate, seed and validate the database end to end |
+
+### Ports
+
+**7447** console · **7448** API · **7449** database — one contiguous block,
+defined once in `scripts/lib/common.sh` and exported to every consumer.
+
+Chosen against 3000/3001, 4200, 5000 (also macOS AirPlay Receiver), 5173,
+8000/8080/8888, and everything already listening here: 5432 Postgres,
+5672/15672 RabbitMQ, 6379 Redis, 7000, 9000/9001 MinIO. `strictPort` is on
+everywhere — the neighbours are each other, so a silent fallback would land the
+console on top of the API.
 
 ```
-cd existing_repo
-git remote add origin https://scm.impack-pratama.net/ip/anubis.git
-git branch -M dev
-git push -uf origin dev
+✗ port 7447 (console) is in use by: bun (pid 95701)
+  override with: ANUBIS_UI_PORT=<port> scripts/ui.sh
 ```
 
-## Integrate with your tools
+### Validating the database
 
-- [ ] [Set up project integrations](https://scm.impack-pratama.net/ip/anubis/-/settings/integrations)
+```bash
+scripts/db.sh reset     # drop, migrate, seed, run every suite
+scripts/db.sh status    # migrations applied, row counts, port publishing
+```
 
-## Collaborate with your team
+Expected output:
 
-- [ ] [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-- [ ] [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-- [ ] [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-- [ ] [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-- [ ] [Set auto-merge](https://docs.gitlab.com/ee/user/project/merge_requests/merge_when_pipeline_succeeds.html)
+```
+==> dropping and rebuilding schema
+    7 migrations applied
+==> seeding
+    150000 grants, 269751 grant_scopes, 128138 closure rows,
+    57000 identities across 3 realms
+==> correctness
+     exact scope match -> ALLOW        | t   | t
+     inherited descendant -> ALLOW     | t   | t
+     different subtree -> DENY         | f   | f
+     permission not held -> DENY       | f   | f
+     FAIL-CLOSED: axis omitted -> DENY | f   | f
+     cross-tenant identity -> DENY     | f   | f
+==> external populations (suppliers, applicants)
+     supplier reads own company PO -> ALLOW             | t   | t
+     supplier reads ANOTHER company PO -> DENY          | f   | f
+     applicant reads OWN record -> ALLOW                | t   | t
+     applicant reads SOMEONE ELSE record -> DENY        | f   | f
+     FAIL-CLOSED: self-scoped, no _owner -> DENY        | f   | f
+     ASSURANCE: IAL1 applicant, IAL3 permission -> DENY | f   | f
+     disabled identity -> DENY | f   | f
+     anonymised (retention) identity -> DENY | f   | f
+     same username across 3 realms |   3 |    3
+    2/2 escalation attempts rejected
+==> negative (all must be blocked by the schema)
+    7/7 illegal writes rejected
+==> performance
+    20k decisions: Time: 891.963 ms
+```
 
-## Test and Deploy
+Full setup: [docs/development.md](docs/development.md).
 
-Use the built-in continuous integration in GitLab.
+## Documentation
 
-- [ ] [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/)
-- [ ] [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-- [ ] [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-- [ ] [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-- [ ] [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
+| Document | Contents |
+| :--- | :--- |
+| [architecture.md](docs/architecture.md) | System design, components, request flows |
+| [schema.md](docs/schema.md) | Every table, column, index and constraint |
+| [api.md](docs/api.md) | Complete endpoint reference |
+| [security.md](docs/security.md) | Threat model and the controls answering each threat |
+| [operations.md](docs/operations.md) | Deployment, monitoring, runbooks, incident response |
+| [development.md](docs/development.md) | Local environment, migrations, testing |
+| [benchmarks.md](docs/benchmarks.md) | Measured results and the methodology behind them |
+| [roadmap.md](docs/roadmap.md) | Delivery phases |
 
-***
+### Decision records
 
-# Editing this README
+| ADR | Decision |
+| :--- | :--- |
+| [0001](docs/adr/0001-token-format.md) | PASETO v4.public as primary, JWS/EdDSA as a dormant hedge |
+| [0002](docs/adr/0002-dependency-policy.md) | Where the no-third-party-library line falls |
+| [0003](docs/adr/0003-scope-model.md) | Forest of axes with closure tables, not one tree with paths |
+| [0004](docs/adr/0004-authorization-semantics.md) | Evaluation rules and fail-closed guarantees |
+| [0005](docs/adr/0005-database-performance.md) | Storage and query design, with measurements |
+| [0006](docs/adr/0006-path-protection.md) | Three enforcement modes for securing website paths |
+| [0007](docs/adr/0007-external-identities.md) | Realms for suppliers and applicants, not one tenant per partner |
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+## Layout
 
-## Suggestions for a good README
+```
+scripts/        platform orchestration: dev, build, database lifecycle.
+migrations/     numbered, forward-only SQL. Applied in filename order.
+bench/          reproducible correctness, negative and performance suites.
+ui/             operator console (React 19 · Mantine 9 · Bun).
+docs/           architecture, ADRs, operations.
+```
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+## Knowledge & tooling
 
-## Name
-Choose a self-explaining name for your project.
+This repo participates in the Discover → Work → Verify → Persist loop:
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+| Tool | Role | Commands |
+| :--- | :--- | :--- |
+| **graphify** | Codebase knowledge graph — answer "where is X / what calls Y" from the graph, not by re-reading files | Build once: `/graphify . --code-only` · then `rtk graphify query "authorize"` · `graphify explain "<node>"` · after landing changes: `rtk graphify update .` |
+| **Obsidian** | Durable decisions and incident notes | `rtk graphify export obsidian --dir ~/Documents/ObsidianVault/Anubis` |
+| **skills.sh** | Reusable workflows — a manual workaround repeated three times becomes a skill | `rtk npx skills list` · `rtk npx skills add <skill>` |
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
-
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
-
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
-
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
-
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
-
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
-
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
-
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
-
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
-
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
+The AST extraction cache is primed (`rtk graphify update .`); the first
+`/graphify . --code-only` completes the graph at `graphify-out/graph.json`
+(gitignored — it is derived, rebuild at will). Durable design decisions live in
+`docs/adr/`; session-scoped notes belong in the vault, not the repo.
 
 ## License
-For open source projects, say how it is licensed.
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+MIT — © Gembit Soultan Shirazi <gembit.soultan@gmail.com>. See [LICENSE](LICENSE).
