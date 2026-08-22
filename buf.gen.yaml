@@ -1,0 +1,11 @@
+# Go codegen. TypeScript generation for the console lives in ui/buf.gen.yaml
+# (plugins resolve from ui/node_modules). Run via scripts/gen.sh, which puts
+# $(go env GOPATH)/bin on PATH for the local protoc plugins.
+version: v2
+plugins:
+  - local: protoc-gen-go
+    out: gen/go
+    opt: paths=source_relative
+  - local: protoc-gen-connect-go
+    out: gen/go
+    opt: paths=source_relative

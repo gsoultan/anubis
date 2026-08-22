@@ -1,0 +1,916 @@
+syntax = "proto3";
+
+package anubis.v1;
+
+option go_package = "github.com/gsoultan/anubis/gen/go/anubis/v1;anubisv1";
+
+// ============================================================================
+// Administration. Anubis is its own relying party: every RPC here is gated by
+// an anubis:* permission checked through authorize(), so delegated
+// administration (partner admins managing their own users) uses ordinary
+// grants scoped to a partner_org node — no parallel admin ACL system.
+// Escalation is blocked in the schema (roles.allowed_realm_kinds,
+// role_grantable), not by API validation.
+// ============================================================================
+
+service IdentityAdminService {
+  rpc ListIdentities(ListIdentitiesRequest) returns (ListIdentitiesResponse);
+  rpc GetIdentity(GetIdentityRequest) returns (GetIdentityResponse);
+  rpc CreateIdentity(CreateIdentityRequest) returns (CreateIdentityResponse);
+  // Immediate, complete deprovisioning: authorize() gates on identity state,
+  // so no grant needs touching.
+  rpc DisableIdentity(DisableIdentityRequest) returns (DisableIdentityResponse);
+  rpc EnableIdentity(EnableIdentityRequest) returns (EnableIdentityResponse);
+  // Global kill switch: invalidates every outstanding token for the identity.
+  rpc BumpTokenEpoch(BumpTokenEpochRequest) returns (BumpTokenEpochResponse);
+  rpc SetPassword(SetPasswordRequest) returns (SetPasswordResponse);
+  // Same human across realms. Records method and evidence; never merges grants.
+  rpc LinkIdentities(LinkIdentitiesRequest) returns (LinkIdentitiesResponse);
+  // Right-to-erasure: sets deletion_requested_at; the retention sweeper and
+  // crypto-shredding handle the rest.
+  rpc RequestErasure(RequestErasureRequest) returns (RequestErasureResponse);
+  rpc ListCredentials(ListCredentialsRequest) returns (ListCredentialsResponse);
+  rpc RevokeCredential(RevokeCredentialRequest) returns (RevokeCredentialResponse);
+  rpc CreateApiKey(CreateApiKeyRequest) returns (CreateApiKeyResponse);
+  rpc ListApiKeys(ListApiKeysRequest) returns (ListApiKeysResponse);
+  rpc ListConsents(ListConsentsRequest) returns (ListConsentsResponse);
+  rpc RecordConsent(RecordConsentRequest) returns (RecordConsentResponse);
+  // Withdrawal appends a row; the record of what was consented to survives.
+  rpc WithdrawConsent(WithdrawConsentRequest) returns (WithdrawConsentResponse);
+}
+
+message Identity {
+  string id = 1;
+  string username = 2;
+  string email = 3;
+  string realm = 4;
+  string realm_kind = 5;
+  string status = 6;
+  string category = 7;
+  string external_ref = 8;
+  int32 assurance_level = 9;
+  int32 token_epoch = 10;
+  int64 created_at = 11;
+  int64 last_login_at = 12;
+  int64 disabled_at = 13;
+  int64 anonymized_at = 14;
+}
+
+message ListIdentitiesRequest {
+  string realm = 1;    // realm code filter; empty = all
+  string query = 2;    // username/email substring
+  string status = 3;
+  int32 page_size = 4; // default 50, max 500
+  string page_token = 5;
+}
+
+message ListIdentitiesResponse {
+  repeated Identity identities = 1;
+  string next_page_token = 2;
+}
+
+message GetIdentityRequest {
+  string id = 1;
+}
+
+message CredentialInfo {
+  string id = 1;
+  string kind = 2;
+  string label = 3;
+  string lookup_key = 4;  // api-key prefix; empty otherwise
+  int64 created_at = 5;
+  int64 last_used_at = 6;
+  int64 expires_at = 7;
+  int64 revoked_at = 8;
+}
+
+message GetIdentityResponse {
+  Identity identity = 1;
+  repeated CredentialInfo credentials = 2;
+}
+
+message CreateIdentityRequest {
+  string realm = 1;  // realm code
+  string username = 2;
+  string email = 3;
+  string password = 4;  // optional; empty = no password credential yet
+  string category = 5;
+  string external_ref = 6;
+  int32 assurance_level = 7;  // 0 = realm default (min_assurance)
+}
+
+message CreateIdentityResponse {
+  Identity identity = 1;
+}
+
+message DisableIdentityRequest {
+  string id = 1;
+  string reason = 2;
+}
+
+message DisableIdentityResponse {}
+
+message EnableIdentityRequest {
+  string id = 1;
+}
+
+message EnableIdentityResponse {}
+
+message BumpTokenEpochRequest {
+  string id = 1;
+}
+
+message BumpTokenEpochResponse {
+  int32 token_epoch = 1;
+}
+
+message SetPasswordRequest {
+  string id = 1;
+  string password = 2;
+}
+
+message SetPasswordResponse {}
+
+message LinkIdentitiesRequest {
+  string primary_id = 1;
+  string secondary_id = 2;
+  string method = 3;  // manual | email_proof | document | hr_sync
+  string evidence_json = 4;
+}
+
+message LinkIdentitiesResponse {}
+
+message RequestErasureRequest {
+  string id = 1;
+}
+
+message RequestErasureResponse {}
+
+message ListCredentialsRequest {
+  string identity_id = 1;
+}
+
+message ListCredentialsResponse {
+  repeated CredentialInfo credentials = 1;
+}
+
+message RevokeCredentialRequest {
+  string credential_id = 1;
+}
+
+message RevokeCredentialResponse {}
+
+message CreateApiKeyRequest {
+  string identity_id = 1;
+  string label = 2;
+  int64 expires_at = 3;  // unix seconds; 0 = no expiry
+}
+
+message CreateApiKeyResponse {
+  // Full key, returned exactly once; only prefix + hash are stored.
+  string api_key = 1;
+  string prefix = 2;
+  string credential_id = 3;
+}
+
+message ListApiKeysRequest {
+  string identity_id = 1;
+}
+
+message ListApiKeysResponse {
+  repeated CredentialInfo keys = 1;
+}
+
+message Consent {
+  string id = 1;
+  string purpose = 2;
+  string policy_version = 3;
+  int64 granted_at = 4;
+  int64 withdrawn_at = 5;
+  int64 expires_at = 6;
+}
+
+message ListConsentsRequest {
+  string identity_id = 1;
+}
+
+message ListConsentsResponse {
+  repeated Consent consents = 1;
+}
+
+message RecordConsentRequest {
+  string identity_id = 1;
+  string purpose = 2;
+  string policy_version = 3;
+  string evidence_json = 4;
+}
+
+message RecordConsentResponse {
+  Consent consent = 1;
+}
+
+message WithdrawConsentRequest {
+  string consent_id = 1;
+}
+
+message WithdrawConsentResponse {}
+
+// ============================================================================
+// Scope administration — the dynamic dimension API. Adding an axis is three
+// RPCs and zero deploys.
+// ============================================================================
+
+service ScopeAdminService {
+  rpc ListScopeAxes(ListScopeAxesRequest) returns (ListScopeAxesResponse);
+  rpc CreateScopeAxis(CreateScopeAxisRequest) returns (CreateScopeAxisResponse);
+  rpc UpdateScopeAxis(UpdateScopeAxisRequest) returns (UpdateScopeAxisResponse);
+  // Replays recent allow decisions against default_effect='deny' and reports
+  // what would break. Run before flipping an axis to strict.
+  rpc StrictDryRun(StrictDryRunRequest) returns (StrictDryRunResponse);
+  rpc ListScopeNodeTypes(ListScopeNodeTypesRequest) returns (ListScopeNodeTypesResponse);
+  rpc CreateScopeNodeType(CreateScopeNodeTypeRequest) returns (CreateScopeNodeTypeResponse);
+  rpc ListScopeNodes(ListScopeNodesRequest) returns (ListScopeNodesResponse);
+  rpc CreateScopeNode(CreateScopeNodeRequest) returns (CreateScopeNodeResponse);
+  rpc EnsureAxisRoot(EnsureAxisRootRequest) returns (EnsureAxisRootResponse);
+  rpc MoveScopeNode(MoveScopeNodeRequest) returns (MoveScopeNodeResponse);
+  rpc ArchiveScopeNode(ArchiveScopeNodeRequest) returns (ArchiveScopeNodeResponse);
+  // Bulk reconcile keyed on external_ref: add/rename/move/archive, manual
+  // nodes untouched. dry=true computes the same report with zero writes.
+  rpc UpsertScopeNodes(UpsertScopeNodesRequest) returns (UpsertScopeNodesResponse);
+  rpc ListSyncSources(ListSyncSourcesRequest) returns (ListSyncSourcesResponse);
+  rpc CreateSyncSource(CreateSyncSourceRequest) returns (CreateSyncSourceResponse);
+  rpc RunSync(RunSyncRequest) returns (RunSyncResponse);
+}
+
+message ScopeAxis {
+  string code = 1;
+  string display_name = 2;
+  string default_effect = 3;  // unconstrained | deny
+  string status = 4;
+  int32 sort_order = 5;
+  string resolution_json = 6;
+  string ui_schema_json = 7;
+}
+
+message ListScopeAxesRequest {}
+
+message ListScopeAxesResponse {
+  repeated ScopeAxis axes = 1;
+}
+
+message CreateScopeAxisRequest {
+  ScopeAxis axis = 1;
+}
+
+message CreateScopeAxisResponse {
+  ScopeAxis axis = 1;
+}
+
+message UpdateScopeAxisRequest {
+  ScopeAxis axis = 1;  // keyed on code
+}
+
+message UpdateScopeAxisResponse {
+  ScopeAxis axis = 1;
+}
+
+message StrictDryRunRequest {
+  string axis = 1;
+  int32 sample_size = 2;  // recent allow decisions to replay; default 2000
+}
+
+message StrictDryRunResponse {
+  int32 sampled = 1;
+  int32 would_deny = 2;
+  string examples_json = 3;  // up to 20 would-break examples
+}
+
+message ScopeNodeType {
+  string code = 1;
+  string axis = 2;
+  string display_name = 3;
+  repeated string parent_types = 4;
+}
+
+message ListScopeNodeTypesRequest {
+  string axis = 1;
+}
+
+message ListScopeNodeTypesResponse {
+  repeated ScopeNodeType types = 1;
+}
+
+message CreateScopeNodeTypeRequest {
+  ScopeNodeType type = 1;
+}
+
+message CreateScopeNodeTypeResponse {
+  ScopeNodeType type = 1;
+}
+
+message ScopeNode {
+  string id = 1;
+  string axis = 2;
+  string node_type = 3;
+  string parent_id = 4;
+  string slug = 5;
+  string name = 6;
+  string external_ref = 7;
+  string status = 8;
+  bool is_axis_root = 9;
+}
+
+message ListScopeNodesRequest {
+  string axis = 1;
+  string parent_id = 2;  // empty = whole axis
+  string query = 3;
+  bool include_archived = 4;
+}
+
+message ListScopeNodesResponse {
+  repeated ScopeNode nodes = 1;
+}
+
+message CreateScopeNodeRequest {
+  string axis = 1;
+  string node_type = 2;
+  string parent_id = 3;
+  string slug = 4;
+  string name = 5;
+  string external_ref = 6;
+}
+
+message CreateScopeNodeResponse {
+  ScopeNode node = 1;
+}
+
+message EnsureAxisRootRequest {
+  string axis = 1;
+}
+
+message EnsureAxisRootResponse {
+  string node_id = 1;
+}
+
+message MoveScopeNodeRequest {
+  string node_id = 1;
+  string new_parent_id = 2;
+}
+
+message MoveScopeNodeResponse {}
+
+message ArchiveScopeNodeRequest {
+  string node_id = 1;
+}
+
+message ArchiveScopeNodeResponse {}
+
+message SyncRow {
+  string ref = 1;         // external_ref; the idempotency key
+  string parent_ref = 2;  // empty = under the axis root
+  string name = 3;
+  string node_type = 4;   // empty = source default_node_type
+}
+
+message UpsertScopeNodesRequest {
+  string axis = 1;
+  repeated SyncRow rows = 2;  // parents before children
+  string default_node_type = 3;
+  bool dry = 4;
+}
+
+message UpsertScopeNodesResponse {
+  string report_json = 1;  // {added, renamed, moved, archived, unchanged, errors}
+}
+
+message SyncSource {
+  string id = 1;
+  string axis = 2;
+  string kind = 3;  // http | db_query | db_table
+  string status = 4;
+  string config_json = 5;
+  int64 last_run_at = 6;
+}
+
+message ListSyncSourcesRequest {}
+
+message ListSyncSourcesResponse {
+  repeated SyncSource sources = 1;
+}
+
+message CreateSyncSourceRequest {
+  SyncSource source = 1;
+}
+
+message CreateSyncSourceResponse {
+  SyncSource source = 1;
+}
+
+message RunSyncRequest {
+  string source_id = 1;
+  // Push model: rows supplied by the caller. For kind=http with empty rows,
+  // the server fetches from config.url.
+  repeated SyncRow rows = 2;
+  bool dry = 3;
+}
+
+message RunSyncResponse {
+  string report_json = 1;
+}
+
+// ============================================================================
+// Roles, permissions, grants, memberships, manifests.
+// ============================================================================
+
+service AuthzAdminService {
+  rpc ListRoles(ListRolesRequest) returns (ListRolesResponse);
+  rpc CreateRole(CreateRoleRequest) returns (CreateRoleResponse);
+  rpc UpdateRole(UpdateRoleRequest) returns (UpdateRoleResponse);
+  rpc GetRoleEffective(GetRoleEffectiveRequest) returns (GetRoleEffectiveResponse);
+  rpc ListPermissions(ListPermissionsRequest) returns (ListPermissionsResponse);
+  rpc ListGrants(ListGrantsRequest) returns (ListGrantsResponse);
+  rpc CreateGrant(CreateGrantRequest) returns (CreateGrantResponse);
+  rpc RevokeGrant(RevokeGrantRequest) returns (RevokeGrantResponse);
+  rpc ListMemberships(ListMembershipsRequest) returns (ListMembershipsResponse);
+  rpc CreateMembership(CreateMembershipRequest) returns (CreateMembershipResponse);
+  rpc SetMembershipEntries(SetMembershipEntriesRequest) returns (SetMembershipEntriesResponse);
+  rpc AssignMembership(AssignMembershipRequest) returns (AssignMembershipResponse);
+  rpc UnassignMembership(UnassignMembershipRequest) returns (UnassignMembershipResponse);
+  rpc ResyncMembership(ResyncMembershipRequest) returns (ResyncMembershipResponse);
+  // Registers an application's permission/role/route catalog. Validates,
+  // diffs, applies. Removed permissions are deprecated, never deleted.
+  rpc ApplyManifest(ApplyManifestRequest) returns (ApplyManifestResponse);
+}
+
+message Role {
+  string id = 1;
+  string name = 2;
+  string description = 3;
+  string application_slug = 4;
+  bool is_system = 5;
+  repeated string allowed_realm_kinds = 6;
+  repeated string assignable_at = 7;
+  repeated string parent_ids = 8;
+  repeated string patterns = 9;
+}
+
+message ListRolesRequest {
+  string query = 1;
+}
+
+message ListRolesResponse {
+  repeated Role roles = 1;
+}
+
+message CreateRoleRequest {
+  Role role = 1;
+}
+
+message CreateRoleResponse {
+  Role role = 1;
+}
+
+message UpdateRoleRequest {
+  Role role = 1;  // keyed on id; parents/patterns replaced, effective recomputed
+}
+
+message UpdateRoleResponse {
+  Role role = 1;
+}
+
+message GetRoleEffectiveRequest {
+  string role_id = 1;
+}
+
+message EffectivePermission {
+  string permission_key = 1;
+  string via_role = 2;
+}
+
+message GetRoleEffectiveResponse {
+  repeated EffectivePermission permissions = 1;
+}
+
+message Permission {
+  string id = 1;
+  string key = 2;
+  string app_slug = 3;
+  string resource = 4;
+  string action = 5;
+  string risk = 6;
+  string description = 7;
+  int32 min_assurance = 8;
+  repeated string requires_amr = 9;
+  string max_auth_age = 10;
+  bool deprecated = 11;
+}
+
+message ListPermissionsRequest {
+  string application_slug = 1;  // empty = all
+  bool include_deprecated = 2;
+}
+
+message ListPermissionsResponse {
+  repeated Permission permissions = 1;
+}
+
+message GrantScope {
+  string axis = 1;
+  string node_id = 2;
+  string node_name = 3;
+  bool inherit = 4;
+}
+
+message Grant {
+  string id = 1;
+  string identity_id = 2;
+  string role_id = 3;
+  string role_name = 4;
+  bool self_scoped = 5;
+  int64 valid_from = 6;
+  int64 valid_until = 7;
+  int64 revoked_at = 8;
+  string granted_by = 9;
+  string via_membership_id = 10;
+  string reason = 11;
+  repeated GrantScope scopes = 12;
+}
+
+message ListGrantsRequest {
+  string identity_id = 1;
+  bool include_revoked = 2;
+}
+
+message ListGrantsResponse {
+  repeated Grant grants = 1;
+}
+
+message CreateGrantRequest {
+  string identity_id = 1;
+  string role_id = 2;
+  bool self_scoped = 3;
+  int64 valid_until = 4;  // 0 = open-ended
+  string reason = 5;
+  repeated GrantScope scopes = 6;  // node_id + axis + inherit
+}
+
+message CreateGrantResponse {
+  Grant grant = 1;
+}
+
+message RevokeGrantRequest {
+  string grant_id = 1;
+  string reason = 2;
+}
+
+message RevokeGrantResponse {}
+
+message MembershipEntry {
+  string id = 1;
+  string role_id = 2;
+  string role_name = 3;
+  repeated GrantScope scopes = 4;
+}
+
+message Membership {
+  string id = 1;
+  string name = 2;
+  string description = 3;
+  repeated MembershipEntry entries = 4;
+  int32 member_count = 5;
+}
+
+message ListMembershipsRequest {}
+
+message ListMembershipsResponse {
+  repeated Membership memberships = 1;
+}
+
+message CreateMembershipRequest {
+  string name = 1;
+  string description = 2;
+}
+
+message CreateMembershipResponse {
+  Membership membership = 1;
+}
+
+message SetMembershipEntriesRequest {
+  string membership_id = 1;
+  repeated MembershipEntry entries = 2;  // replaces; resync runs in the same tx
+}
+
+message SetMembershipEntriesResponse {
+  Membership membership = 1;
+  int32 grants_changed = 2;
+}
+
+message AssignMembershipRequest {
+  string membership_id = 1;
+  string identity_id = 2;
+}
+
+message AssignMembershipResponse {
+  int32 grants_created = 1;
+}
+
+message UnassignMembershipRequest {
+  string membership_id = 1;
+  string identity_id = 2;
+}
+
+message UnassignMembershipResponse {
+  int32 grants_revoked = 1;
+}
+
+message ResyncMembershipRequest {
+  string membership_id = 1;
+}
+
+message ResyncMembershipResponse {
+  int32 grants_changed = 1;
+}
+
+message ApplyManifestRequest {
+  string application_slug = 1;
+  // {permissions:[{resource,action,description,risk,min_assurance,
+  //   requires_amr,max_auth_age}],
+  //  roles:[{name,description,permissions:[...],patterns:[...],
+  //   allowed_realm_kinds:[...]}],
+  //  routes:[{priority,path_pattern,methods,effect,permission,host_pattern,
+  //   scope_bindings}]}
+  string manifest_json = 2;
+  bool dry = 3;
+}
+
+message ApplyManifestResponse {
+  // {permissions:{added,updated,deprecated},roles:{added,updated},
+  //  routes:{replaced},warnings:[...]}
+  string report_json = 1;
+  int32 manifest_version = 2;
+}
+
+// ============================================================================
+// Tenant-level operations: realms, applications, audit, keys, sign-in page.
+// ============================================================================
+
+service TenantAdminService {
+  rpc ListTenants(ListTenantsRequest) returns (ListTenantsResponse);
+  rpc CreateTenant(CreateTenantRequest) returns (CreateTenantResponse);
+  rpc ListRealms(ListRealmsRequest) returns (ListRealmsResponse);
+  rpc CreateRealm(CreateRealmRequest) returns (CreateRealmResponse);
+  rpc UpdateRealm(UpdateRealmRequest) returns (UpdateRealmResponse);
+  rpc ListRealmCategories(ListRealmCategoriesRequest) returns (ListRealmCategoriesResponse);
+  rpc CreateRealmCategory(CreateRealmCategoryRequest) returns (CreateRealmCategoryResponse);
+  rpc ListApplications(ListApplicationsRequest) returns (ListApplicationsResponse);
+  rpc CreateApplication(CreateApplicationRequest) returns (CreateApplicationResponse);
+  rpc UpdateApplication(UpdateApplicationRequest) returns (UpdateApplicationResponse);
+  rpc RotateClientSecret(RotateClientSecretRequest) returns (RotateClientSecretResponse);
+  rpc ListRoutePolicies(ListRoutePoliciesRequest) returns (ListRoutePoliciesResponse);
+  rpc QueryAudit(QueryAuditRequest) returns (QueryAuditResponse);
+  // Walks the hash chain; an attacker with UPDATE rights cannot rewrite
+  // history without breaking it.
+  rpc VerifyAuditChain(VerifyAuditChainRequest) returns (VerifyAuditChainResponse);
+  rpc ListSigningKeys(ListSigningKeysRequest) returns (ListSigningKeysResponse);
+  // pending -> active -> retiring -> retired. Publish before signing.
+  rpc RotateSigningKey(RotateSigningKeyRequest) returns (RotateSigningKeyResponse);
+  rpc GetCatalogVersion(GetCatalogVersionRequest) returns (GetCatalogVersionResponse);
+  rpc GetSigninPage(GetSigninPageRequest) returns (GetSigninPageResponse);
+  rpc PutSigninPage(PutSigninPageRequest) returns (PutSigninPageResponse);
+}
+
+message Tenant {
+  string id = 1;
+  string slug = 2;
+  string name = 3;
+  string status = 4;
+  int64 created_at = 5;
+}
+
+message ListTenantsRequest {}
+
+message ListTenantsResponse {
+  repeated Tenant tenants = 1;
+}
+
+message CreateTenantRequest {
+  string slug = 1;
+  string name = 2;
+}
+
+message CreateTenantResponse {
+  Tenant tenant = 1;
+}
+
+message Realm {
+  string id = 1;
+  string code = 2;
+  string kind = 3;  // internal | partner | public | service
+  string display_name = 4;
+  int32 min_assurance = 5;
+  bool self_registration = 6;
+  bool email_verification_required = 7;
+  bool pii_encryption = 8;
+  repeated string allowed_factors = 9;
+  repeated string required_factors = 10;
+  string session_ttl = 11;        // Postgres interval text, e.g. "8 hours"
+  string access_token_ttl = 12;
+  string refresh_token_ttl = 13;
+  string default_retention = 14;  // empty = no statutory limit
+  string password_policy_json = 15;
+}
+
+message ListRealmsRequest {}
+
+message ListRealmsResponse {
+  repeated Realm realms = 1;
+}
+
+message CreateRealmRequest {
+  Realm realm = 1;
+}
+
+message CreateRealmResponse {
+  Realm realm = 1;
+}
+
+message UpdateRealmRequest {
+  Realm realm = 1;  // keyed on id
+}
+
+message UpdateRealmResponse {
+  Realm realm = 1;
+}
+
+message RealmCategory {
+  string id = 1;
+  string realm_id = 2;
+  string code = 3;
+  string display_name = 4;
+  int32 sort_order = 5;
+}
+
+message ListRealmCategoriesRequest {
+  string realm_id = 1;
+}
+
+message ListRealmCategoriesResponse {
+  repeated RealmCategory categories = 1;
+}
+
+message CreateRealmCategoryRequest {
+  RealmCategory category = 1;
+}
+
+message CreateRealmCategoryResponse {
+  RealmCategory category = 1;
+}
+
+message Application {
+  string id = 1;
+  string slug = 2;
+  string name = 3;
+  string kind = 4;  // spa | native | server | service
+  string status = 5;
+  repeated string redirect_uris = 6;
+  string backchannel_logout_uri = 7;
+  string token_format = 8;
+  string access_token_ttl = 9;
+  string refresh_token_ttl = 10;
+  int32 manifest_version = 11;
+}
+
+message ListApplicationsRequest {}
+
+message ListApplicationsResponse {
+  repeated Application applications = 1;
+}
+
+message CreateApplicationRequest {
+  Application application = 1;
+}
+
+message CreateApplicationResponse {
+  Application application = 1;
+  // Only for kind server/service; shown exactly once.
+  string client_secret = 2;
+}
+
+message UpdateApplicationRequest {
+  Application application = 1;  // keyed on id
+}
+
+message UpdateApplicationResponse {
+  Application application = 1;
+}
+
+message RotateClientSecretRequest {
+  string application_id = 1;
+}
+
+message RotateClientSecretResponse {
+  string client_secret = 1;  // shown exactly once
+}
+
+message RoutePolicy {
+  string id = 1;
+  string application_slug = 2;
+  int32 priority = 3;
+  string effect = 4;  // public | require_auth | require_permission | deny
+  string path_pattern = 5;
+  string host_pattern = 6;
+  repeated string methods = 7;
+  string permission_key = 8;
+  string scope_bindings_json = 9;
+}
+
+message ListRoutePoliciesRequest {
+  string application_slug = 1;
+}
+
+message ListRoutePoliciesResponse {
+  repeated RoutePolicy policies = 1;
+}
+
+message AuditEntry {
+  int64 occurred_at = 1;
+  string id = 2;
+  int64 seq = 3;
+  string actor_id = 4;
+  string actor_kind = 5;
+  string target_id = 6;
+  string session_id = 7;
+  string action = 8;
+  string result = 9;
+  string ip = 10;
+  string detail_json = 11;
+  string entry_hash = 12;  // hex
+}
+
+message QueryAuditRequest {
+  string actor_id = 1;
+  string action = 2;
+  int64 from = 3;  // unix seconds; 0 = unbounded
+  int64 to = 4;
+  int32 page_size = 5;
+  string page_token = 6;
+}
+
+message QueryAuditResponse {
+  repeated AuditEntry entries = 1;
+  string next_page_token = 2;
+}
+
+message VerifyAuditChainRequest {
+  int64 from = 1;
+  int64 to = 2;
+}
+
+message VerifyAuditChainResponse {
+  bool ok = 1;
+  int64 checked = 2;
+  int64 broken_at_seq = 3;  // meaningful only when ok=false
+}
+
+message SigningKey {
+  string kid = 1;
+  string alg = 2;
+  string status = 3;   // pending | active | retiring | retired
+  string purpose = 4;  // access | local
+  int64 not_before = 5;
+  int64 not_after = 6;
+}
+
+message ListSigningKeysRequest {}
+
+message ListSigningKeysResponse {
+  repeated SigningKey keys = 1;
+}
+
+message RotateSigningKeyRequest {
+  string purpose = 1;
+}
+
+message RotateSigningKeyResponse {
+  SigningKey new_key = 1;
+}
+
+message GetCatalogVersionRequest {}
+
+message GetCatalogVersionResponse {
+  int64 version = 1;
+  int64 changed_at = 2;
+}
+
+message GetSigninPageRequest {}
+
+message GetSigninPageResponse {
+  string config_json = 1;
+  int64 updated_at = 2;
+}
+
+message PutSigninPageRequest {
+  string config_json = 1;
+}
+
+message PutSigninPageResponse {}
