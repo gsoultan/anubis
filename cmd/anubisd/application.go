@@ -1,0 +1,192 @@
+package main
+
+import (
+	"context"
+	"log/slog"
+	"net/http"
+
+	"connectrpc.com/connect"
+
+	"github.com/gsoultan/anubis/gen/go/anubis/v1/anubisv1connect"
+	apihttp "github.com/gsoultan/anubis/internal/api/http"
+	auditpg "github.com/gsoultan/anubis/internal/audit/adapter/postgres"
+	authhttp "github.com/gsoultan/anubis/internal/auth/adapter/http"
+	authpg "github.com/gsoultan/anubis/internal/auth/adapter/postgres"
+	authrpc "github.com/gsoultan/anubis/internal/auth/adapter/rpc"
+	authapp "github.com/gsoultan/anubis/internal/auth/app"
+	"github.com/gsoultan/anubis/internal/auth/app/device"
+	"github.com/gsoultan/anubis/internal/auth/app/mfa"
+	sessionapp "github.com/gsoultan/anubis/internal/auth/app/session"
+	"github.com/gsoultan/anubis/internal/auth/app/signin"
+	tokenapp "github.com/gsoultan/anubis/internal/auth/app/token"
+	authep "github.com/gsoultan/anubis/internal/auth/endpoint"
+	authsvc "github.com/gsoultan/anubis/internal/auth/service"
+	authzpg "github.com/gsoultan/anubis/internal/authz/adapter/postgres"
+	authzrpc "github.com/gsoultan/anubis/internal/authz/adapter/rpc"
+	authzapp "github.com/gsoultan/anubis/internal/authz/app"
+	authzadmin "github.com/gsoultan/anubis/internal/authz/app/admin"
+	authzep "github.com/gsoultan/anubis/internal/authz/endpoint"
+	authzsvc "github.com/gsoultan/anubis/internal/authz/service"
+	gatehttp "github.com/gsoultan/anubis/internal/gate/adapter/http"
+	gatepg "github.com/gsoultan/anubis/internal/gate/adapter/postgres"
+	gateapp "github.com/gsoultan/anubis/internal/gate/app"
+	identitypg "github.com/gsoultan/anubis/internal/identity/adapter/postgres"
+	identityrpc "github.com/gsoultan/anubis/internal/identity/adapter/rpc"
+	identityapp "github.com/gsoultan/anubis/internal/identity/app"
+	"github.com/gsoultan/anubis/internal/identity/app/registration"
+	identitysvc "github.com/gsoultan/anubis/internal/identity/service"
+	"github.com/gsoultan/anubis/internal/platform/config"
+	"github.com/gsoultan/anubis/internal/platform/crypto/keyring"
+	"github.com/gsoultan/anubis/internal/platform/database"
+	"github.com/gsoultan/anubis/internal/platform/mw"
+	"github.com/gsoultan/anubis/internal/platform/ratelimit"
+	scopepg "github.com/gsoultan/anubis/internal/scope/adapter/postgres"
+	scoperpc "github.com/gsoultan/anubis/internal/scope/adapter/rpc"
+	scopeapp "github.com/gsoultan/anubis/internal/scope/app"
+	scopesvc "github.com/gsoultan/anubis/internal/scope/service"
+	tenancypg "github.com/gsoultan/anubis/internal/tenancy/adapter/postgres"
+	tenancyrpc "github.com/gsoultan/anubis/internal/tenancy/adapter/rpc"
+	tenancyapp "github.com/gsoultan/anubis/internal/tenancy/app"
+	tenancysvc "github.com/gsoultan/anubis/internal/tenancy/service"
+
+	"github.com/gsoultan/anubis/internal/scope/adapter/feed"
+)
+
+// application is the composition root: it wires each bounded context's
+// repositories, usecases, services and endpoints, then lets the contexts
+// register their own transports. Nothing here contains business logic —
+// this file exists so no other package has to know the whole system.
+type application struct {
+	clock     systemClock
+	ring      *keyring.Manager
+	auditor   *auditpg.ChainedAuditor
+	issuer    authapp.TokenIssuer
+	issuerURL string
+	masterKey []byte
+
+	identity *identitypg.Repository
+	auth     *authpg.Repository
+	authz    *authzpg.Repository
+	scope    *scopepg.Repository
+	tenancy  *tenancypg.Repository
+	audit    *auditpg.Repository
+	gate     *gatepg.Repository
+}
+
+func newApplication(ctx context.Context, cfg *config.Config, db *database.DB, logger *slog.Logger) (*application, error) {
+	a := &application{
+		clock:     systemClock{},
+		masterKey: cfg.MasterKey,
+		issuerURL: cfg.Issuer,
+		identity:  identitypg.New(db),
+		auth:      authpg.New(db),
+		authz:     authzpg.New(db),
+		scope:     scopepg.New(db),
+		tenancy:   tenancypg.New(db),
+		audit:     auditpg.New(db),
+		gate:      gatepg.New(db),
+	}
+	ring, err := loadRing(ctx, logger, a.auth, cfg.MasterKey, cfg.AutoKeys)
+	if err != nil {
+		return nil, err
+	}
+	a.ring = ring
+	a.auditor = auditpg.NewChainedAuditor(a.audit, logger)
+	a.issuer = authapp.NewPasetoTokenIssuer(cfg.Issuer, ring, a.tenancy, a.identity,
+		a.auth, a.auth, a.authz, a.tenancy, a.clock)
+	return a, nil
+}
+
+func (a *application) close() { a.auditor.Close() }
+
+// registerRPC mounts every context's Connect service on one mux.
+func (a *application) registerRPC(rpc *http.ServeMux, opts connect.HandlerOption,
+	limiter *ratelimit.Limiter, logger *slog.Logger) {
+
+	// --- auth context -------------------------------------------------------
+	backchannel := sessionapp.NewBackchannelLogout(a.issuerURL, a.ring, a.tenancy,
+		authpg.NewHTTPBackchannelNotifier(logger), a.clock)
+	login := signin.NewLoginInteractor(a.tenancy, a.identity, a.identity, a.identity,
+		a.auth, a.auth, a.issuer, a.ring, a.auth, a.clock, a.auditor)
+	verifyMfa := mfa.NewVerifyMfaInteractor(a.ring, a.auth, a.identity, a.identity,
+		a.identity, a.tenancy, a.auth, a.issuer, a.auth, a.clock, a.auditor)
+	refresh := tokenapp.NewRefreshInteractor(a.auth, a.auth, a.tenancy, a.issuer, a.auth, a.auditor)
+	logout := sessionapp.NewLogoutInteractor(a.auth, a.auth, a.identity, a.auth, a.auditor, backchannel)
+	dev := device.NewDeviceInteractor(a.tenancy, a.identity, a.identity, a.identity,
+		a.auth, a.auth, a.issuer, a.auth, a.clock, a.auditor)
+	reg := registration.NewRegisterInteractor(a.tenancy, a.identity, a.identity, a.identity,
+		a.identity, a.auth, a.auth, a.clock, a.auditor)
+	verifyEmail := registration.NewVerifyEmailInteractor(a.auth, a.identity)
+	introspect := tokenapp.NewIntrospectInteractor(a.issuerURL, a.ring, a.auth, a.tenancy, a.clock)
+	revoke := tokenapp.NewRevokeInteractor(a.auth, a.auth, a.tenancy, a.auditor)
+	getMe := sessionapp.NewGetMeInteractor(a.identity, a.authz)
+	listSessions := sessionapp.NewListSessionsInteractor(a.auth)
+
+	authService := authsvc.NewAuthService(login, verifyMfa, refresh,
+		logout, logout.All(), logout.Session(), dev, dev.Verify(), reg, verifyEmail)
+	tokenService := authsvc.NewTokenService(introspect, revoke)
+	sessionService := authsvc.NewSessionService(getMe, listSessions, logout.Session())
+
+	rpc.Handle(anubisv1connect.NewAuthServiceHandler(
+		authrpc.NewAuthHandler(authep.NewAuthEndpoints(authService, logger, limiter)), opts))
+	rpc.Handle(anubisv1connect.NewTokenServiceHandler(
+		authrpc.NewTokenHandler(authep.NewTokenEndpoints(tokenService, logger)), opts))
+	rpc.Handle(anubisv1connect.NewSessionServiceHandler(
+		authrpc.NewSessionHandler(authep.NewSessionEndpoints(sessionService, logger)), opts))
+
+	// --- authz context ------------------------------------------------------
+	authorize := authzapp.NewAuthorizeInteractor(a.authz, a.clock, a.auditor)
+	explain := authzapp.NewExplainInteractor(a.authz)
+	switchScope := authzapp.NewSwitchScopeInteractor(a.auth, a.scope, a.tenancy, a.issuer, a.auth, a.auditor)
+	authzService := authzsvc.NewAuthzService(authorize, explain, switchScope)
+	rpc.Handle(anubisv1connect.NewAuthzServiceHandler(
+		authzrpc.NewAuthzHandler(authzep.NewAuthzEndpoints(authzService, logger)), opts))
+
+	// --- admin planes -------------------------------------------------------
+	f := mw.NewFactory(logger)
+
+	identityAdmin := identityapp.NewIdentityAdminInteractor(a.authz, a.identity, a.identity,
+		a.identity, a.identity, a.identity, a.identity, a.auth, a.auth, a.tenancy,
+		a.auth, a.clock, a.auditor)
+	rpc.Handle(anubisv1connect.NewIdentityAdminServiceHandler(
+		identityrpc.NewIdentityAdminHandler(identitysvc.NewIdentityAdminService(identityAdmin), f), opts))
+
+	scopeAdmin := scopeapp.NewScopeAdminInteractor(a.authz, a.scope, a.scope, a.scope,
+		feed.NewFetcher(), a.auth, a.auditor)
+	rpc.Handle(anubisv1connect.NewScopeAdminServiceHandler(
+		scoperpc.NewScopeAdminHandler(scopesvc.NewScopeAdminService(scopeAdmin), f), opts))
+
+	authzAdmin := authzadmin.NewAuthzAdminInteractor(a.authz, a.authz, a.authz, a.authz,
+		a.authz, a.tenancy, a.tenancy, a.auth, a.auditor)
+	rpc.Handle(anubisv1connect.NewAuthzAdminServiceHandler(
+		authzrpc.NewAuthzAdminHandler(authzsvc.NewAuthzAdminService(authzAdmin), f), opts))
+
+	tenantAdmin := tenancyapp.NewTenantAdminInteractor(a.authz, a.tenancy, a.identity,
+		a.tenancy, a.tenancy, a.audit, a.auth, a.tenancy, a.auditor,
+		&storeKeyRotator{keys: a.auth, master: a.masterKey}, a.auditor)
+	rpc.Handle(anubisv1connect.NewTenantAdminServiceHandler(
+		tenancyrpc.NewTenantAdminHandler(tenancysvc.NewTenantAdminService(tenantAdmin), f), opts))
+}
+
+// registerHTTP lets each context mount its protocol-shaped routes (OIDC,
+// key discovery, forward auth) on the shared server.
+func (a *application) registerHTTP(ctx context.Context, srv *apihttp.Server,
+	cfg *config.Config, limiter *ratelimit.Limiter, logger *slog.Logger) {
+
+	wellKnown := authhttp.NewWellKnownHandler(cfg.Issuer, a.ring)
+	srv.HandleFunc("GET /.well-known/anubis-keys.json", wellKnown.Keys)
+	srv.HandleFunc("GET /.well-known/openid-configuration", wellKnown.OpenIDConfiguration)
+
+	oidc := authhttp.NewOIDCHandler(cfg.Issuer, a.tenancy, a.identity, a.identity,
+		a.identity, a.auth, a.auth, a.tenancy, a.tenancy, a.issuer, a.clock,
+		a.auditor, limiter, logger)
+	srv.HandleFunc("GET /v1/authorize", oidc.Authorize)
+	srv.HandleFunc("POST /v1/login", oidc.LoginForm)
+	srv.HandleFunc("POST /v1/token", oidc.Token)
+
+	snaps := gateapp.NewManager(a.gate, a.gate, logger)
+	go snaps.Run(ctx)
+	gate := gatehttp.NewGateHandler(cfg.Issuer, a.ring, snaps)
+	srv.HandleFunc("POST /v1/gate/check", gate.Check)
+	srv.HandleFunc("GET /v1/gate/check", gate.Check)
+}

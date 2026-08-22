@@ -9,20 +9,21 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gsoultan/anubis/pkg/anubis/keys"
 	"github.com/gsoultan/anubis/pkg/anubis/paseto"
 )
 
-func testKeys(t *testing.T) (ed25519.PublicKey, ed25519.PrivateKey, *KeySet) {
+func testKeys(t *testing.T) (ed25519.PublicKey, ed25519.PrivateKey, *keys.Set) {
 	t.Helper()
 	pk, sk, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		t.Fatal(err)
 	}
-	doc, _ := json.Marshal(KeysDocument{Keys: []KeyEntry{{
+	doc, _ := json.Marshal(keys.Document{Keys: []keys.Entry{{
 		Kid: "k1", Alg: "Ed25519",
 		PublicKey: base64.RawURLEncoding.EncodeToString(pk),
 	}}})
-	ks, err := ParseKeysDocument(doc)
+	ks, err := keys.ParseDocument(doc)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,7 +48,7 @@ func baseClaims(now time.Time) Claims {
 	}
 }
 
-func newTestVerifier(t *testing.T, ks *KeySet, aud string, now time.Time) *Verifier {
+func newTestVerifier(t *testing.T, ks *keys.Set, aud string, now time.Time) *Verifier {
 	t.Helper()
 	v, err := NewVerifier(Config{
 		Issuer: "https://anubis.test", Audience: aud, StaticKeys: ks,

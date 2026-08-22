@@ -96,39 +96,48 @@ tokens.
 
 ## Component layout
 
+Seven bounded contexts (ADR-0010), each owning its domain, its ports, its
+application services and its adapters. Nothing crosses a context except
+through ports and domain types.
+
 ```
-                    ┌──────────────────────────────────────┐
-   browsers  ──────►│  transport/httpapi   (net/http)      │
-   mobile    ──────►│    login, refresh, OIDC redirect     │
-                    ├──────────────────────────────────────┤
-   services  ──────►│  transport/grpcapi                   │
-                    │    introspect, authorize, gate check  │
-                    ├──────────────────────────────────────┤
-                    │  usecase/                            │
-                    │    Login · Refresh · Logout           │
-                    │    Authorize · SwitchScope · GateCheck│
-                    ├──────────────────────────────────────┤
-                    │  domain/            (stdlib only)    │
-                    │    identity · credential · session    │
-                    │    scope · grant · token              │
-                    ├──────────────────────────────────────┤
-                    │  port/     interfaces the domain needs│
-                    ├────────────┬───────────┬──────────────┤
-                    │ postgres   │  cache    │  crypto      │
-                    │  (pgx)     │  (redis)  │  (stdlib)    │
-                    └────────────┴───────────┴──────────────┘
+                 ┌──────────────────────────────────────────────┐
+  browsers ─────►│ adapter/rpc     (Connect: also gRPC/gRPC-Web) │
+  mobile   ─────►│ adapter/http    (OIDC, well-known, gate)      │
+  services ─────►├──────────────────────────────────────────────┤
+                 │ endpoint/   go-kit middleware composes here   │
+                 ├──────────────────────────────────────────────┤
+                 │ service/    coarse surfaces over usecases     │
+                 ├──────────────────────────────────────────────┤
+                 │ app/        one usecase per operation         │
+                 ├──────────────────────────────────────────────┤
+                 │ port/       interfaces the context needs      │
+                 ├──────────────────────────────────────────────┤
+                 │ domain/     entities + rules  (stdlib only)   │
+                 └──────────────────────────────────────────────┘
+
+internal/
+  identity/   who exists — identities, credentials, realms, consents
+  auth/       how they prove it — sessions, tokens, sign-in, MFA, devices
+  authz/      what they may do — roles, permissions, grants, decisions
+  scope/      where they may do it — axes, node trees, external sync
+  tenancy/    whose installation — tenants, applications, route policies
+  audit/      what happened — hash-chained log
+  gate/       may this request pass — snapshot read model, forward auth
+  shared/     kernel: errors, principal, clock, validation
+  platform/   technical: config, crypto, database, migrate, middleware
+pkg/anubis/   public client SDK — zero dependencies, verifies offline
 ```
 
-**`internal/domain` imports nothing outside the standard library.** That rule is
-what keeps the security-critical logic testable without a database and honest
-about its dependencies.
+Each context's `domain/` imports nothing outside the standard library, and
+each carries its own generated query package
+(`adapter/postgres/gen`, from `db/queries/<context>`), so no package holds
+another context's SQL. Enforced by `scripts/check/`.
 
-`pkg/anubis` ships as a public client SDK: fetch keys, cache them, verify
+`pkg/anubis` ships as the public client SDK: fetch keys, cache them, verify
 offline, expose middleware. It is the highest-leverage code in the project —
 without it every team writes their own verifier and one of them will skip the
 `aud` check.
-
----
 
 ## Token architecture
 

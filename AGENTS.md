@@ -2,22 +2,29 @@
 
 ## Architecture (mandatory)
 
-Layering: **repositories → usecases → services → endpoints → transports**.
-Programming by interface at every seam. No interface wider than **15
-methods** — compose wider capabilities by embedding (see
-`internal/repository/catalog_repository.go`). **One interface per file, one
-struct per file** (methods may live in topical files; the type definition
-appears exactly once). Security-critical flows are single-method usecases
-(`Execute`); admin planes use grouped ≤15-method usecase interfaces.
-go-kit middleware (recover, request-id, logging, metrics, rate-limit)
-composes ONLY at the endpoint layer. Transports (Connect RPC + stdlib HTTP)
-contain no business logic. SQL exists only in `db/queries/*.sql` (sqlc) and
-`migrations/`.
+**Bounded contexts** (ADR-0010): `identity`, `auth`, `authz`, `scope`,
+`tenancy`, `audit`, `gate`, plus `shared/` (kernel) and `platform/`
+(technical). Inside each context the layering is
+**domain → port → app → service → endpoint → adapter**, programmed by
+interface at every seam.
 
-Non-trivial changes are worked as a pair: adopt the **Driver** profile that
-owns the code you touch, then re-read the diff as the **Challenger** whose
-budget it most likely breaks. Name both in the task summary
-(`Driver: sec · Challenger: perf`).
+Hard rules, all CI-enforced (`scripts/check/*.sh`):
+
+- **≤ 10 Go files per folder.** Outgrowing it means a missing concept —
+  split by aggregate (`authz/domain/grant`), not by adding files.
+- **≤ 15 methods per interface**; compose wider capabilities by embedding.
+- **One interface per file, one struct per file.** Methods may live in
+  topical files; the type is defined exactly once.
+- **Folders name the layer, package clauses are context-prefixed and
+  unique** (`internal/identity/domain` → `package identitydomain`). No
+  aliases at import sites, no shadowing of common locals.
+- **`*/domain` and `shared/*` import stdlib only.**
+- **No context imports another context's `adapter/…`** — cross-context
+  traffic goes through ports and domain types.
+- **SQL only in `db/queries/<context>/*.sql` and `migrations/`** (ADR-0009),
+  one generated package per context.
+- go-kit middleware composes ONLY at the endpoint layer; transports carry no
+  business logic.
 
 | Profile | Owns | Vetoes | Proof |
 | :--- | :--- | :--- | :--- |

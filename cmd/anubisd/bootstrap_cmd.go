@@ -6,13 +6,18 @@ import (
 	"fmt"
 	"log/slog"
 
+	authzpg "github.com/gsoultan/anubis/internal/authz/adapter/postgres"
+	authzdomain "github.com/gsoultan/anubis/internal/authz/domain"
+	"github.com/gsoultan/anubis/internal/authz/domain/grant"
+	identitypg "github.com/gsoultan/anubis/internal/identity/adapter/postgres"
+	identitydomain "github.com/gsoultan/anubis/internal/identity/domain"
+	"github.com/gsoultan/anubis/internal/identity/domain/credential"
+	"github.com/gsoultan/anubis/internal/platform/config"
+	"github.com/gsoultan/anubis/internal/platform/crypto/kdf"
+	"github.com/gsoultan/anubis/internal/platform/database"
+	tenancypg "github.com/gsoultan/anubis/internal/tenancy/adapter/postgres"
+	tenancydomain "github.com/gsoultan/anubis/internal/tenancy/domain"
 	"github.com/jackc/pgx/v5/pgxpool"
-
-	"github.com/gsoultan/anubis/internal/config"
-	"github.com/gsoultan/anubis/internal/crypto/kdf"
-	"github.com/gsoultan/anubis/internal/domain"
-	"github.com/gsoultan/anubis/internal/repository"
-	"github.com/gsoultan/anubis/internal/repository/postgres"
 )
 
 // selfPermissions is Anubis's own catalog — Anubis is its own relying party.
@@ -65,20 +70,23 @@ func runBootstrap(ctx context.Context, logger *slog.Logger, args []string) error
 		return err
 	}
 	defer pool.Close()
-	store := postgres.NewStore(pool)
+	db := database.New(pool)
+	tenancyRepo := tenancypg.New(db)
+	identityRepo := identitypg.New(db)
+	authzRepo := authzpg.New(db)
 
-	return store.WithinTx(ctx, func(ctx context.Context) error {
-		tenant, err := store.TenantBySlug(ctx, *tenantSlug)
+	return db.WithinTx(ctx, func(ctx context.Context) error {
+		tenant, err := tenancyRepo.TenantBySlug(ctx, *tenantSlug)
 		if err != nil {
-			if tenant, err = store.CreateTenant(ctx, *tenantSlug, *tenantName); err != nil {
+			if tenant, err = tenancyRepo.CreateTenant(ctx, *tenantSlug, *tenantName); err != nil {
 				return fmt.Errorf("create tenant: %w", err)
 			}
 			logger.Info("tenant created", "slug", *tenantSlug)
 		}
 
-		realm, err := store.RealmByCode(ctx, tenant.ID, "internal")
+		realm, err := identityRepo.RealmByCode(ctx, tenant.ID, "internal")
 		if err != nil {
-			id, cerr := store.CreateRealm(ctx, tenant.ID, repository.RealmRecord{
+			id, cerr := identityRepo.CreateRealm(ctx, tenant.ID, identitydomain.RealmRecord{
 				Code: "internal", Kind: "internal", DisplayName: "Internal",
 				MinAssurance:    1,
 				AllowedFactors:  []string{"password", "totp", "device_key"},
@@ -87,30 +95,30 @@ func runBootstrap(ctx context.Context, logger *slog.Logger, args []string) error
 			if cerr != nil {
 				return fmt.Errorf("create realm: %w", cerr)
 			}
-			if realm, err = store.RealmByID(ctx, id); err != nil {
+			if realm, err = identityRepo.RealmByID(ctx, id); err != nil {
 				return err
 			}
 			logger.Info("internal realm created")
 		}
 
 		// Applications: the console (browser SPA) and anubis itself.
-		if _, err := store.ApplicationBySlug(ctx, tenant.ID, "console"); err != nil {
-			if _, err := store.CreateApplication(ctx, tenant.ID, repository.ApplicationRecord{
+		if _, err := tenancyRepo.ApplicationBySlug(ctx, tenant.ID, "console"); err != nil {
+			if _, err := tenancyRepo.CreateApplication(ctx, tenant.ID, tenancydomain.ApplicationRecord{
 				Slug: "console", Name: "Anubis Console", Kind: "spa",
 				RedirectURIs: []string{*consoleOrigin + "/callback"},
 			}); err != nil {
 				return fmt.Errorf("create console app: %w", err)
 			}
 		}
-		anubisApp, err := store.ApplicationBySlug(ctx, tenant.ID, "anubis")
+		anubisApp, err := tenancyRepo.ApplicationBySlug(ctx, tenant.ID, "anubis")
 		if err != nil {
-			id, cerr := store.CreateApplication(ctx, tenant.ID, repository.ApplicationRecord{
+			id, cerr := tenancyRepo.CreateApplication(ctx, tenant.ID, tenancydomain.ApplicationRecord{
 				Slug: "anubis", Name: "Anubis", Kind: "service",
 			})
 			if cerr != nil {
 				return fmt.Errorf("create anubis app: %w", cerr)
 			}
-			if anubisApp, err = store.ApplicationByID(ctx, tenant.ID, id); err != nil {
+			if anubisApp, err = tenancyRepo.ApplicationByID(ctx, tenant.ID, id); err != nil {
 				return err
 			}
 		}
@@ -118,8 +126,8 @@ func runBootstrap(ctx context.Context, logger *slog.Logger, args []string) error
 		// Self catalog + admin role with the anubis:* pattern.
 		keep := make([]string, 0, len(selfPermissions))
 		for _, p := range selfPermissions {
-			id, _, uerr := store.UpsertPermission(ctx, tenant.ID, anubisApp.ID, "anubis",
-				repository.PermissionRecord{
+			id, _, uerr := authzRepo.UpsertPermission(ctx, tenant.ID, anubisApp.ID, "anubis",
+				authzdomain.PermissionRecord{
 					Resource: p.resource, Action: p.action,
 					Description: p.description, Risk: p.risk, MinAssurance: 1,
 				})
@@ -128,52 +136,52 @@ func runBootstrap(ctx context.Context, logger *slog.Logger, args []string) error
 			}
 			keep = append(keep, id)
 		}
-		if _, err := store.DeprecatePermissionsExcept(ctx, anubisApp.ID, keep); err != nil {
+		if _, err := authzRepo.DeprecatePermissionsExcept(ctx, anubisApp.ID, keep); err != nil {
 			return err
 		}
 
-		adminRole, err := store.RoleByName(ctx, tenant.ID, "anubis.admin")
+		adminRole, err := authzRepo.RoleByName(ctx, tenant.ID, "anubis.admin")
 		if err != nil {
-			id, cerr := store.CreateRole(ctx, tenant.ID, repository.RoleRecord{
+			id, cerr := authzRepo.CreateRole(ctx, tenant.ID, authzdomain.RoleRecord{
 				Name: "anubis.admin", Description: "Full Anubis administration",
 				AllowedRealmKinds: []string{"internal"},
 			}, anubisApp.ID)
 			if cerr != nil {
 				return fmt.Errorf("create role: %w", cerr)
 			}
-			adminRole = &repository.RoleRecord{ID: id, Name: "anubis.admin"}
+			adminRole = &authzdomain.RoleRecord{ID: id, Name: "anubis.admin"}
 		}
-		if err := store.SetRolePatterns(ctx, adminRole.ID, []string{"anubis:*"}); err != nil {
+		if err := authzRepo.SetRolePatterns(ctx, adminRole.ID, []string{"anubis:*"}); err != nil {
 			return err
 		}
-		if err := store.RecomputeRole(ctx, adminRole.ID); err != nil {
+		if err := authzRepo.RecomputeRole(ctx, adminRole.ID); err != nil {
 			return err
 		}
 
 		// Admin identity + password + grant.
-		identity, err := store.IdentityForLogin(ctx, tenant.ID, realm.ID, *adminUser)
+		identity, err := identityRepo.IdentityForLogin(ctx, tenant.ID, realm.ID, *adminUser)
 		if err != nil || identity == nil {
 			hash, herr := kdf.Hash(*adminPass)
 			if herr != nil {
 				return herr
 			}
-			id, cerr := store.CreateIdentity(ctx, repository.IdentityCreate{
+			id, cerr := identityRepo.CreateIdentity(ctx, identitydomain.IdentityCreate{
 				TenantID: tenant.ID, RealmID: realm.ID, Username: *adminUser,
 				AssuranceLevel: 3, Status: "active",
 			})
 			if cerr != nil {
 				return fmt.Errorf("create admin identity: %w", cerr)
 			}
-			if _, cerr := store.CreateCredential(ctx, repository.CredentialInput{
+			if _, cerr := identityRepo.CreateCredential(ctx, credential.CredentialInput{
 				IdentityID: id, TenantID: tenant.ID, Kind: "password", Secret: hash,
 			}); cerr != nil {
 				return cerr
 			}
-			identity = &domain.Identity{ID: id}
+			identity = &identitydomain.Identity{ID: id}
 			logger.Info("admin identity created", "username", *adminUser)
 		}
 
-		grants, err := store.ListGrants(ctx, tenant.ID, identity.ID, false)
+		grants, err := authzRepo.ListGrants(ctx, tenant.ID, identity.ID, false)
 		if err != nil {
 			return err
 		}
@@ -184,7 +192,7 @@ func runBootstrap(ctx context.Context, logger *slog.Logger, args []string) error
 			}
 		}
 		if !hasAdmin {
-			if _, err := store.CreateGrant(ctx, repository.GrantCreate{
+			if _, err := authzRepo.CreateGrant(ctx, grant.GrantCreate{
 				TenantID: tenant.ID, IdentityID: identity.ID, RoleID: adminRole.ID,
 				GrantedBy: identity.ID, Reason: "bootstrap",
 			}); err != nil {

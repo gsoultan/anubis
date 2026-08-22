@@ -7,15 +7,16 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/gsoultan/anubis/internal/crypto/keyring"
-	"github.com/gsoultan/anubis/internal/repository"
+	authdomain "github.com/gsoultan/anubis/internal/auth/domain"
+	authport "github.com/gsoultan/anubis/internal/auth/port"
+	"github.com/gsoultan/anubis/internal/platform/crypto/keyring"
 )
 
 const keyLifetime = 90 * 24 * time.Hour
 
 // loadRing loads signing keys from the database, unseals private material
 // with the master key, and optionally provisions first keys (dev).
-func loadRing(ctx context.Context, logger *slog.Logger, keys repository.KeyRepository, master []byte, autoProvision bool) (*keyring.Manager, error) {
+func loadRing(ctx context.Context, logger *slog.Logger, keys authport.KeyRepository, master []byte, autoProvision bool) (*keyring.Manager, error) {
 	ring, err := buildRing(ctx, keys, master)
 	if err != nil {
 		return nil, err
@@ -32,7 +33,7 @@ func loadRing(ctx context.Context, logger *slog.Logger, keys repository.KeyRepos
 	return keyring.NewManager(ring), nil
 }
 
-func buildRing(ctx context.Context, keys repository.KeyRepository, master []byte) (*keyring.Ring, error) {
+func buildRing(ctx context.Context, keys authport.KeyRepository, master []byte) (*keyring.Ring, error) {
 	records, err := keys.VerificationKeys(ctx)
 	if err != nil {
 		return nil, err
@@ -59,7 +60,7 @@ func buildRing(ctx context.Context, keys repository.KeyRepository, master []byte
 	return keyring.NewRing(out)
 }
 
-func provisionKeys(ctx context.Context, keys repository.KeyRepository, master []byte) error {
+func provisionKeys(ctx context.Context, keys authport.KeyRepository, master []byte) error {
 	now := time.Now()
 	access, err := keyring.GenerateAccessKey(now, keyLifetime)
 	if err != nil {
@@ -78,7 +79,7 @@ func provisionKeys(ctx context.Context, keys repository.KeyRepository, master []
 		if err != nil {
 			return err
 		}
-		if err := keys.CreateKey(ctx, repository.KeyRecord{
+		if err := keys.CreateKey(ctx, authdomain.KeyRecord{
 			Kid: k.Kid, Alg: k.Alg, Status: keyring.StatusActive, Purpose: k.Purpose,
 			PublicKey: orEmptyBytes(k.Public), PrivateKeyEnc: sealed,
 			NotBefore: k.NotBefore, NotAfter: k.NotAfter,

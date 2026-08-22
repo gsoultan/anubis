@@ -1,6 +1,10 @@
 package anubis
 
-import "time"
+import (
+	"time"
+
+	"github.com/gsoultan/anubis/pkg/anubis/keys"
+)
 
 // Config configures offline verification.
 type Config struct {
@@ -14,7 +18,7 @@ type Config struct {
 	// or StaticKeys must be set.
 	KeysURL string
 	// StaticKeys pins keys directly (air-gapped consumers, tests).
-	StaticKeys *KeySet
+	StaticKeys *keys.Set
 	// Leeway absorbs clock skew between services. Default 60s; enforce NTP.
 	Leeway time.Duration
 	// now is a test seam.

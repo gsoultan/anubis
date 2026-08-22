@@ -3,12 +3,12 @@ package main
 import (
 	"time"
 
-	"github.com/gsoultan/anubis/internal/repository"
+	"github.com/gsoultan/anubis/internal/shared/clock"
 )
 
-// systemClock is the production repository.Clock.
+// systemClock is the production clock.Clock.
 type systemClock struct{}
 
 func (systemClock) Now() time.Time { return time.Now() }
 
-var _ repository.Clock = systemClock{}
+var _ clock.Clock = systemClock{}

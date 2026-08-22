@@ -6,12 +6,13 @@ import (
 	"log/slog"
 	"time"
 
+	authpg "github.com/gsoultan/anubis/internal/auth/adapter/postgres"
+	authdomain "github.com/gsoultan/anubis/internal/auth/domain"
+	authport "github.com/gsoultan/anubis/internal/auth/port"
+	"github.com/gsoultan/anubis/internal/platform/config"
+	"github.com/gsoultan/anubis/internal/platform/crypto/keyring"
+	"github.com/gsoultan/anubis/internal/platform/database"
 	"github.com/jackc/pgx/v5/pgxpool"
-
-	"github.com/gsoultan/anubis/internal/config"
-	"github.com/gsoultan/anubis/internal/crypto/keyring"
-	"github.com/gsoultan/anubis/internal/repository"
-	"github.com/gsoultan/anubis/internal/repository/postgres"
 )
 
 // keys list|prepare|promote — the pending -> active -> retiring lifecycle.
@@ -36,7 +37,7 @@ func runKeys(ctx context.Context, logger *slog.Logger, args []string) error {
 		return err
 	}
 	defer pool.Close()
-	store := postgres.NewStore(pool)
+	store := authpg.New(database.New(pool))
 
 	switch sub {
 	case "list":
@@ -70,7 +71,7 @@ func runKeys(ctx context.Context, logger *slog.Logger, args []string) error {
 	}
 }
 
-func prepareKey(ctx context.Context, keys repository.KeyRepository, master []byte, purpose string) error {
+func prepareKey(ctx context.Context, keys authport.KeyRepository, master []byte, purpose string) error {
 	now := time.Now()
 	var k *keyring.Key
 	var err error
@@ -90,7 +91,7 @@ func prepareKey(ctx context.Context, keys repository.KeyRepository, master []byt
 	if err != nil {
 		return err
 	}
-	if err := keys.CreateKey(ctx, repository.KeyRecord{
+	if err := keys.CreateKey(ctx, authdomain.KeyRecord{
 		Kid: k.Kid, Alg: k.Alg, Status: keyring.StatusPending, Purpose: k.Purpose,
 		PublicKey: orEmptyBytes(k.Public), PrivateKeyEnc: sealed,
 		NotBefore: k.NotBefore, NotAfter: k.NotAfter,

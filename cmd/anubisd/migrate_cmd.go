@@ -6,8 +6,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"github.com/gsoultan/anubis/internal/config"
-	"github.com/gsoultan/anubis/internal/migrate"
+	"github.com/gsoultan/anubis/internal/platform/config"
+	"github.com/gsoultan/anubis/internal/platform/migrate"
 	"github.com/gsoultan/anubis/migrations"
 )
 

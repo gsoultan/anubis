@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/gsoultan/anubis/pkg/anubis/keys"
 	"github.com/gsoultan/anubis/pkg/anubis/paseto"
 )
 
@@ -15,7 +16,7 @@ import (
 // path except a bounded, rate-limited key refetch on unknown kid.
 type Verifier struct {
 	cfg   Config
-	cache *KeyCache
+	cache *keys.Cache
 }
 
 func NewVerifier(cfg Config) (*Verifier, error) {
@@ -33,7 +34,7 @@ func NewVerifier(cfg Config) (*Verifier, error) {
 	}
 	v := &Verifier{cfg: cfg}
 	if cfg.KeysURL != "" {
-		v.cache = NewKeyCache(cfg.KeysURL)
+		v.cache = keys.NewCache(cfg.KeysURL)
 	}
 	return v, nil
 }
