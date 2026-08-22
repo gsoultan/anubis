@@ -30,7 +30,7 @@ var (
 	ErrKeySize     = errors.New("paseto: wrong key size")
 )
 
-var b64 = base64.RawURLEncoding
+var b64 = base64.RawURLEncoding.Strict()
 
 // pae implements Pre-Authentication Encoding from the PASETO spec:
 // LE64(count) || for each piece: LE64(len(piece)) || piece.

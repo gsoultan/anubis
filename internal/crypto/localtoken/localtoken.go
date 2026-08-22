@@ -37,7 +37,7 @@ var (
 	ErrExpired   = errors.New("localtoken: expired")
 	ErrOpen      = errors.New("localtoken: decryption failed")
 
-	b64 = base64.RawURLEncoding
+	b64 = base64.RawURLEncoding.Strict()
 )
 
 // deriveKey turns the ring's 32-byte local secret into the AEAD key. The

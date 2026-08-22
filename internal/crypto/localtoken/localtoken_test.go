@@ -75,7 +75,14 @@ func TestWrongKeyAndTamper(t *testing.T) {
 	}
 
 	raw := []byte(tok)
-	raw[len(raw)-1] ^= 1
+	mid := len(raw) - 10 // inside the ciphertext, clear of the final char's
+	// padding bits (Go's lenient decoders ignore those; ours are Strict now,
+	// but the tamper test should not depend on that)
+	if raw[mid] == 'A' {
+		raw[mid] = 'B'
+	} else {
+		raw[mid] = 'A'
+	}
 	if _, _, err := Open(sec, string(raw), "mfa", now); err == nil {
 		t.Fatal("tampered token opened")
 	}
