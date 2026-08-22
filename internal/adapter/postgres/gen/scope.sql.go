@@ -593,3 +593,30 @@ func (q *Queries) UpdateScopeAxis(ctx context.Context, arg UpdateScopeAxisParams
 	}
 	return result.RowsAffected(), nil
 }
+
+const updateSyncSource = `-- name: UpdateSyncSource :execrows
+UPDATE scope_sync_sources
+SET config = $1::jsonb,
+    status = $2
+WHERE id = $3 AND tenant_id = $4
+`
+
+type UpdateSyncSourceParams struct {
+	Config   []byte
+	Status   string
+	ID       string
+	TenantID string
+}
+
+func (q *Queries) UpdateSyncSource(ctx context.Context, arg UpdateSyncSourceParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updateSyncSource,
+		arg.Config,
+		arg.Status,
+		arg.ID,
+		arg.TenantID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}

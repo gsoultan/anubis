@@ -12,6 +12,7 @@ import (
 	"github.com/gsoultan/anubis/internal/crypto/keyring"
 	ep "github.com/gsoultan/anubis/internal/endpoint"
 	"github.com/gsoultan/anubis/internal/repository"
+	"github.com/gsoultan/anubis/internal/repository/feed"
 	"github.com/gsoultan/anubis/internal/repository/postgres"
 	"github.com/gsoultan/anubis/internal/service"
 	"github.com/gsoultan/anubis/internal/transport/connectrpc"
@@ -71,7 +72,8 @@ func (w adminWiring) register(mux *http.ServeMux, opts connect.HandlerOption) {
 
 	identityUC := usecase.NewIdentityAdminInteractor(
 		s, s, s, s, s, s, s, s, s, s, s, systemClock{}, w.auditor)
-	scopeUC := usecase.NewScopeAdminInteractor(s, s, s, s, s, w.auditor)
+	// Structure feeds open their own connections (http/db_query/db_table).
+	scopeUC := usecase.NewScopeAdminInteractor(s, s, s, s, feed.NewFetcher(), s, w.auditor)
 	authzUC := usecase.NewAuthzAdminInteractor(s, s, s, s, s, s, s, s, w.auditor)
 	tenantUC := usecase.NewTenantAdminInteractor(
 		s, s, s, s, s, s, s, s, w.auditor, &storeKeyRotator{keys: s, master: w.master}, w.auditor)

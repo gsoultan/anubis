@@ -28,6 +28,13 @@ import (
 // advisoryLockKey is arbitrary but fixed: one lock guards schema evolution.
 const advisoryLockKey = 0x616e7562 // "anub"
 
+// ErrNeedsBaseline: the schema exists but nothing is tracked. Re-applying
+// would fail on objects that already exist, so the operator must say
+// explicitly whether this database is already at head (`anubisd baseline`,
+// scripts/db.sh baseline) or should be rebuilt (scripts/db.sh reset).
+var ErrNeedsBaseline = errors.New(
+	"migrate: schema exists but no migrations are recorded — run `anubisd baseline` if it is already at head, or scripts/db.sh reset to rebuild")
+
 // Runner applies embedded migrations over a single connection.
 type Runner struct {
 	fsys   fs.FS
@@ -60,6 +67,16 @@ func (r *Runner) Run(ctx context.Context, conn *pgx.Conn) (*Result, error) {
 	applied, err := r.appliedVersions(ctx, conn)
 	if err != nil {
 		return nil, err
+	}
+	// A database whose schema exists but whose tracking is empty predates
+	// this runner, or was rebuilt by bench/rebuild.sh. Re-applying 0001 would
+	// fail on "relation already exists"; demand an explicit baseline instead
+	// of guessing — the same call scripts/db.sh makes.
+	if len(applied) == 0 {
+		n, terr := publicTableCount(ctx, conn)
+		if terr == nil && n > 1 {
+			return nil, ErrNeedsBaseline
+		}
 	}
 
 	res := &Result{}
@@ -118,6 +135,37 @@ func (r *Runner) files() ([]string, error) {
 	return entries, nil
 }
 
+// Baseline records every embedded migration as applied WITHOUT running any
+// of them. For adopting an existing database (or one rebuilt by
+// bench/rebuild.sh), never for a fresh one.
+func (r *Runner) Baseline(ctx context.Context, conn *pgx.Conn) (int, error) {
+	files, err := r.files()
+	if err != nil {
+		return 0, err
+	}
+	n := 0
+	for _, name := range files {
+		raw, err := fs.ReadFile(r.fsys, name)
+		if err != nil {
+			return n, err
+		}
+		sum := sha256.Sum256(raw)
+		if _, err := conn.Exec(ctx,
+			"INSERT INTO schema_migrations (version, checksum) VALUES ($1, $2) ON CONFLICT (version) DO NOTHING",
+			strings.TrimSuffix(name, ".sql"), hex.EncodeToString(sum[:])); err != nil {
+			return n, err
+		}
+		n++
+	}
+	return n, nil
+}
+
+func publicTableCount(ctx context.Context, conn *pgx.Conn) (int, error) {
+	var n int
+	err := conn.QueryRow(ctx, "SELECT count(*) FROM pg_tables WHERE schemaname='public'").Scan(&n)
+	return n, err
+}
+
 // appliedVersions tolerates the pre-schema case: 0001 creates
 // schema_migrations, so a fresh database has neither the table nor rows —
 // but a database migrated by scripts/db.sh has both and must not re-run.
@@ -126,13 +174,8 @@ func (r *Runner) appliedVersions(ctx context.Context, conn *pgx.Conn) (map[strin
 	rows, err := conn.Query(ctx, "SELECT version, checksum FROM schema_migrations")
 	if err != nil {
 		if isUndefinedTable(err) {
-			// Guard against the half-adopted case db.sh also detects: tables
-			// exist but tracking is empty -> demand baseline, never re-apply.
-			var n int
-			if qerr := conn.QueryRow(ctx,
-				"SELECT count(*) FROM pg_tables WHERE schemaname='public'").Scan(&n); qerr == nil && n > 1 {
-				return nil, errors.New(
-					"migrate: schema exists but schema_migrations is missing; run scripts/db.sh baseline or reset")
+			if n, terr := publicTableCount(ctx, conn); terr == nil && n > 1 {
+				return nil, ErrNeedsBaseline
 			}
 			return out, nil
 		}

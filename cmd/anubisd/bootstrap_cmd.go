@@ -80,8 +80,8 @@ func runBootstrap(ctx context.Context, logger *slog.Logger, args []string) error
 		if err != nil {
 			id, cerr := store.CreateRealm(ctx, tenant.ID, repository.RealmRecord{
 				Code: "internal", Kind: "internal", DisplayName: "Internal",
-				MinAssurance: 1,
-				AllowedFactors: []string{"password", "totp", "device_key"},
+				MinAssurance:    1,
+				AllowedFactors:  []string{"password", "totp", "device_key"},
 				RequiredFactors: []string{"password"},
 			})
 			if cerr != nil {

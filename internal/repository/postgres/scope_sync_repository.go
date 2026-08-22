@@ -41,6 +41,21 @@ func (s *Store) CreateSyncSource(ctx context.Context, tenantID string, src repos
 	return id, mapErr(err)
 }
 
+func (s *Store) UpdateSyncSource(ctx context.Context, tenantID string, src repository.SyncSourceRecord) error {
+	n, err := s.q(ctx).UpdateSyncSource(ctx, gen.UpdateSyncSourceParams{
+		ID: src.ID, TenantID: tenantID,
+		Config: orEmptyJSON(src.Config),
+		Status: orDefaultStr(src.Status, "active"),
+	})
+	if err != nil {
+		return mapErr(err)
+	}
+	if n == 0 {
+		return notFoundErr()
+	}
+	return nil
+}
+
 func (s *Store) ScopeSyncApply(ctx context.Context, sourceID string, rows []byte, dry bool) (string, error) {
 	report, err := s.q(ctx).ScopeSyncApply(ctx, gen.ScopeSyncApplyParams{
 		SourceID: sourceID, Rows: rows, Dry: dry,

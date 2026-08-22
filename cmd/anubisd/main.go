@@ -27,6 +27,8 @@ func main() {
 		err = runServe(ctx, logger)
 	case "migrate":
 		err = runMigrate(ctx, logger)
+	case "baseline":
+		err = runBaseline(ctx, logger)
 	case "keys":
 		err = runKeys(ctx, logger, os.Args[2:])
 	case "bootstrap":
@@ -34,7 +36,7 @@ func main() {
 	case "version":
 		fmt.Println("anubisd dev")
 	default:
-		err = fmt.Errorf("unknown command %q (serve|migrate|keys|bootstrap)", cmd)
+		err = fmt.Errorf("unknown command %q (serve|migrate|baseline|keys|bootstrap)", cmd)
 	}
 	if err != nil {
 		logger.Error("fatal", "cmd", cmd, "error", err)

@@ -239,6 +239,9 @@ service ScopeAdminService {
   rpc UpsertScopeNodes(UpsertScopeNodesRequest) returns (UpsertScopeNodesResponse);
   rpc ListSyncSources(ListSyncSourcesRequest) returns (ListSyncSourcesResponse);
   rpc CreateSyncSource(CreateSyncSourceRequest) returns (CreateSyncSourceResponse);
+  // Rotate a feed's credentials or move it to a new endpoint without losing
+  // the source's history. Config is REPLACED, never merged.
+  rpc UpdateSyncSource(UpdateSyncSourceRequest) returns (UpdateSyncSourceResponse);
   rpc RunSync(RunSyncRequest) returns (RunSyncResponse);
 }
 
@@ -403,6 +406,14 @@ message CreateSyncSourceRequest {
 }
 
 message CreateSyncSourceResponse {
+  SyncSource source = 1;
+}
+
+message UpdateSyncSourceRequest {
+  SyncSource source = 1;  // keyed on id; config_json and status are applied
+}
+
+message UpdateSyncSourceResponse {
   SyncSource source = 1;
 }
 

@@ -293,6 +293,59 @@ Replays recent decisions against `default_effect='deny'` and reports what would
 break. **Run this before flipping an axis to strict.** On the seed data the flip
 took allows from 800 → 0 — better learned from a report than an outage.
 
+### Synchronising a structure from where it actually lives
+
+Structures usually belong to another system: the ERP owns cost centres, the CRM
+owns customers, HR owns the org chart. Register **one source of truth per
+axis** and Anubis pulls from it — over that source's **own connection**, which
+is a different database, a different credential, possibly a different engine
+than Anubis's own.
+
+| `kind` | Config | Used for |
+| :--- | :--- | :--- |
+| `http` | `{"url":…, "auth_header":…}` | A JSON API returning `[{ref, parent_ref, name, node_type?}]` |
+| `db_query` | `{"dsn":…, "query":…}` | **Another database**; the operator's own SQL, aliased to `ref`/`parent_ref`/`name` |
+| `db_table` | `{"dsn":…, "table":…, "columns":{"ref":…,"parent_ref":…,"name":…}}` | **A table in another database**, mapped column-by-column |
+
+```jsonc
+// register once
+POST /v1/admin/scope-sync-sources
+{ "axis": "cost_center", "kind": "db_table",
+  "config": { "dsn": "postgres://reader:…@erp-db:5432/erp",
+              "table": "cost_centers",
+              "columns": {"ref":"id","parent_ref":"parent_id","name":"label"},
+              "default_node_type": "cost_center" } }
+
+// then, on a schedule or on demand — no rows in the body means PULL
+POST /v1/admin/scope-sync-sources/{id}/run     { "dry": true }
+→ { "added": 5, "renamed": 0, "moved": 0, "archived": 0, "unchanged": 0, "errors": [] }
+```
+
+Rows may also be **pushed** in the request body when the source cannot be
+reached from Anubis (an air-gapped ERP, a nightly export).
+
+Rules that make this safe to run unattended:
+
+- **Keyed on `external_ref`** — same ref, same node, forever. Renames and moves
+  follow; ids never churn.
+- **Archive, never delete.** A row that vanishes from the source archives its
+  node: existing grants keep deciding, pickers stop offering it.
+- **Manual nodes are untouched.** Only ref-carrying nodes are sync's to
+  archive; a node created by hand in the console is never removed by a feed.
+  *(Verified against ~31,000 hand-seeded nodes: zero archived.)*
+- **An unreachable source is an error, not an empty feed.** Returning "no rows"
+  would archive the entire axis; the run fails loudly instead.
+- **Parents-first is guaranteed by Anubis, not assumed of the source.** No SQL
+  `ORDER BY` can express a topological order, so feeds are sorted before they
+  are applied.
+- **`dry: true` reports the same numbers with zero writes** — including rows
+  whose parent would only be created by that same run.
+- **Rotating a credential is `UpdateSyncSource`**, not delete-and-recreate; the
+  source keeps its history.
+- Level rules still bite: inserts and moves go through `scope_add_node` /
+  `scope_move_node`, so an illegal placement is captured as that row's error
+  without aborting the run.
+
 ### Manifests
 
 ```http

@@ -24,6 +24,20 @@ convention.
 4. **Enforcement:** `scripts/check/no-sql-in-go.sh` fails CI if SQL keywords
    appear in string literals in any hand-written `.go` file.
 
+## The two exemptions, stated rather than smuggled
+
+| Package | Why it may hold SQL |
+| :--- | :--- |
+| `internal/migrate` | The runner (hand-written per ADR-0002) executes SQL *before* the schema it would be generated against exists. Its statements are three fixed lines against `schema_migrations`. |
+| `internal/repository/feed` | Scope-sync sources read **foreign** databases (`kind = db_query \| db_table`, migrations/0017) over their own `config.dsn` connection. Those schemas are unknown at build time, so sqlc cannot type-check them and `db/queries` cannot host them. |
+
+The feed exemption is bounded by construction: `db_query` executes the
+operator's own configured query verbatim, and `db_table` assembles a
+`SELECT` only from identifiers validated against `^[a-zA-Z_][a-zA-Z0-9_]{0,62}$`
+and quoted through `pgx.Identifier.Sanitize()`. Neither path can touch
+Anubis's own schema — a different connection, a different database.
+Everything reading Anubis's tables still goes through `db/queries`.
+
 ## The tooling line ADR-0002 implies
 
 ADR-0002 governs **what links into the shipped binary**. Codegen and analysis

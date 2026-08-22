@@ -33,10 +33,10 @@ func (s *Store) CreateRealm(ctx context.Context, tenantID string, r repository.R
 		MinAssurance: int16(r.MinAssurance), SelfRegistration: r.SelfRegistration,
 		EmailVerificationRequired: r.EmailVerification, PiiEncryption: r.PIIEncryption,
 		AllowedFactors: emptyIfNil(r.AllowedFactors), RequiredFactors: emptyIfNil(r.RequiredFactors),
-		PasswordPolicy: orEmptyJSON(r.PasswordPolicy),
-		SessionTtl:     orDefaultStr(r.SessionTTL, "12 hours"),
-		AccessTokenTtl: orDefaultStr(r.AccessTokenTTL, "10 minutes"),
-		RefreshTokenTtl: orDefaultStr(r.RefreshTokenTTL, "30 days"),
+		PasswordPolicy:   orEmptyJSON(r.PasswordPolicy),
+		SessionTtl:       orDefaultStr(r.SessionTTL, "12 hours"),
+		AccessTokenTtl:   orDefaultStr(r.AccessTokenTTL, "10 minutes"),
+		RefreshTokenTtl:  orDefaultStr(r.RefreshTokenTTL, "30 days"),
 		DefaultRetention: r.DefaultRetention,
 	})
 	return id, mapErr(err)
@@ -47,12 +47,12 @@ func (s *Store) UpdateRealm(ctx context.Context, tenantID string, r repository.R
 	_, err := s.q(ctx).UpdateRealm(ctx, gen.UpdateRealmParams{
 		ID: r.ID, DisplayName: r.DisplayName, MinAssurance: int16(r.MinAssurance),
 		SelfRegistration: r.SelfRegistration, EmailVerificationRequired: r.EmailVerification,
-		PiiEncryption: r.PIIEncryption,
+		PiiEncryption:  r.PIIEncryption,
 		AllowedFactors: emptyIfNil(r.AllowedFactors), RequiredFactors: emptyIfNil(r.RequiredFactors),
-		PasswordPolicy: orEmptyJSON(r.PasswordPolicy),
-		SessionTtl:     orDefaultStr(r.SessionTTL, "12 hours"),
-		AccessTokenTtl: orDefaultStr(r.AccessTokenTTL, "10 minutes"),
-		RefreshTokenTtl: orDefaultStr(r.RefreshTokenTTL, "30 days"),
+		PasswordPolicy:   orEmptyJSON(r.PasswordPolicy),
+		SessionTtl:       orDefaultStr(r.SessionTTL, "12 hours"),
+		AccessTokenTtl:   orDefaultStr(r.AccessTokenTTL, "10 minutes"),
+		RefreshTokenTtl:  orDefaultStr(r.RefreshTokenTTL, "30 days"),
 		DefaultRetention: r.DefaultRetention,
 	})
 	return mapErr(err)

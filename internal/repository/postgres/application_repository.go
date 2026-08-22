@@ -48,7 +48,7 @@ func (s *Store) ListApplications(ctx context.Context, tenantID string) ([]reposi
 		out = append(out, repository.ApplicationRecord{
 			ID: r.ID, Slug: r.Slug, Name: r.Name, Kind: r.Kind, Status: r.Status,
 			RedirectURIs: r.RedirectUris, BackchannelLogoutURI: deref(r.BackchannelLogoutUri),
-			TokenFormat: r.TokenFormat,
+			TokenFormat:    r.TokenFormat,
 			AccessTokenTTL: r.AccessTokenTtl, RefreshTokenTTL: r.RefreshTokenTtl,
 			ManifestVersion: int(r.ManifestVersion),
 		})

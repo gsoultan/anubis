@@ -29,8 +29,8 @@ type Manager struct {
 	maxAge        time.Duration
 	revokedWindow time.Duration
 
-	mu   sync.RWMutex
-	data map[string]*Data // by tenant slug
+	mu    sync.RWMutex
+	data  map[string]*Data // by tenant slug
 	dirty chan string
 }
 

@@ -15,11 +15,11 @@ func (s *Store) QueryAudit(ctx context.Context, tenantID string, q repository.Au
 	}
 	var beforeSeq *int64 = q.BeforeSeq
 	rows, err := s.q(ctx).QueryAudit(ctx, gen.QueryAuditParams{
-		TenantID: tenantID,
-		ActorID:  optStr(q.ActorID),
-		Action:   optStr(q.Action),
-		FromTs:   q.From,
-		ToTs:     q.To,
+		TenantID:  tenantID,
+		ActorID:   optStr(q.ActorID),
+		Action:    optStr(q.Action),
+		FromTs:    q.From,
+		ToTs:      q.To,
 		BeforeSeq: beforeSeq,
 		PageSize:  int32(limit),
 	})

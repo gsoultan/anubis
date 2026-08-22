@@ -13,13 +13,14 @@ import (
 
 // scopeAdminInteractor implements ScopeAdminUsecase.
 type scopeAdminInteractor struct {
-	guard *adminGuard
-	axes  repository.ScopeAxisRepository
-	nodes repository.ScopeNodeRepository
-	sync  repository.ScopeSyncRepository
-	authz repository.AuthzRepository
-	tx    repository.TxManager
-	audit repository.Auditor
+	guard   *adminGuard
+	axes    repository.ScopeAxisRepository
+	nodes   repository.ScopeNodeRepository
+	sync    repository.ScopeSyncRepository
+	authz   repository.AuthzRepository
+	fetcher repository.ScopeFeedFetcher
+	tx      repository.TxManager
+	audit   repository.Auditor
 }
 
 func NewScopeAdminInteractor(
@@ -27,12 +28,13 @@ func NewScopeAdminInteractor(
 	axes repository.ScopeAxisRepository,
 	nodes repository.ScopeNodeRepository,
 	sync repository.ScopeSyncRepository,
+	fetcher repository.ScopeFeedFetcher,
 	tx repository.TxManager,
 	audit repository.Auditor,
 ) ScopeAdminUsecase {
 	return &scopeAdminInteractor{
 		guard: newAdminGuard(authz), axes: axes, nodes: nodes, sync: sync,
-		authz: authz, tx: tx, audit: audit,
+		authz: authz, fetcher: fetcher, tx: tx, audit: audit,
 	}
 }
 
@@ -329,6 +331,9 @@ func (u *scopeAdminInteractor) CreateSyncSource(ctx context.Context, s repositor
 	if err != nil {
 		return nil, err
 	}
+	if err := validateSyncConfig(s); err != nil {
+		return nil, err
+	}
 	id, err := u.sync.CreateSyncSource(ctx, p.TenantID, s)
 	if err != nil {
 		return nil, err
@@ -337,15 +342,99 @@ func (u *scopeAdminInteractor) CreateSyncSource(ctx context.Context, s repositor
 	return u.sync.SyncSource(ctx, p.TenantID, id)
 }
 
-// RunSync pushes rows through the database-side reconciler
-// (scope_sync_apply) with its per-row error capture and dry-run support.
+// UpdateSyncSource rotates a feed's credentials or endpoint in place. The
+// config is REPLACED wholesale — merging secrets is how half-rotated
+// credentials happen.
+func (u *scopeAdminInteractor) UpdateSyncSource(ctx context.Context, src repository.SyncSourceRecord) (*repository.SyncSourceRecord, error) {
+	p, err := u.guard.require(ctx, "anubis:sync:admin")
+	if err != nil {
+		return nil, err
+	}
+	existing, err := u.sync.SyncSource(ctx, p.TenantID, src.ID)
+	if err != nil {
+		return nil, domain.ErrNotFound
+	}
+	// Kind is immutable: it decides how config is interpreted, and a source
+	// that changes kind is a different source.
+	src.Kind = existing.Kind
+	src.Axis = existing.Axis
+	if err := validateSyncConfig(src); err != nil {
+		return nil, err
+	}
+	if err := u.sync.UpdateSyncSource(ctx, p.TenantID, src); err != nil {
+		return nil, err
+	}
+	// Never echo dsn/auth_header back into the audit detail.
+	u.emit(ctx, p, "sync.source_update", src.ID, map[string]string{
+		"axis": existing.Axis, "kind": existing.Kind,
+	})
+	return u.sync.SyncSource(ctx, p.TenantID, src.ID)
+}
+
+// RunSync reconciles a structure from its source of truth. Rows may be
+// PUSHED by the caller, or — when none are supplied — PULLED by the server
+// from wherever the structure actually lives: an HTTP API, a query against
+// another database, or a table in another database, each over that source's
+// OWN connection (migrations/0017; config carries the url/dsn). Either way
+// the rows go through the database-side reconciler (scope_sync_apply) with
+// its per-row error capture and dry-run support.
 func (u *scopeAdminInteractor) RunSync(ctx context.Context, sourceID string, rows []SyncRowInput, dry bool) (string, error) {
 	p, err := u.guard.require(ctx, "anubis:sync:admin")
 	if err != nil {
 		return "", err
 	}
-	if _, err := u.sync.SyncSource(ctx, p.TenantID, sourceID); err != nil {
+	source, err := u.sync.SyncSource(ctx, p.TenantID, sourceID)
+	if err != nil {
 		return "", domain.ErrNotFound
+	}
+	if source.Status != "active" {
+		return "", domain.ErrInvalidArgument.With("source", "disabled")
+	}
+	// Rows with no parent_ref attach to the axis root, so it must exist
+	// before the reconciler runs — syncing into a brand-new axis is the
+	// normal case, not an edge case.
+	if _, err := u.nodes.EnsureAxisRoot(ctx, p.TenantID, source.Axis); err != nil {
+		return "", err
+	}
+	if len(rows) == 0 {
+		if u.fetcher == nil {
+			return "", domain.ErrInvalidArgument.With("rows", "no rows supplied and no feed fetcher configured")
+		}
+		fetched, ferr := u.fetcher.Fetch(ctx, *source)
+		if ferr != nil {
+			// A feed that cannot be reached must not silently archive every
+			// node it was supposed to confirm.
+			u.emit(ctx, p, "sync.fetch_failed", sourceID, map[string]string{
+				"kind": source.Kind, "error": domain.AsError(ferr).Code,
+			})
+			return "", ferr
+		}
+		if len(fetched) == 0 {
+			return "", domain.ErrInvalidArgument.With("feed", "returned zero rows; refusing to archive the whole axis")
+		}
+		rows = make([]SyncRowInput, 0, len(fetched))
+		for _, f := range fetched {
+			rows = append(rows, SyncRowInput{
+				Ref: f.Ref, ParentRef: f.ParentRef, Name: f.Name, NodeType: f.NodeType,
+			})
+		}
+	}
+	if len(rows) > 50000 {
+		return "", domain.ErrInvalidArgument.With("rows", "max 50000 per run")
+	}
+	// Pushed rows get the same parents-first guarantee as pulled ones.
+	feedRows := make([]repository.SyncFeedRow, 0, len(rows))
+	for _, r := range rows {
+		feedRows = append(feedRows, repository.SyncFeedRow{
+			Ref: r.Ref, ParentRef: r.ParentRef, Name: r.Name, NodeType: r.NodeType,
+		})
+	}
+	feedRows = repository.SortFeedParentsFirst(feedRows)
+	rows = rows[:0]
+	for _, f := range feedRows {
+		rows = append(rows, SyncRowInput{
+			Ref: f.Ref, ParentRef: f.ParentRef, Name: f.Name, NodeType: f.NodeType,
+		})
 	}
 	raw, err := json.Marshal(rows)
 	if err != nil {
@@ -356,7 +445,9 @@ func (u *scopeAdminInteractor) RunSync(ctx context.Context, sourceID string, row
 		return "", err
 	}
 	if !dry {
-		u.emit(ctx, p, "sync.run", sourceID, map[string]string{"rows": itoaLen(rows)})
+		u.emit(ctx, p, "sync.run", sourceID, map[string]string{
+			"rows": itoaLen(rows), "kind": source.Kind,
+		})
 	}
 	return report, nil
 }
@@ -393,4 +484,50 @@ func itoaLen[T any](v []T) string {
 		n /= 10
 	}
 	return string(digits)
+}
+
+// validateSyncConfig rejects a source whose config cannot possibly work, at
+// creation rather than at 3am when the sync runs. Credentials inside dsn/
+// auth_header are never logged or echoed back.
+func validateSyncConfig(s repository.SyncSourceRecord) error {
+	var cfg map[string]any
+	if err := json.Unmarshal(s.Config, &cfg); err != nil {
+		return domain.ErrInvalidArgument.With("config", "invalid JSON")
+	}
+	need := func(keys ...string) error {
+		for _, k := range keys {
+			if v, ok := cfg[k].(string); !ok || v == "" {
+				return domain.ErrInvalidArgument.With("config", "missing "+k)
+			}
+		}
+		return nil
+	}
+	switch s.Kind {
+	case "http":
+		if err := need("url"); err != nil {
+			return err
+		}
+		u, _ := cfg["url"].(string)
+		if !strings.HasPrefix(u, "http://") && !strings.HasPrefix(u, "https://") {
+			return domain.ErrInvalidArgument.With("url", "http(s) only")
+		}
+	case "db_query":
+		return need("dsn", "query")
+	case "db_table":
+		if err := need("dsn", "table"); err != nil {
+			return err
+		}
+		cols, ok := cfg["columns"].(map[string]any)
+		if !ok {
+			return domain.ErrInvalidArgument.With("columns", "required for db_table")
+		}
+		for _, k := range []string{"ref", "name"} {
+			if v, ok := cols[k].(string); !ok || v == "" {
+				return domain.ErrInvalidArgument.With("columns", "missing "+k)
+			}
+		}
+	default:
+		return domain.ErrInvalidArgument.With("kind", s.Kind)
+	}
+	return nil
 }

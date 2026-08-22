@@ -39,7 +39,13 @@ func runServe(ctx context.Context, logger *slog.Logger) error {
 		}
 		if _, err := migrate.NewRunner(migrations.FS, logger).Run(ctx, conn); err != nil {
 			conn.Close(context.WithoutCancel(ctx))
-			return err
+			if errors.Is(err, migrate.ErrNeedsBaseline) {
+				// Common after bench/rebuild.sh: the schema IS at head, only
+				// the tracking is empty. Serving is safe; say what to run.
+				logger.Warn("schema present but untracked — serving anyway; run `anubisd baseline` to record it")
+			} else {
+				return err
+			}
 		}
 		conn.Close(context.WithoutCancel(ctx))
 	}

@@ -129,6 +129,9 @@ const (
 	// ScopeAdminServiceCreateSyncSourceProcedure is the fully-qualified name of the ScopeAdminService's
 	// CreateSyncSource RPC.
 	ScopeAdminServiceCreateSyncSourceProcedure = "/anubis.v1.ScopeAdminService/CreateSyncSource"
+	// ScopeAdminServiceUpdateSyncSourceProcedure is the fully-qualified name of the ScopeAdminService's
+	// UpdateSyncSource RPC.
+	ScopeAdminServiceUpdateSyncSourceProcedure = "/anubis.v1.ScopeAdminService/UpdateSyncSource"
 	// ScopeAdminServiceRunSyncProcedure is the fully-qualified name of the ScopeAdminService's RunSync
 	// RPC.
 	ScopeAdminServiceRunSyncProcedure = "/anubis.v1.ScopeAdminService/RunSync"
@@ -730,6 +733,9 @@ type ScopeAdminServiceClient interface {
 	UpsertScopeNodes(context.Context, *connect.Request[v1.UpsertScopeNodesRequest]) (*connect.Response[v1.UpsertScopeNodesResponse], error)
 	ListSyncSources(context.Context, *connect.Request[v1.ListSyncSourcesRequest]) (*connect.Response[v1.ListSyncSourcesResponse], error)
 	CreateSyncSource(context.Context, *connect.Request[v1.CreateSyncSourceRequest]) (*connect.Response[v1.CreateSyncSourceResponse], error)
+	// Rotate a feed's credentials or move it to a new endpoint without losing
+	// the source's history. Config is REPLACED, never merged.
+	UpdateSyncSource(context.Context, *connect.Request[v1.UpdateSyncSourceRequest]) (*connect.Response[v1.UpdateSyncSourceResponse], error)
 	RunSync(context.Context, *connect.Request[v1.RunSyncRequest]) (*connect.Response[v1.RunSyncResponse], error)
 }
 
@@ -828,6 +834,12 @@ func NewScopeAdminServiceClient(httpClient connect.HTTPClient, baseURL string, o
 			connect.WithSchema(scopeAdminServiceMethods.ByName("CreateSyncSource")),
 			connect.WithClientOptions(opts...),
 		),
+		updateSyncSource: connect.NewClient[v1.UpdateSyncSourceRequest, v1.UpdateSyncSourceResponse](
+			httpClient,
+			baseURL+ScopeAdminServiceUpdateSyncSourceProcedure,
+			connect.WithSchema(scopeAdminServiceMethods.ByName("UpdateSyncSource")),
+			connect.WithClientOptions(opts...),
+		),
 		runSync: connect.NewClient[v1.RunSyncRequest, v1.RunSyncResponse](
 			httpClient,
 			baseURL+ScopeAdminServiceRunSyncProcedure,
@@ -853,6 +865,7 @@ type scopeAdminServiceClient struct {
 	upsertScopeNodes    *connect.Client[v1.UpsertScopeNodesRequest, v1.UpsertScopeNodesResponse]
 	listSyncSources     *connect.Client[v1.ListSyncSourcesRequest, v1.ListSyncSourcesResponse]
 	createSyncSource    *connect.Client[v1.CreateSyncSourceRequest, v1.CreateSyncSourceResponse]
+	updateSyncSource    *connect.Client[v1.UpdateSyncSourceRequest, v1.UpdateSyncSourceResponse]
 	runSync             *connect.Client[v1.RunSyncRequest, v1.RunSyncResponse]
 }
 
@@ -926,6 +939,11 @@ func (c *scopeAdminServiceClient) CreateSyncSource(ctx context.Context, req *con
 	return c.createSyncSource.CallUnary(ctx, req)
 }
 
+// UpdateSyncSource calls anubis.v1.ScopeAdminService.UpdateSyncSource.
+func (c *scopeAdminServiceClient) UpdateSyncSource(ctx context.Context, req *connect.Request[v1.UpdateSyncSourceRequest]) (*connect.Response[v1.UpdateSyncSourceResponse], error) {
+	return c.updateSyncSource.CallUnary(ctx, req)
+}
+
 // RunSync calls anubis.v1.ScopeAdminService.RunSync.
 func (c *scopeAdminServiceClient) RunSync(ctx context.Context, req *connect.Request[v1.RunSyncRequest]) (*connect.Response[v1.RunSyncResponse], error) {
 	return c.runSync.CallUnary(ctx, req)
@@ -951,6 +969,9 @@ type ScopeAdminServiceHandler interface {
 	UpsertScopeNodes(context.Context, *connect.Request[v1.UpsertScopeNodesRequest]) (*connect.Response[v1.UpsertScopeNodesResponse], error)
 	ListSyncSources(context.Context, *connect.Request[v1.ListSyncSourcesRequest]) (*connect.Response[v1.ListSyncSourcesResponse], error)
 	CreateSyncSource(context.Context, *connect.Request[v1.CreateSyncSourceRequest]) (*connect.Response[v1.CreateSyncSourceResponse], error)
+	// Rotate a feed's credentials or move it to a new endpoint without losing
+	// the source's history. Config is REPLACED, never merged.
+	UpdateSyncSource(context.Context, *connect.Request[v1.UpdateSyncSourceRequest]) (*connect.Response[v1.UpdateSyncSourceResponse], error)
 	RunSync(context.Context, *connect.Request[v1.RunSyncRequest]) (*connect.Response[v1.RunSyncResponse], error)
 }
 
@@ -1045,6 +1066,12 @@ func NewScopeAdminServiceHandler(svc ScopeAdminServiceHandler, opts ...connect.H
 		connect.WithSchema(scopeAdminServiceMethods.ByName("CreateSyncSource")),
 		connect.WithHandlerOptions(opts...),
 	)
+	scopeAdminServiceUpdateSyncSourceHandler := connect.NewUnaryHandler(
+		ScopeAdminServiceUpdateSyncSourceProcedure,
+		svc.UpdateSyncSource,
+		connect.WithSchema(scopeAdminServiceMethods.ByName("UpdateSyncSource")),
+		connect.WithHandlerOptions(opts...),
+	)
 	scopeAdminServiceRunSyncHandler := connect.NewUnaryHandler(
 		ScopeAdminServiceRunSyncProcedure,
 		svc.RunSync,
@@ -1081,6 +1108,8 @@ func NewScopeAdminServiceHandler(svc ScopeAdminServiceHandler, opts ...connect.H
 			scopeAdminServiceListSyncSourcesHandler.ServeHTTP(w, r)
 		case ScopeAdminServiceCreateSyncSourceProcedure:
 			scopeAdminServiceCreateSyncSourceHandler.ServeHTTP(w, r)
+		case ScopeAdminServiceUpdateSyncSourceProcedure:
+			scopeAdminServiceUpdateSyncSourceHandler.ServeHTTP(w, r)
 		case ScopeAdminServiceRunSyncProcedure:
 			scopeAdminServiceRunSyncHandler.ServeHTTP(w, r)
 		default:
@@ -1146,6 +1175,10 @@ func (UnimplementedScopeAdminServiceHandler) ListSyncSources(context.Context, *c
 
 func (UnimplementedScopeAdminServiceHandler) CreateSyncSource(context.Context, *connect.Request[v1.CreateSyncSourceRequest]) (*connect.Response[v1.CreateSyncSourceResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.ScopeAdminService.CreateSyncSource is not implemented"))
+}
+
+func (UnimplementedScopeAdminServiceHandler) UpdateSyncSource(context.Context, *connect.Request[v1.UpdateSyncSourceRequest]) (*connect.Response[v1.UpdateSyncSourceResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.ScopeAdminService.UpdateSyncSource is not implemented"))
 }
 
 func (UnimplementedScopeAdminServiceHandler) RunSync(context.Context, *connect.Request[v1.RunSyncRequest]) (*connect.Response[v1.RunSyncResponse], error) {

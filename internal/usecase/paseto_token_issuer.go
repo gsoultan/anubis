@@ -6,8 +6,8 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/gsoultan/anubis/internal/crypto/secret"
 	"github.com/gsoultan/anubis/internal/crypto/keyring"
+	"github.com/gsoultan/anubis/internal/crypto/secret"
 	"github.com/gsoultan/anubis/internal/domain"
 	"github.com/gsoultan/anubis/internal/repository"
 	"github.com/gsoultan/anubis/pkg/anubis"

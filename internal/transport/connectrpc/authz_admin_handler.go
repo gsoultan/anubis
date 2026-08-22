@@ -51,7 +51,7 @@ func (h *AuthzAdminHandler) ListRoles(ctx context.Context, req *connect.Request[
 func roleRecord(r *anubisv1.Role) repository.RoleRecord {
 	return repository.RoleRecord{
 		ID: r.Id, Name: r.Name, Description: r.Description,
-		ApplicationSlug: r.ApplicationSlug,
+		ApplicationSlug:   r.ApplicationSlug,
 		AllowedRealmKinds: r.AllowedRealmKinds, AssignableAt: r.AssignableAt,
 	}
 }

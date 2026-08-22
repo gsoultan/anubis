@@ -7,9 +7,16 @@ hits=$(grep -rn --include='*.go' -E '"(SELECT|INSERT INTO|UPDATE [a-z_]+ SET|DEL
   cmd internal pkg 2>/dev/null \
   | grep -v 'internal/adapter/postgres/gen/' \
   | grep -v 'internal/migrate/' \
+  | grep -v 'internal/repository/feed/' \
   | grep -v '_test.go' || true)
-# internal/migrate is the documented exception: ADR-0002 lists the migration
-# runner as hand-written, and it must execute SQL before any schema exists.
+# Two documented exemptions, both in ADR-0009:
+#   internal/migrate       — the hand-written runner (ADR-0002) must execute
+#                            SQL before any schema exists to query.
+#   internal/repository/feed — reads FOREIGN databases (scope sync sources).
+#                            Their schemas are unknown at build time, so sqlc
+#                            cannot type-check them; identifiers are validated
+#                            and quoted instead. Nothing here touches Anubis's
+#                            own schema.
 if [ -n "$hits" ]; then
   echo "FAIL: SQL string literals in hand-written Go:" >&2
   echo "$hits" >&2

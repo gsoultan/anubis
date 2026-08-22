@@ -66,7 +66,7 @@ func (h *IdentityAdminHandler) ListIdentities(ctx context.Context, req *connect.
 	out, err := h.f.Do(ctx, "admin.identity.list", func(ctx context.Context) (any, error) {
 		list, next, err := h.svc.ListIdentities(ctx, repository.IdentityFilter{
 			RealmID: req.Msg.Realm,
-			Status: req.Msg.Status, Query: req.Msg.Query,
+			Status:  req.Msg.Status, Query: req.Msg.Query,
 			AfterID: req.Msg.PageToken, Limit: int(req.Msg.PageSize),
 		})
 		if err != nil {

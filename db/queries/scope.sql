@@ -99,6 +99,12 @@ SELECT id, tenant_id, axis_code, kind, status, config, last_run_at
 FROM scope_sync_sources
 WHERE id = sqlc.arg(id) AND tenant_id = sqlc.arg(tenant_id);
 
+-- name: UpdateSyncSource :execrows
+UPDATE scope_sync_sources
+SET config = sqlc.arg(config)::jsonb,
+    status = sqlc.arg(status)
+WHERE id = sqlc.arg(id) AND tenant_id = sqlc.arg(tenant_id);
+
 -- name: CreateSyncSource :one
 INSERT INTO scope_sync_sources (tenant_id, axis_code, kind, config)
 VALUES (sqlc.arg(tenant_id), sqlc.arg(axis_code), sqlc.arg(kind),

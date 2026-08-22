@@ -30,3 +30,24 @@ func runMigrate(ctx context.Context, logger *slog.Logger) error {
 		"applied", len(res.Applied), "skipped", res.Skipped, "drifted", len(res.Drifted))
 	return nil
 }
+
+// runBaseline records the embedded migrations as applied without executing
+// them — for a database already at head (e.g. rebuilt by bench/rebuild.sh).
+func runBaseline(ctx context.Context, logger *slog.Logger) error {
+	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
+	conn, err := pgx.Connect(ctx, cfg.DatabaseURL)
+	if err != nil {
+		return err
+	}
+	defer conn.Close(context.WithoutCancel(ctx))
+
+	n, err := migrate.NewRunner(migrations.FS, logger).Baseline(ctx, conn)
+	if err != nil {
+		return err
+	}
+	logger.Info("baseline recorded (nothing was executed)", "migrations", n)
+	return nil
+}

@@ -246,6 +246,24 @@ func (h *ScopeAdminHandler) CreateSyncSource(ctx context.Context, req *connect.R
 	}), nil
 }
 
+func (h *ScopeAdminHandler) UpdateSyncSource(ctx context.Context, req *connect.Request[anubisv1.UpdateSyncSourceRequest]) (*connect.Response[anubisv1.UpdateSyncSourceResponse], error) {
+	out, err := h.f.Do(ctx, "admin.sync.source_update", func(ctx context.Context) (any, error) {
+		s := req.Msg.Source
+		return h.svc.UpdateSyncSource(ctx, repository.SyncSourceRecord{
+			ID: s.Id, Status: s.Status, Config: []byte(s.ConfigJson),
+		})
+	})
+	if err != nil {
+		return nil, toConnectErr(ctx, err)
+	}
+	s := out.(*repository.SyncSourceRecord)
+	return connect.NewResponse(&anubisv1.UpdateSyncSourceResponse{
+		Source: &anubisv1.SyncSource{
+			Id: s.ID, Axis: s.Axis, Kind: s.Kind, Status: s.Status, ConfigJson: string(s.Config),
+		},
+	}), nil
+}
+
 func (h *ScopeAdminHandler) RunSync(ctx context.Context, req *connect.Request[anubisv1.RunSyncRequest]) (*connect.Response[anubisv1.RunSyncResponse], error) {
 	out, err := h.f.Do(ctx, "admin.sync.run", func(ctx context.Context) (any, error) {
 		return h.svc.RunSync(ctx, req.Msg.SourceId, syncRows(req.Msg.Rows), req.Msg.Dry)

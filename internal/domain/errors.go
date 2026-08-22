@@ -28,6 +28,9 @@ var (
 	ErrConflict        = E(KindConflict, "conflict", "Already exists")
 	ErrRateLimited     = E(KindRateLimited, "rate_limited", "Too many requests")
 
+	// External structure feeds (scope sync).
+	ErrUnavailableFeed = E(KindUnavailable, "feed_unavailable", "Structure feed is unreachable")
+
 	// Registration / flows.
 	ErrRegistrationClosed = E(KindPermissionDenied, "registration_closed", "Self-registration is not enabled for this realm")
 	ErrRedirectURI        = E(KindInvalidArgument, "invalid_redirect_uri", "redirect_uri is not registered for this client")
