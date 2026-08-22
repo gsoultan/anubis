@@ -45,9 +45,21 @@ func authClient() anubisv1connect.AuthServiceClient {
 
 func login(t *testing.T) *anubisv1.TokenPair {
 	t.Helper()
-	resp, err := authClient().Login(context.Background(), connect.NewRequest(&anubisv1.LoginRequest{
-		Tenant: tenant, Username: admin, Password: password, ClientId: "console",
-	}))
+	var resp *connect.Response[anubisv1.LoginResponse]
+	var err error
+	// The per-IP limiter refills at 30/min; a prior run's hammer test may
+	// have drained it. Waiting for refill IS the correct behaviour under
+	// test — only a non-ratelimit failure is fatal immediately.
+	deadline := time.Now().Add(90 * time.Second)
+	for {
+		resp, err = authClient().Login(context.Background(), connect.NewRequest(&anubisv1.LoginRequest{
+			Tenant: tenant, Username: admin, Password: password, ClientId: "console",
+		}))
+		if connect.CodeOf(err) != connect.CodeResourceExhausted || time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(5 * time.Second)
+	}
 	if err != nil {
 		t.Fatalf("login: %v", err)
 	}
