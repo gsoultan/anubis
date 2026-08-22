@@ -54,3 +54,26 @@ Anubis pool. Non-obvious invariants learned by building it:
 - migration 0021 fixed dry runs resolving parents created in the same run.
 - db_table builds SQL from validated+quoted identifiers only; ADR-0009
   records that exemption (foreign schemas sqlc cannot check).
+
+## Structure (ADR-0010, refactored 2026-08-23)
+Seven bounded contexts under internal/: identity, auth, authz, scope,
+tenancy, audit, gate — each with domain/ port/ app/ service/ endpoint/
+adapter/{postgres,rpc,http}. Plus shared/ (apperr, authctx, clock, validate,
+jsonx, txm) and platform/ (config, crypto/*, database, migrate, mw,
+ratelimit). Conventions that surprise newcomers:
+- FOLDER names the layer, PACKAGE clause is context-prefixed and unique
+  (internal/identity/domain => package identitydomain). Deliberate: no
+  import aliases, and no package shadows locals like `identity`/`session`.
+- <=10 Go files per folder, CI-enforced (scripts/check/folder-size.sh).
+  Outgrowing it means a missing concept: that is why authz/domain/grant,
+  authz/domain/membership and auth/app/{signin,mfa,device,session,token}
+  exist.
+- One sqlc package PER CONTEXT (db/queries/<ctx> -> internal/<ctx>/adapter/
+  postgres/gen). No generated package holds another context's SQL.
+- One repository type per context over platform/database (pool, WithinTx via
+  context, MapErr + column helpers). The old god-Store is gone.
+- internal/api/{connect,http} is transport plumbing and must NOT import any
+  context; contexts register their own routes via srv.Handle (the compiler
+  caught the cycle when this was violated).
+- cmd/anubisd/application.go is the composition root: every wiring decision
+  lives there, nothing else knows the whole system.
