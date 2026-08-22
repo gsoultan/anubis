@@ -38,3 +38,19 @@ logout, gate decisions, rate limiting. Enforcement: scripts/check/* wired in
 .gitlab-ci.yml. Bootstrap: `anubisd bootstrap` seeds tenant/realm/admin/
 apps/anubis.admin role (pattern anubis:*). Gate snapshot differential parity
 with authorize() still to add as an automated test.
+
+## Scope sync from external systems
+Each axis has ONE source of truth (UNIQUE tenant_id, axis_code):
+kind = http | db_query | db_table, config carries url/dsn — the fetcher
+(internal/repository/feed) opens the SOURCE's own connection, never the
+Anubis pool. Non-obvious invariants learned by building it:
+- feeds MUST be sorted parents-first in Go (repository.SortFeedParentsFirst);
+  no SQL ORDER BY expresses a topological order.
+- RunSync must EnsureAxisRoot first or parentless rows violate
+  nonroot_has_parent.
+- unreachable feed => error; an empty feed would archive the whole axis.
+- only external_ref-carrying nodes are archived; manual nodes are never
+  sync's to remove (verified against ~31k seeded nodes).
+- migration 0021 fixed dry runs resolving parents created in the same run.
+- db_table builds SQL from validated+quoted identifiers only; ADR-0009
+  records that exemption (foreign schemas sqlc cannot check).
