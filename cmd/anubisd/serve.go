@@ -105,7 +105,7 @@ func runServe(ctx context.Context, logger *slog.Logger) error {
 	rpc.Handle(anubisv1connect.NewTokenServiceHandler(connectrpc.NewTokenHandler(tokenEps), opts))
 	rpc.Handle(anubisv1connect.NewAuthzServiceHandler(connectrpc.NewAuthzHandler(authzEps), opts))
 	rpc.Handle(anubisv1connect.NewSessionServiceHandler(connectrpc.NewSessionHandler(sessionEps), opts))
-	registerAdminHandlers(rpc, opts, store, ring, clock, logger, auditor)
+	registerAdminHandlers(rpc, opts, store, auditor, cfg.MasterKey, logger)
 
 	srv := httpapi.NewServer(logger, cfg.UIOrigin, rpc,
 		httpapi.NewHealthHandler(pool, ring),

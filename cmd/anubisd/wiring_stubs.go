@@ -20,9 +20,10 @@ import (
 	"github.com/gsoultan/anubis/internal/usecase"
 )
 
-func registerAdminHandlers(_ *http.ServeMux, _ connect.HandlerOption,
-	_ *postgres.Store, _ *keyring.Manager, _ repository.Clock, _ *slog.Logger,
-	_ repository.Auditor) {
+func registerAdminHandlers(mux *http.ServeMux, opts connect.HandlerOption,
+	store *postgres.Store, auditor *postgres.ChainedAuditor, master []byte,
+	logger *slog.Logger) {
+	adminWiring{store: store, auditor: auditor, master: master, logger: logger}.register(mux, opts)
 }
 
 func registerBrowserRoutes(_ *httpapi.Server, _ *config.Config, _ *postgres.Store,
