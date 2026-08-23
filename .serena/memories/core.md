@@ -77,3 +77,24 @@ ratelimit). Conventions that surprise newcomers:
   caught the cycle when this was violated).
 - cmd/anubisd/application.go is the composition root: every wiring decision
   lives there, nothing else knows the whole system.
+
+## Production readiness (2026-08-23)
+Runtime: request/read/header timeouts + MaxHeaderBytes + body limits + panic
+recovery in internal/api/http/server.go (NO WriteTimeout on purpose — it
+would cut gRPC streams; per-request deadlines do that job, streaming
+detected by content-type). Pool config in cmd serve.go (MaxConns default
+4xGOMAXPROCS, lifetime jitter) + statement_timeout/application_name baked
+into cfg.PoolURL(). /readyz fails on stale snapshot (gate fails closed past
+maxAge, so the instance must leave the LB).
+Jobs (internal/platform/jobs + cmd/anubisd/maintenance.go): partitions
+(boot+daily), one-time sweep, retention, key-expiry warning; each under
+pg_try_advisory_lock so replicas cooperate without leader election.
+DB roles: migration 0023 (anubis_owner/app/readonly). app cannot CREATE or
+UPDATE/DELETE audit_log; readonly cannot read credentials/keys/pii_keys.
+Gotcha: bench/rebuild.sh is DESTRUCTIVE — after it run `anubisd baseline`
+then `anubisd bootstrap` or every e2e login fails with invalid_credentials.
+Second factors: an ENROLLED factor is always demanded (realm allow-list
+still applies). Enrol-or-deny for required-but-unenrolled is deliberately
+NOT implemented (policy flip would lock out existing users).
+TOTP codes are single-use (last_step in credentials.params) — tests must
+wait for the step boundary, not generate a future code (skew=1).
