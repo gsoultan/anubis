@@ -14,6 +14,7 @@ import (
 	authpg "github.com/gsoultan/anubis/internal/auth/adapter/postgres"
 	authrpc "github.com/gsoultan/anubis/internal/auth/adapter/rpc"
 	authapp "github.com/gsoultan/anubis/internal/auth/app"
+	"github.com/gsoultan/anubis/internal/auth/app/clientcreds"
 	"github.com/gsoultan/anubis/internal/auth/app/device"
 	"github.com/gsoultan/anubis/internal/auth/app/enroll"
 	"github.com/gsoultan/anubis/internal/auth/app/mfa"
@@ -133,7 +134,7 @@ func (a *application) registerRPC(rpc *http.ServeMux, opts connect.HandlerOption
 	revoke := tokenapp.NewRevokeInteractor(a.auth, a.auth, a.tenancy, a.auditor)
 	enrollment := enroll.NewEnrollmentInteractor(a.issuerURL, a.ring, a.identity,
 		a.identity, a.auth, a.auth, a.clock, a.auditor)
-	clientCreds := tokenapp.NewClientCredentialsInteractor(a.issuerURL, a.ring,
+	clientCreds := clientcreds.NewClientCredentialsInteractor(a.issuerURL, a.ring,
 		a.tenancy, a.tenancy, a.clock, a.auditor)
 	getMe := sessionapp.NewGetMeInteractor(a.identity, a.authz)
 	listSessions := sessionapp.NewListSessionsInteractor(a.auth)

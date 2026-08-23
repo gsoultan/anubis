@@ -1,4 +1,4 @@
-package tokenapp
+package clientcreds
 
 // ClientCredentialsOutput is a bare access token: no refresh, no session.
 type ClientCredentialsOutput struct {

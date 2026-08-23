@@ -9,6 +9,7 @@ import (
 	"github.com/gsoultan/anubis/gen/go/anubis/v1/anubisv1connect"
 	apiconnect "github.com/gsoultan/anubis/internal/api/connect"
 	authapp "github.com/gsoultan/anubis/internal/auth/app"
+	"github.com/gsoultan/anubis/internal/auth/app/clientcreds"
 	"github.com/gsoultan/anubis/internal/auth/app/device"
 	"github.com/gsoultan/anubis/internal/auth/app/enroll"
 	"github.com/gsoultan/anubis/internal/auth/app/mfa"
@@ -200,14 +201,14 @@ func (h *AuthHandler) EnrollDeviceKey(ctx context.Context, req *connect.Request[
 }
 
 func (h *AuthHandler) ClientCredentials(ctx context.Context, req *connect.Request[anubisv1.ClientCredentialsRequest]) (*connect.Response[anubisv1.ClientCredentialsResponse], error) {
-	out, err := h.eps.ClientCreds(ctx, authep.WrapClientCredentials(tokenapp.ClientCredentialsInput{
+	out, err := h.eps.ClientCreds(ctx, authep.WrapClientCredentials(clientcreds.ClientCredentialsInput{
 		Tenant: req.Msg.Tenant, ClientID: req.Msg.ClientId,
 		ClientSecret: req.Msg.ClientSecret, Audience: req.Msg.Audience,
 	}))
 	if err != nil {
 		return nil, apiconnect.Err(ctx, err)
 	}
-	c := out.(*tokenapp.ClientCredentialsOutput)
+	c := out.(*clientcreds.ClientCredentialsOutput)
 	return connect.NewResponse(&anubisv1.ClientCredentialsResponse{
 		AccessToken: c.AccessToken, TokenType: c.TokenType, ExpiresIn: int32(c.ExpiresIn),
 	}), nil

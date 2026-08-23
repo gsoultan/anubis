@@ -4,6 +4,7 @@ import (
 	"context"
 
 	authapp "github.com/gsoultan/anubis/internal/auth/app"
+	"github.com/gsoultan/anubis/internal/auth/app/clientcreds"
 	"github.com/gsoultan/anubis/internal/auth/app/device"
 	"github.com/gsoultan/anubis/internal/auth/app/enroll"
 	"github.com/gsoultan/anubis/internal/auth/app/mfa"
@@ -26,7 +27,7 @@ type authService struct {
 	register      registration.RegisterUsecase
 	verifyEmail   registration.VerifyEmailUsecase
 	enrollment    enroll.EnrollmentUsecase
-	clientCreds   tokenapp.ClientCredentialsUsecase
+	clientCreds   clientcreds.ClientCredentialsUsecase
 }
 
 func NewAuthService(
@@ -41,7 +42,7 @@ func NewAuthService(
 	register registration.RegisterUsecase,
 	verifyEmail registration.VerifyEmailUsecase,
 	enrollment enroll.EnrollmentUsecase,
-	clientCreds tokenapp.ClientCredentialsUsecase,
+	clientCreds clientcreds.ClientCredentialsUsecase,
 ) AuthService {
 	return &authService{
 		login: login, verifyMfa: verifyMfa, refresh: refresh,
@@ -100,6 +101,6 @@ func (s *authService) EnrollDeviceKey(ctx context.Context, publicKey, label stri
 	return s.enrollment.EnrollDeviceKey(ctx, publicKey, label)
 }
 
-func (s *authService) ClientCredentials(ctx context.Context, in tokenapp.ClientCredentialsInput) (*tokenapp.ClientCredentialsOutput, error) {
+func (s *authService) ClientCredentials(ctx context.Context, in clientcreds.ClientCredentialsInput) (*clientcreds.ClientCredentialsOutput, error) {
 	return s.clientCreds.Execute(ctx, in)
 }

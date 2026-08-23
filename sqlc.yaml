@@ -4,6 +4,16 @@ version: "2"
 sql:
   - engine: "postgresql"
     schema: "migrations"
+    queries: "db/queries/platform"
+    gen:
+      go:
+        package: "gen"
+        out: "internal/platform/database/gen"
+        sql_package: "pgx/v5"
+        emit_json_tags: false
+        emit_pointers_for_null_types: true
+  - engine: "postgresql"
+    schema: "migrations"
     queries: "db/queries/identity"
     gen:
       go:

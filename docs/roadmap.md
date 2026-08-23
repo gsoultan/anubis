@@ -109,17 +109,3 @@ gRPC transport, automated key rotation, admin API, the JWS codec flag
 | **Social login** | Applicants may want it. `credentials.kind = 'oidc_link'` reserves the slot. |
 | **Argon2id** | Requires `x/crypto`. PBKDF2 hash format supports transparent migration later. |
 
-## Known unproven claims
-
-Stated plainly so nobody mistakes design for validation.
-
-| Claim | Status |
-| :--- | :--- |
-| `scope_move_node` is safe under concurrency | **Unproven.** Asserts `SERIALIZABLE`; not stress-tested with concurrent moves in the same subtree. |
-| `role_recompute_effective` handles deep role graphs | **Unproven.** `CYCLE` detection is present; not tested beyond shallow graphs. |
-| Snapshot loading is torn-read free | **Design only.** The `REPEATABLE READ` requirement is documented but there is no loader yet to test. |
-| Path normalisation matches between gate and app | **Design only.** The shared corpus does not exist yet. |
-| Rate limiting, uniform login timing | **Design only.** No application layer. |
-
-The first two are testable against the current schema and should be closed before
-Phase 2 depends on them.

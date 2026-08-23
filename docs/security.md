@@ -259,10 +259,15 @@ Stated plainly rather than left implicit.
 | **Deep role graphs unproven** | Open | `role_recompute_effective` has `CYCLE` detection; not stress-tested. |
 | **No deny rules** | Deliberate | Allow-only union semantics in v1. Adding deny needs strict precedence and an explain endpoint. |
 | **No PASETO ecosystem support** | Deliberate | Dormant JWS codec behind a per-application flag. |
-| **PII crypto-shredding not implemented** | Open | `pii_key_id` is modelled; key management does not exist. Retention enforcement is `anonymized_at` only — it stops access but does not destroy data. |
-| **Self-registration abuse controls** | Open | Public realms need bot protection, email verification and registration rate limits. Not built. |
-| **Application layer not built** | In progress | Every claim above about tokens, rate limiting and normalisation is design, not running code. Only the database layer is validated. |
+| **PII crypto-shredding** | **Built** | `migrations/0022` + `internal/identity/domain/pii`: per-identity keys sealed under the master key, erasure and the retention job destroy the key and leave a tombstone (the *fact* of erasure stays auditable). No column is encrypted yet — the schema holds free-form PII only in `identities.attributes`, which the API does not write. |
+| **Self-registration abuse controls** | Partly built | Email verification and per-IP/per-tenant registration limits ship; bot protection (CAPTCHA/attestation) does not. |
+| **Enrol-or-deny for required factors** | Open, deliberate | A realm requiring TOTP still admits a password-only login from an un-enrolled user; an enrolled factor is always demanded. Closing the gap locks out existing users at policy-flip time, so it is a rollout decision. |
+| **Bot protection on public registration** | Open | Rate limits bound the damage; they do not stop a determined script. |
 
-The last row is the important one: **this document describes a validated database
-layer and a specified application layer.** Do not read the specified parts as
-shipped.
+**This document now describes running code.** The application layer is built
+and its security properties are tested rather than asserted: uniform login
+timing (histogram, not assertion), refresh-reuse family revocation, PKCE and
+exact `redirect_uri` matching, the path-normalisation corpus, the
+schema-enforced invariants, and least-privilege database roles
+(`migrations/0023`). See [roadmap.md](roadmap.md#formerly-unproven-claims--now-closed)
+for what each test proves.

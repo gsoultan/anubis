@@ -1,4 +1,4 @@
-package tokenapp
+package clientcreds
 
 // ClientCredentialsInput is the presented client identity.
 type ClientCredentialsInput struct {

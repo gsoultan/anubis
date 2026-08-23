@@ -121,6 +121,23 @@ done
 Drops the schema, reapplies every migration, seeds a realistic dataset, and runs
 correctness, negative and performance suites. Roughly 30 seconds.
 
+**It is destructive**, so anything bootstrapped is gone afterwards. To get a
+working API back:
+
+```bash
+anubisd baseline    # records the rebuilt schema as applied
+anubisd bootstrap --tenant impack --name Impack \
+        --admin-user admin --admin-pass '<12+ chars>'
+```
+
+The Go suites layer on top:
+
+```bash
+go test -race -shuffle=on ./...                    # unit, fuzz corpora, benchmarks
+go test -tags integration ./test/integration/      # claims + performance budgets
+go test -tags integration ./test/e2e/              # against a running anubisd
+```
+
 ```
 ==> dropping and rebuilding schema
     7 migrations applied

@@ -1,266 +1,157 @@
 # Operations
 
-> Anubis is the front door for every application. Its availability target is
-> therefore higher than anything it protects, and its failure modes must degrade
-> rather than deny.
+Everything an on-call engineer needs at 3am, and nothing that duplicates
+[architecture.md](architecture.md) or [security.md](security.md).
 
 ## Contents
 
-1. [Deployment](#deployment)
+1. [Deploying](#deploying)
 2. [Configuration](#configuration)
-3. [Key management](#key-management)
-4. [Scheduled jobs](#scheduled-jobs)
-5. [Monitoring](#monitoring)
-6. [Runbooks](#runbooks)
-7. [Backup and restore](#backup-and-restore)
-8. [Capacity](#capacity)
+3. [Database roles](#database-roles)
+4. [Health and readiness](#health-and-readiness)
+5. [Maintenance jobs](#maintenance-jobs)
+6. [Key rotation](#key-rotation)
+7. [Incident: refresh token reuse](#incident-refresh-token-reuse)
+8. [Incident: signing key compromise](#incident-signing-key-compromise)
+9. [Restoring from backup](#restoring-from-backup)
+10. [Performance budgets](#performance-budgets)
 
 ---
 
-## Deployment
+## Deploying
 
-Stateless and horizontally scalable. State lives in Postgres and Redis.
+```bash
+anubisd migrate     # schema, as anubis_owner — a separate step, on purpose
+anubisd serve       # runtime, as anubis_app
+```
 
-| Component | Requirement |
-| :--- | :--- |
-| Anubis replicas | ≥ 3, spread across availability zones, with a PodDisruptionBudget |
-| PostgreSQL | Primary + synchronous standby. Read replicas optional. |
-| Redis | Rate-limit counters and single-use nonces. Loss degrades, does not break. |
-| KMS / Vault | Master key for signing-key encryption. **Hard dependency at startup.** |
+Migrations run **forward-only** and take an advisory lock, so several replicas
+starting at once cannot race. `serve` in a non-prod environment applies
+migrations itself; production does not, because a schema change should be a
+deliberate deploy step with its own rollback plan (which is: roll forward).
 
-`readyz` must check: database reachable, snapshot within max age, an `active`
-signing key present. A replica that cannot verify tokens must not receive
-traffic.
-
-### Zero-downtime migrations
-
-**Expand/contract only.** Add nullable column → backfill → dual-write → switch
-reads → drop old. Never a destructive change in one step.
-
-You cannot take auth down for a schema change. A migration that takes `ACCESS
-EXCLUSIVE` on `grants` or `audit_log` stops every application in the
-organisation simultaneously.
-
----
+The image (`Dockerfile`) is distroless and non-root, and embeds the
+migrations — nothing is mounted.
 
 ## Configuration
 
-| Variable | Notes |
-| :--- | :--- |
-| `ANUBIS_DB_URL` | Postgres DSN |
-| `ANUBIS_REDIS_URL` | |
-| `ANUBIS_KMS_KEY_REF` | Master key for signing-key encryption |
-| `ANUBIS_ISSUER` | Must match the `iss` claim consumers expect |
-| `ANUBIS_SNAPSHOT_MAX_AGE` | Beyond this the gate fails **closed**. Default 300s. |
-| `ANUBIS_SNAPSHOT_POLL` | Backstop for missed `LISTEN/NOTIFY`. Default 15s. |
-
-> Signing keys never appear in environment variables, Git, or CI variables.
-> Masked CI variables are not a security boundary.
-
----
-
-## Key management
-
-### Rotation (every 30–90 days)
-
-```
-1. Generate       → status 'pending'
-2. Publish        → appears in key discovery. WAIT for consumer caches
-                    (≥ 2 × max cache TTL) before step 3.
-3. Activate       → status 'active'; the previous key becomes 'retiring'
-4. Retire         → once the longest-lived token signed by it has expired
-```
-
-Publishing before activating is the whole point: a consumer that has not yet
-seen the new `kid` will reject every token signed with it.
-
-At most one `active` key per purpose is enforced by a partial unique index —
-the database will reject an attempt to activate two.
-
-### Compromise
-
-**This is the highest-severity incident possible.** The attacker mints valid
-tokens for any user in any scope, and the audit log shows nothing wrong.
-
-1. Generate and activate a replacement key immediately
-2. Mark the compromised key `retired` — **do not wait for token expiry**
-3. Remove its public key from discovery, so existing tokens fail verification
-4. **Bump `token_epoch` for every identity** — invalidates all outstanding tokens
-5. Revoke all sessions and refresh-token families
-6. Audit every action taken during the exposure window
-
-```sql
-UPDATE identities SET token_epoch = token_epoch + 1 WHERE tenant_id = $1;
-UPDATE sessions SET revoked_at = now(), revoke_reason = 'key_compromise'
- WHERE tenant_id = $1 AND revoked_at IS NULL;
-```
-
----
-
-## Scheduled jobs
-
-| Job | Frequency | Consequence if it stops |
+| Variable | Default | Notes |
 | :--- | :--- | :--- |
-| `ensure_month_partitions('audit_log','occurred_at',3)` | daily | Writes land in the `DEFAULT` partition — degraded, not broken |
-| `ensure_month_partitions('refresh_tokens','expires_at',3)` | daily | Same |
-| Drop expired `refresh_tokens` partitions | monthly | Unbounded growth |
-| Expire `grants` past `valid_until` | hourly | Access outlives its authorisation |
-| Retention sweep — anonymise past `retention_until` | daily | **Statutory breach.** UU PDP 27/2022 and equivalents. |
-| `role_permissions_effective` reconciliation | nightly | Silent drift in a cache of authorization decisions |
-| Audit hash-chain verification | daily | Tampering goes undetected |
-| Key rotation check | daily | Keys age past policy |
+| `ANUBIS_DB_URL` | *required* | Runtime connects as `anubis_app` |
+| `ANUBIS_LISTEN` | `:7448` | |
+| `ANUBIS_ISSUER` | `http://localhost:7448` | The `iss` claim; **must** match what SDKs verify |
+| `ANUBIS_ENV` | `dev` | `prod` refuses to boot without a master key |
+| `ANUBIS_MASTER_KEY` | *required in prod* | base64url, 32 bytes, KMS-held. Unseals signing and PII keys |
+| `ANUBIS_DB_MAX_CONNS` | `4 × GOMAXPROCS` | Size to the DATABASE, not the app |
+| `ANUBIS_DB_STATEMENT_TIMEOUT` | `15s` | Server-side; a slower query is a bug |
+| `ANUBIS_REQUEST_TIMEOUT` | `30s` | Streaming RPCs are exempt |
+| `ANUBIS_MAX_REQUEST_BYTES` | `1MiB` | |
+| `ANUBIS_SHUTDOWN_GRACE` | `20s` | Drain before the audit queue closes |
+| `ANUBIS_SNAPSHOT_MAX_AGE` | `5m` | Past this the gate fails closed **and readiness fails** |
+| `ANUBIS_DEBUG_LISTEN` | *(off)* | pprof/expvar; bind loopback only |
+| `ANUBIS_UI_ORIGIN` | *(off)* | Dev CORS only; production is same-origin |
 
-> The reconciliation job matters more than it looks.
-> `role_permissions_effective` is a materialised cache of authorization
-> decisions. Drift is **invisible** — nothing errors, permissions are just
-> quietly wrong. Recompute from scratch and alert on any diff.
+**The master key is the whole system.** Losing it makes every signing key and
+every PII key unreadable; leaking it is equivalent to leaking the signing keys
+themselves. Keep it in a KMS, never in a CI variable — masked variables are not
+a security boundary.
 
----
+## Database roles
 
-## Monitoring
+`migrations/0023` provisions least privilege:
 
-### Must page a human
+| Role | May | May not |
+| :--- | :--- | :--- |
+| `anubis_owner` | own the schema, run migrations | — |
+| `anubis_app` | read/write data, execute functions | CREATE/DROP/ALTER, UPDATE or DELETE on `audit_log` |
+| `anubis_readonly` | read non-secret tables | read `credentials`, `signing_keys`, `refresh_tokens`, `one_time_tokens`, `pii_keys` |
 
-| Alert | Why |
-| :--- | :--- |
-| **`refresh_token_reuse_detected`** | **A token was stolen.** Highest-signal alert in the system. |
-| Login failure rate spike per account | Credential stuffing |
-| No `active` signing key | Token issuance is down |
-| Snapshot age > max | Gate is failing closed — protected paths are denying |
-| Audit hash chain broken | Tampering, or a bug that destroys evidentiary value |
-| `authorize` p99 > 5 ms | The PDP is on someone's hot path |
-| Retention sweep failed | Statutory exposure |
+The roles are created `NOLOGIN`; the deployment grants LOGIN and a password, so
+no credential ever lands in a migration file.
 
-### Should alert but not page
+## Health and readiness
 
-Key rotation overdue · partition provisioning behind · `role_permissions_effective`
-reconciliation diff · Redis unavailable (rate limiting degraded) · grant
-expiry backlog.
+| Endpoint | Fails when | Orchestrator should |
+| :--- | :--- | :--- |
+| `GET /healthz` | process is wedged | restart |
+| `GET /readyz` | database unreachable, no active signing key, or **snapshot older than `ANUBIS_SNAPSHOT_MAX_AGE`** | remove from the load balancer |
 
-### Dashboards
+Readiness includes snapshot age because past that age the gate fails closed:
+the instance is denying traffic it should allow, and must stop receiving it.
 
-**Golden signals** — login success/failure rate, token issuance rate, refresh
-rate, `authorize` p50/p99, gate check p50/p99.
+## Maintenance jobs
 
-**Security** — reuse detections, lockouts, step-up challenges, cross-tenant
-attempts (should be **zero**; non-zero means an application is malfunctioning or
-probing), assurance-gate denials.
+Started automatically by `serve`; coordinated across replicas by advisory
+locks, so every instance can run them safely.
 
-**Capacity** — snapshot size and load time, closure row count, largest subtree
-per axis, grants per identity (p99).
+| Job | Interval | Why it matters |
+| :--- | :--- | :--- |
+| `partitions` | boot + daily | Rows landing in the DEFAULT partition defeat partitioning; retention becomes a bulk DELETE again |
+| `sweep_one_time_tokens` | hourly | MFA/PKCE/nonce rows live seconds; the rest is bloat on a hot path |
+| `retention` | 6h | Applies realm `default_retention`, anonymises past the deadline, **shreds the PII key** |
+| `signing_key_expiry` | boot + 6h | Warns 14 days out; an expired active key stops every login |
 
----
+## Key rotation
 
-## Runbooks
+Publish before you sign — consumer caches must warm first:
 
-### "Users cannot log in"
-
-1. `readyz` on every replica — which check fails?
-2. Active signing key present? `SELECT * FROM signing_keys WHERE status='active'`
-3. Database reachable? Connection pool exhausted?
-4. Rate limiter misfiring? Check per-tenant limits before per-IP.
-5. Realm policy changed recently? A `required_factors` change can lock out a
-   population that has not enrolled that factor.
-
-### "User has access they should not"
-
-```sql
--- every live grant, with provenance
-SELECT g.id, r.name AS role, p.key AS permission, rpe.via_role_id,
-       gs.axis_code, sn.name AS scope_node, gs.inherit, g.self_scoped
-  FROM grants g
-  JOIN roles r ON r.id = g.role_id
-  JOIN role_permissions_effective rpe ON rpe.role_id = g.role_id
-  JOIN permissions p ON p.id = rpe.permission_id
-  LEFT JOIN grant_scopes gs ON gs.grant_id = g.id
-  LEFT JOIN scope_nodes sn ON sn.id = gs.scope_node_id
- WHERE g.identity_id = $1 AND g.revoked_at IS NULL;
+```bash
+anubisd keys prepare access     # mints a PENDING key; it appears in /.well-known immediately
+# wait for consumer key caches (default 5 min Cache-Control) …
+anubisd keys promote access     # active -> retiring, pending -> active
 ```
 
-`via_role_id` answers *why*. Check inherited roles via `role_parents`, and
-whether a wildcard pattern expanded more broadly than intended.
+Keep the retiring key published until the longest-lived token signed with it
+has expired (≤ the access TTL). Rotate every 30–90 days; the job warns at 14
+days.
 
-### "User cannot access something they should"
+## Incident: refresh token reuse
 
-Almost always a **fail-closed denial from an unresolved axis.** The calling
-application omitted an axis the grant constrains.
+`action=token.reuse_detected` in the audit log **means a refresh token was
+stolen**. It is the highest-signal alert in the system: either the attacker
+used a token the legitimate user already rotated, or the user rotated one the
+attacker holds. Anubis has already revoked the whole family and the session.
 
-```sql
-SELECT axis_code, scope_node_id, inherit FROM grant_scopes WHERE grant_id = $1;
-```
+1. Identify the session and identity from the audit entry.
+2. `BumpTokenEpoch` on that identity — kills every outstanding access token
+   immediately, not just the refresh chain.
+3. Review `audit_log` for that `actor_id` around the event: what did the
+   session do before detection?
+4. Force credential rotation if the access predates the detection.
 
-Compare against the target map the application sent. Also check
-`identities.assurance_level` against `permissions.min_assurance`, and whether the
-grant is `self_scoped` while the caller omitted `_owner`.
+## Incident: signing key compromise
 
-### "Suspected token theft"
+Total compromise: the attacker mints valid tokens for any user in any scope
+and the audit log shows nothing wrong.
 
-Reuse detection already revoked the family and the session. Then:
+1. `anubisd keys prepare access && anubisd keys promote access`.
+2. Set the compromised key `retired` (it disappears from discovery).
+3. Bump `token_epoch` for **every** identity — the only way to invalidate
+   tokens already signed with the old key.
+4. Rotate the master key and re-seal, if the master itself may have leaked.
 
-1. `audit_log` for that `sid` — what was done during the window?
-2. Compare `ip` and `device_fp` across the family's history
-3. Global logout for the identity, bump `token_epoch`
-4. Force credential rotation
+## Restoring from backup
 
-### Flipping a scope axis to strict
+A restore brings revoked refresh tokens back to life. `token_epoch` is the
+mitigation, and it only works if the restore is **consistent**: restore
+`identities` and `refresh_tokens` from the same snapshot, never mix.
 
-**Never without the dry run.**
+After any restore, bump `token_epoch` for affected identities unless you can
+prove the snapshot post-dates the last revocation. `test/integration`
+exercises this case explicitly.
 
-```http
-POST /v1/admin/scope-axes/{code}/strict-dry-run
-```
+## Performance budgets
 
-Measured on seed data: flipping `cost_center` to `deny` took allows from
-**800 → 0**. Discovering that from a report beats discovering it from an outage.
+Measured, and enforced by tests rather than asserted in prose:
 
-### Emergency access revocation
+| Path | Budget | Where |
+| :--- | :--- | :--- |
+| `authorize()` through pgx | p95 < 2 ms *(measured 0.33 ms)* | `TestAuthorizeLatencyBudget` |
+| Snapshot decision (gate) | sub-µs, zero alloc *(measured 300 ns)* | `BenchmarkEvaluate` |
+| Offline token verify (SDK) | ~50 µs, no I/O *(measured 62 µs)* | `BenchmarkVerify` |
+| Path normalise + match | µs *(measured 0.9 + 0.8 µs)* | `BenchmarkNormalizePath`, `BenchmarkMatch` |
+| Login | KDF-dominated *(~49 ms)* — **do not "optimise"** | `TestLoginTimingDoesNotRevealUserExistence` |
 
-```sql
--- one identity, everywhere
-UPDATE identities SET status='disabled', disabled_at=now() WHERE id=$1;
-```
-
-Sufficient and immediate — `authorize()` gates on identity state, so no grant
-needs touching. Access tokens remain valid until `exp` (≤ 15 min) unless
-applications introspect.
-
----
-
-## Backup and restore
-
-| Data | Method |
-| :--- | :--- |
-| Postgres | Continuous archiving + PITR. Test restores quarterly. |
-| Signing keys | Backed up **encrypted**, restored via KMS. Losing them invalidates every token. |
-| Audit log | Shipped to append-only object storage with object lock |
-
-### The restore footgun
-
-**Restoring `refresh_tokens` resurrects revoked tokens.**
-
-`identities.token_epoch` is the mitigation — but only if restored consistently
-**and** if applications actually validate it.
-
-> Test this explicitly. Restore to a scratch environment, present a
-> pre-revocation refresh token, and assert it fails. Nobody discovers this until
-> it matters.
-
----
-
-## Capacity
-
-Measured on 4 vCPU / 4 GB ([benchmarks.md](benchmarks.md)):
-
-| Metric | Value |
-| :--- | :--- |
-| Authorization decisions | ~22,400/sec, single connection |
-| Per decision | 0.045 ms |
-| Database at 150k grants / 57k identities | 164 MB |
-
-**Growth drivers, in order:** `audit_log` (partition monthly, archive),
-`refresh_tokens` (partition, drop old), `grant_scopes` (grows with axes ×
-grants), `scope_closure` (n × depth).
-
-**Watch:** grants per identity at p99, and the largest subtree per axis. Neither
-degrades the current query formulation — `EXISTS` short-circuits, so broad grants
-cost the same as narrow ones — but both drive snapshot size and load time.
+The login number is a security property, not a performance problem: the KDF
+cost is what makes offline cracking expensive, and it must be paid identically
+whether or not the user exists.

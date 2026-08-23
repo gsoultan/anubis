@@ -1,8 +1,8 @@
 package authep
 
 import (
+	"github.com/gsoultan/anubis/internal/auth/app/clientcreds"
 	"github.com/gsoultan/anubis/internal/auth/app/signin"
-	tokenapp "github.com/gsoultan/anubis/internal/auth/app/token"
 	"github.com/gsoultan/anubis/internal/identity/app/registration"
 )
 
@@ -22,7 +22,7 @@ func (r registerRateKeys) RateTenant() string  { return r.Tenant }
 func (r registerRateKeys) RateAccount() string { return "" }
 
 type clientCredsRateKeys struct {
-	tokenapp.ClientCredentialsInput
+	clientcreds.ClientCredentialsInput
 }
 
 func (r clientCredsRateKeys) RateTenant() string  { return r.Tenant }
@@ -30,6 +30,6 @@ func (r clientCredsRateKeys) RateAccount() string { return r.Tenant + "/client/"
 
 // WrapClientCredentials adapts the input for the limiter; transports use it
 // so the rate-key carriers stay unexported.
-func WrapClientCredentials(in tokenapp.ClientCredentialsInput) any {
+func WrapClientCredentials(in clientcreds.ClientCredentialsInput) any {
 	return clientCredsRateKeys{in}
 }

@@ -139,20 +139,34 @@ func (u *loginInteractor) burnKDF(password string) {
 	_, _, _ = kdf.Verify(password, kdf.Dummy())
 }
 
+// availableSecondFactors decides whether this login needs a second step.
+//
+// A factor is demanded when the identity HAS IT ENROLLED — not only when the
+// realm requires it. Enrolment is an opt-in to stronger authentication, and
+// honouring it only in realms that already mandate MFA would mean a user who
+// deliberately added an authenticator still signs in with a password alone.
+// That is the entire value of the feature, silently discarded.
+//
+// The realm's allowed_factors still governs: a factor the realm forbids is
+// not offered even if a credential row survives from before the policy
+// changed.
+//
+// The remaining gap is deliberate and documented: a realm that REQUIRES totp
+// still admits a password-only login from someone who has not enrolled yet.
+// Closing it means locking out every existing user the moment the policy
+// flips, so it is a rollout decision (enrol-or-deny), not a default.
 func (u *loginInteractor) availableSecondFactors(ctx context.Context, realm *identitydomain.Realm, identityID string) []string {
-	wantTOTP := realm.RequiresFactor("totp")
-	wantDevice := realm.RequiresFactor("device_key")
-	if !wantTOTP && !wantDevice {
-		return nil
-	}
 	kinds, err := u.creds.ActiveCredentialKinds(ctx, identityID)
 	if err != nil {
 		return nil
 	}
 	var out []string
 	for _, k := range kinds {
-		if (k == "totp" && wantTOTP) || (k == "device_key" && wantDevice) {
-			out = append(out, k)
+		switch k {
+		case "totp", "device_key":
+			if realm.AllowsFactor(k) {
+				out = append(out, k)
+			}
 		}
 	}
 	return out
