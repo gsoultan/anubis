@@ -1,10 +1,12 @@
 package apihttp
 
 import (
+	"context"
 	"expvar"
 	"log/slog"
 	"net/http"
 	"net/http/pprof"
+	"strings"
 	"time"
 )
 
@@ -43,9 +45,21 @@ func (s *Server) HandleFunc(pattern string, h http.HandlerFunc) {
 	s.mux.HandleFunc(pattern, h)
 }
 
+// Limits are the transport-level budgets. Every one of them exists because
+// its absence is a denial-of-service primitive: a slow header write, an
+// endless body, a connection that never closes.
+type Limits struct {
+	RequestTimeout  time.Duration
+	MaxRequestBytes int64
+}
+
 // HTTPServer builds the http.Server with native unencrypted HTTP/2 enabled
 // so gRPC works over cleartext in dev (Go 1.24+ Protocols knob; no x/net).
-func (s *Server) HTTPServer(addr string) *http.Server {
+//
+// WriteTimeout is deliberately NOT set: it would cut long-lived streams
+// (revocation events, gRPC), so per-request deadlines carry that duty
+// instead — see withLimits.
+func (s *Server) HTTPServer(addr string, lim Limits) *http.Server {
 	protocols := new(http.Protocols)
 	protocols.SetHTTP1(true)
 	protocols.SetHTTP2(true)
@@ -53,11 +67,51 @@ func (s *Server) HTTPServer(addr string) *http.Server {
 
 	return &http.Server{
 		Addr:              addr,
-		Handler:           s.mux,
+		Handler:           withLimits(s.mux, lim),
 		Protocols:         protocols,
 		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       60 * time.Second,
 		IdleTimeout:       2 * time.Minute,
+		MaxHeaderBytes:    1 << 16, // 64 KiB; anything larger is an attack
+		ErrorLog:          slog.NewLogLogger(s.logger.Handler(), slog.LevelWarn),
 	}
+}
+
+// withLimits bounds body size and request duration, and turns a panic in any
+// handler into a 500 instead of a dropped connection.
+func withLimits(next http.Handler, lim Limits) http.Handler {
+	if lim.RequestTimeout <= 0 {
+		lim.RequestTimeout = 30 * time.Second
+	}
+	if lim.MaxRequestBytes <= 0 {
+		lim.MaxRequestBytes = 1 << 20
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			if rec := recover(); rec != nil {
+				slog.Error("panic in http handler", "path", r.URL.Path, "panic", rec)
+				http.Error(w, "internal error", http.StatusInternalServerError)
+			}
+		}()
+		if r.Body != nil {
+			r.Body = http.MaxBytesReader(w, r.Body, lim.MaxRequestBytes)
+		}
+		// Streaming RPCs manage their own lifetime; a deadline here would
+		// truncate them.
+		if isStreaming(r) {
+			next.ServeHTTP(w, r)
+			return
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), lim.RequestTimeout)
+		defer cancel()
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+func isStreaming(r *http.Request) bool {
+	ct := r.Header.Get("Content-Type")
+	return strings.HasPrefix(ct, "application/grpc") ||
+		strings.HasPrefix(ct, "application/connect+")
 }
 
 // DebugServer serves pprof and expvar on a loopback-only listener.

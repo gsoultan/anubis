@@ -5,6 +5,7 @@ import (
 
 	authapp "github.com/gsoultan/anubis/internal/auth/app"
 	"github.com/gsoultan/anubis/internal/auth/app/device"
+	"github.com/gsoultan/anubis/internal/auth/app/enroll"
 	"github.com/gsoultan/anubis/internal/auth/app/mfa"
 	"github.com/gsoultan/anubis/internal/auth/app/signin"
 	tokenapp "github.com/gsoultan/anubis/internal/auth/app/token"
@@ -23,4 +24,9 @@ type AuthService interface {
 	DeviceVerify(ctx context.Context, in device.DeviceVerifyInput) (*authapp.TokenPair, error)
 	Register(ctx context.Context, in registration.RegisterInput) (*registration.RegisterOutput, error)
 	VerifyEmail(ctx context.Context, token string) error
+
+	BeginTotpEnrollment(ctx context.Context) (*enroll.TOTPEnrollment, error)
+	ConfirmTotpEnrollment(ctx context.Context, enrollmentToken, code string) (*enroll.TOTPConfirmation, error)
+	EnrollDeviceKey(ctx context.Context, publicKey, label string) (string, error)
+	ClientCredentials(ctx context.Context, in tokenapp.ClientCredentialsInput) (*tokenapp.ClientCredentialsOutput, error)
 }

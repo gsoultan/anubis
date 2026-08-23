@@ -12,7 +12,206 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file anubis/v1/auth.proto.
  */
 export const file_anubis_v1_auth: GenFile = /*@__PURE__*/
-  fileDesc("ChRhbnViaXMvdjEvYXV0aC5wcm90bxIJYW51YmlzLnYxIncKDExvZ2luUmVxdWVzdBIOCgZ0ZW5hbnQYASABKAkSDQoFcmVhbG0YAiABKAkSEAoIdXNlcm5hbWUYAyABKAkSEAoIcGFzc3dvcmQYBCABKAkSEQoJY2xpZW50X2lkGAUgASgJEhEKCWRldmljZV9mcBgGIAEoCSJGCgxNZmFDaGFsbGVuZ2USEQoJbWZhX3Rva2VuGAEgASgJEg8KB21ldGhvZHMYAiADKAkSEgoKZXhwaXJlc19pbhgDIAEoBSJpCg1Mb2dpblJlc3BvbnNlEiYKBnRva2VucxgBIAEoCzIULmFudWJpcy52MS5Ub2tlblBhaXJIABImCgNtZmEYAiABKAsyFy5hbnViaXMudjEuTWZhQ2hhbGxlbmdlSABCCAoGcmVzdWx0IkMKEFZlcmlmeU1mYVJlcXVlc3QSEQoJbWZhX3Rva2VuGAEgASgJEg4KBm1ldGhvZBgCIAEoCRIMCgRjb2RlGAMgASgJIjkKEVZlcmlmeU1mYVJlc3BvbnNlEiQKBnRva2VucxgBIAEoCzIULmFudWJpcy52MS5Ub2tlblBhaXIiJwoOUmVmcmVzaFJlcXVlc3QSFQoNcmVmcmVzaF90b2tlbhgBIAEoCSI3Cg9SZWZyZXNoUmVzcG9uc2USJAoGdG9rZW5zGAEgASgLMhQuYW51YmlzLnYxLlRva2VuUGFpciIPCg1Mb2dvdXRSZXF1ZXN0IhAKDkxvZ291dFJlc3BvbnNlIhIKEExvZ291dEFsbFJlcXVlc3QiLQoRTG9nb3V0QWxsUmVzcG9uc2USGAoQc2Vzc2lvbnNfcmV2b2tlZBgBIAEoBSIqChRMb2dvdXRTZXNzaW9uUmVxdWVzdBISCgpzZXNzaW9uX2lkGAEgASgJIhcKFUxvZ291dFNlc3Npb25SZXNwb25zZSJKChZEZXZpY2VDaGFsbGVuZ2VSZXF1ZXN0Eg4KBnRlbmFudBgBIAEoCRINCgVyZWFsbRgCIAEoCRIRCglkZXZpY2VfaWQYAyABKAkiPAoXRGV2aWNlQ2hhbGxlbmdlUmVzcG9uc2USDQoFbm9uY2UYASABKAkSEgoKZXhwaXJlc19pbhgCIAEoBSJ9ChNEZXZpY2VWZXJpZnlSZXF1ZXN0Eg4KBnRlbmFudBgBIAEoCRINCgVub25jZRgCIAEoCRIOCgZrZXlfaWQYAyABKAkSEQoJc2lnbmF0dXJlGAQgASgJEhEKCWNsaWVudF9pZBgFIAEoCRIRCglkZXZpY2VfZnAYBiABKAkiPAoURGV2aWNlVmVyaWZ5UmVzcG9uc2USJAoGdG9rZW5zGAEgASgLMhQuYW51YmlzLnYxLlRva2VuUGFpciI3CgxDb25zZW50SW5wdXQSDwoHcHVycG9zZRgBIAEoCRIWCg5wb2xpY3lfdmVyc2lvbhgCIAEoCSKOAQoPUmVnaXN0ZXJSZXF1ZXN0Eg4KBnRlbmFudBgBIAEoCRINCgVyZWFsbRgCIAEoCRIQCgh1c2VybmFtZRgDIAEoCRINCgVlbWFpbBgEIAEoCRIQCghwYXNzd29yZBgFIAEoCRIpCghjb25zZW50cxgGIAMoCzIXLmFudWJpcy52MS5Db25zZW50SW5wdXQiRgoQUmVnaXN0ZXJSZXNwb25zZRITCgtpZGVudGl0eV9pZBgBIAEoCRIdChV2ZXJpZmljYXRpb25fcmVxdWlyZWQYAiABKAgiIwoSVmVyaWZ5RW1haWxSZXF1ZXN0Eg0KBXRva2VuGAEgASgJIhUKE1ZlcmlmeUVtYWlsUmVzcG9uc2Uy7AUKC0F1dGhTZXJ2aWNlEjoKBUxvZ2luEhcuYW51YmlzLnYxLkxvZ2luUmVxdWVzdBoYLmFudWJpcy52MS5Mb2dpblJlc3BvbnNlEkYKCVZlcmlmeU1mYRIbLmFudWJpcy52MS5WZXJpZnlNZmFSZXF1ZXN0GhwuYW51YmlzLnYxLlZlcmlmeU1mYVJlc3BvbnNlEkAKB1JlZnJlc2gSGS5hbnViaXMudjEuUmVmcmVzaFJlcXVlc3QaGi5hbnViaXMudjEuUmVmcmVzaFJlc3BvbnNlEj0KBkxvZ291dBIYLmFudWJpcy52MS5Mb2dvdXRSZXF1ZXN0GhkuYW51YmlzLnYxLkxvZ291dFJlc3BvbnNlEkYKCUxvZ291dEFsbBIbLmFudWJpcy52MS5Mb2dvdXRBbGxSZXF1ZXN0GhwuYW51YmlzLnYxLkxvZ291dEFsbFJlc3BvbnNlElIKDUxvZ291dFNlc3Npb24SHy5hbnViaXMudjEuTG9nb3V0U2Vzc2lvblJlcXVlc3QaIC5hbnViaXMudjEuTG9nb3V0U2Vzc2lvblJlc3BvbnNlElgKD0RldmljZUNoYWxsZW5nZRIhLmFudWJpcy52MS5EZXZpY2VDaGFsbGVuZ2VSZXF1ZXN0GiIuYW51YmlzLnYxLkRldmljZUNoYWxsZW5nZVJlc3BvbnNlEk8KDERldmljZVZlcmlmeRIeLmFudWJpcy52MS5EZXZpY2VWZXJpZnlSZXF1ZXN0Gh8uYW51YmlzLnYxLkRldmljZVZlcmlmeVJlc3BvbnNlEkMKCFJlZ2lzdGVyEhouYW51YmlzLnYxLlJlZ2lzdGVyUmVxdWVzdBobLmFudWJpcy52MS5SZWdpc3RlclJlc3BvbnNlEkwKC1ZlcmlmeUVtYWlsEh0uYW51YmlzLnYxLlZlcmlmeUVtYWlsUmVxdWVzdBoeLmFudWJpcy52MS5WZXJpZnlFbWFpbFJlc3BvbnNlQjZaNGdpdGh1Yi5jb20vZ3NvdWx0YW4vYW51YmlzL2dlbi9nby9hbnViaXMvdjE7YW51YmlzdjFiBnByb3RvMw", [file_anubis_v1_common]);
+  fileDesc("ChRhbnViaXMvdjEvYXV0aC5wcm90bxIJYW51YmlzLnYxIhwKGkJlZ2luVG90cEVucm9sbG1lbnRSZXF1ZXN0InUKG0JlZ2luVG90cEVucm9sbG1lbnRSZXNwb25zZRIYChBwcm92aXNpb25pbmdfdXJpGAEgASgJEg4KBnNlY3JldBgCIAEoCRIYChBlbnJvbGxtZW50X3Rva2VuGAMgASgJEhIKCmV4cGlyZXNfaW4YBCABKAUiRgocQ29uZmlybVRvdHBFbnJvbGxtZW50UmVxdWVzdBIYChBlbnJvbGxtZW50X3Rva2VuGAEgASgJEgwKBGNvZGUYAiABKAkiTgodQ29uZmlybVRvdHBFbnJvbGxtZW50UmVzcG9uc2USFQoNY3JlZGVudGlhbF9pZBgBIAEoCRIWCg5yZWNvdmVyeV9jb2RlcxgCIAMoCSI7ChZFbnJvbGxEZXZpY2VLZXlSZXF1ZXN0EhIKCnB1YmxpY19rZXkYASABKAkSDQoFbGFiZWwYAiABKAkiMAoXRW5yb2xsRGV2aWNlS2V5UmVzcG9uc2USFQoNY3JlZGVudGlhbF9pZBgBIAEoCSJmChhDbGllbnRDcmVkZW50aWFsc1JlcXVlc3QSDgoGdGVuYW50GAEgASgJEhEKCWNsaWVudF9pZBgCIAEoCRIVCg1jbGllbnRfc2VjcmV0GAMgASgJEhAKCGF1ZGllbmNlGAQgASgJIlkKGUNsaWVudENyZWRlbnRpYWxzUmVzcG9uc2USFAoMYWNjZXNzX3Rva2VuGAEgASgJEhIKCnRva2VuX3R5cGUYAiABKAkSEgoKZXhwaXJlc19pbhgDIAEoBSJ3CgxMb2dpblJlcXVlc3QSDgoGdGVuYW50GAEgASgJEg0KBXJlYWxtGAIgASgJEhAKCHVzZXJuYW1lGAMgASgJEhAKCHBhc3N3b3JkGAQgASgJEhEKCWNsaWVudF9pZBgFIAEoCRIRCglkZXZpY2VfZnAYBiABKAkiRgoMTWZhQ2hhbGxlbmdlEhEKCW1mYV90b2tlbhgBIAEoCRIPCgdtZXRob2RzGAIgAygJEhIKCmV4cGlyZXNfaW4YAyABKAUiaQoNTG9naW5SZXNwb25zZRImCgZ0b2tlbnMYASABKAsyFC5hbnViaXMudjEuVG9rZW5QYWlySAASJgoDbWZhGAIgASgLMhcuYW51YmlzLnYxLk1mYUNoYWxsZW5nZUgAQggKBnJlc3VsdCJDChBWZXJpZnlNZmFSZXF1ZXN0EhEKCW1mYV90b2tlbhgBIAEoCRIOCgZtZXRob2QYAiABKAkSDAoEY29kZRgDIAEoCSI5ChFWZXJpZnlNZmFSZXNwb25zZRIkCgZ0b2tlbnMYASABKAsyFC5hbnViaXMudjEuVG9rZW5QYWlyIicKDlJlZnJlc2hSZXF1ZXN0EhUKDXJlZnJlc2hfdG9rZW4YASABKAkiNwoPUmVmcmVzaFJlc3BvbnNlEiQKBnRva2VucxgBIAEoCzIULmFudWJpcy52MS5Ub2tlblBhaXIiDwoNTG9nb3V0UmVxdWVzdCIQCg5Mb2dvdXRSZXNwb25zZSISChBMb2dvdXRBbGxSZXF1ZXN0Ii0KEUxvZ291dEFsbFJlc3BvbnNlEhgKEHNlc3Npb25zX3Jldm9rZWQYASABKAUiKgoUTG9nb3V0U2Vzc2lvblJlcXVlc3QSEgoKc2Vzc2lvbl9pZBgBIAEoCSIXChVMb2dvdXRTZXNzaW9uUmVzcG9uc2UiSgoWRGV2aWNlQ2hhbGxlbmdlUmVxdWVzdBIOCgZ0ZW5hbnQYASABKAkSDQoFcmVhbG0YAiABKAkSEQoJZGV2aWNlX2lkGAMgASgJIjwKF0RldmljZUNoYWxsZW5nZVJlc3BvbnNlEg0KBW5vbmNlGAEgASgJEhIKCmV4cGlyZXNfaW4YAiABKAUifQoTRGV2aWNlVmVyaWZ5UmVxdWVzdBIOCgZ0ZW5hbnQYASABKAkSDQoFbm9uY2UYAiABKAkSDgoGa2V5X2lkGAMgASgJEhEKCXNpZ25hdHVyZRgEIAEoCRIRCgljbGllbnRfaWQYBSABKAkSEQoJZGV2aWNlX2ZwGAYgASgJIjwKFERldmljZVZlcmlmeVJlc3BvbnNlEiQKBnRva2VucxgBIAEoCzIULmFudWJpcy52MS5Ub2tlblBhaXIiNwoMQ29uc2VudElucHV0Eg8KB3B1cnBvc2UYASABKAkSFgoOcG9saWN5X3ZlcnNpb24YAiABKAkijgEKD1JlZ2lzdGVyUmVxdWVzdBIOCgZ0ZW5hbnQYASABKAkSDQoFcmVhbG0YAiABKAkSEAoIdXNlcm5hbWUYAyABKAkSDQoFZW1haWwYBCABKAkSEAoIcGFzc3dvcmQYBSABKAkSKQoIY29uc2VudHMYBiADKAsyFy5hbnViaXMudjEuQ29uc2VudElucHV0IkYKEFJlZ2lzdGVyUmVzcG9uc2USEwoLaWRlbnRpdHlfaWQYASABKAkSHQoVdmVyaWZpY2F0aW9uX3JlcXVpcmVkGAIgASgIIiMKElZlcmlmeUVtYWlsUmVxdWVzdBINCgV0b2tlbhgBIAEoCSIVChNWZXJpZnlFbWFpbFJlc3BvbnNlMvgICgtBdXRoU2VydmljZRI6CgVMb2dpbhIXLmFudWJpcy52MS5Mb2dpblJlcXVlc3QaGC5hbnViaXMudjEuTG9naW5SZXNwb25zZRJGCglWZXJpZnlNZmESGy5hbnViaXMudjEuVmVyaWZ5TWZhUmVxdWVzdBocLmFudWJpcy52MS5WZXJpZnlNZmFSZXNwb25zZRJACgdSZWZyZXNoEhkuYW51YmlzLnYxLlJlZnJlc2hSZXF1ZXN0GhouYW51YmlzLnYxLlJlZnJlc2hSZXNwb25zZRI9CgZMb2dvdXQSGC5hbnViaXMudjEuTG9nb3V0UmVxdWVzdBoZLmFudWJpcy52MS5Mb2dvdXRSZXNwb25zZRJGCglMb2dvdXRBbGwSGy5hbnViaXMudjEuTG9nb3V0QWxsUmVxdWVzdBocLmFudWJpcy52MS5Mb2dvdXRBbGxSZXNwb25zZRJSCg1Mb2dvdXRTZXNzaW9uEh8uYW51YmlzLnYxLkxvZ291dFNlc3Npb25SZXF1ZXN0GiAuYW51YmlzLnYxLkxvZ291dFNlc3Npb25SZXNwb25zZRJYCg9EZXZpY2VDaGFsbGVuZ2USIS5hbnViaXMudjEuRGV2aWNlQ2hhbGxlbmdlUmVxdWVzdBoiLmFudWJpcy52MS5EZXZpY2VDaGFsbGVuZ2VSZXNwb25zZRJPCgxEZXZpY2VWZXJpZnkSHi5hbnViaXMudjEuRGV2aWNlVmVyaWZ5UmVxdWVzdBofLmFudWJpcy52MS5EZXZpY2VWZXJpZnlSZXNwb25zZRJDCghSZWdpc3RlchIaLmFudWJpcy52MS5SZWdpc3RlclJlcXVlc3QaGy5hbnViaXMudjEuUmVnaXN0ZXJSZXNwb25zZRJMCgtWZXJpZnlFbWFpbBIdLmFudWJpcy52MS5WZXJpZnlFbWFpbFJlcXVlc3QaHi5hbnViaXMudjEuVmVyaWZ5RW1haWxSZXNwb25zZRJkChNCZWdpblRvdHBFbnJvbGxtZW50EiUuYW51YmlzLnYxLkJlZ2luVG90cEVucm9sbG1lbnRSZXF1ZXN0GiYuYW51YmlzLnYxLkJlZ2luVG90cEVucm9sbG1lbnRSZXNwb25zZRJqChVDb25maXJtVG90cEVucm9sbG1lbnQSJy5hbnViaXMudjEuQ29uZmlybVRvdHBFbnJvbGxtZW50UmVxdWVzdBooLmFudWJpcy52MS5Db25maXJtVG90cEVucm9sbG1lbnRSZXNwb25zZRJYCg9FbnJvbGxEZXZpY2VLZXkSIS5hbnViaXMudjEuRW5yb2xsRGV2aWNlS2V5UmVxdWVzdBoiLmFudWJpcy52MS5FbnJvbGxEZXZpY2VLZXlSZXNwb25zZRJeChFDbGllbnRDcmVkZW50aWFscxIjLmFudWJpcy52MS5DbGllbnRDcmVkZW50aWFsc1JlcXVlc3QaJC5hbnViaXMudjEuQ2xpZW50Q3JlZGVudGlhbHNSZXNwb25zZUI2WjRnaXRodWIuY29tL2dzb3VsdGFuL2FudWJpcy9nZW4vZ28vYW51YmlzL3YxO2FudWJpc3YxYgZwcm90bzM", [file_anubis_v1_common]);
+
+/**
+ * @generated from message anubis.v1.BeginTotpEnrollmentRequest
+ */
+export type BeginTotpEnrollmentRequest = Message<"anubis.v1.BeginTotpEnrollmentRequest"> & {
+};
+
+/**
+ * Describes the message anubis.v1.BeginTotpEnrollmentRequest.
+ * Use `create(BeginTotpEnrollmentRequestSchema)` to create a new message.
+ */
+export const BeginTotpEnrollmentRequestSchema: GenMessage<BeginTotpEnrollmentRequest> = /*@__PURE__*/
+  messageDesc(file_anubis_v1_auth, 0);
+
+/**
+ * @generated from message anubis.v1.BeginTotpEnrollmentResponse
+ */
+export type BeginTotpEnrollmentResponse = Message<"anubis.v1.BeginTotpEnrollmentResponse"> & {
+  /**
+   * otpauth:// URI for the QR code, and the raw secret for manual entry.
+   *
+   * @generated from field: string provisioning_uri = 1;
+   */
+  provisioningUri: string;
+
+  /**
+   * @generated from field: string secret = 2;
+   */
+  secret: string;
+
+  /**
+   * Opaque handle carrying the pending secret; expires in 10 minutes.
+   *
+   * @generated from field: string enrollment_token = 3;
+   */
+  enrollmentToken: string;
+
+  /**
+   * @generated from field: int32 expires_in = 4;
+   */
+  expiresIn: number;
+};
+
+/**
+ * Describes the message anubis.v1.BeginTotpEnrollmentResponse.
+ * Use `create(BeginTotpEnrollmentResponseSchema)` to create a new message.
+ */
+export const BeginTotpEnrollmentResponseSchema: GenMessage<BeginTotpEnrollmentResponse> = /*@__PURE__*/
+  messageDesc(file_anubis_v1_auth, 1);
+
+/**
+ * @generated from message anubis.v1.ConfirmTotpEnrollmentRequest
+ */
+export type ConfirmTotpEnrollmentRequest = Message<"anubis.v1.ConfirmTotpEnrollmentRequest"> & {
+  /**
+   * @generated from field: string enrollment_token = 1;
+   */
+  enrollmentToken: string;
+
+  /**
+   * @generated from field: string code = 2;
+   */
+  code: string;
+};
+
+/**
+ * Describes the message anubis.v1.ConfirmTotpEnrollmentRequest.
+ * Use `create(ConfirmTotpEnrollmentRequestSchema)` to create a new message.
+ */
+export const ConfirmTotpEnrollmentRequestSchema: GenMessage<ConfirmTotpEnrollmentRequest> = /*@__PURE__*/
+  messageDesc(file_anubis_v1_auth, 2);
+
+/**
+ * @generated from message anubis.v1.ConfirmTotpEnrollmentResponse
+ */
+export type ConfirmTotpEnrollmentResponse = Message<"anubis.v1.ConfirmTotpEnrollmentResponse"> & {
+  /**
+   * @generated from field: string credential_id = 1;
+   */
+  credentialId: string;
+
+  /**
+   * Single-use recovery codes, shown exactly once: an authenticator lost
+   * without them means an account recovery ticket for a human to judge.
+   *
+   * @generated from field: repeated string recovery_codes = 2;
+   */
+  recoveryCodes: string[];
+};
+
+/**
+ * Describes the message anubis.v1.ConfirmTotpEnrollmentResponse.
+ * Use `create(ConfirmTotpEnrollmentResponseSchema)` to create a new message.
+ */
+export const ConfirmTotpEnrollmentResponseSchema: GenMessage<ConfirmTotpEnrollmentResponse> = /*@__PURE__*/
+  messageDesc(file_anubis_v1_auth, 3);
+
+/**
+ * @generated from message anubis.v1.EnrollDeviceKeyRequest
+ */
+export type EnrollDeviceKeyRequest = Message<"anubis.v1.EnrollDeviceKeyRequest"> & {
+  /**
+   * base64url raw Ed25519 public key generated in the Secure Enclave /
+   * Android Keystore, gated on biometric unlock.
+   *
+   * @generated from field: string public_key = 1;
+   */
+  publicKey: string;
+
+  /**
+   * @generated from field: string label = 2;
+   */
+  label: string;
+};
+
+/**
+ * Describes the message anubis.v1.EnrollDeviceKeyRequest.
+ * Use `create(EnrollDeviceKeyRequestSchema)` to create a new message.
+ */
+export const EnrollDeviceKeyRequestSchema: GenMessage<EnrollDeviceKeyRequest> = /*@__PURE__*/
+  messageDesc(file_anubis_v1_auth, 4);
+
+/**
+ * @generated from message anubis.v1.EnrollDeviceKeyResponse
+ */
+export type EnrollDeviceKeyResponse = Message<"anubis.v1.EnrollDeviceKeyResponse"> & {
+  /**
+   * @generated from field: string credential_id = 1;
+   */
+  credentialId: string;
+};
+
+/**
+ * Describes the message anubis.v1.EnrollDeviceKeyResponse.
+ * Use `create(EnrollDeviceKeyResponseSchema)` to create a new message.
+ */
+export const EnrollDeviceKeyResponseSchema: GenMessage<EnrollDeviceKeyResponse> = /*@__PURE__*/
+  messageDesc(file_anubis_v1_auth, 5);
+
+/**
+ * @generated from message anubis.v1.ClientCredentialsRequest
+ */
+export type ClientCredentialsRequest = Message<"anubis.v1.ClientCredentialsRequest"> & {
+  /**
+   * @generated from field: string tenant = 1;
+   */
+  tenant: string;
+
+  /**
+   * @generated from field: string client_id = 2;
+   */
+  clientId: string;
+
+  /**
+   * @generated from field: string client_secret = 3;
+   */
+  clientSecret: string;
+
+  /**
+   * Optional audience; defaults to the calling application itself.
+   *
+   * @generated from field: string audience = 4;
+   */
+  audience: string;
+};
+
+/**
+ * Describes the message anubis.v1.ClientCredentialsRequest.
+ * Use `create(ClientCredentialsRequestSchema)` to create a new message.
+ */
+export const ClientCredentialsRequestSchema: GenMessage<ClientCredentialsRequest> = /*@__PURE__*/
+  messageDesc(file_anubis_v1_auth, 6);
+
+/**
+ * @generated from message anubis.v1.ClientCredentialsResponse
+ */
+export type ClientCredentialsResponse = Message<"anubis.v1.ClientCredentialsResponse"> & {
+  /**
+   * @generated from field: string access_token = 1;
+   */
+  accessToken: string;
+
+  /**
+   * @generated from field: string token_type = 2;
+   */
+  tokenType: string;
+
+  /**
+   * @generated from field: int32 expires_in = 3;
+   */
+  expiresIn: number;
+};
+
+/**
+ * Describes the message anubis.v1.ClientCredentialsResponse.
+ * Use `create(ClientCredentialsResponseSchema)` to create a new message.
+ */
+export const ClientCredentialsResponseSchema: GenMessage<ClientCredentialsResponse> = /*@__PURE__*/
+  messageDesc(file_anubis_v1_auth, 7);
 
 /**
  * @generated from message anubis.v1.LoginRequest
@@ -60,7 +259,7 @@ export type LoginRequest = Message<"anubis.v1.LoginRequest"> & {
  * Use `create(LoginRequestSchema)` to create a new message.
  */
 export const LoginRequestSchema: GenMessage<LoginRequest> = /*@__PURE__*/
-  messageDesc(file_anubis_v1_auth, 0);
+  messageDesc(file_anubis_v1_auth, 8);
 
 /**
  * @generated from message anubis.v1.MfaChallenge
@@ -91,7 +290,7 @@ export type MfaChallenge = Message<"anubis.v1.MfaChallenge"> & {
  * Use `create(MfaChallengeSchema)` to create a new message.
  */
 export const MfaChallengeSchema: GenMessage<MfaChallenge> = /*@__PURE__*/
-  messageDesc(file_anubis_v1_auth, 1);
+  messageDesc(file_anubis_v1_auth, 9);
 
 /**
  * @generated from message anubis.v1.LoginResponse
@@ -120,7 +319,7 @@ export type LoginResponse = Message<"anubis.v1.LoginResponse"> & {
  * Use `create(LoginResponseSchema)` to create a new message.
  */
 export const LoginResponseSchema: GenMessage<LoginResponse> = /*@__PURE__*/
-  messageDesc(file_anubis_v1_auth, 2);
+  messageDesc(file_anubis_v1_auth, 10);
 
 /**
  * @generated from message anubis.v1.VerifyMfaRequest
@@ -149,7 +348,7 @@ export type VerifyMfaRequest = Message<"anubis.v1.VerifyMfaRequest"> & {
  * Use `create(VerifyMfaRequestSchema)` to create a new message.
  */
 export const VerifyMfaRequestSchema: GenMessage<VerifyMfaRequest> = /*@__PURE__*/
-  messageDesc(file_anubis_v1_auth, 3);
+  messageDesc(file_anubis_v1_auth, 11);
 
 /**
  * @generated from message anubis.v1.VerifyMfaResponse
@@ -166,7 +365,7 @@ export type VerifyMfaResponse = Message<"anubis.v1.VerifyMfaResponse"> & {
  * Use `create(VerifyMfaResponseSchema)` to create a new message.
  */
 export const VerifyMfaResponseSchema: GenMessage<VerifyMfaResponse> = /*@__PURE__*/
-  messageDesc(file_anubis_v1_auth, 4);
+  messageDesc(file_anubis_v1_auth, 12);
 
 /**
  * @generated from message anubis.v1.RefreshRequest
@@ -183,7 +382,7 @@ export type RefreshRequest = Message<"anubis.v1.RefreshRequest"> & {
  * Use `create(RefreshRequestSchema)` to create a new message.
  */
 export const RefreshRequestSchema: GenMessage<RefreshRequest> = /*@__PURE__*/
-  messageDesc(file_anubis_v1_auth, 5);
+  messageDesc(file_anubis_v1_auth, 13);
 
 /**
  * @generated from message anubis.v1.RefreshResponse
@@ -200,7 +399,7 @@ export type RefreshResponse = Message<"anubis.v1.RefreshResponse"> & {
  * Use `create(RefreshResponseSchema)` to create a new message.
  */
 export const RefreshResponseSchema: GenMessage<RefreshResponse> = /*@__PURE__*/
-  messageDesc(file_anubis_v1_auth, 6);
+  messageDesc(file_anubis_v1_auth, 14);
 
 /**
  * @generated from message anubis.v1.LogoutRequest
@@ -213,7 +412,7 @@ export type LogoutRequest = Message<"anubis.v1.LogoutRequest"> & {
  * Use `create(LogoutRequestSchema)` to create a new message.
  */
 export const LogoutRequestSchema: GenMessage<LogoutRequest> = /*@__PURE__*/
-  messageDesc(file_anubis_v1_auth, 7);
+  messageDesc(file_anubis_v1_auth, 15);
 
 /**
  * @generated from message anubis.v1.LogoutResponse
@@ -226,7 +425,7 @@ export type LogoutResponse = Message<"anubis.v1.LogoutResponse"> & {
  * Use `create(LogoutResponseSchema)` to create a new message.
  */
 export const LogoutResponseSchema: GenMessage<LogoutResponse> = /*@__PURE__*/
-  messageDesc(file_anubis_v1_auth, 8);
+  messageDesc(file_anubis_v1_auth, 16);
 
 /**
  * @generated from message anubis.v1.LogoutAllRequest
@@ -239,7 +438,7 @@ export type LogoutAllRequest = Message<"anubis.v1.LogoutAllRequest"> & {
  * Use `create(LogoutAllRequestSchema)` to create a new message.
  */
 export const LogoutAllRequestSchema: GenMessage<LogoutAllRequest> = /*@__PURE__*/
-  messageDesc(file_anubis_v1_auth, 9);
+  messageDesc(file_anubis_v1_auth, 17);
 
 /**
  * @generated from message anubis.v1.LogoutAllResponse
@@ -256,7 +455,7 @@ export type LogoutAllResponse = Message<"anubis.v1.LogoutAllResponse"> & {
  * Use `create(LogoutAllResponseSchema)` to create a new message.
  */
 export const LogoutAllResponseSchema: GenMessage<LogoutAllResponse> = /*@__PURE__*/
-  messageDesc(file_anubis_v1_auth, 10);
+  messageDesc(file_anubis_v1_auth, 18);
 
 /**
  * @generated from message anubis.v1.LogoutSessionRequest
@@ -273,7 +472,7 @@ export type LogoutSessionRequest = Message<"anubis.v1.LogoutSessionRequest"> & {
  * Use `create(LogoutSessionRequestSchema)` to create a new message.
  */
 export const LogoutSessionRequestSchema: GenMessage<LogoutSessionRequest> = /*@__PURE__*/
-  messageDesc(file_anubis_v1_auth, 11);
+  messageDesc(file_anubis_v1_auth, 19);
 
 /**
  * @generated from message anubis.v1.LogoutSessionResponse
@@ -286,7 +485,7 @@ export type LogoutSessionResponse = Message<"anubis.v1.LogoutSessionResponse"> &
  * Use `create(LogoutSessionResponseSchema)` to create a new message.
  */
 export const LogoutSessionResponseSchema: GenMessage<LogoutSessionResponse> = /*@__PURE__*/
-  messageDesc(file_anubis_v1_auth, 12);
+  messageDesc(file_anubis_v1_auth, 20);
 
 /**
  * @generated from message anubis.v1.DeviceChallengeRequest
@@ -315,7 +514,7 @@ export type DeviceChallengeRequest = Message<"anubis.v1.DeviceChallengeRequest">
  * Use `create(DeviceChallengeRequestSchema)` to create a new message.
  */
 export const DeviceChallengeRequestSchema: GenMessage<DeviceChallengeRequest> = /*@__PURE__*/
-  messageDesc(file_anubis_v1_auth, 13);
+  messageDesc(file_anubis_v1_auth, 21);
 
 /**
  * @generated from message anubis.v1.DeviceChallengeResponse
@@ -339,7 +538,7 @@ export type DeviceChallengeResponse = Message<"anubis.v1.DeviceChallengeResponse
  * Use `create(DeviceChallengeResponseSchema)` to create a new message.
  */
 export const DeviceChallengeResponseSchema: GenMessage<DeviceChallengeResponse> = /*@__PURE__*/
-  messageDesc(file_anubis_v1_auth, 14);
+  messageDesc(file_anubis_v1_auth, 22);
 
 /**
  * @generated from message anubis.v1.DeviceVerifyRequest
@@ -385,7 +584,7 @@ export type DeviceVerifyRequest = Message<"anubis.v1.DeviceVerifyRequest"> & {
  * Use `create(DeviceVerifyRequestSchema)` to create a new message.
  */
 export const DeviceVerifyRequestSchema: GenMessage<DeviceVerifyRequest> = /*@__PURE__*/
-  messageDesc(file_anubis_v1_auth, 15);
+  messageDesc(file_anubis_v1_auth, 23);
 
 /**
  * @generated from message anubis.v1.DeviceVerifyResponse
@@ -402,7 +601,7 @@ export type DeviceVerifyResponse = Message<"anubis.v1.DeviceVerifyResponse"> & {
  * Use `create(DeviceVerifyResponseSchema)` to create a new message.
  */
 export const DeviceVerifyResponseSchema: GenMessage<DeviceVerifyResponse> = /*@__PURE__*/
-  messageDesc(file_anubis_v1_auth, 16);
+  messageDesc(file_anubis_v1_auth, 24);
 
 /**
  * @generated from message anubis.v1.ConsentInput
@@ -424,7 +623,7 @@ export type ConsentInput = Message<"anubis.v1.ConsentInput"> & {
  * Use `create(ConsentInputSchema)` to create a new message.
  */
 export const ConsentInputSchema: GenMessage<ConsentInput> = /*@__PURE__*/
-  messageDesc(file_anubis_v1_auth, 17);
+  messageDesc(file_anubis_v1_auth, 25);
 
 /**
  * @generated from message anubis.v1.RegisterRequest
@@ -466,7 +665,7 @@ export type RegisterRequest = Message<"anubis.v1.RegisterRequest"> & {
  * Use `create(RegisterRequestSchema)` to create a new message.
  */
 export const RegisterRequestSchema: GenMessage<RegisterRequest> = /*@__PURE__*/
-  messageDesc(file_anubis_v1_auth, 18);
+  messageDesc(file_anubis_v1_auth, 26);
 
 /**
  * @generated from message anubis.v1.RegisterResponse
@@ -488,7 +687,7 @@ export type RegisterResponse = Message<"anubis.v1.RegisterResponse"> & {
  * Use `create(RegisterResponseSchema)` to create a new message.
  */
 export const RegisterResponseSchema: GenMessage<RegisterResponse> = /*@__PURE__*/
-  messageDesc(file_anubis_v1_auth, 19);
+  messageDesc(file_anubis_v1_auth, 27);
 
 /**
  * @generated from message anubis.v1.VerifyEmailRequest
@@ -505,7 +704,7 @@ export type VerifyEmailRequest = Message<"anubis.v1.VerifyEmailRequest"> & {
  * Use `create(VerifyEmailRequestSchema)` to create a new message.
  */
 export const VerifyEmailRequestSchema: GenMessage<VerifyEmailRequest> = /*@__PURE__*/
-  messageDesc(file_anubis_v1_auth, 20);
+  messageDesc(file_anubis_v1_auth, 28);
 
 /**
  * @generated from message anubis.v1.VerifyEmailResponse
@@ -518,7 +717,7 @@ export type VerifyEmailResponse = Message<"anubis.v1.VerifyEmailResponse"> & {
  * Use `create(VerifyEmailResponseSchema)` to create a new message.
  */
 export const VerifyEmailResponseSchema: GenMessage<VerifyEmailResponse> = /*@__PURE__*/
-  messageDesc(file_anubis_v1_auth, 21);
+  messageDesc(file_anubis_v1_auth, 29);
 
 /**
  * Authentication. Failure responses are uniform in message AND timing: the
@@ -612,6 +811,50 @@ export const AuthService: GenService<{
     methodKind: "unary";
     input: typeof VerifyEmailRequestSchema;
     output: typeof VerifyEmailResponseSchema;
+  },
+  /**
+   * --- second-factor enrolment (bearer token required) --------------------
+   * Two steps on purpose: the secret is only committed once the user proves
+   * they can generate a code from it, so a mistyped transfer to the
+   * authenticator cannot lock them out of their own account.
+   *
+   * @generated from rpc anubis.v1.AuthService.BeginTotpEnrollment
+   */
+  beginTotpEnrollment: {
+    methodKind: "unary";
+    input: typeof BeginTotpEnrollmentRequestSchema;
+    output: typeof BeginTotpEnrollmentResponseSchema;
+  },
+  /**
+   * @generated from rpc anubis.v1.AuthService.ConfirmTotpEnrollment
+   */
+  confirmTotpEnrollment: {
+    methodKind: "unary";
+    input: typeof ConfirmTotpEnrollmentRequestSchema;
+    output: typeof ConfirmTotpEnrollmentResponseSchema;
+  },
+  /**
+   * Device-bound key: the device generates the keypair inside its secure
+   * element and sends only the PUBLIC key. Biometric data never travels.
+   *
+   * @generated from rpc anubis.v1.AuthService.EnrollDeviceKey
+   */
+  enrollDeviceKey: {
+    methodKind: "unary";
+    input: typeof EnrollDeviceKeyRequestSchema;
+    output: typeof EnrollDeviceKeyResponseSchema;
+  },
+  /**
+   * Service-to-service: OAuth2 client_credentials against an application's
+   * registered secret. Returns an access token with no session and no
+   * refresh — a service does not "log in", it presents its identity.
+   *
+   * @generated from rpc anubis.v1.AuthService.ClientCredentials
+   */
+  clientCredentials: {
+    methodKind: "unary";
+    input: typeof ClientCredentialsRequestSchema;
+    output: typeof ClientCredentialsResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_anubis_v1_auth, 0);

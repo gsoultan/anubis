@@ -8,8 +8,8 @@ import (
 	anubisv1 "github.com/gsoultan/anubis/gen/go/anubis/v1"
 	"github.com/gsoultan/anubis/gen/go/anubis/v1/anubisv1connect"
 	apiconnect "github.com/gsoultan/anubis/internal/api/connect"
-	"github.com/gsoultan/anubis/internal/auth/app/session"
-	"github.com/gsoultan/anubis/internal/auth/domain"
+	sessionapp "github.com/gsoultan/anubis/internal/auth/app/session"
+	authdomain "github.com/gsoultan/anubis/internal/auth/domain"
 	authep "github.com/gsoultan/anubis/internal/auth/endpoint"
 )
 

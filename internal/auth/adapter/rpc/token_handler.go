@@ -8,7 +8,7 @@ import (
 	anubisv1 "github.com/gsoultan/anubis/gen/go/anubis/v1"
 	"github.com/gsoultan/anubis/gen/go/anubis/v1/anubisv1connect"
 	apiconnect "github.com/gsoultan/anubis/internal/api/connect"
-	"github.com/gsoultan/anubis/internal/auth/app/token"
+	tokenapp "github.com/gsoultan/anubis/internal/auth/app/token"
 	authep "github.com/gsoultan/anubis/internal/auth/endpoint"
 	"github.com/gsoultan/anubis/internal/shared/apperr"
 	"github.com/gsoultan/anubis/internal/shared/authctx"

@@ -21,6 +21,445 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type BeginTotpEnrollmentRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BeginTotpEnrollmentRequest) Reset() {
+	*x = BeginTotpEnrollmentRequest{}
+	mi := &file_anubis_v1_auth_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BeginTotpEnrollmentRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BeginTotpEnrollmentRequest) ProtoMessage() {}
+
+func (x *BeginTotpEnrollmentRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_anubis_v1_auth_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BeginTotpEnrollmentRequest.ProtoReflect.Descriptor instead.
+func (*BeginTotpEnrollmentRequest) Descriptor() ([]byte, []int) {
+	return file_anubis_v1_auth_proto_rawDescGZIP(), []int{0}
+}
+
+type BeginTotpEnrollmentResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// otpauth:// URI for the QR code, and the raw secret for manual entry.
+	ProvisioningUri string `protobuf:"bytes,1,opt,name=provisioning_uri,json=provisioningUri,proto3" json:"provisioning_uri,omitempty"`
+	Secret          string `protobuf:"bytes,2,opt,name=secret,proto3" json:"secret,omitempty"`
+	// Opaque handle carrying the pending secret; expires in 10 minutes.
+	EnrollmentToken string `protobuf:"bytes,3,opt,name=enrollment_token,json=enrollmentToken,proto3" json:"enrollment_token,omitempty"`
+	ExpiresIn       int32  `protobuf:"varint,4,opt,name=expires_in,json=expiresIn,proto3" json:"expires_in,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *BeginTotpEnrollmentResponse) Reset() {
+	*x = BeginTotpEnrollmentResponse{}
+	mi := &file_anubis_v1_auth_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BeginTotpEnrollmentResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BeginTotpEnrollmentResponse) ProtoMessage() {}
+
+func (x *BeginTotpEnrollmentResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_anubis_v1_auth_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BeginTotpEnrollmentResponse.ProtoReflect.Descriptor instead.
+func (*BeginTotpEnrollmentResponse) Descriptor() ([]byte, []int) {
+	return file_anubis_v1_auth_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *BeginTotpEnrollmentResponse) GetProvisioningUri() string {
+	if x != nil {
+		return x.ProvisioningUri
+	}
+	return ""
+}
+
+func (x *BeginTotpEnrollmentResponse) GetSecret() string {
+	if x != nil {
+		return x.Secret
+	}
+	return ""
+}
+
+func (x *BeginTotpEnrollmentResponse) GetEnrollmentToken() string {
+	if x != nil {
+		return x.EnrollmentToken
+	}
+	return ""
+}
+
+func (x *BeginTotpEnrollmentResponse) GetExpiresIn() int32 {
+	if x != nil {
+		return x.ExpiresIn
+	}
+	return 0
+}
+
+type ConfirmTotpEnrollmentRequest struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	EnrollmentToken string                 `protobuf:"bytes,1,opt,name=enrollment_token,json=enrollmentToken,proto3" json:"enrollment_token,omitempty"`
+	Code            string                 `protobuf:"bytes,2,opt,name=code,proto3" json:"code,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *ConfirmTotpEnrollmentRequest) Reset() {
+	*x = ConfirmTotpEnrollmentRequest{}
+	mi := &file_anubis_v1_auth_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ConfirmTotpEnrollmentRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ConfirmTotpEnrollmentRequest) ProtoMessage() {}
+
+func (x *ConfirmTotpEnrollmentRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_anubis_v1_auth_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ConfirmTotpEnrollmentRequest.ProtoReflect.Descriptor instead.
+func (*ConfirmTotpEnrollmentRequest) Descriptor() ([]byte, []int) {
+	return file_anubis_v1_auth_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *ConfirmTotpEnrollmentRequest) GetEnrollmentToken() string {
+	if x != nil {
+		return x.EnrollmentToken
+	}
+	return ""
+}
+
+func (x *ConfirmTotpEnrollmentRequest) GetCode() string {
+	if x != nil {
+		return x.Code
+	}
+	return ""
+}
+
+type ConfirmTotpEnrollmentResponse struct {
+	state        protoimpl.MessageState `protogen:"open.v1"`
+	CredentialId string                 `protobuf:"bytes,1,opt,name=credential_id,json=credentialId,proto3" json:"credential_id,omitempty"`
+	// Single-use recovery codes, shown exactly once: an authenticator lost
+	// without them means an account recovery ticket for a human to judge.
+	RecoveryCodes []string `protobuf:"bytes,2,rep,name=recovery_codes,json=recoveryCodes,proto3" json:"recovery_codes,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ConfirmTotpEnrollmentResponse) Reset() {
+	*x = ConfirmTotpEnrollmentResponse{}
+	mi := &file_anubis_v1_auth_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ConfirmTotpEnrollmentResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ConfirmTotpEnrollmentResponse) ProtoMessage() {}
+
+func (x *ConfirmTotpEnrollmentResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_anubis_v1_auth_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ConfirmTotpEnrollmentResponse.ProtoReflect.Descriptor instead.
+func (*ConfirmTotpEnrollmentResponse) Descriptor() ([]byte, []int) {
+	return file_anubis_v1_auth_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *ConfirmTotpEnrollmentResponse) GetCredentialId() string {
+	if x != nil {
+		return x.CredentialId
+	}
+	return ""
+}
+
+func (x *ConfirmTotpEnrollmentResponse) GetRecoveryCodes() []string {
+	if x != nil {
+		return x.RecoveryCodes
+	}
+	return nil
+}
+
+type EnrollDeviceKeyRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// base64url raw Ed25519 public key generated in the Secure Enclave /
+	// Android Keystore, gated on biometric unlock.
+	PublicKey     string `protobuf:"bytes,1,opt,name=public_key,json=publicKey,proto3" json:"public_key,omitempty"`
+	Label         string `protobuf:"bytes,2,opt,name=label,proto3" json:"label,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *EnrollDeviceKeyRequest) Reset() {
+	*x = EnrollDeviceKeyRequest{}
+	mi := &file_anubis_v1_auth_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EnrollDeviceKeyRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EnrollDeviceKeyRequest) ProtoMessage() {}
+
+func (x *EnrollDeviceKeyRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_anubis_v1_auth_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EnrollDeviceKeyRequest.ProtoReflect.Descriptor instead.
+func (*EnrollDeviceKeyRequest) Descriptor() ([]byte, []int) {
+	return file_anubis_v1_auth_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *EnrollDeviceKeyRequest) GetPublicKey() string {
+	if x != nil {
+		return x.PublicKey
+	}
+	return ""
+}
+
+func (x *EnrollDeviceKeyRequest) GetLabel() string {
+	if x != nil {
+		return x.Label
+	}
+	return ""
+}
+
+type EnrollDeviceKeyResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	CredentialId  string                 `protobuf:"bytes,1,opt,name=credential_id,json=credentialId,proto3" json:"credential_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *EnrollDeviceKeyResponse) Reset() {
+	*x = EnrollDeviceKeyResponse{}
+	mi := &file_anubis_v1_auth_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EnrollDeviceKeyResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EnrollDeviceKeyResponse) ProtoMessage() {}
+
+func (x *EnrollDeviceKeyResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_anubis_v1_auth_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EnrollDeviceKeyResponse.ProtoReflect.Descriptor instead.
+func (*EnrollDeviceKeyResponse) Descriptor() ([]byte, []int) {
+	return file_anubis_v1_auth_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *EnrollDeviceKeyResponse) GetCredentialId() string {
+	if x != nil {
+		return x.CredentialId
+	}
+	return ""
+}
+
+type ClientCredentialsRequest struct {
+	state        protoimpl.MessageState `protogen:"open.v1"`
+	Tenant       string                 `protobuf:"bytes,1,opt,name=tenant,proto3" json:"tenant,omitempty"`
+	ClientId     string                 `protobuf:"bytes,2,opt,name=client_id,json=clientId,proto3" json:"client_id,omitempty"`
+	ClientSecret string                 `protobuf:"bytes,3,opt,name=client_secret,json=clientSecret,proto3" json:"client_secret,omitempty"`
+	// Optional audience; defaults to the calling application itself.
+	Audience      string `protobuf:"bytes,4,opt,name=audience,proto3" json:"audience,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ClientCredentialsRequest) Reset() {
+	*x = ClientCredentialsRequest{}
+	mi := &file_anubis_v1_auth_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ClientCredentialsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ClientCredentialsRequest) ProtoMessage() {}
+
+func (x *ClientCredentialsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_anubis_v1_auth_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ClientCredentialsRequest.ProtoReflect.Descriptor instead.
+func (*ClientCredentialsRequest) Descriptor() ([]byte, []int) {
+	return file_anubis_v1_auth_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *ClientCredentialsRequest) GetTenant() string {
+	if x != nil {
+		return x.Tenant
+	}
+	return ""
+}
+
+func (x *ClientCredentialsRequest) GetClientId() string {
+	if x != nil {
+		return x.ClientId
+	}
+	return ""
+}
+
+func (x *ClientCredentialsRequest) GetClientSecret() string {
+	if x != nil {
+		return x.ClientSecret
+	}
+	return ""
+}
+
+func (x *ClientCredentialsRequest) GetAudience() string {
+	if x != nil {
+		return x.Audience
+	}
+	return ""
+}
+
+type ClientCredentialsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	AccessToken   string                 `protobuf:"bytes,1,opt,name=access_token,json=accessToken,proto3" json:"access_token,omitempty"`
+	TokenType     string                 `protobuf:"bytes,2,opt,name=token_type,json=tokenType,proto3" json:"token_type,omitempty"`
+	ExpiresIn     int32                  `protobuf:"varint,3,opt,name=expires_in,json=expiresIn,proto3" json:"expires_in,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ClientCredentialsResponse) Reset() {
+	*x = ClientCredentialsResponse{}
+	mi := &file_anubis_v1_auth_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ClientCredentialsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ClientCredentialsResponse) ProtoMessage() {}
+
+func (x *ClientCredentialsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_anubis_v1_auth_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ClientCredentialsResponse.ProtoReflect.Descriptor instead.
+func (*ClientCredentialsResponse) Descriptor() ([]byte, []int) {
+	return file_anubis_v1_auth_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *ClientCredentialsResponse) GetAccessToken() string {
+	if x != nil {
+		return x.AccessToken
+	}
+	return ""
+}
+
+func (x *ClientCredentialsResponse) GetTokenType() string {
+	if x != nil {
+		return x.TokenType
+	}
+	return ""
+}
+
+func (x *ClientCredentialsResponse) GetExpiresIn() int32 {
+	if x != nil {
+		return x.ExpiresIn
+	}
+	return 0
+}
+
 type LoginRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Tenant        string                 `protobuf:"bytes,1,opt,name=tenant,proto3" json:"tenant,omitempty"` // tenant slug
@@ -35,7 +474,7 @@ type LoginRequest struct {
 
 func (x *LoginRequest) Reset() {
 	*x = LoginRequest{}
-	mi := &file_anubis_v1_auth_proto_msgTypes[0]
+	mi := &file_anubis_v1_auth_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -47,7 +486,7 @@ func (x *LoginRequest) String() string {
 func (*LoginRequest) ProtoMessage() {}
 
 func (x *LoginRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_auth_proto_msgTypes[0]
+	mi := &file_anubis_v1_auth_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -60,7 +499,7 @@ func (x *LoginRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LoginRequest.ProtoReflect.Descriptor instead.
 func (*LoginRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_auth_proto_rawDescGZIP(), []int{0}
+	return file_anubis_v1_auth_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *LoginRequest) GetTenant() string {
@@ -116,7 +555,7 @@ type MfaChallenge struct {
 
 func (x *MfaChallenge) Reset() {
 	*x = MfaChallenge{}
-	mi := &file_anubis_v1_auth_proto_msgTypes[1]
+	mi := &file_anubis_v1_auth_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -128,7 +567,7 @@ func (x *MfaChallenge) String() string {
 func (*MfaChallenge) ProtoMessage() {}
 
 func (x *MfaChallenge) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_auth_proto_msgTypes[1]
+	mi := &file_anubis_v1_auth_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -141,7 +580,7 @@ func (x *MfaChallenge) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MfaChallenge.ProtoReflect.Descriptor instead.
 func (*MfaChallenge) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_auth_proto_rawDescGZIP(), []int{1}
+	return file_anubis_v1_auth_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *MfaChallenge) GetMfaToken() string {
@@ -178,7 +617,7 @@ type LoginResponse struct {
 
 func (x *LoginResponse) Reset() {
 	*x = LoginResponse{}
-	mi := &file_anubis_v1_auth_proto_msgTypes[2]
+	mi := &file_anubis_v1_auth_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -190,7 +629,7 @@ func (x *LoginResponse) String() string {
 func (*LoginResponse) ProtoMessage() {}
 
 func (x *LoginResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_auth_proto_msgTypes[2]
+	mi := &file_anubis_v1_auth_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -203,7 +642,7 @@ func (x *LoginResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LoginResponse.ProtoReflect.Descriptor instead.
 func (*LoginResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_auth_proto_rawDescGZIP(), []int{2}
+	return file_anubis_v1_auth_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *LoginResponse) GetResult() isLoginResponse_Result {
@@ -258,7 +697,7 @@ type VerifyMfaRequest struct {
 
 func (x *VerifyMfaRequest) Reset() {
 	*x = VerifyMfaRequest{}
-	mi := &file_anubis_v1_auth_proto_msgTypes[3]
+	mi := &file_anubis_v1_auth_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -270,7 +709,7 @@ func (x *VerifyMfaRequest) String() string {
 func (*VerifyMfaRequest) ProtoMessage() {}
 
 func (x *VerifyMfaRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_auth_proto_msgTypes[3]
+	mi := &file_anubis_v1_auth_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -283,7 +722,7 @@ func (x *VerifyMfaRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VerifyMfaRequest.ProtoReflect.Descriptor instead.
 func (*VerifyMfaRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_auth_proto_rawDescGZIP(), []int{3}
+	return file_anubis_v1_auth_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *VerifyMfaRequest) GetMfaToken() string {
@@ -316,7 +755,7 @@ type VerifyMfaResponse struct {
 
 func (x *VerifyMfaResponse) Reset() {
 	*x = VerifyMfaResponse{}
-	mi := &file_anubis_v1_auth_proto_msgTypes[4]
+	mi := &file_anubis_v1_auth_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -328,7 +767,7 @@ func (x *VerifyMfaResponse) String() string {
 func (*VerifyMfaResponse) ProtoMessage() {}
 
 func (x *VerifyMfaResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_auth_proto_msgTypes[4]
+	mi := &file_anubis_v1_auth_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -341,7 +780,7 @@ func (x *VerifyMfaResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VerifyMfaResponse.ProtoReflect.Descriptor instead.
 func (*VerifyMfaResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_auth_proto_rawDescGZIP(), []int{4}
+	return file_anubis_v1_auth_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *VerifyMfaResponse) GetTokens() *TokenPair {
@@ -360,7 +799,7 @@ type RefreshRequest struct {
 
 func (x *RefreshRequest) Reset() {
 	*x = RefreshRequest{}
-	mi := &file_anubis_v1_auth_proto_msgTypes[5]
+	mi := &file_anubis_v1_auth_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -372,7 +811,7 @@ func (x *RefreshRequest) String() string {
 func (*RefreshRequest) ProtoMessage() {}
 
 func (x *RefreshRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_auth_proto_msgTypes[5]
+	mi := &file_anubis_v1_auth_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -385,7 +824,7 @@ func (x *RefreshRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RefreshRequest.ProtoReflect.Descriptor instead.
 func (*RefreshRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_auth_proto_rawDescGZIP(), []int{5}
+	return file_anubis_v1_auth_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *RefreshRequest) GetRefreshToken() string {
@@ -404,7 +843,7 @@ type RefreshResponse struct {
 
 func (x *RefreshResponse) Reset() {
 	*x = RefreshResponse{}
-	mi := &file_anubis_v1_auth_proto_msgTypes[6]
+	mi := &file_anubis_v1_auth_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -416,7 +855,7 @@ func (x *RefreshResponse) String() string {
 func (*RefreshResponse) ProtoMessage() {}
 
 func (x *RefreshResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_auth_proto_msgTypes[6]
+	mi := &file_anubis_v1_auth_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -429,7 +868,7 @@ func (x *RefreshResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RefreshResponse.ProtoReflect.Descriptor instead.
 func (*RefreshResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_auth_proto_rawDescGZIP(), []int{6}
+	return file_anubis_v1_auth_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *RefreshResponse) GetTokens() *TokenPair {
@@ -447,7 +886,7 @@ type LogoutRequest struct {
 
 func (x *LogoutRequest) Reset() {
 	*x = LogoutRequest{}
-	mi := &file_anubis_v1_auth_proto_msgTypes[7]
+	mi := &file_anubis_v1_auth_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -459,7 +898,7 @@ func (x *LogoutRequest) String() string {
 func (*LogoutRequest) ProtoMessage() {}
 
 func (x *LogoutRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_auth_proto_msgTypes[7]
+	mi := &file_anubis_v1_auth_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -472,7 +911,7 @@ func (x *LogoutRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LogoutRequest.ProtoReflect.Descriptor instead.
 func (*LogoutRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_auth_proto_rawDescGZIP(), []int{7}
+	return file_anubis_v1_auth_proto_rawDescGZIP(), []int{15}
 }
 
 type LogoutResponse struct {
@@ -483,7 +922,7 @@ type LogoutResponse struct {
 
 func (x *LogoutResponse) Reset() {
 	*x = LogoutResponse{}
-	mi := &file_anubis_v1_auth_proto_msgTypes[8]
+	mi := &file_anubis_v1_auth_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -495,7 +934,7 @@ func (x *LogoutResponse) String() string {
 func (*LogoutResponse) ProtoMessage() {}
 
 func (x *LogoutResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_auth_proto_msgTypes[8]
+	mi := &file_anubis_v1_auth_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -508,7 +947,7 @@ func (x *LogoutResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LogoutResponse.ProtoReflect.Descriptor instead.
 func (*LogoutResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_auth_proto_rawDescGZIP(), []int{8}
+	return file_anubis_v1_auth_proto_rawDescGZIP(), []int{16}
 }
 
 type LogoutAllRequest struct {
@@ -519,7 +958,7 @@ type LogoutAllRequest struct {
 
 func (x *LogoutAllRequest) Reset() {
 	*x = LogoutAllRequest{}
-	mi := &file_anubis_v1_auth_proto_msgTypes[9]
+	mi := &file_anubis_v1_auth_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -531,7 +970,7 @@ func (x *LogoutAllRequest) String() string {
 func (*LogoutAllRequest) ProtoMessage() {}
 
 func (x *LogoutAllRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_auth_proto_msgTypes[9]
+	mi := &file_anubis_v1_auth_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -544,7 +983,7 @@ func (x *LogoutAllRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LogoutAllRequest.ProtoReflect.Descriptor instead.
 func (*LogoutAllRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_auth_proto_rawDescGZIP(), []int{9}
+	return file_anubis_v1_auth_proto_rawDescGZIP(), []int{17}
 }
 
 type LogoutAllResponse struct {
@@ -556,7 +995,7 @@ type LogoutAllResponse struct {
 
 func (x *LogoutAllResponse) Reset() {
 	*x = LogoutAllResponse{}
-	mi := &file_anubis_v1_auth_proto_msgTypes[10]
+	mi := &file_anubis_v1_auth_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -568,7 +1007,7 @@ func (x *LogoutAllResponse) String() string {
 func (*LogoutAllResponse) ProtoMessage() {}
 
 func (x *LogoutAllResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_auth_proto_msgTypes[10]
+	mi := &file_anubis_v1_auth_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -581,7 +1020,7 @@ func (x *LogoutAllResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LogoutAllResponse.ProtoReflect.Descriptor instead.
 func (*LogoutAllResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_auth_proto_rawDescGZIP(), []int{10}
+	return file_anubis_v1_auth_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *LogoutAllResponse) GetSessionsRevoked() int32 {
@@ -600,7 +1039,7 @@ type LogoutSessionRequest struct {
 
 func (x *LogoutSessionRequest) Reset() {
 	*x = LogoutSessionRequest{}
-	mi := &file_anubis_v1_auth_proto_msgTypes[11]
+	mi := &file_anubis_v1_auth_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -612,7 +1051,7 @@ func (x *LogoutSessionRequest) String() string {
 func (*LogoutSessionRequest) ProtoMessage() {}
 
 func (x *LogoutSessionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_auth_proto_msgTypes[11]
+	mi := &file_anubis_v1_auth_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -625,7 +1064,7 @@ func (x *LogoutSessionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LogoutSessionRequest.ProtoReflect.Descriptor instead.
 func (*LogoutSessionRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_auth_proto_rawDescGZIP(), []int{11}
+	return file_anubis_v1_auth_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *LogoutSessionRequest) GetSessionId() string {
@@ -643,7 +1082,7 @@ type LogoutSessionResponse struct {
 
 func (x *LogoutSessionResponse) Reset() {
 	*x = LogoutSessionResponse{}
-	mi := &file_anubis_v1_auth_proto_msgTypes[12]
+	mi := &file_anubis_v1_auth_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -655,7 +1094,7 @@ func (x *LogoutSessionResponse) String() string {
 func (*LogoutSessionResponse) ProtoMessage() {}
 
 func (x *LogoutSessionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_auth_proto_msgTypes[12]
+	mi := &file_anubis_v1_auth_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -668,7 +1107,7 @@ func (x *LogoutSessionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LogoutSessionResponse.ProtoReflect.Descriptor instead.
 func (*LogoutSessionResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_auth_proto_rawDescGZIP(), []int{12}
+	return file_anubis_v1_auth_proto_rawDescGZIP(), []int{20}
 }
 
 type DeviceChallengeRequest struct {
@@ -682,7 +1121,7 @@ type DeviceChallengeRequest struct {
 
 func (x *DeviceChallengeRequest) Reset() {
 	*x = DeviceChallengeRequest{}
-	mi := &file_anubis_v1_auth_proto_msgTypes[13]
+	mi := &file_anubis_v1_auth_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -694,7 +1133,7 @@ func (x *DeviceChallengeRequest) String() string {
 func (*DeviceChallengeRequest) ProtoMessage() {}
 
 func (x *DeviceChallengeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_auth_proto_msgTypes[13]
+	mi := &file_anubis_v1_auth_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -707,7 +1146,7 @@ func (x *DeviceChallengeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeviceChallengeRequest.ProtoReflect.Descriptor instead.
 func (*DeviceChallengeRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_auth_proto_rawDescGZIP(), []int{13}
+	return file_anubis_v1_auth_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *DeviceChallengeRequest) GetTenant() string {
@@ -741,7 +1180,7 @@ type DeviceChallengeResponse struct {
 
 func (x *DeviceChallengeResponse) Reset() {
 	*x = DeviceChallengeResponse{}
-	mi := &file_anubis_v1_auth_proto_msgTypes[14]
+	mi := &file_anubis_v1_auth_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -753,7 +1192,7 @@ func (x *DeviceChallengeResponse) String() string {
 func (*DeviceChallengeResponse) ProtoMessage() {}
 
 func (x *DeviceChallengeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_auth_proto_msgTypes[14]
+	mi := &file_anubis_v1_auth_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -766,7 +1205,7 @@ func (x *DeviceChallengeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeviceChallengeResponse.ProtoReflect.Descriptor instead.
 func (*DeviceChallengeResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_auth_proto_rawDescGZIP(), []int{14}
+	return file_anubis_v1_auth_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *DeviceChallengeResponse) GetNonce() string {
@@ -797,7 +1236,7 @@ type DeviceVerifyRequest struct {
 
 func (x *DeviceVerifyRequest) Reset() {
 	*x = DeviceVerifyRequest{}
-	mi := &file_anubis_v1_auth_proto_msgTypes[15]
+	mi := &file_anubis_v1_auth_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -809,7 +1248,7 @@ func (x *DeviceVerifyRequest) String() string {
 func (*DeviceVerifyRequest) ProtoMessage() {}
 
 func (x *DeviceVerifyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_auth_proto_msgTypes[15]
+	mi := &file_anubis_v1_auth_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -822,7 +1261,7 @@ func (x *DeviceVerifyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeviceVerifyRequest.ProtoReflect.Descriptor instead.
 func (*DeviceVerifyRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_auth_proto_rawDescGZIP(), []int{15}
+	return file_anubis_v1_auth_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *DeviceVerifyRequest) GetTenant() string {
@@ -876,7 +1315,7 @@ type DeviceVerifyResponse struct {
 
 func (x *DeviceVerifyResponse) Reset() {
 	*x = DeviceVerifyResponse{}
-	mi := &file_anubis_v1_auth_proto_msgTypes[16]
+	mi := &file_anubis_v1_auth_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -888,7 +1327,7 @@ func (x *DeviceVerifyResponse) String() string {
 func (*DeviceVerifyResponse) ProtoMessage() {}
 
 func (x *DeviceVerifyResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_auth_proto_msgTypes[16]
+	mi := &file_anubis_v1_auth_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -901,7 +1340,7 @@ func (x *DeviceVerifyResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeviceVerifyResponse.ProtoReflect.Descriptor instead.
 func (*DeviceVerifyResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_auth_proto_rawDescGZIP(), []int{16}
+	return file_anubis_v1_auth_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *DeviceVerifyResponse) GetTokens() *TokenPair {
@@ -921,7 +1360,7 @@ type ConsentInput struct {
 
 func (x *ConsentInput) Reset() {
 	*x = ConsentInput{}
-	mi := &file_anubis_v1_auth_proto_msgTypes[17]
+	mi := &file_anubis_v1_auth_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -933,7 +1372,7 @@ func (x *ConsentInput) String() string {
 func (*ConsentInput) ProtoMessage() {}
 
 func (x *ConsentInput) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_auth_proto_msgTypes[17]
+	mi := &file_anubis_v1_auth_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -946,7 +1385,7 @@ func (x *ConsentInput) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConsentInput.ProtoReflect.Descriptor instead.
 func (*ConsentInput) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_auth_proto_rawDescGZIP(), []int{17}
+	return file_anubis_v1_auth_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *ConsentInput) GetPurpose() string {
@@ -977,7 +1416,7 @@ type RegisterRequest struct {
 
 func (x *RegisterRequest) Reset() {
 	*x = RegisterRequest{}
-	mi := &file_anubis_v1_auth_proto_msgTypes[18]
+	mi := &file_anubis_v1_auth_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -989,7 +1428,7 @@ func (x *RegisterRequest) String() string {
 func (*RegisterRequest) ProtoMessage() {}
 
 func (x *RegisterRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_auth_proto_msgTypes[18]
+	mi := &file_anubis_v1_auth_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1002,7 +1441,7 @@ func (x *RegisterRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RegisterRequest.ProtoReflect.Descriptor instead.
 func (*RegisterRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_auth_proto_rawDescGZIP(), []int{18}
+	return file_anubis_v1_auth_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *RegisterRequest) GetTenant() string {
@@ -1057,7 +1496,7 @@ type RegisterResponse struct {
 
 func (x *RegisterResponse) Reset() {
 	*x = RegisterResponse{}
-	mi := &file_anubis_v1_auth_proto_msgTypes[19]
+	mi := &file_anubis_v1_auth_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1069,7 +1508,7 @@ func (x *RegisterResponse) String() string {
 func (*RegisterResponse) ProtoMessage() {}
 
 func (x *RegisterResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_auth_proto_msgTypes[19]
+	mi := &file_anubis_v1_auth_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1082,7 +1521,7 @@ func (x *RegisterResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RegisterResponse.ProtoReflect.Descriptor instead.
 func (*RegisterResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_auth_proto_rawDescGZIP(), []int{19}
+	return file_anubis_v1_auth_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *RegisterResponse) GetIdentityId() string {
@@ -1108,7 +1547,7 @@ type VerifyEmailRequest struct {
 
 func (x *VerifyEmailRequest) Reset() {
 	*x = VerifyEmailRequest{}
-	mi := &file_anubis_v1_auth_proto_msgTypes[20]
+	mi := &file_anubis_v1_auth_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1120,7 +1559,7 @@ func (x *VerifyEmailRequest) String() string {
 func (*VerifyEmailRequest) ProtoMessage() {}
 
 func (x *VerifyEmailRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_auth_proto_msgTypes[20]
+	mi := &file_anubis_v1_auth_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1133,7 +1572,7 @@ func (x *VerifyEmailRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VerifyEmailRequest.ProtoReflect.Descriptor instead.
 func (*VerifyEmailRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_auth_proto_rawDescGZIP(), []int{20}
+	return file_anubis_v1_auth_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *VerifyEmailRequest) GetToken() string {
@@ -1151,7 +1590,7 @@ type VerifyEmailResponse struct {
 
 func (x *VerifyEmailResponse) Reset() {
 	*x = VerifyEmailResponse{}
-	mi := &file_anubis_v1_auth_proto_msgTypes[21]
+	mi := &file_anubis_v1_auth_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1163,7 +1602,7 @@ func (x *VerifyEmailResponse) String() string {
 func (*VerifyEmailResponse) ProtoMessage() {}
 
 func (x *VerifyEmailResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_auth_proto_msgTypes[21]
+	mi := &file_anubis_v1_auth_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1176,14 +1615,44 @@ func (x *VerifyEmailResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VerifyEmailResponse.ProtoReflect.Descriptor instead.
 func (*VerifyEmailResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_auth_proto_rawDescGZIP(), []int{21}
+	return file_anubis_v1_auth_proto_rawDescGZIP(), []int{29}
 }
 
 var File_anubis_v1_auth_proto protoreflect.FileDescriptor
 
 const file_anubis_v1_auth_proto_rawDesc = "" +
 	"\n" +
-	"\x14anubis/v1/auth.proto\x12\tanubis.v1\x1a\x16anubis/v1/common.proto\"\xae\x01\n" +
+	"\x14anubis/v1/auth.proto\x12\tanubis.v1\x1a\x16anubis/v1/common.proto\"\x1c\n" +
+	"\x1aBeginTotpEnrollmentRequest\"\xaa\x01\n" +
+	"\x1bBeginTotpEnrollmentResponse\x12)\n" +
+	"\x10provisioning_uri\x18\x01 \x01(\tR\x0fprovisioningUri\x12\x16\n" +
+	"\x06secret\x18\x02 \x01(\tR\x06secret\x12)\n" +
+	"\x10enrollment_token\x18\x03 \x01(\tR\x0fenrollmentToken\x12\x1d\n" +
+	"\n" +
+	"expires_in\x18\x04 \x01(\x05R\texpiresIn\"]\n" +
+	"\x1cConfirmTotpEnrollmentRequest\x12)\n" +
+	"\x10enrollment_token\x18\x01 \x01(\tR\x0fenrollmentToken\x12\x12\n" +
+	"\x04code\x18\x02 \x01(\tR\x04code\"k\n" +
+	"\x1dConfirmTotpEnrollmentResponse\x12#\n" +
+	"\rcredential_id\x18\x01 \x01(\tR\fcredentialId\x12%\n" +
+	"\x0erecovery_codes\x18\x02 \x03(\tR\rrecoveryCodes\"M\n" +
+	"\x16EnrollDeviceKeyRequest\x12\x1d\n" +
+	"\n" +
+	"public_key\x18\x01 \x01(\tR\tpublicKey\x12\x14\n" +
+	"\x05label\x18\x02 \x01(\tR\x05label\">\n" +
+	"\x17EnrollDeviceKeyResponse\x12#\n" +
+	"\rcredential_id\x18\x01 \x01(\tR\fcredentialId\"\x90\x01\n" +
+	"\x18ClientCredentialsRequest\x12\x16\n" +
+	"\x06tenant\x18\x01 \x01(\tR\x06tenant\x12\x1b\n" +
+	"\tclient_id\x18\x02 \x01(\tR\bclientId\x12#\n" +
+	"\rclient_secret\x18\x03 \x01(\tR\fclientSecret\x12\x1a\n" +
+	"\baudience\x18\x04 \x01(\tR\baudience\"|\n" +
+	"\x19ClientCredentialsResponse\x12!\n" +
+	"\faccess_token\x18\x01 \x01(\tR\vaccessToken\x12\x1d\n" +
+	"\n" +
+	"token_type\x18\x02 \x01(\tR\ttokenType\x12\x1d\n" +
+	"\n" +
+	"expires_in\x18\x03 \x01(\x05R\texpiresIn\"\xae\x01\n" +
 	"\fLoginRequest\x12\x16\n" +
 	"\x06tenant\x18\x01 \x01(\tR\x06tenant\x12\x14\n" +
 	"\x05realm\x18\x02 \x01(\tR\x05realm\x12\x1a\n" +
@@ -1252,7 +1721,7 @@ const file_anubis_v1_auth_proto_rawDesc = "" +
 	"\x15verification_required\x18\x02 \x01(\bR\x14verificationRequired\"*\n" +
 	"\x12VerifyEmailRequest\x12\x14\n" +
 	"\x05token\x18\x01 \x01(\tR\x05token\"\x15\n" +
-	"\x13VerifyEmailResponse2\xec\x05\n" +
+	"\x13VerifyEmailResponse2\xf8\b\n" +
 	"\vAuthService\x12:\n" +
 	"\x05Login\x12\x17.anubis.v1.LoginRequest\x1a\x18.anubis.v1.LoginResponse\x12F\n" +
 	"\tVerifyMfa\x12\x1b.anubis.v1.VerifyMfaRequest\x1a\x1c.anubis.v1.VerifyMfaResponse\x12@\n" +
@@ -1263,7 +1732,11 @@ const file_anubis_v1_auth_proto_rawDesc = "" +
 	"\x0fDeviceChallenge\x12!.anubis.v1.DeviceChallengeRequest\x1a\".anubis.v1.DeviceChallengeResponse\x12O\n" +
 	"\fDeviceVerify\x12\x1e.anubis.v1.DeviceVerifyRequest\x1a\x1f.anubis.v1.DeviceVerifyResponse\x12C\n" +
 	"\bRegister\x12\x1a.anubis.v1.RegisterRequest\x1a\x1b.anubis.v1.RegisterResponse\x12L\n" +
-	"\vVerifyEmail\x12\x1d.anubis.v1.VerifyEmailRequest\x1a\x1e.anubis.v1.VerifyEmailResponseB6Z4github.com/gsoultan/anubis/gen/go/anubis/v1;anubisv1b\x06proto3"
+	"\vVerifyEmail\x12\x1d.anubis.v1.VerifyEmailRequest\x1a\x1e.anubis.v1.VerifyEmailResponse\x12d\n" +
+	"\x13BeginTotpEnrollment\x12%.anubis.v1.BeginTotpEnrollmentRequest\x1a&.anubis.v1.BeginTotpEnrollmentResponse\x12j\n" +
+	"\x15ConfirmTotpEnrollment\x12'.anubis.v1.ConfirmTotpEnrollmentRequest\x1a(.anubis.v1.ConfirmTotpEnrollmentResponse\x12X\n" +
+	"\x0fEnrollDeviceKey\x12!.anubis.v1.EnrollDeviceKeyRequest\x1a\".anubis.v1.EnrollDeviceKeyResponse\x12^\n" +
+	"\x11ClientCredentials\x12#.anubis.v1.ClientCredentialsRequest\x1a$.anubis.v1.ClientCredentialsResponseB6Z4github.com/gsoultan/anubis/gen/go/anubis/v1;anubisv1b\x06proto3"
 
 var (
 	file_anubis_v1_auth_proto_rawDescOnce sync.Once
@@ -1277,61 +1750,77 @@ func file_anubis_v1_auth_proto_rawDescGZIP() []byte {
 	return file_anubis_v1_auth_proto_rawDescData
 }
 
-var file_anubis_v1_auth_proto_msgTypes = make([]protoimpl.MessageInfo, 22)
+var file_anubis_v1_auth_proto_msgTypes = make([]protoimpl.MessageInfo, 30)
 var file_anubis_v1_auth_proto_goTypes = []any{
-	(*LoginRequest)(nil),            // 0: anubis.v1.LoginRequest
-	(*MfaChallenge)(nil),            // 1: anubis.v1.MfaChallenge
-	(*LoginResponse)(nil),           // 2: anubis.v1.LoginResponse
-	(*VerifyMfaRequest)(nil),        // 3: anubis.v1.VerifyMfaRequest
-	(*VerifyMfaResponse)(nil),       // 4: anubis.v1.VerifyMfaResponse
-	(*RefreshRequest)(nil),          // 5: anubis.v1.RefreshRequest
-	(*RefreshResponse)(nil),         // 6: anubis.v1.RefreshResponse
-	(*LogoutRequest)(nil),           // 7: anubis.v1.LogoutRequest
-	(*LogoutResponse)(nil),          // 8: anubis.v1.LogoutResponse
-	(*LogoutAllRequest)(nil),        // 9: anubis.v1.LogoutAllRequest
-	(*LogoutAllResponse)(nil),       // 10: anubis.v1.LogoutAllResponse
-	(*LogoutSessionRequest)(nil),    // 11: anubis.v1.LogoutSessionRequest
-	(*LogoutSessionResponse)(nil),   // 12: anubis.v1.LogoutSessionResponse
-	(*DeviceChallengeRequest)(nil),  // 13: anubis.v1.DeviceChallengeRequest
-	(*DeviceChallengeResponse)(nil), // 14: anubis.v1.DeviceChallengeResponse
-	(*DeviceVerifyRequest)(nil),     // 15: anubis.v1.DeviceVerifyRequest
-	(*DeviceVerifyResponse)(nil),    // 16: anubis.v1.DeviceVerifyResponse
-	(*ConsentInput)(nil),            // 17: anubis.v1.ConsentInput
-	(*RegisterRequest)(nil),         // 18: anubis.v1.RegisterRequest
-	(*RegisterResponse)(nil),        // 19: anubis.v1.RegisterResponse
-	(*VerifyEmailRequest)(nil),      // 20: anubis.v1.VerifyEmailRequest
-	(*VerifyEmailResponse)(nil),     // 21: anubis.v1.VerifyEmailResponse
-	(*TokenPair)(nil),               // 22: anubis.v1.TokenPair
+	(*BeginTotpEnrollmentRequest)(nil),    // 0: anubis.v1.BeginTotpEnrollmentRequest
+	(*BeginTotpEnrollmentResponse)(nil),   // 1: anubis.v1.BeginTotpEnrollmentResponse
+	(*ConfirmTotpEnrollmentRequest)(nil),  // 2: anubis.v1.ConfirmTotpEnrollmentRequest
+	(*ConfirmTotpEnrollmentResponse)(nil), // 3: anubis.v1.ConfirmTotpEnrollmentResponse
+	(*EnrollDeviceKeyRequest)(nil),        // 4: anubis.v1.EnrollDeviceKeyRequest
+	(*EnrollDeviceKeyResponse)(nil),       // 5: anubis.v1.EnrollDeviceKeyResponse
+	(*ClientCredentialsRequest)(nil),      // 6: anubis.v1.ClientCredentialsRequest
+	(*ClientCredentialsResponse)(nil),     // 7: anubis.v1.ClientCredentialsResponse
+	(*LoginRequest)(nil),                  // 8: anubis.v1.LoginRequest
+	(*MfaChallenge)(nil),                  // 9: anubis.v1.MfaChallenge
+	(*LoginResponse)(nil),                 // 10: anubis.v1.LoginResponse
+	(*VerifyMfaRequest)(nil),              // 11: anubis.v1.VerifyMfaRequest
+	(*VerifyMfaResponse)(nil),             // 12: anubis.v1.VerifyMfaResponse
+	(*RefreshRequest)(nil),                // 13: anubis.v1.RefreshRequest
+	(*RefreshResponse)(nil),               // 14: anubis.v1.RefreshResponse
+	(*LogoutRequest)(nil),                 // 15: anubis.v1.LogoutRequest
+	(*LogoutResponse)(nil),                // 16: anubis.v1.LogoutResponse
+	(*LogoutAllRequest)(nil),              // 17: anubis.v1.LogoutAllRequest
+	(*LogoutAllResponse)(nil),             // 18: anubis.v1.LogoutAllResponse
+	(*LogoutSessionRequest)(nil),          // 19: anubis.v1.LogoutSessionRequest
+	(*LogoutSessionResponse)(nil),         // 20: anubis.v1.LogoutSessionResponse
+	(*DeviceChallengeRequest)(nil),        // 21: anubis.v1.DeviceChallengeRequest
+	(*DeviceChallengeResponse)(nil),       // 22: anubis.v1.DeviceChallengeResponse
+	(*DeviceVerifyRequest)(nil),           // 23: anubis.v1.DeviceVerifyRequest
+	(*DeviceVerifyResponse)(nil),          // 24: anubis.v1.DeviceVerifyResponse
+	(*ConsentInput)(nil),                  // 25: anubis.v1.ConsentInput
+	(*RegisterRequest)(nil),               // 26: anubis.v1.RegisterRequest
+	(*RegisterResponse)(nil),              // 27: anubis.v1.RegisterResponse
+	(*VerifyEmailRequest)(nil),            // 28: anubis.v1.VerifyEmailRequest
+	(*VerifyEmailResponse)(nil),           // 29: anubis.v1.VerifyEmailResponse
+	(*TokenPair)(nil),                     // 30: anubis.v1.TokenPair
 }
 var file_anubis_v1_auth_proto_depIdxs = []int32{
-	22, // 0: anubis.v1.LoginResponse.tokens:type_name -> anubis.v1.TokenPair
-	1,  // 1: anubis.v1.LoginResponse.mfa:type_name -> anubis.v1.MfaChallenge
-	22, // 2: anubis.v1.VerifyMfaResponse.tokens:type_name -> anubis.v1.TokenPair
-	22, // 3: anubis.v1.RefreshResponse.tokens:type_name -> anubis.v1.TokenPair
-	22, // 4: anubis.v1.DeviceVerifyResponse.tokens:type_name -> anubis.v1.TokenPair
-	17, // 5: anubis.v1.RegisterRequest.consents:type_name -> anubis.v1.ConsentInput
-	0,  // 6: anubis.v1.AuthService.Login:input_type -> anubis.v1.LoginRequest
-	3,  // 7: anubis.v1.AuthService.VerifyMfa:input_type -> anubis.v1.VerifyMfaRequest
-	5,  // 8: anubis.v1.AuthService.Refresh:input_type -> anubis.v1.RefreshRequest
-	7,  // 9: anubis.v1.AuthService.Logout:input_type -> anubis.v1.LogoutRequest
-	9,  // 10: anubis.v1.AuthService.LogoutAll:input_type -> anubis.v1.LogoutAllRequest
-	11, // 11: anubis.v1.AuthService.LogoutSession:input_type -> anubis.v1.LogoutSessionRequest
-	13, // 12: anubis.v1.AuthService.DeviceChallenge:input_type -> anubis.v1.DeviceChallengeRequest
-	15, // 13: anubis.v1.AuthService.DeviceVerify:input_type -> anubis.v1.DeviceVerifyRequest
-	18, // 14: anubis.v1.AuthService.Register:input_type -> anubis.v1.RegisterRequest
-	20, // 15: anubis.v1.AuthService.VerifyEmail:input_type -> anubis.v1.VerifyEmailRequest
-	2,  // 16: anubis.v1.AuthService.Login:output_type -> anubis.v1.LoginResponse
-	4,  // 17: anubis.v1.AuthService.VerifyMfa:output_type -> anubis.v1.VerifyMfaResponse
-	6,  // 18: anubis.v1.AuthService.Refresh:output_type -> anubis.v1.RefreshResponse
-	8,  // 19: anubis.v1.AuthService.Logout:output_type -> anubis.v1.LogoutResponse
-	10, // 20: anubis.v1.AuthService.LogoutAll:output_type -> anubis.v1.LogoutAllResponse
-	12, // 21: anubis.v1.AuthService.LogoutSession:output_type -> anubis.v1.LogoutSessionResponse
-	14, // 22: anubis.v1.AuthService.DeviceChallenge:output_type -> anubis.v1.DeviceChallengeResponse
-	16, // 23: anubis.v1.AuthService.DeviceVerify:output_type -> anubis.v1.DeviceVerifyResponse
-	19, // 24: anubis.v1.AuthService.Register:output_type -> anubis.v1.RegisterResponse
-	21, // 25: anubis.v1.AuthService.VerifyEmail:output_type -> anubis.v1.VerifyEmailResponse
-	16, // [16:26] is the sub-list for method output_type
-	6,  // [6:16] is the sub-list for method input_type
+	30, // 0: anubis.v1.LoginResponse.tokens:type_name -> anubis.v1.TokenPair
+	9,  // 1: anubis.v1.LoginResponse.mfa:type_name -> anubis.v1.MfaChallenge
+	30, // 2: anubis.v1.VerifyMfaResponse.tokens:type_name -> anubis.v1.TokenPair
+	30, // 3: anubis.v1.RefreshResponse.tokens:type_name -> anubis.v1.TokenPair
+	30, // 4: anubis.v1.DeviceVerifyResponse.tokens:type_name -> anubis.v1.TokenPair
+	25, // 5: anubis.v1.RegisterRequest.consents:type_name -> anubis.v1.ConsentInput
+	8,  // 6: anubis.v1.AuthService.Login:input_type -> anubis.v1.LoginRequest
+	11, // 7: anubis.v1.AuthService.VerifyMfa:input_type -> anubis.v1.VerifyMfaRequest
+	13, // 8: anubis.v1.AuthService.Refresh:input_type -> anubis.v1.RefreshRequest
+	15, // 9: anubis.v1.AuthService.Logout:input_type -> anubis.v1.LogoutRequest
+	17, // 10: anubis.v1.AuthService.LogoutAll:input_type -> anubis.v1.LogoutAllRequest
+	19, // 11: anubis.v1.AuthService.LogoutSession:input_type -> anubis.v1.LogoutSessionRequest
+	21, // 12: anubis.v1.AuthService.DeviceChallenge:input_type -> anubis.v1.DeviceChallengeRequest
+	23, // 13: anubis.v1.AuthService.DeviceVerify:input_type -> anubis.v1.DeviceVerifyRequest
+	26, // 14: anubis.v1.AuthService.Register:input_type -> anubis.v1.RegisterRequest
+	28, // 15: anubis.v1.AuthService.VerifyEmail:input_type -> anubis.v1.VerifyEmailRequest
+	0,  // 16: anubis.v1.AuthService.BeginTotpEnrollment:input_type -> anubis.v1.BeginTotpEnrollmentRequest
+	2,  // 17: anubis.v1.AuthService.ConfirmTotpEnrollment:input_type -> anubis.v1.ConfirmTotpEnrollmentRequest
+	4,  // 18: anubis.v1.AuthService.EnrollDeviceKey:input_type -> anubis.v1.EnrollDeviceKeyRequest
+	6,  // 19: anubis.v1.AuthService.ClientCredentials:input_type -> anubis.v1.ClientCredentialsRequest
+	10, // 20: anubis.v1.AuthService.Login:output_type -> anubis.v1.LoginResponse
+	12, // 21: anubis.v1.AuthService.VerifyMfa:output_type -> anubis.v1.VerifyMfaResponse
+	14, // 22: anubis.v1.AuthService.Refresh:output_type -> anubis.v1.RefreshResponse
+	16, // 23: anubis.v1.AuthService.Logout:output_type -> anubis.v1.LogoutResponse
+	18, // 24: anubis.v1.AuthService.LogoutAll:output_type -> anubis.v1.LogoutAllResponse
+	20, // 25: anubis.v1.AuthService.LogoutSession:output_type -> anubis.v1.LogoutSessionResponse
+	22, // 26: anubis.v1.AuthService.DeviceChallenge:output_type -> anubis.v1.DeviceChallengeResponse
+	24, // 27: anubis.v1.AuthService.DeviceVerify:output_type -> anubis.v1.DeviceVerifyResponse
+	27, // 28: anubis.v1.AuthService.Register:output_type -> anubis.v1.RegisterResponse
+	29, // 29: anubis.v1.AuthService.VerifyEmail:output_type -> anubis.v1.VerifyEmailResponse
+	1,  // 30: anubis.v1.AuthService.BeginTotpEnrollment:output_type -> anubis.v1.BeginTotpEnrollmentResponse
+	3,  // 31: anubis.v1.AuthService.ConfirmTotpEnrollment:output_type -> anubis.v1.ConfirmTotpEnrollmentResponse
+	5,  // 32: anubis.v1.AuthService.EnrollDeviceKey:output_type -> anubis.v1.EnrollDeviceKeyResponse
+	7,  // 33: anubis.v1.AuthService.ClientCredentials:output_type -> anubis.v1.ClientCredentialsResponse
+	20, // [20:34] is the sub-list for method output_type
+	6,  // [6:20] is the sub-list for method input_type
 	6,  // [6:6] is the sub-list for extension type_name
 	6,  // [6:6] is the sub-list for extension extendee
 	0,  // [0:6] is the sub-list for field type_name
@@ -1343,7 +1832,7 @@ func file_anubis_v1_auth_proto_init() {
 		return
 	}
 	file_anubis_v1_common_proto_init()
-	file_anubis_v1_auth_proto_msgTypes[2].OneofWrappers = []any{
+	file_anubis_v1_auth_proto_msgTypes[10].OneofWrappers = []any{
 		(*LoginResponse_Tokens)(nil),
 		(*LoginResponse_Mfa)(nil),
 	}
@@ -1353,7 +1842,7 @@ func file_anubis_v1_auth_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_anubis_v1_auth_proto_rawDesc), len(file_anubis_v1_auth_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   22,
+			NumMessages:   30,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -81,3 +81,48 @@ VALUES (sqlc.arg(tenant_id), sqlc.arg(primary_id), sqlc.arg(secondary_id),
 SELECT token_epoch, status, disabled_at, anonymized_at
 FROM identities
 WHERE id = sqlc.arg(id) AND tenant_id = sqlc.arg(tenant_id);
+
+-- name: ExpireRetainedIdentities :many
+-- Retention sweep: identities past their statutory limit are anonymised, not
+-- deleted — rows and referential integrity survive for audit while
+-- authorize() denies from that moment (migrations/0009 gate 1).
+UPDATE identities
+SET anonymized_at = now(),
+    status        = 'disabled',
+    username      = 'anon_' || left(replace(id::text, '-', ''), 16),
+    email         = NULL,
+    external_ref  = NULL,
+    attributes    = '{}'::jsonb,
+    token_epoch   = token_epoch + 1,
+    updated_at    = now()
+WHERE retention_until IS NOT NULL
+  AND retention_until < now()
+  AND anonymized_at IS NULL
+RETURNING id, tenant_id, pii_key_id;
+
+-- name: SetRetentionFromRealm :execrows
+-- Applies the realm's default_retention to identities that have none yet.
+UPDATE identities i
+SET retention_until = now() + r.default_retention, updated_at = now()
+FROM realms r
+WHERE i.realm_id = r.id
+  AND r.default_retention IS NOT NULL
+  AND i.retention_until IS NULL
+  AND i.anonymized_at IS NULL;
+
+-- name: AnonymizeIdentity :one
+-- Right-to-erasure execution: crypto-shred the PII key, blank the direct
+-- identifiers, bump the epoch so every outstanding token dies.
+UPDATE identities
+SET anonymized_at = now(),
+    status        = 'disabled',
+    username      = 'anon_' || left(replace(id::text, '-', ''), 16),
+    email         = NULL,
+    external_ref  = NULL,
+    attributes    = '{}'::jsonb,
+    pii_key_id    = NULL,
+    token_epoch   = token_epoch + 1,
+    updated_at    = now()
+WHERE id = sqlc.arg(id) AND tenant_id = sqlc.arg(tenant_id)
+  AND anonymized_at IS NULL
+RETURNING id, pii_key_id;

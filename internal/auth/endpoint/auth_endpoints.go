@@ -28,6 +28,10 @@ type AuthEndpoints struct {
 	DeviceVerify    endpoint.Endpoint
 	Register        endpoint.Endpoint
 	VerifyEmail     endpoint.Endpoint
+	BeginTotp       endpoint.Endpoint
+	ConfirmTotp     endpoint.Endpoint
+	EnrollDeviceKey endpoint.Endpoint
+	ClientCreds     endpoint.Endpoint
 }
 
 // NewAuthEndpoints applies the standard chain everywhere and credential-flow
@@ -77,6 +81,22 @@ func NewAuthEndpoints(svc authsvc.AuthService, logger *slog.Logger, limiter *rat
 			}),
 		VerifyEmail: wrap("auth.verify_email", limited, func(ctx context.Context, req any) (any, error) {
 			return nil, svc.VerifyEmail(ctx, req.(string))
+		}),
+		BeginTotp: wrap("auth.totp_enroll_begin", none, func(ctx context.Context, _ any) (any, error) {
+			return svc.BeginTotpEnrollment(ctx)
+		}),
+		ConfirmTotp: wrap("auth.totp_enroll_confirm", limited, func(ctx context.Context, req any) (any, error) {
+			r := req.([2]string)
+			return svc.ConfirmTotpEnrollment(ctx, r[0], r[1])
+		}),
+		EnrollDeviceKey: wrap("auth.device_enroll", none, func(ctx context.Context, req any) (any, error) {
+			r := req.([2]string)
+			return svc.EnrollDeviceKey(ctx, r[0], r[1])
+		}),
+		// Client credentials are hammered by misconfigured services, so they
+		// carry the same limiter as human sign-in.
+		ClientCreds: wrap("auth.client_credentials", limited, func(ctx context.Context, req any) (any, error) {
+			return svc.ClientCredentials(ctx, req.(clientCredsRateKeys).ClientCredentialsInput)
 		}),
 	}
 }

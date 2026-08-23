@@ -10,6 +10,7 @@ import (
 	apiconnect "github.com/gsoultan/anubis/internal/api/connect"
 	authapp "github.com/gsoultan/anubis/internal/auth/app"
 	"github.com/gsoultan/anubis/internal/auth/app/device"
+	"github.com/gsoultan/anubis/internal/auth/app/enroll"
 	"github.com/gsoultan/anubis/internal/auth/app/mfa"
 	"github.com/gsoultan/anubis/internal/auth/app/signin"
 	tokenapp "github.com/gsoultan/anubis/internal/auth/app/token"
@@ -165,4 +166,49 @@ func (h *AuthHandler) VerifyEmail(ctx context.Context, req *connect.Request[anub
 		return nil, apiconnect.Err(ctx, err)
 	}
 	return connect.NewResponse(&anubisv1.VerifyEmailResponse{}), nil
+}
+
+func (h *AuthHandler) BeginTotpEnrollment(ctx context.Context, _ *connect.Request[anubisv1.BeginTotpEnrollmentRequest]) (*connect.Response[anubisv1.BeginTotpEnrollmentResponse], error) {
+	out, err := h.eps.BeginTotp(ctx, nil)
+	if err != nil {
+		return nil, apiconnect.Err(ctx, err)
+	}
+	e := out.(*enroll.TOTPEnrollment)
+	return connect.NewResponse(&anubisv1.BeginTotpEnrollmentResponse{
+		ProvisioningUri: e.ProvisioningURI, Secret: e.Secret,
+		EnrollmentToken: e.EnrollmentToken, ExpiresIn: int32(e.ExpiresIn),
+	}), nil
+}
+
+func (h *AuthHandler) ConfirmTotpEnrollment(ctx context.Context, req *connect.Request[anubisv1.ConfirmTotpEnrollmentRequest]) (*connect.Response[anubisv1.ConfirmTotpEnrollmentResponse], error) {
+	out, err := h.eps.ConfirmTotp(ctx, [2]string{req.Msg.EnrollmentToken, req.Msg.Code})
+	if err != nil {
+		return nil, apiconnect.Err(ctx, err)
+	}
+	c := out.(*enroll.TOTPConfirmation)
+	return connect.NewResponse(&anubisv1.ConfirmTotpEnrollmentResponse{
+		CredentialId: c.CredentialID, RecoveryCodes: c.RecoveryCodes,
+	}), nil
+}
+
+func (h *AuthHandler) EnrollDeviceKey(ctx context.Context, req *connect.Request[anubisv1.EnrollDeviceKeyRequest]) (*connect.Response[anubisv1.EnrollDeviceKeyResponse], error) {
+	out, err := h.eps.EnrollDeviceKey(ctx, [2]string{req.Msg.PublicKey, req.Msg.Label})
+	if err != nil {
+		return nil, apiconnect.Err(ctx, err)
+	}
+	return connect.NewResponse(&anubisv1.EnrollDeviceKeyResponse{CredentialId: out.(string)}), nil
+}
+
+func (h *AuthHandler) ClientCredentials(ctx context.Context, req *connect.Request[anubisv1.ClientCredentialsRequest]) (*connect.Response[anubisv1.ClientCredentialsResponse], error) {
+	out, err := h.eps.ClientCreds(ctx, authep.WrapClientCredentials(tokenapp.ClientCredentialsInput{
+		Tenant: req.Msg.Tenant, ClientID: req.Msg.ClientId,
+		ClientSecret: req.Msg.ClientSecret, Audience: req.Msg.Audience,
+	}))
+	if err != nil {
+		return nil, apiconnect.Err(ctx, err)
+	}
+	c := out.(*tokenapp.ClientCredentialsOutput)
+	return connect.NewResponse(&anubisv1.ClientCredentialsResponse{
+		AccessToken: c.AccessToken, TokenType: c.TokenType, ExpiresIn: int32(c.ExpiresIn),
+	}), nil
 }

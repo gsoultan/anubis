@@ -10,6 +10,51 @@ import (
 	"time"
 )
 
+const consumeRecoveryCode = `-- name: ConsumeRecoveryCode :one
+UPDATE credentials
+SET revoked_at = now(), last_used_at = now(), updated_at = now()
+WHERE id = (
+    SELECT c.id FROM credentials c
+     WHERE c.identity_id = $1
+       AND c.kind = 'recovery_code'
+       AND c.revoked_at IS NULL
+       AND c.secret = $2
+     LIMIT 1)
+RETURNING id
+`
+
+type ConsumeRecoveryCodeParams struct {
+	IdentityID string
+	CodeHash   *string
+}
+
+// Single use: the row is revoked as it is accepted, in one statement, so two
+// concurrent presentations cannot both win.
+func (q *Queries) ConsumeRecoveryCode(ctx context.Context, arg ConsumeRecoveryCodeParams) (string, error) {
+	row := q.db.QueryRow(ctx, consumeRecoveryCode, arg.IdentityID, arg.CodeHash)
+	var id string
+	err := row.Scan(&id)
+	return id, err
+}
+
+const countActiveCredentialsOfKind = `-- name: CountActiveCredentialsOfKind :one
+SELECT count(*)::int FROM credentials
+WHERE identity_id = $1 AND kind = $2
+  AND revoked_at IS NULL
+`
+
+type CountActiveCredentialsOfKindParams struct {
+	IdentityID string
+	Kind       string
+}
+
+func (q *Queries) CountActiveCredentialsOfKind(ctx context.Context, arg CountActiveCredentialsOfKindParams) (int32, error) {
+	row := q.db.QueryRow(ctx, countActiveCredentialsOfKind, arg.IdentityID, arg.Kind)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const createCredential = `-- name: CreateCredential :one
 INSERT INTO credentials (identity_id, tenant_id, kind, secret, lookup_key,
                          label, params, expires_at)

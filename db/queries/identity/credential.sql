@@ -73,3 +73,22 @@ WHERE identity_id = sqlc.arg(identity_id) AND kind = sqlc.arg(kind)
   AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > now())
 ORDER BY created_at DESC
 LIMIT 1;
+
+-- name: CountActiveCredentialsOfKind :one
+SELECT count(*)::int FROM credentials
+WHERE identity_id = sqlc.arg(identity_id) AND kind = sqlc.arg(kind)
+  AND revoked_at IS NULL;
+
+-- name: ConsumeRecoveryCode :one
+-- Single use: the row is revoked as it is accepted, in one statement, so two
+-- concurrent presentations cannot both win.
+UPDATE credentials
+SET revoked_at = now(), last_used_at = now(), updated_at = now()
+WHERE id = (
+    SELECT c.id FROM credentials c
+     WHERE c.identity_id = sqlc.arg(identity_id)
+       AND c.kind = 'recovery_code'
+       AND c.revoked_at IS NULL
+       AND c.secret = sqlc.arg(code_hash)
+     LIMIT 1)
+RETURNING id;

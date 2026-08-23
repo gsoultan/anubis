@@ -36,15 +36,36 @@ type Manager struct {
 	dirty chan string
 }
 
-func NewManager(loader Loader, tenants TenantLister, logger *slog.Logger) *Manager {
+func NewManager(loader Loader, tenants TenantLister, maxAge time.Duration, logger *slog.Logger) *Manager {
+	if maxAge <= 0 {
+		maxAge = 5 * time.Minute
+	}
 	return &Manager{
 		loader: loader, tenants: tenants, logger: logger,
 		pollInterval:  30 * time.Second,
-		maxAge:        5 * time.Minute,
+		maxAge:        maxAge,
 		revokedWindow: 30 * time.Minute,
 		data:          map[string]*snapshot.Data{},
 		dirty:         make(chan string, 64),
 	}
+}
+
+// Stale reports the freshness of the OLDEST loaded tenant snapshot, which is
+// what readiness must judge on: one stale tenant means this instance is
+// failing closed for that tenant's traffic.
+func (m *Manager) Stale() (bool, time.Duration, bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if len(m.data) == 0 {
+		return true, 0, false
+	}
+	var worst time.Duration
+	for _, d := range m.data {
+		if age := time.Since(d.LoadedAt); age > worst {
+			worst = age
+		}
+	}
+	return worst > m.maxAge, worst, true
 }
 
 // Get returns the snapshot for a tenant slug, and whether it is FRESH enough

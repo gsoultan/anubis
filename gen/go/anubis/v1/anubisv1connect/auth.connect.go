@@ -56,6 +56,18 @@ const (
 	AuthServiceRegisterProcedure = "/anubis.v1.AuthService/Register"
 	// AuthServiceVerifyEmailProcedure is the fully-qualified name of the AuthService's VerifyEmail RPC.
 	AuthServiceVerifyEmailProcedure = "/anubis.v1.AuthService/VerifyEmail"
+	// AuthServiceBeginTotpEnrollmentProcedure is the fully-qualified name of the AuthService's
+	// BeginTotpEnrollment RPC.
+	AuthServiceBeginTotpEnrollmentProcedure = "/anubis.v1.AuthService/BeginTotpEnrollment"
+	// AuthServiceConfirmTotpEnrollmentProcedure is the fully-qualified name of the AuthService's
+	// ConfirmTotpEnrollment RPC.
+	AuthServiceConfirmTotpEnrollmentProcedure = "/anubis.v1.AuthService/ConfirmTotpEnrollment"
+	// AuthServiceEnrollDeviceKeyProcedure is the fully-qualified name of the AuthService's
+	// EnrollDeviceKey RPC.
+	AuthServiceEnrollDeviceKeyProcedure = "/anubis.v1.AuthService/EnrollDeviceKey"
+	// AuthServiceClientCredentialsProcedure is the fully-qualified name of the AuthService's
+	// ClientCredentials RPC.
+	AuthServiceClientCredentialsProcedure = "/anubis.v1.AuthService/ClientCredentials"
 )
 
 // AuthServiceClient is a client for the anubis.v1.AuthService service.
@@ -73,6 +85,19 @@ type AuthServiceClient interface {
 	// Self-registration; public realms with self_registration=true only.
 	Register(context.Context, *connect.Request[v1.RegisterRequest]) (*connect.Response[v1.RegisterResponse], error)
 	VerifyEmail(context.Context, *connect.Request[v1.VerifyEmailRequest]) (*connect.Response[v1.VerifyEmailResponse], error)
+	// --- second-factor enrolment (bearer token required) --------------------
+	// Two steps on purpose: the secret is only committed once the user proves
+	// they can generate a code from it, so a mistyped transfer to the
+	// authenticator cannot lock them out of their own account.
+	BeginTotpEnrollment(context.Context, *connect.Request[v1.BeginTotpEnrollmentRequest]) (*connect.Response[v1.BeginTotpEnrollmentResponse], error)
+	ConfirmTotpEnrollment(context.Context, *connect.Request[v1.ConfirmTotpEnrollmentRequest]) (*connect.Response[v1.ConfirmTotpEnrollmentResponse], error)
+	// Device-bound key: the device generates the keypair inside its secure
+	// element and sends only the PUBLIC key. Biometric data never travels.
+	EnrollDeviceKey(context.Context, *connect.Request[v1.EnrollDeviceKeyRequest]) (*connect.Response[v1.EnrollDeviceKeyResponse], error)
+	// Service-to-service: OAuth2 client_credentials against an application's
+	// registered secret. Returns an access token with no session and no
+	// refresh — a service does not "log in", it presents its identity.
+	ClientCredentials(context.Context, *connect.Request[v1.ClientCredentialsRequest]) (*connect.Response[v1.ClientCredentialsResponse], error)
 }
 
 // NewAuthServiceClient constructs a client for the anubis.v1.AuthService service. By default, it
@@ -146,21 +171,49 @@ func NewAuthServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(authServiceMethods.ByName("VerifyEmail")),
 			connect.WithClientOptions(opts...),
 		),
+		beginTotpEnrollment: connect.NewClient[v1.BeginTotpEnrollmentRequest, v1.BeginTotpEnrollmentResponse](
+			httpClient,
+			baseURL+AuthServiceBeginTotpEnrollmentProcedure,
+			connect.WithSchema(authServiceMethods.ByName("BeginTotpEnrollment")),
+			connect.WithClientOptions(opts...),
+		),
+		confirmTotpEnrollment: connect.NewClient[v1.ConfirmTotpEnrollmentRequest, v1.ConfirmTotpEnrollmentResponse](
+			httpClient,
+			baseURL+AuthServiceConfirmTotpEnrollmentProcedure,
+			connect.WithSchema(authServiceMethods.ByName("ConfirmTotpEnrollment")),
+			connect.WithClientOptions(opts...),
+		),
+		enrollDeviceKey: connect.NewClient[v1.EnrollDeviceKeyRequest, v1.EnrollDeviceKeyResponse](
+			httpClient,
+			baseURL+AuthServiceEnrollDeviceKeyProcedure,
+			connect.WithSchema(authServiceMethods.ByName("EnrollDeviceKey")),
+			connect.WithClientOptions(opts...),
+		),
+		clientCredentials: connect.NewClient[v1.ClientCredentialsRequest, v1.ClientCredentialsResponse](
+			httpClient,
+			baseURL+AuthServiceClientCredentialsProcedure,
+			connect.WithSchema(authServiceMethods.ByName("ClientCredentials")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // authServiceClient implements AuthServiceClient.
 type authServiceClient struct {
-	login           *connect.Client[v1.LoginRequest, v1.LoginResponse]
-	verifyMfa       *connect.Client[v1.VerifyMfaRequest, v1.VerifyMfaResponse]
-	refresh         *connect.Client[v1.RefreshRequest, v1.RefreshResponse]
-	logout          *connect.Client[v1.LogoutRequest, v1.LogoutResponse]
-	logoutAll       *connect.Client[v1.LogoutAllRequest, v1.LogoutAllResponse]
-	logoutSession   *connect.Client[v1.LogoutSessionRequest, v1.LogoutSessionResponse]
-	deviceChallenge *connect.Client[v1.DeviceChallengeRequest, v1.DeviceChallengeResponse]
-	deviceVerify    *connect.Client[v1.DeviceVerifyRequest, v1.DeviceVerifyResponse]
-	register        *connect.Client[v1.RegisterRequest, v1.RegisterResponse]
-	verifyEmail     *connect.Client[v1.VerifyEmailRequest, v1.VerifyEmailResponse]
+	login                 *connect.Client[v1.LoginRequest, v1.LoginResponse]
+	verifyMfa             *connect.Client[v1.VerifyMfaRequest, v1.VerifyMfaResponse]
+	refresh               *connect.Client[v1.RefreshRequest, v1.RefreshResponse]
+	logout                *connect.Client[v1.LogoutRequest, v1.LogoutResponse]
+	logoutAll             *connect.Client[v1.LogoutAllRequest, v1.LogoutAllResponse]
+	logoutSession         *connect.Client[v1.LogoutSessionRequest, v1.LogoutSessionResponse]
+	deviceChallenge       *connect.Client[v1.DeviceChallengeRequest, v1.DeviceChallengeResponse]
+	deviceVerify          *connect.Client[v1.DeviceVerifyRequest, v1.DeviceVerifyResponse]
+	register              *connect.Client[v1.RegisterRequest, v1.RegisterResponse]
+	verifyEmail           *connect.Client[v1.VerifyEmailRequest, v1.VerifyEmailResponse]
+	beginTotpEnrollment   *connect.Client[v1.BeginTotpEnrollmentRequest, v1.BeginTotpEnrollmentResponse]
+	confirmTotpEnrollment *connect.Client[v1.ConfirmTotpEnrollmentRequest, v1.ConfirmTotpEnrollmentResponse]
+	enrollDeviceKey       *connect.Client[v1.EnrollDeviceKeyRequest, v1.EnrollDeviceKeyResponse]
+	clientCredentials     *connect.Client[v1.ClientCredentialsRequest, v1.ClientCredentialsResponse]
 }
 
 // Login calls anubis.v1.AuthService.Login.
@@ -213,6 +266,26 @@ func (c *authServiceClient) VerifyEmail(ctx context.Context, req *connect.Reques
 	return c.verifyEmail.CallUnary(ctx, req)
 }
 
+// BeginTotpEnrollment calls anubis.v1.AuthService.BeginTotpEnrollment.
+func (c *authServiceClient) BeginTotpEnrollment(ctx context.Context, req *connect.Request[v1.BeginTotpEnrollmentRequest]) (*connect.Response[v1.BeginTotpEnrollmentResponse], error) {
+	return c.beginTotpEnrollment.CallUnary(ctx, req)
+}
+
+// ConfirmTotpEnrollment calls anubis.v1.AuthService.ConfirmTotpEnrollment.
+func (c *authServiceClient) ConfirmTotpEnrollment(ctx context.Context, req *connect.Request[v1.ConfirmTotpEnrollmentRequest]) (*connect.Response[v1.ConfirmTotpEnrollmentResponse], error) {
+	return c.confirmTotpEnrollment.CallUnary(ctx, req)
+}
+
+// EnrollDeviceKey calls anubis.v1.AuthService.EnrollDeviceKey.
+func (c *authServiceClient) EnrollDeviceKey(ctx context.Context, req *connect.Request[v1.EnrollDeviceKeyRequest]) (*connect.Response[v1.EnrollDeviceKeyResponse], error) {
+	return c.enrollDeviceKey.CallUnary(ctx, req)
+}
+
+// ClientCredentials calls anubis.v1.AuthService.ClientCredentials.
+func (c *authServiceClient) ClientCredentials(ctx context.Context, req *connect.Request[v1.ClientCredentialsRequest]) (*connect.Response[v1.ClientCredentialsResponse], error) {
+	return c.clientCredentials.CallUnary(ctx, req)
+}
+
 // AuthServiceHandler is an implementation of the anubis.v1.AuthService service.
 type AuthServiceHandler interface {
 	Login(context.Context, *connect.Request[v1.LoginRequest]) (*connect.Response[v1.LoginResponse], error)
@@ -228,6 +301,19 @@ type AuthServiceHandler interface {
 	// Self-registration; public realms with self_registration=true only.
 	Register(context.Context, *connect.Request[v1.RegisterRequest]) (*connect.Response[v1.RegisterResponse], error)
 	VerifyEmail(context.Context, *connect.Request[v1.VerifyEmailRequest]) (*connect.Response[v1.VerifyEmailResponse], error)
+	// --- second-factor enrolment (bearer token required) --------------------
+	// Two steps on purpose: the secret is only committed once the user proves
+	// they can generate a code from it, so a mistyped transfer to the
+	// authenticator cannot lock them out of their own account.
+	BeginTotpEnrollment(context.Context, *connect.Request[v1.BeginTotpEnrollmentRequest]) (*connect.Response[v1.BeginTotpEnrollmentResponse], error)
+	ConfirmTotpEnrollment(context.Context, *connect.Request[v1.ConfirmTotpEnrollmentRequest]) (*connect.Response[v1.ConfirmTotpEnrollmentResponse], error)
+	// Device-bound key: the device generates the keypair inside its secure
+	// element and sends only the PUBLIC key. Biometric data never travels.
+	EnrollDeviceKey(context.Context, *connect.Request[v1.EnrollDeviceKeyRequest]) (*connect.Response[v1.EnrollDeviceKeyResponse], error)
+	// Service-to-service: OAuth2 client_credentials against an application's
+	// registered secret. Returns an access token with no session and no
+	// refresh — a service does not "log in", it presents its identity.
+	ClientCredentials(context.Context, *connect.Request[v1.ClientCredentialsRequest]) (*connect.Response[v1.ClientCredentialsResponse], error)
 }
 
 // NewAuthServiceHandler builds an HTTP handler from the service implementation. It returns the path
@@ -297,6 +383,30 @@ func NewAuthServiceHandler(svc AuthServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(authServiceMethods.ByName("VerifyEmail")),
 		connect.WithHandlerOptions(opts...),
 	)
+	authServiceBeginTotpEnrollmentHandler := connect.NewUnaryHandler(
+		AuthServiceBeginTotpEnrollmentProcedure,
+		svc.BeginTotpEnrollment,
+		connect.WithSchema(authServiceMethods.ByName("BeginTotpEnrollment")),
+		connect.WithHandlerOptions(opts...),
+	)
+	authServiceConfirmTotpEnrollmentHandler := connect.NewUnaryHandler(
+		AuthServiceConfirmTotpEnrollmentProcedure,
+		svc.ConfirmTotpEnrollment,
+		connect.WithSchema(authServiceMethods.ByName("ConfirmTotpEnrollment")),
+		connect.WithHandlerOptions(opts...),
+	)
+	authServiceEnrollDeviceKeyHandler := connect.NewUnaryHandler(
+		AuthServiceEnrollDeviceKeyProcedure,
+		svc.EnrollDeviceKey,
+		connect.WithSchema(authServiceMethods.ByName("EnrollDeviceKey")),
+		connect.WithHandlerOptions(opts...),
+	)
+	authServiceClientCredentialsHandler := connect.NewUnaryHandler(
+		AuthServiceClientCredentialsProcedure,
+		svc.ClientCredentials,
+		connect.WithSchema(authServiceMethods.ByName("ClientCredentials")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/anubis.v1.AuthService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case AuthServiceLoginProcedure:
@@ -319,6 +429,14 @@ func NewAuthServiceHandler(svc AuthServiceHandler, opts ...connect.HandlerOption
 			authServiceRegisterHandler.ServeHTTP(w, r)
 		case AuthServiceVerifyEmailProcedure:
 			authServiceVerifyEmailHandler.ServeHTTP(w, r)
+		case AuthServiceBeginTotpEnrollmentProcedure:
+			authServiceBeginTotpEnrollmentHandler.ServeHTTP(w, r)
+		case AuthServiceConfirmTotpEnrollmentProcedure:
+			authServiceConfirmTotpEnrollmentHandler.ServeHTTP(w, r)
+		case AuthServiceEnrollDeviceKeyProcedure:
+			authServiceEnrollDeviceKeyHandler.ServeHTTP(w, r)
+		case AuthServiceClientCredentialsProcedure:
+			authServiceClientCredentialsHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -366,4 +484,20 @@ func (UnimplementedAuthServiceHandler) Register(context.Context, *connect.Reques
 
 func (UnimplementedAuthServiceHandler) VerifyEmail(context.Context, *connect.Request[v1.VerifyEmailRequest]) (*connect.Response[v1.VerifyEmailResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.AuthService.VerifyEmail is not implemented"))
+}
+
+func (UnimplementedAuthServiceHandler) BeginTotpEnrollment(context.Context, *connect.Request[v1.BeginTotpEnrollmentRequest]) (*connect.Response[v1.BeginTotpEnrollmentResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.AuthService.BeginTotpEnrollment is not implemented"))
+}
+
+func (UnimplementedAuthServiceHandler) ConfirmTotpEnrollment(context.Context, *connect.Request[v1.ConfirmTotpEnrollmentRequest]) (*connect.Response[v1.ConfirmTotpEnrollmentResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.AuthService.ConfirmTotpEnrollment is not implemented"))
+}
+
+func (UnimplementedAuthServiceHandler) EnrollDeviceKey(context.Context, *connect.Request[v1.EnrollDeviceKeyRequest]) (*connect.Response[v1.EnrollDeviceKeyResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.AuthService.EnrollDeviceKey is not implemented"))
+}
+
+func (UnimplementedAuthServiceHandler) ClientCredentials(context.Context, *connect.Request[v1.ClientCredentialsRequest]) (*connect.Response[v1.ClientCredentialsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.AuthService.ClientCredentials is not implemented"))
 }

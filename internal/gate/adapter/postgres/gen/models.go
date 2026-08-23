@@ -213,6 +213,22 @@ type Permission struct {
 	MinAssurance  int16
 }
 
+type PiiKey struct {
+	CreatedAt  time.Time
+	ShreddedAt *time.Time
+	ID         string
+	TenantID   string
+	KeyEnc     []byte
+	KmsKeyRef  *string
+}
+
+type PiiKeyTombstone struct {
+	ShreddedAt time.Time
+	KeyID      string
+	TenantID   string
+	Reason     string
+}
+
 type Realm struct {
 	CreatedAt                 time.Time
 	UpdatedAt                 time.Time

@@ -5,6 +5,7 @@ import (
 
 	authapp "github.com/gsoultan/anubis/internal/auth/app"
 	"github.com/gsoultan/anubis/internal/auth/app/device"
+	"github.com/gsoultan/anubis/internal/auth/app/enroll"
 	"github.com/gsoultan/anubis/internal/auth/app/mfa"
 	sessionapp "github.com/gsoultan/anubis/internal/auth/app/session"
 	"github.com/gsoultan/anubis/internal/auth/app/signin"
@@ -24,6 +25,8 @@ type authService struct {
 	deviceVerify  device.DeviceVerifyUsecase
 	register      registration.RegisterUsecase
 	verifyEmail   registration.VerifyEmailUsecase
+	enrollment    enroll.EnrollmentUsecase
+	clientCreds   tokenapp.ClientCredentialsUsecase
 }
 
 func NewAuthService(
@@ -37,12 +40,15 @@ func NewAuthService(
 	deviceVerify device.DeviceVerifyUsecase,
 	register registration.RegisterUsecase,
 	verifyEmail registration.VerifyEmailUsecase,
+	enrollment enroll.EnrollmentUsecase,
+	clientCreds tokenapp.ClientCredentialsUsecase,
 ) AuthService {
 	return &authService{
 		login: login, verifyMfa: verifyMfa, refresh: refresh,
 		logout: logout, logoutAll: logoutAll, logoutSession: logoutSession,
 		deviceCh: deviceCh, deviceVerify: deviceVerify,
 		register: register, verifyEmail: verifyEmail,
+		enrollment: enrollment, clientCreds: clientCreds,
 	}
 }
 
@@ -80,4 +86,20 @@ func (s *authService) Register(ctx context.Context, in registration.RegisterInpu
 
 func (s *authService) VerifyEmail(ctx context.Context, token string) error {
 	return s.verifyEmail.Execute(ctx, token)
+}
+
+func (s *authService) BeginTotpEnrollment(ctx context.Context) (*enroll.TOTPEnrollment, error) {
+	return s.enrollment.BeginTOTP(ctx)
+}
+
+func (s *authService) ConfirmTotpEnrollment(ctx context.Context, enrollmentToken, code string) (*enroll.TOTPConfirmation, error) {
+	return s.enrollment.ConfirmTOTP(ctx, enrollmentToken, code)
+}
+
+func (s *authService) EnrollDeviceKey(ctx context.Context, publicKey, label string) (string, error) {
+	return s.enrollment.EnrollDeviceKey(ctx, publicKey, label)
+}
+
+func (s *authService) ClientCredentials(ctx context.Context, in tokenapp.ClientCredentialsInput) (*tokenapp.ClientCredentialsOutput, error) {
+	return s.clientCreds.Execute(ctx, in)
 }

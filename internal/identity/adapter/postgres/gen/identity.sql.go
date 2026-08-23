@@ -10,6 +10,41 @@ import (
 	"time"
 )
 
+const anonymizeIdentity = `-- name: AnonymizeIdentity :one
+UPDATE identities
+SET anonymized_at = now(),
+    status        = 'disabled',
+    username      = 'anon_' || left(replace(id::text, '-', ''), 16),
+    email         = NULL,
+    external_ref  = NULL,
+    attributes    = '{}'::jsonb,
+    pii_key_id    = NULL,
+    token_epoch   = token_epoch + 1,
+    updated_at    = now()
+WHERE id = $1 AND tenant_id = $2
+  AND anonymized_at IS NULL
+RETURNING id, pii_key_id
+`
+
+type AnonymizeIdentityParams struct {
+	ID       string
+	TenantID string
+}
+
+type AnonymizeIdentityRow struct {
+	ID       string
+	PiiKeyID *string
+}
+
+// Right-to-erasure execution: crypto-shred the PII key, blank the direct
+// identifiers, bump the epoch so every outstanding token dies.
+func (q *Queries) AnonymizeIdentity(ctx context.Context, arg AnonymizeIdentityParams) (AnonymizeIdentityRow, error) {
+	row := q.db.QueryRow(ctx, anonymizeIdentity, arg.ID, arg.TenantID)
+	var i AnonymizeIdentityRow
+	err := row.Scan(&i.ID, &i.PiiKeyID)
+	return i, err
+}
+
 const bumpTokenEpoch = `-- name: BumpTokenEpoch :one
 UPDATE identities SET token_epoch = token_epoch + 1, updated_at = now()
 WHERE id = $1 AND tenant_id = $2
@@ -104,6 +139,51 @@ func (q *Queries) EnableIdentity(ctx context.Context, arg EnableIdentityParams) 
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const expireRetainedIdentities = `-- name: ExpireRetainedIdentities :many
+UPDATE identities
+SET anonymized_at = now(),
+    status        = 'disabled',
+    username      = 'anon_' || left(replace(id::text, '-', ''), 16),
+    email         = NULL,
+    external_ref  = NULL,
+    attributes    = '{}'::jsonb,
+    token_epoch   = token_epoch + 1,
+    updated_at    = now()
+WHERE retention_until IS NOT NULL
+  AND retention_until < now()
+  AND anonymized_at IS NULL
+RETURNING id, tenant_id, pii_key_id
+`
+
+type ExpireRetainedIdentitiesRow struct {
+	ID       string
+	TenantID string
+	PiiKeyID *string
+}
+
+// Retention sweep: identities past their statutory limit are anonymised, not
+// deleted — rows and referential integrity survive for audit while
+// authorize() denies from that moment (migrations/0009 gate 1).
+func (q *Queries) ExpireRetainedIdentities(ctx context.Context) ([]ExpireRetainedIdentitiesRow, error) {
+	rows, err := q.db.Query(ctx, expireRetainedIdentities)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ExpireRetainedIdentitiesRow
+	for rows.Next() {
+		var i ExpireRetainedIdentitiesRow
+		if err := rows.Scan(&i.ID, &i.TenantID, &i.PiiKeyID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getIdentity = `-- name: GetIdentity :one
@@ -389,6 +469,25 @@ type RequestErasureParams struct {
 
 func (q *Queries) RequestErasure(ctx context.Context, arg RequestErasureParams) (int64, error) {
 	result, err := q.db.Exec(ctx, requestErasure, arg.ID, arg.TenantID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const setRetentionFromRealm = `-- name: SetRetentionFromRealm :execrows
+UPDATE identities i
+SET retention_until = now() + r.default_retention, updated_at = now()
+FROM realms r
+WHERE i.realm_id = r.id
+  AND r.default_retention IS NOT NULL
+  AND i.retention_until IS NULL
+  AND i.anonymized_at IS NULL
+`
+
+// Applies the realm's default_retention to identities that have none yet.
+func (q *Queries) SetRetentionFromRealm(ctx context.Context) (int64, error) {
+	result, err := q.db.Exec(ctx, setRetentionFromRealm)
 	if err != nil {
 		return 0, err
 	}

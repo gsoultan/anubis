@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"time"
@@ -47,11 +48,27 @@ func runServe(ctx context.Context, logger *slog.Logger) error {
 		}
 	}
 
-	pool, err := pgxpool.New(ctx, cfg.DatabaseURL)
+	// Pool sized to the DATABASE's capacity, with server-side guards baked
+	// into the URL so no caller can forget them.
+	poolCfg, err := pgxpool.ParseConfig(cfg.PoolURL())
+	if err != nil {
+		return err
+	}
+	poolCfg.MaxConns = cfg.MaxConns
+	poolCfg.MinConns = 2
+	poolCfg.MaxConnLifetime = time.Hour
+	poolCfg.MaxConnLifetimeJitter = 5 * time.Minute // avoid synchronised reconnect storms
+	poolCfg.MaxConnIdleTime = 15 * time.Minute
+	poolCfg.HealthCheckPeriod = 30 * time.Second
+
+	pool, err := pgxpool.NewWithConfig(ctx, poolCfg)
 	if err != nil {
 		return err
 	}
 	defer pool.Close()
+	if err := pool.Ping(ctx); err != nil {
+		return fmt.Errorf("database unreachable: %w", err)
+	}
 
 	// One pool and one transaction mechanism; each bounded context gets its
 	// own repository over its own generated queries.
@@ -71,10 +88,15 @@ func runServe(ctx context.Context, logger *slog.Logger) error {
 	rpc := http.NewServeMux()
 	app.registerRPC(rpc, opts, limiter, logger)
 
-	srv := apihttp.NewServer(logger, cfg.UIOrigin, rpc, apihttp.NewHealthHandler(pool, app.ring))
-	app.registerHTTP(ctx, srv, cfg, limiter, logger)
+	health := apihttp.NewHealthHandler(pool, app.ring)
+	srv := apihttp.NewServer(logger, cfg.UIOrigin, rpc, health)
+	app.registerHTTP(ctx, srv, cfg, health, limiter, logger)
+	app.runMaintenance(ctx, db, logger)
 
-	httpSrv := srv.HTTPServer(cfg.Listen)
+	httpSrv := srv.HTTPServer(cfg.Listen, apihttp.Limits{
+		RequestTimeout:  cfg.RequestTimeout,
+		MaxRequestBytes: cfg.MaxRequestBytes,
+	})
 
 	if cfg.DebugListen != "" {
 		dbg := apihttp.DebugServer(cfg.DebugListen)
@@ -93,10 +115,18 @@ func runServe(ctx context.Context, logger *slog.Logger) error {
 
 	select {
 	case <-ctx.Done():
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		// Shutdown order matters: stop accepting first, let in-flight
+		// requests finish, and only then close the audit queue — an audit
+		// event dropped during drain is a security record lost.
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownGrace)
 		defer cancel()
-		logger.Info("shutting down")
-		return httpSrv.Shutdown(shutdownCtx)
+		logger.Info("draining", "grace", cfg.ShutdownGrace.String())
+		err := httpSrv.Shutdown(shutdownCtx)
+		if err != nil {
+			logger.Warn("drain incomplete; forcing close", "error", err)
+			_ = httpSrv.Close()
+		}
+		return err
 	case err := <-errCh:
 		if errors.Is(err, http.ErrServerClosed) {
 			return nil

@@ -9,10 +9,10 @@ import (
 	"github.com/gsoultan/anubis/gen/go/anubis/v1/anubisv1connect"
 	apiconnect "github.com/gsoultan/anubis/internal/api/connect"
 	authrpc "github.com/gsoultan/anubis/internal/auth/adapter/rpc"
-	"github.com/gsoultan/anubis/internal/auth/app"
+	authapp "github.com/gsoultan/anubis/internal/auth/app"
 	authzapp "github.com/gsoultan/anubis/internal/authz/app"
-	"github.com/gsoultan/anubis/internal/authz/domain"
-	"github.com/gsoultan/anubis/internal/authz/endpoint"
+	authzdomain "github.com/gsoultan/anubis/internal/authz/domain"
+	authzep "github.com/gsoultan/anubis/internal/authz/endpoint"
 )
 
 // AuthzHandler implements anubisv1connect.AuthzServiceHandler.

@@ -15,6 +15,7 @@ import (
 	authrpc "github.com/gsoultan/anubis/internal/auth/adapter/rpc"
 	authapp "github.com/gsoultan/anubis/internal/auth/app"
 	"github.com/gsoultan/anubis/internal/auth/app/device"
+	"github.com/gsoultan/anubis/internal/auth/app/enroll"
 	"github.com/gsoultan/anubis/internal/auth/app/mfa"
 	sessionapp "github.com/gsoultan/anubis/internal/auth/app/session"
 	"github.com/gsoultan/anubis/internal/auth/app/signin"
@@ -38,6 +39,7 @@ import (
 	"github.com/gsoultan/anubis/internal/platform/config"
 	"github.com/gsoultan/anubis/internal/platform/crypto/keyring"
 	"github.com/gsoultan/anubis/internal/platform/database"
+	"github.com/gsoultan/anubis/internal/platform/jobs"
 	"github.com/gsoultan/anubis/internal/platform/mw"
 	"github.com/gsoultan/anubis/internal/platform/ratelimit"
 	scopepg "github.com/gsoultan/anubis/internal/scope/adapter/postgres"
@@ -99,6 +101,16 @@ func newApplication(ctx context.Context, cfg *config.Config, db *database.DB, lo
 
 func (a *application) close() { a.auditor.Close() }
 
+// runMaintenance starts the recurring database maintenance every deployment
+// needs. Replicas coordinate through advisory locks, so this is safe to run
+// on every instance.
+func (a *application) runMaintenance(ctx context.Context, db *database.DB, logger *slog.Logger) {
+	retention := identityapp.NewRetentionInteractor(a.identity, a.identity, db, a.auditor)
+	sched := jobs.NewScheduler(db, logger,
+		maintenanceJobs(a.audit, a.auth, retention, a.auth, logger)...)
+	go sched.Run(ctx)
+}
+
 // registerRPC mounts every context's Connect service on one mux.
 func (a *application) registerRPC(rpc *http.ServeMux, opts connect.HandlerOption,
 	limiter *ratelimit.Limiter, logger *slog.Logger) {
@@ -119,11 +131,16 @@ func (a *application) registerRPC(rpc *http.ServeMux, opts connect.HandlerOption
 	verifyEmail := registration.NewVerifyEmailInteractor(a.auth, a.identity)
 	introspect := tokenapp.NewIntrospectInteractor(a.issuerURL, a.ring, a.auth, a.tenancy, a.clock)
 	revoke := tokenapp.NewRevokeInteractor(a.auth, a.auth, a.tenancy, a.auditor)
+	enrollment := enroll.NewEnrollmentInteractor(a.issuerURL, a.ring, a.identity,
+		a.identity, a.auth, a.auth, a.clock, a.auditor)
+	clientCreds := tokenapp.NewClientCredentialsInteractor(a.issuerURL, a.ring,
+		a.tenancy, a.tenancy, a.clock, a.auditor)
 	getMe := sessionapp.NewGetMeInteractor(a.identity, a.authz)
 	listSessions := sessionapp.NewListSessionsInteractor(a.auth)
 
 	authService := authsvc.NewAuthService(login, verifyMfa, refresh,
-		logout, logout.All(), logout.Session(), dev, dev.Verify(), reg, verifyEmail)
+		logout, logout.All(), logout.Session(), dev, dev.Verify(), reg, verifyEmail,
+		enrollment, clientCreds)
 	tokenService := authsvc.NewTokenService(introspect, revoke)
 	sessionService := authsvc.NewSessionService(getMe, listSessions, logout.Session())
 
@@ -171,7 +188,8 @@ func (a *application) registerRPC(rpc *http.ServeMux, opts connect.HandlerOption
 // registerHTTP lets each context mount its protocol-shaped routes (OIDC,
 // key discovery, forward auth) on the shared server.
 func (a *application) registerHTTP(ctx context.Context, srv *apihttp.Server,
-	cfg *config.Config, limiter *ratelimit.Limiter, logger *slog.Logger) {
+	cfg *config.Config, health *apihttp.HealthHandler,
+	limiter *ratelimit.Limiter, logger *slog.Logger) {
 
 	wellKnown := authhttp.NewWellKnownHandler(cfg.Issuer, a.ring)
 	srv.HandleFunc("GET /.well-known/anubis-keys.json", wellKnown.Keys)
@@ -184,8 +202,12 @@ func (a *application) registerHTTP(ctx context.Context, srv *apihttp.Server,
 	srv.HandleFunc("POST /v1/login", oidc.LoginForm)
 	srv.HandleFunc("POST /v1/token", oidc.Token)
 
-	snaps := gateapp.NewManager(a.gate, a.gate, logger)
+	snaps := gateapp.NewManager(a.gate, a.gate, cfg.SnapshotMaxAge, logger)
 	go snaps.Run(ctx)
+	// Readiness must fail while the snapshot is too stale to serve from:
+	// past that age the gate fails closed, so this instance is denying
+	// traffic and should leave the load balancer.
+	health.WithSnapshot(snaps)
 	gate := gatehttp.NewGateHandler(cfg.Issuer, a.ring, snaps)
 	srv.HandleFunc("POST /v1/gate/check", gate.Check)
 	srv.HandleFunc("GET /v1/gate/check", gate.Check)

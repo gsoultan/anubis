@@ -22,6 +22,69 @@ service AuthService {
   // Self-registration; public realms with self_registration=true only.
   rpc Register(RegisterRequest) returns (RegisterResponse);
   rpc VerifyEmail(VerifyEmailRequest) returns (VerifyEmailResponse);
+
+  // --- second-factor enrolment (bearer token required) --------------------
+  // Two steps on purpose: the secret is only committed once the user proves
+  // they can generate a code from it, so a mistyped transfer to the
+  // authenticator cannot lock them out of their own account.
+  rpc BeginTotpEnrollment(BeginTotpEnrollmentRequest) returns (BeginTotpEnrollmentResponse);
+  rpc ConfirmTotpEnrollment(ConfirmTotpEnrollmentRequest) returns (ConfirmTotpEnrollmentResponse);
+  // Device-bound key: the device generates the keypair inside its secure
+  // element and sends only the PUBLIC key. Biometric data never travels.
+  rpc EnrollDeviceKey(EnrollDeviceKeyRequest) returns (EnrollDeviceKeyResponse);
+
+  // Service-to-service: OAuth2 client_credentials against an application's
+  // registered secret. Returns an access token with no session and no
+  // refresh — a service does not "log in", it presents its identity.
+  rpc ClientCredentials(ClientCredentialsRequest) returns (ClientCredentialsResponse);
+}
+
+message BeginTotpEnrollmentRequest {}
+
+message BeginTotpEnrollmentResponse {
+  // otpauth:// URI for the QR code, and the raw secret for manual entry.
+  string provisioning_uri = 1;
+  string secret = 2;
+  // Opaque handle carrying the pending secret; expires in 10 minutes.
+  string enrollment_token = 3;
+  int32 expires_in = 4;
+}
+
+message ConfirmTotpEnrollmentRequest {
+  string enrollment_token = 1;
+  string code = 2;
+}
+
+message ConfirmTotpEnrollmentResponse {
+  string credential_id = 1;
+  // Single-use recovery codes, shown exactly once: an authenticator lost
+  // without them means an account recovery ticket for a human to judge.
+  repeated string recovery_codes = 2;
+}
+
+message EnrollDeviceKeyRequest {
+  // base64url raw Ed25519 public key generated in the Secure Enclave /
+  // Android Keystore, gated on biometric unlock.
+  string public_key = 1;
+  string label = 2;
+}
+
+message EnrollDeviceKeyResponse {
+  string credential_id = 1;
+}
+
+message ClientCredentialsRequest {
+  string tenant = 1;
+  string client_id = 2;
+  string client_secret = 3;
+  // Optional audience; defaults to the calling application itself.
+  string audience = 4;
+}
+
+message ClientCredentialsResponse {
+  string access_token = 1;
+  string token_type = 2;
+  int32 expires_in = 3;
 }
 
 message LoginRequest {
