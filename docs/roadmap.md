@@ -20,7 +20,9 @@ step-up via amr/auth_time). Phase 7 ✅ (gate + snapshot + shared normalisation
 corpus + fuzz). Phase 8 partially (gRPC via Connect on day one; key prepare/
 promote lifecycle; Envoy ext_authz and revocation streaming remain).
 
-Everything in [api.md](api.md) is **specification**, not shipped code.
+[api.md](api.md) is now **implemented**, not specification. What remains
+unbuilt is listed under [Remaining gaps](#remaining-gaps) at the end of this
+document.
 
 ---
 
@@ -109,3 +111,36 @@ gRPC transport, automated key rotation, admin API, the JWS codec flag
 | **Social login** | Applicants may want it. `credentials.kind = 'oidc_link'` reserves the slot. |
 | **Argon2id** | Requires `x/crypto`. PBKDF2 hash format supports transparent migration later. |
 
+
+---
+
+## Formerly unproven claims — now closed
+
+Each of these was asserted by a document and verified by nothing, which is the
+same as not having the property. Every one now has a test that fails if the
+property regresses (`go test -tags integration ./test/integration/`).
+
+| Claim | Closed by | Result |
+| :--- | :--- | :--- |
+| `scope_move_node` is safe under concurrency | `TestConcurrentSubtreeMovesKeepClosureConsistent` | 6 workers moving one subtree; the closure is recomputed from `parent_id` and compared. 14 serialisation retries observed, 0 divergence — an *extra* closure row would have been a privilege leak |
+| `role_recompute_effective` handles deep role graphs | `TestDeepRoleGraphRecompute`, `TestCyclicRoleGraphTerminates` | 60-level inheritance propagates in ~3 ms; a 3-role cycle terminates instead of hanging |
+| Snapshot loading is torn-read free; the gate agrees with the engine | `TestSnapshotAgreesWithAuthorizeEngine` | 404 probes replayed through both the in-memory evaluator and `authorize()`: **0 disagreements**. The loader asserts `REPEATABLE READ` at runtime |
+| Path normalisation matches between gate and app | `internal/gate/routepath` corpus + `FuzzNormalizePath` | Shared corpus; it found two real bypasses (percent-encoded dot-segments, overlong UTF-8) that are now fixed |
+| Uniform login timing | `TestLoginTimingDoesNotRevealUserExistence` | Existing vs unknown user: median 49.2 ms vs 48.8 ms — 0.6% apart, both paying full KDF cost |
+| Backup restore cannot resurrect access | `TestBackupRestoreCannotResurrectAccess` | A restored refresh row stays useless: its session is revoked and `token_epoch` has advanced |
+
+Performance budgets are enforced the same way — by tests, not prose. See
+[operations.md](operations.md#performance-budgets).
+
+## Remaining gaps
+
+Stated plainly, as the earlier list was.
+
+| Gap | Status |
+| :--- | :--- |
+| **Field-level PII encryption** | Key lifecycle, sealing API and shredding are built (`migrations/0022`, `internal/identity/domain/pii`). No column is encrypted yet: the schema keeps free-form PII only in `identities.attributes`, which the API does not currently write |
+| **Enrol-or-deny rollout** | A realm requiring TOTP still admits a password-only login from someone not yet enrolled. An *enrolled* factor is always demanded. Closing the remaining gap locks out existing users the moment policy flips, so it is a rollout decision, not a default |
+| **Envoy `ext_authz`, revocation streaming, JWS codec flag** | Phase 8 tail. Connect already serves gRPC, so these are integrations rather than new mechanisms |
+| **Console still on its mock backend** | The typed client exists (`ui/src/lib/anubis.ts`) and typechecks; the screens have not been rewired to it |
+| **Redis-backed rate limits** | Deliberate. In-memory counters are per-instance; sharing them across replicas needs an ADR first (ADR-0008 posture: no new infrastructure until deployment demands it) |
+| **Bot protection on public registration** | Rate limits bound the damage; they do not stop a determined script |
