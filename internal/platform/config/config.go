@@ -61,6 +61,11 @@ type Config struct {
 	// SnapshotMaxAge is how stale the gate's snapshot may be before it fails
 	// closed and readiness reports unhealthy (ANUBIS_SNAPSHOT_MAX_AGE, 5m).
 	SnapshotMaxAge time.Duration
+
+	// DefaultTenant is the tenant assumed when a request carries no tenant of
+	// its own — single-tenant installs, and the example page URLs the console
+	// displays (ANUBIS_DEFAULT_TENANT).
+	DefaultTenant string
 }
 
 func Load() (*Config, error) {
@@ -78,6 +83,7 @@ func Load() (*Config, error) {
 		MaxRequestBytes:   int64(envInt("ANUBIS_MAX_REQUEST_BYTES", 1<<20)),
 		ShutdownGrace:     envDuration("ANUBIS_SHUTDOWN_GRACE", 20*time.Second),
 		TrustProxyHeaders: os.Getenv("ANUBIS_TRUST_PROXY") == "1",
+		DefaultTenant:     envOr("ANUBIS_DEFAULT_TENANT", "impack"),
 		SnapshotMaxAge:    envDuration("ANUBIS_SNAPSHOT_MAX_AGE", 5*time.Minute),
 	}
 	if c.MaxConns < 2 {

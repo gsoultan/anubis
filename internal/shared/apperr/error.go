@@ -3,6 +3,8 @@ package apperr
 import (
 	"errors"
 	"fmt"
+	"sort"
+	"strings"
 )
 
 // Error is a stable machine-readable failure. Code values are the public
@@ -18,11 +20,35 @@ type Error struct {
 	wrapped error
 }
 
+// Error includes the details map. The wire already carries it (ErrorInfo on
+// connect, the envelope on HTTP) — omitting it from the Go string meant logs
+// said "invalid argument" while the caller was told exactly which field was
+// wrong, and the operator reading the log was the one who needed it most.
+// Keys are sorted so the same failure always reads the same way.
 func (e *Error) Error() string {
-	if e.wrapped != nil {
-		return fmt.Sprintf("%s: %s: %v", e.Code, e.Message, e.wrapped)
+	var b strings.Builder
+	b.WriteString(e.Code)
+	b.WriteString(": ")
+	b.WriteString(e.Message)
+	if len(e.Details) > 0 {
+		keys := make([]string, 0, len(e.Details))
+		for k := range e.Details {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		b.WriteString(" (")
+		for i, k := range keys {
+			if i > 0 {
+				b.WriteString(", ")
+			}
+			fmt.Fprintf(&b, "%s=%s", k, e.Details[k])
+		}
+		b.WriteString(")")
 	}
-	return fmt.Sprintf("%s: %s", e.Code, e.Message)
+	if e.wrapped != nil {
+		fmt.Fprintf(&b, ": %v", e.wrapped)
+	}
+	return b.String()
 }
 
 func (e *Error) Unwrap() error { return e.wrapped }

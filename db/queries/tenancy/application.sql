@@ -1,5 +1,6 @@
 -- name: GetApplicationBySlug :one
 SELECT id, tenant_id, slug, name, kind, status, redirect_uris,
+       post_logout_redirect_uris,
        backchannel_logout_uri, token_format, client_secret_hash,
        manifest_version,
        access_token_ttl::text AS access_token_ttl,
@@ -11,6 +12,7 @@ WHERE tenant_id = sqlc.arg(tenant_id) AND slug = sqlc.arg(slug);
 
 -- name: GetApplication :one
 SELECT id, tenant_id, slug, name, kind, status, redirect_uris,
+       post_logout_redirect_uris,
        backchannel_logout_uri, token_format, client_secret_hash,
        manifest_version,
        access_token_ttl::text AS access_token_ttl,
@@ -20,6 +22,7 @@ WHERE id = sqlc.arg(id) AND tenant_id = sqlc.arg(tenant_id);
 
 -- name: ListApplications :many
 SELECT id, tenant_id, slug, name, kind, status, redirect_uris,
+       post_logout_redirect_uris,
        backchannel_logout_uri, token_format, manifest_version,
        access_token_ttl::text AS access_token_ttl,
        refresh_token_ttl::text AS refresh_token_ttl
@@ -29,10 +32,12 @@ ORDER BY slug;
 
 -- name: CreateApplication :one
 INSERT INTO applications (tenant_id, slug, name, kind, redirect_uris,
+                          post_logout_redirect_uris,
                           backchannel_logout_uri, token_format,
                           client_secret_hash, access_token_ttl, refresh_token_ttl)
 VALUES (sqlc.arg(tenant_id), sqlc.arg(slug), sqlc.arg(name), sqlc.arg(kind),
         sqlc.arg(redirect_uris)::text[],
+        sqlc.arg(post_logout_redirect_uris)::text[],
         nullif(sqlc.arg(backchannel_logout_uri), ''),
         sqlc.arg(token_format),
         nullif(sqlc.arg(client_secret_hash), ''),
@@ -45,6 +50,7 @@ UPDATE applications
 SET name = sqlc.arg(name),
     status = sqlc.arg(status),
     redirect_uris = sqlc.arg(redirect_uris)::text[],
+    post_logout_redirect_uris = sqlc.arg(post_logout_redirect_uris)::text[],
     backchannel_logout_uri = nullif(sqlc.arg(backchannel_logout_uri), ''),
     token_format = sqlc.arg(token_format),
     access_token_ttl = sqlc.arg(access_token_ttl)::text::interval,

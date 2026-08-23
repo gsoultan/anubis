@@ -7,7 +7,6 @@ package gen
 
 import (
 	"context"
-	"time"
 )
 
 const getSigninPage = `-- name: GetSigninPage :one
@@ -16,16 +15,10 @@ SELECT tenant_id, config, updated_at FROM signin_pages
 WHERE tenant_id = $1
 `
 
-type GetSigninPageRow struct {
-	TenantID  string
-	Config    []byte
-	UpdatedAt time.Time
-}
-
 // Per-tenant sign-in page configuration (migrations/0018).
-func (q *Queries) GetSigninPage(ctx context.Context, tenantID string) (GetSigninPageRow, error) {
+func (q *Queries) GetSigninPage(ctx context.Context, tenantID string) (SigninPage, error) {
 	row := q.db.QueryRow(ctx, getSigninPage, tenantID)
-	var i GetSigninPageRow
+	var i SigninPage
 	err := row.Scan(&i.TenantID, &i.Config, &i.UpdatedAt)
 	return i, err
 }

@@ -14,6 +14,7 @@ import (
 	authdomain "github.com/gsoultan/anubis/internal/auth/domain"
 	identitydomain "github.com/gsoultan/anubis/internal/identity/domain"
 	"github.com/gsoultan/anubis/internal/platform/mw"
+	"github.com/gsoultan/anubis/internal/shared/apperr"
 	tenancydomain "github.com/gsoultan/anubis/internal/tenancy/domain"
 	tenancysvc "github.com/gsoultan/anubis/internal/tenancy/service"
 )
@@ -22,10 +23,15 @@ import (
 type TenantAdminHandler struct {
 	svc tenancysvc.TenantAdminService
 	f   mw.Factory
+	// issuer and tenantSlug build the public URL a page is served at, so the
+	// console can show and copy it rather than reconstruct it.
+	issuer     string
+	tenantSlug string
 }
 
-func NewTenantAdminHandler(svc tenancysvc.TenantAdminService, f mw.Factory) *TenantAdminHandler {
-	return &TenantAdminHandler{svc: svc, f: f}
+func NewTenantAdminHandler(svc tenancysvc.TenantAdminService, f mw.Factory,
+	issuer, tenantSlug string) *TenantAdminHandler {
+	return &TenantAdminHandler{svc: svc, f: f, issuer: issuer, tenantSlug: tenantSlug}
 }
 
 var _ anubisv1connect.TenantAdminServiceHandler = (*TenantAdminHandler)(nil)
@@ -57,8 +63,9 @@ func realmRecord(r *anubisv1.Realm) identitydomain.RealmRecord {
 func appProto(a *tenancydomain.ApplicationRecord) *anubisv1.Application {
 	return &anubisv1.Application{
 		Id: a.ID, Slug: a.Slug, Name: a.Name, Kind: a.Kind, Status: a.Status,
-		RedirectUris: a.RedirectURIs, BackchannelLogoutUri: a.BackchannelLogoutURI,
-		TokenFormat: a.TokenFormat, AccessTokenTtl: a.AccessTokenTTL,
+		RedirectUris: a.RedirectURIs, PostLogoutRedirectUris: a.PostLogoutRedirectURIs,
+		BackchannelLogoutUri: a.BackchannelLogoutURI,
+		TokenFormat:          a.TokenFormat, AccessTokenTtl: a.AccessTokenTTL,
 		RefreshTokenTtl: a.RefreshTokenTTL, ManifestVersion: int32(a.ManifestVersion),
 	}
 }
@@ -187,8 +194,9 @@ func (h *TenantAdminHandler) CreateApplication(ctx context.Context, req *connect
 		a := req.Msg.Application
 		rec, secret, err := h.svc.CreateApplication(ctx, tenancydomain.ApplicationRecord{
 			Slug: a.Slug, Name: a.Name, Kind: a.Kind,
-			RedirectURIs: a.RedirectUris, BackchannelLogoutURI: a.BackchannelLogoutUri,
-			TokenFormat: a.TokenFormat, AccessTokenTTL: a.AccessTokenTtl,
+			RedirectURIs: a.RedirectUris, PostLogoutRedirectURIs: a.PostLogoutRedirectUris,
+			BackchannelLogoutURI: a.BackchannelLogoutUri,
+			TokenFormat:          a.TokenFormat, AccessTokenTTL: a.AccessTokenTtl,
 			RefreshTokenTTL: a.RefreshTokenTtl,
 		})
 		if err != nil {
@@ -209,8 +217,9 @@ func (h *TenantAdminHandler) UpdateApplication(ctx context.Context, req *connect
 		a := req.Msg.Application
 		return h.svc.UpdateApplication(ctx, tenancydomain.ApplicationRecord{
 			ID: a.Id, Slug: a.Slug, Name: a.Name, Status: a.Status,
-			RedirectURIs: a.RedirectUris, BackchannelLogoutURI: a.BackchannelLogoutUri,
-			TokenFormat: a.TokenFormat, AccessTokenTTL: a.AccessTokenTtl,
+			RedirectURIs: a.RedirectUris, PostLogoutRedirectURIs: a.PostLogoutRedirectUris,
+			BackchannelLogoutURI: a.BackchannelLogoutUri,
+			TokenFormat:          a.TokenFormat, AccessTokenTTL: a.AccessTokenTtl,
 			RefreshTokenTTL: a.RefreshTokenTtl,
 		})
 	})
@@ -384,4 +393,127 @@ func (h *TenantAdminHandler) PutSigninPage(ctx context.Context, req *connect.Req
 		return nil, apiconnect.Err(ctx, err)
 	}
 	return connect.NewResponse(&anubisv1.PutSigninPageResponse{}), nil
+}
+
+// pageProto renders a page for the console, including the URL it is served
+// at — the console should not have to know how to build that string.
+func (h *TenantAdminHandler) pageProto(p tenancydomain.AuthPage) *anubisv1.AuthPage {
+	out := &anubisv1.AuthPage{
+		Id: p.ID, Kind: p.Kind, Slug: p.Slug, Name: p.Name, Status: p.Status,
+		IsDefault: p.IsDefault, ApplicationId: p.ApplicationID,
+		ApplicationSlug: p.ApplicationSlug, ConfigJson: string(p.Config),
+		Url: h.pageURL(p),
+	}
+	if !p.CreatedAt.IsZero() {
+		out.CreatedAt = p.CreatedAt.Unix()
+	}
+	if !p.UpdatedAt.IsZero() {
+		out.UpdatedAt = p.UpdatedAt.Unix()
+	}
+	return out
+}
+
+func (h *TenantAdminHandler) pageURL(p tenancydomain.AuthPage) string {
+	if h.issuer == "" || h.tenantSlug == "" {
+		return ""
+	}
+	return h.issuer + "/p/" + h.tenantSlug + "/" + p.Kind + "/" + p.Slug
+}
+
+func (h *TenantAdminHandler) ListAuthPages(ctx context.Context, req *connect.Request[anubisv1.ListAuthPagesRequest]) (*connect.Response[anubisv1.ListAuthPagesResponse], error) {
+	out, err := h.f.Do(ctx, "admin.page.list", func(ctx context.Context) (any, error) {
+		return h.svc.ListAuthPages(ctx, req.Msg.Kind)
+	})
+	if err != nil {
+		return nil, apiconnect.Err(ctx, err)
+	}
+	resp := &anubisv1.ListAuthPagesResponse{}
+	for _, p := range out.([]tenancydomain.AuthPage) {
+		resp.Pages = append(resp.Pages, h.pageProto(p))
+	}
+	return connect.NewResponse(resp), nil
+}
+
+func (h *TenantAdminHandler) GetAuthPage(ctx context.Context, req *connect.Request[anubisv1.GetAuthPageRequest]) (*connect.Response[anubisv1.GetAuthPageResponse], error) {
+	out, err := h.f.Do(ctx, "admin.page.get", func(ctx context.Context) (any, error) {
+		return h.svc.GetAuthPage(ctx, req.Msg.Id)
+	})
+	if err != nil {
+		return nil, apiconnect.Err(ctx, err)
+	}
+	return connect.NewResponse(&anubisv1.GetAuthPageResponse{
+		Page: h.pageProto(*out.(*tenancydomain.AuthPage)),
+	}), nil
+}
+
+func (h *TenantAdminHandler) CreateAuthPage(ctx context.Context, req *connect.Request[anubisv1.CreateAuthPageRequest]) (*connect.Response[anubisv1.CreateAuthPageResponse], error) {
+	out, err := h.f.Do(ctx, "admin.page.create", func(ctx context.Context) (any, error) {
+		return h.svc.CreateAuthPage(ctx, pageInput(req.Msg.Page))
+	})
+	if err != nil {
+		return nil, apiconnect.Err(ctx, err)
+	}
+	return connect.NewResponse(&anubisv1.CreateAuthPageResponse{
+		Page: h.pageProto(*out.(*tenancydomain.AuthPage)),
+	}), nil
+}
+
+func (h *TenantAdminHandler) UpdateAuthPage(ctx context.Context, req *connect.Request[anubisv1.UpdateAuthPageRequest]) (*connect.Response[anubisv1.UpdateAuthPageResponse], error) {
+	out, err := h.f.Do(ctx, "admin.page.update", func(ctx context.Context) (any, error) {
+		return h.svc.UpdateAuthPage(ctx, pageInput(req.Msg.Page))
+	})
+	if err != nil {
+		return nil, apiconnect.Err(ctx, err)
+	}
+	return connect.NewResponse(&anubisv1.UpdateAuthPageResponse{
+		Page: h.pageProto(*out.(*tenancydomain.AuthPage)),
+	}), nil
+}
+
+func (h *TenantAdminHandler) DeleteAuthPage(ctx context.Context, req *connect.Request[anubisv1.DeleteAuthPageRequest]) (*connect.Response[anubisv1.DeleteAuthPageResponse], error) {
+	if _, err := h.f.Do(ctx, "admin.page.delete", func(ctx context.Context) (any, error) {
+		return nil, h.svc.DeleteAuthPage(ctx, req.Msg.Id)
+	}); err != nil {
+		return nil, apiconnect.Err(ctx, err)
+	}
+	return connect.NewResponse(&anubisv1.DeleteAuthPageResponse{}), nil
+}
+
+func (h *TenantAdminHandler) SetDefaultAuthPage(ctx context.Context, req *connect.Request[anubisv1.SetDefaultAuthPageRequest]) (*connect.Response[anubisv1.SetDefaultAuthPageResponse], error) {
+	if _, err := h.f.Do(ctx, "admin.page.set_default", func(ctx context.Context) (any, error) {
+		return nil, h.svc.SetDefaultAuthPage(ctx, req.Msg.Id)
+	}); err != nil {
+		return nil, apiconnect.Err(ctx, err)
+	}
+	return connect.NewResponse(&anubisv1.SetDefaultAuthPageResponse{}), nil
+}
+
+// PreviewAuthPage answers with the validation verdict rather than an error:
+// a builder asking "is this draft valid?" is not making a failed request.
+func (h *TenantAdminHandler) PreviewAuthPage(ctx context.Context, req *connect.Request[anubisv1.PreviewAuthPageRequest]) (*connect.Response[anubisv1.PreviewAuthPageResponse], error) {
+	out, err := h.f.Do(ctx, "admin.page.preview", func(ctx context.Context) (any, error) {
+		if perr := h.svc.PreviewAuthPage(ctx, req.Msg.Kind, []byte(req.Msg.ConfigJson)); perr != nil {
+			de := apperr.AsError(perr)
+			if de.Kind == apperr.KindInvalidArgument {
+				return &anubisv1.PreviewAuthPageResponse{Valid: false, Error: de.Error()}, nil
+			}
+			return nil, perr // permission or internal problems are real errors
+		}
+		return &anubisv1.PreviewAuthPageResponse{Valid: true}, nil
+	})
+	if err != nil {
+		return nil, apiconnect.Err(ctx, err)
+	}
+	return connect.NewResponse(out.(*anubisv1.PreviewAuthPageResponse)), nil
+}
+
+func pageInput(p *anubisv1.AuthPage) tenancydomain.AuthPageInput {
+	if p == nil {
+		return tenancydomain.AuthPageInput{}
+	}
+	return tenancydomain.AuthPageInput{
+		ID: p.Id, Kind: p.Kind, Slug: p.Slug, Name: p.Name,
+		Status: p.Status, ApplicationID: p.ApplicationId,
+		Config: []byte(p.ConfigJson),
+	}
 }

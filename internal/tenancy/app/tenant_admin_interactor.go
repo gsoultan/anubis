@@ -304,6 +304,9 @@ func (u *tenantAdminInteractor) GetCatalogVersion(ctx context.Context) (int64, t
 	return u.tenants.CatalogVersion(ctx, p.TenantID)
 }
 
+// GetSigninPage is the pre-multi-page API: it answers for the tenant's
+// DEFAULT sign-in page so an older console keeps working while it migrates to
+// ListAuthPages.
 func (u *tenantAdminInteractor) GetSigninPage(ctx context.Context) ([]byte, time.Time, error) {
 	p, err := u.guard.Require(ctx, "anubis:identity:read")
 	if err != nil {

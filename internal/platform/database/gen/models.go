@@ -11,21 +11,22 @@ import (
 )
 
 type Application struct {
-	CreatedAt            pgtype.Timestamptz
-	UpdatedAt            pgtype.Timestamptz
-	AccessTokenTtl       pgtype.Interval
-	RefreshTokenTtl      pgtype.Interval
-	ID                   pgtype.UUID
-	TenantID             pgtype.UUID
-	ManifestVersion      int32
-	Kind                 string
-	Status               string
-	Slug                 string
-	Name                 string
-	ClientSecretHash     *string
-	RedirectUris         []string
-	BackchannelLogoutUri *string
-	TokenFormat          string
+	CreatedAt              pgtype.Timestamptz
+	UpdatedAt              pgtype.Timestamptz
+	AccessTokenTtl         pgtype.Interval
+	RefreshTokenTtl        pgtype.Interval
+	ID                     pgtype.UUID
+	TenantID               pgtype.UUID
+	ManifestVersion        int32
+	Kind                   string
+	Status                 string
+	Slug                   string
+	Name                   string
+	ClientSecretHash       *string
+	RedirectUris           []string
+	BackchannelLogoutUri   *string
+	TokenFormat            string
+	PostLogoutRedirectUris []string
 }
 
 type AuditLog struct {
@@ -60,6 +61,20 @@ type AuditLogDefault struct {
 	Detail     []byte
 	PrevHash   []byte
 	EntryHash  []byte
+}
+
+type AuthPage struct {
+	CreatedAt     pgtype.Timestamptz
+	UpdatedAt     pgtype.Timestamptz
+	ID            pgtype.UUID
+	TenantID      pgtype.UUID
+	ApplicationID pgtype.UUID
+	IsDefault     bool
+	Kind          string
+	Status        string
+	Slug          string
+	Name          string
+	Config        []byte
 }
 
 type CatalogVersion struct {
@@ -432,9 +447,9 @@ type Session struct {
 }
 
 type SigninPage struct {
-	UpdatedAt pgtype.Timestamptz
 	TenantID  pgtype.UUID
 	Config    []byte
+	UpdatedAt pgtype.Timestamptz
 }
 
 type SigningKey struct {

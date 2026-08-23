@@ -17,7 +17,7 @@ func (s *Repository) ApplicationBySlug(ctx context.Context, tenantID, slug strin
 	}
 	return &tenancydomain.ApplicationRecord{
 		ID: r.ID, Slug: r.Slug, Name: r.Name, Kind: r.Kind, Status: r.Status,
-		RedirectURIs: r.RedirectUris, BackchannelLogoutURI: database.Deref(r.BackchannelLogoutUri),
+		RedirectURIs: r.RedirectUris, PostLogoutRedirectURIs: r.PostLogoutRedirectUris, BackchannelLogoutURI: database.Deref(r.BackchannelLogoutUri),
 		TokenFormat: r.TokenFormat, ClientSecretHash: database.Deref(r.ClientSecretHash),
 		AccessTokenTTL: r.AccessTokenTtl, RefreshTokenTTL: r.RefreshTokenTtl,
 		AccessTokenTTLSecs: r.AccessTokenTtlSecs, RefreshTokenTTLSecs: r.RefreshTokenTtlSecs,
@@ -32,7 +32,7 @@ func (s *Repository) ApplicationByID(ctx context.Context, tenantID, id string) (
 	}
 	return &tenancydomain.ApplicationRecord{
 		ID: r.ID, Slug: r.Slug, Name: r.Name, Kind: r.Kind, Status: r.Status,
-		RedirectURIs: r.RedirectUris, BackchannelLogoutURI: database.Deref(r.BackchannelLogoutUri),
+		RedirectURIs: r.RedirectUris, PostLogoutRedirectURIs: r.PostLogoutRedirectUris, BackchannelLogoutURI: database.Deref(r.BackchannelLogoutUri),
 		TokenFormat: r.TokenFormat, ClientSecretHash: database.Deref(r.ClientSecretHash),
 		AccessTokenTTL: r.AccessTokenTtl, RefreshTokenTTL: r.RefreshTokenTtl,
 		ManifestVersion: int(r.ManifestVersion),
@@ -48,7 +48,7 @@ func (s *Repository) ListApplications(ctx context.Context, tenantID string) ([]t
 	for _, r := range rows {
 		out = append(out, tenancydomain.ApplicationRecord{
 			ID: r.ID, Slug: r.Slug, Name: r.Name, Kind: r.Kind, Status: r.Status,
-			RedirectURIs: r.RedirectUris, BackchannelLogoutURI: database.Deref(r.BackchannelLogoutUri),
+			RedirectURIs: r.RedirectUris, PostLogoutRedirectURIs: r.PostLogoutRedirectUris, BackchannelLogoutURI: database.Deref(r.BackchannelLogoutUri),
 			TokenFormat:    r.TokenFormat,
 			AccessTokenTTL: r.AccessTokenTtl, RefreshTokenTTL: r.RefreshTokenTtl,
 			ManifestVersion: int(r.ManifestVersion),
@@ -60,7 +60,8 @@ func (s *Repository) ListApplications(ctx context.Context, tenantID string) ([]t
 func (s *Repository) CreateApplication(ctx context.Context, tenantID string, a tenancydomain.ApplicationRecord) (string, error) {
 	row, err := s.q(ctx).CreateApplication(ctx, gen.CreateApplicationParams{
 		TenantID: tenantID, Slug: a.Slug, Name: a.Name, Kind: a.Kind,
-		RedirectUris: database.EmptyIfNil(a.RedirectURIs), BackchannelLogoutUri: a.BackchannelLogoutURI,
+		RedirectUris:           database.EmptyIfNil(a.RedirectURIs),
+		PostLogoutRedirectUris: database.EmptyIfNil(a.PostLogoutRedirectURIs), BackchannelLogoutUri: a.BackchannelLogoutURI,
 		TokenFormat:      database.OrDefaultStr(a.TokenFormat, "v4.public"),
 		ClientSecretHash: a.ClientSecretHash,
 		AccessTokenTtl:   database.OrDefaultStr(a.AccessTokenTTL, "10 minutes"),
@@ -75,7 +76,8 @@ func (s *Repository) CreateApplication(ctx context.Context, tenantID string, a t
 func (s *Repository) UpdateApplication(ctx context.Context, tenantID string, a tenancydomain.ApplicationRecord) error {
 	_, err := s.q(ctx).UpdateApplication(ctx, gen.UpdateApplicationParams{
 		ID: a.ID, TenantID: tenantID, Name: a.Name, Status: database.OrDefaultStr(a.Status, "active"),
-		RedirectUris: database.EmptyIfNil(a.RedirectURIs), BackchannelLogoutUri: a.BackchannelLogoutURI,
+		RedirectUris:           database.EmptyIfNil(a.RedirectURIs),
+		PostLogoutRedirectUris: database.EmptyIfNil(a.PostLogoutRedirectURIs), BackchannelLogoutUri: a.BackchannelLogoutURI,
 		TokenFormat:     database.OrDefaultStr(a.TokenFormat, "v4.public"),
 		AccessTokenTtl:  database.OrDefaultStr(a.AccessTokenTTL, "10 minutes"),
 		RefreshTokenTtl: database.OrDefaultStr(a.RefreshTokenTTL, "30 days"),

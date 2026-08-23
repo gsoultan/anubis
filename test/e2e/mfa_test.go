@@ -58,6 +58,7 @@ func TestSecondFactorLifecycle(t *testing.T) {
 		t.Fatalf("begin enrolment: %v", err)
 	}
 	secret := decodeBase32(t, begin.Msg.Secret)
+	_ = secret
 
 	// A wrong code must not enrol anything.
 	if _, err := authClient().ConfirmTotpEnrollment(ctx,
@@ -76,11 +77,16 @@ func TestSecondFactorLifecycle(t *testing.T) {
 	}
 	secret = decodeBase32(t, begin.Msg.Secret)
 
-	confirm, err := authClient().ConfirmTotpEnrollment(ctx,
-		bearer(connect.NewRequest(&anubisv1.ConfirmTotpEnrollmentRequest{
-			EnrollmentToken: begin.Msg.EnrollmentToken,
-			Code:            totp.Generate(secret, time.Now(), totp.DefaultStep, totp.DefaultDigits),
-		}), tokens.AccessToken))
+	// Enrolment shares the credential-flow limiter with every other test in
+	// this package, so a full-suite run can legitimately be throttled here.
+	// Waiting for refill is the correct behaviour under test.
+	confirm, err := retryRateLimited(t, func() (*connect.Response[anubisv1.ConfirmTotpEnrollmentResponse], error) {
+		return authClient().ConfirmTotpEnrollment(ctx,
+			bearer(connect.NewRequest(&anubisv1.ConfirmTotpEnrollmentRequest{
+				EnrollmentToken: begin.Msg.EnrollmentToken,
+				Code:            totp.Generate(secret, time.Now(), totp.DefaultStep, totp.DefaultDigits),
+			}), tokens.AccessToken))
+	})
 	if err != nil {
 		t.Fatalf("confirm enrolment: %v", err)
 	}
@@ -120,10 +126,12 @@ func TestSecondFactorLifecycle(t *testing.T) {
 	//     the test clock-dependent.
 	waitForNextStep()
 	challenge = mustChallenge(t, username, password)
-	verified, err := authClient().VerifyMfa(ctx, connect.NewRequest(&anubisv1.VerifyMfaRequest{
-		MfaToken: challenge.MfaToken, Method: "totp",
-		Code: totp.Generate(secret, time.Now(), totp.DefaultStep, totp.DefaultDigits),
-	}))
+	verified, err := retryRateLimited(t, func() (*connect.Response[anubisv1.VerifyMfaResponse], error) {
+		return authClient().VerifyMfa(ctx, connect.NewRequest(&anubisv1.VerifyMfaRequest{
+			MfaToken: challenge.MfaToken, Method: "totp",
+			Code: totp.Generate(secret, time.Now(), totp.DefaultStep, totp.DefaultDigits),
+		}))
+	})
 	if err != nil {
 		t.Fatalf("verify mfa with the next code: %v", err)
 	}
@@ -165,6 +173,24 @@ func waitForNextStep() {
 	now := time.Now()
 	boundary := now.Truncate(totp.DefaultStep).Add(totp.DefaultStep)
 	time.Sleep(time.Until(boundary) + 250*time.Millisecond)
+}
+
+// retryRateLimited waits out the limiter rather than failing on it: being
+// throttled is the system working, not a defect.
+func retryRateLimited[T any](t *testing.T, call func() (T, error)) (T, error) {
+	t.Helper()
+	var zero T
+	deadline := time.Now().Add(90 * time.Second)
+	for {
+		out, err := call()
+		if connect.CodeOf(err) != connect.CodeResourceExhausted {
+			return out, err
+		}
+		if time.Now().After(deadline) {
+			return zero, err
+		}
+		time.Sleep(3 * time.Second)
+	}
 }
 
 func decodeBase32(t *testing.T, s string) []byte {

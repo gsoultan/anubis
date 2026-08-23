@@ -140,6 +140,21 @@ After any restore, bump `token_epoch` for affected identities unless you can
 prove the snapshot post-dates the last revocation. `test/integration`
 exercises this case explicitly.
 
+## Sign-in and sign-out pages
+
+Each tenant publishes as many as it needs; each has its own URL
+(`/p/{tenant}/{kind}/{slug}`). Exactly one per kind is the default that
+`/v1/authorize` and `/v1/logout` fall back to — it cannot be deleted or
+disabled without promoting another first, because those endpoints must always
+have something to render.
+
+**Browser flows need TLS.** The SSO and sign-out cookies use the `__Host-`
+prefix, which browsers only accept over HTTPS. Outside `ANUBIS_ENV=prod`, and
+only for a request that arrived without TLS, the same cookies are issued
+un-prefixed and without `Secure` so local development works. Production always
+gets the hardened form — including behind a TLS-terminating proxy, where the
+request reaches Anubis over plain HTTP.
+
 ## Performance budgets
 
 Measured, and enforced by tests rather than asserted in prose:

@@ -686,8 +686,100 @@ service TenantAdminService {
   // pending -> active -> retiring -> retired. Publish before signing.
   rpc RotateSigningKey(RotateSigningKeyRequest) returns (RotateSigningKeyResponse);
   rpc GetCatalogVersion(GetCatalogVersionRequest) returns (GetCatalogVersionResponse);
+  // Deprecated: operate on the tenant's DEFAULT sign-in page. Kept so the
+  // console keeps working while it moves to the multi-page API below.
   rpc GetSigninPage(GetSigninPageRequest) returns (GetSigninPageResponse);
   rpc PutSigninPage(PutSigninPageRequest) returns (PutSigninPageResponse);
+
+  // --- sign-in / sign-out page builder ------------------------------------
+  // A tenant may publish many of each. Every page has its own URL
+  // (/p/{tenant}/{kind}/{slug}); exactly one per kind is the default that
+  // /v1/authorize and /v1/logout fall back to.
+  rpc ListAuthPages(ListAuthPagesRequest) returns (ListAuthPagesResponse);
+  rpc GetAuthPage(GetAuthPageRequest) returns (GetAuthPageResponse);
+  rpc CreateAuthPage(CreateAuthPageRequest) returns (CreateAuthPageResponse);
+  rpc UpdateAuthPage(UpdateAuthPageRequest) returns (UpdateAuthPageResponse);
+  rpc DeleteAuthPage(DeleteAuthPageRequest) returns (DeleteAuthPageResponse);
+  rpc SetDefaultAuthPage(SetDefaultAuthPageRequest) returns (SetDefaultAuthPageResponse);
+  // Validate a draft without saving it, so the builder shows the same errors
+  // the save would produce.
+  rpc PreviewAuthPage(PreviewAuthPageRequest) returns (PreviewAuthPageResponse);
+}
+
+message AuthPage {
+  string id = 1;
+  string kind = 2;    // signin | signout
+  string slug = 3;    // URL segment: /p/{tenant}/{kind}/{slug}
+  string name = 4;    // admin-facing label
+  string status = 5;  // active | disabled
+  bool is_default = 6;
+  // Optional binding: visiting a bound page starts a real authorization-code
+  // flow for that application instead of rendering a form with nowhere to post.
+  string application_id = 7;
+  string application_slug = 8;
+  // The constrained token set (brand, layout, copy, links, features,
+  // behavior) — never markup. Validated server-side before it is stored.
+  string config_json = 9;
+  int64 created_at = 10;
+  int64 updated_at = 11;
+  // Where this page is served, for the console to show and copy.
+  string url = 12;
+}
+
+message ListAuthPagesRequest {
+  string kind = 1;  // empty = both
+}
+
+message ListAuthPagesResponse {
+  repeated AuthPage pages = 1;
+}
+
+message GetAuthPageRequest {
+  string id = 1;
+}
+
+message GetAuthPageResponse {
+  AuthPage page = 1;
+}
+
+message CreateAuthPageRequest {
+  AuthPage page = 1;
+}
+
+message CreateAuthPageResponse {
+  AuthPage page = 1;
+}
+
+message UpdateAuthPageRequest {
+  // Keyed on id. kind and slug are immutable: the URL is published.
+  AuthPage page = 1;
+}
+
+message UpdateAuthPageResponse {
+  AuthPage page = 1;
+}
+
+message DeleteAuthPageRequest {
+  string id = 1;
+}
+
+message DeleteAuthPageResponse {}
+
+message SetDefaultAuthPageRequest {
+  string id = 1;
+}
+
+message SetDefaultAuthPageResponse {}
+
+message PreviewAuthPageRequest {
+  string kind = 1;
+  string config_json = 2;
+}
+
+message PreviewAuthPageResponse {
+  bool valid = 1;
+  // Empty when valid; otherwise names the offending field.
+  string error = 2;
 }
 
 message Tenant {
@@ -785,6 +877,10 @@ message Application {
   string status = 5;
   repeated string redirect_uris = 6;
   string backchannel_logout_uri = 7;
+  // Exact-match allowlist for RP-initiated logout. Separate from
+  // redirect_uris: a login callback is not a place to land after signing out,
+  // and an open redirect here is a phishing primitive.
+  repeated string post_logout_redirect_uris = 12;
   string token_format = 8;
   string access_token_ttl = 9;
   string refresh_token_ttl = 10;

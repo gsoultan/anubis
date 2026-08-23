@@ -237,6 +237,27 @@ const (
 	// TenantAdminServicePutSigninPageProcedure is the fully-qualified name of the TenantAdminService's
 	// PutSigninPage RPC.
 	TenantAdminServicePutSigninPageProcedure = "/anubis.v1.TenantAdminService/PutSigninPage"
+	// TenantAdminServiceListAuthPagesProcedure is the fully-qualified name of the TenantAdminService's
+	// ListAuthPages RPC.
+	TenantAdminServiceListAuthPagesProcedure = "/anubis.v1.TenantAdminService/ListAuthPages"
+	// TenantAdminServiceGetAuthPageProcedure is the fully-qualified name of the TenantAdminService's
+	// GetAuthPage RPC.
+	TenantAdminServiceGetAuthPageProcedure = "/anubis.v1.TenantAdminService/GetAuthPage"
+	// TenantAdminServiceCreateAuthPageProcedure is the fully-qualified name of the TenantAdminService's
+	// CreateAuthPage RPC.
+	TenantAdminServiceCreateAuthPageProcedure = "/anubis.v1.TenantAdminService/CreateAuthPage"
+	// TenantAdminServiceUpdateAuthPageProcedure is the fully-qualified name of the TenantAdminService's
+	// UpdateAuthPage RPC.
+	TenantAdminServiceUpdateAuthPageProcedure = "/anubis.v1.TenantAdminService/UpdateAuthPage"
+	// TenantAdminServiceDeleteAuthPageProcedure is the fully-qualified name of the TenantAdminService's
+	// DeleteAuthPage RPC.
+	TenantAdminServiceDeleteAuthPageProcedure = "/anubis.v1.TenantAdminService/DeleteAuthPage"
+	// TenantAdminServiceSetDefaultAuthPageProcedure is the fully-qualified name of the
+	// TenantAdminService's SetDefaultAuthPage RPC.
+	TenantAdminServiceSetDefaultAuthPageProcedure = "/anubis.v1.TenantAdminService/SetDefaultAuthPage"
+	// TenantAdminServicePreviewAuthPageProcedure is the fully-qualified name of the
+	// TenantAdminService's PreviewAuthPage RPC.
+	TenantAdminServicePreviewAuthPageProcedure = "/anubis.v1.TenantAdminService/PreviewAuthPage"
 )
 
 // IdentityAdminServiceClient is a client for the anubis.v1.IdentityAdminService service.
@@ -1645,8 +1666,23 @@ type TenantAdminServiceClient interface {
 	// pending -> active -> retiring -> retired. Publish before signing.
 	RotateSigningKey(context.Context, *connect.Request[v1.RotateSigningKeyRequest]) (*connect.Response[v1.RotateSigningKeyResponse], error)
 	GetCatalogVersion(context.Context, *connect.Request[v1.GetCatalogVersionRequest]) (*connect.Response[v1.GetCatalogVersionResponse], error)
+	// Deprecated: operate on the tenant's DEFAULT sign-in page. Kept so the
+	// console keeps working while it moves to the multi-page API below.
 	GetSigninPage(context.Context, *connect.Request[v1.GetSigninPageRequest]) (*connect.Response[v1.GetSigninPageResponse], error)
 	PutSigninPage(context.Context, *connect.Request[v1.PutSigninPageRequest]) (*connect.Response[v1.PutSigninPageResponse], error)
+	// --- sign-in / sign-out page builder ------------------------------------
+	// A tenant may publish many of each. Every page has its own URL
+	// (/p/{tenant}/{kind}/{slug}); exactly one per kind is the default that
+	// /v1/authorize and /v1/logout fall back to.
+	ListAuthPages(context.Context, *connect.Request[v1.ListAuthPagesRequest]) (*connect.Response[v1.ListAuthPagesResponse], error)
+	GetAuthPage(context.Context, *connect.Request[v1.GetAuthPageRequest]) (*connect.Response[v1.GetAuthPageResponse], error)
+	CreateAuthPage(context.Context, *connect.Request[v1.CreateAuthPageRequest]) (*connect.Response[v1.CreateAuthPageResponse], error)
+	UpdateAuthPage(context.Context, *connect.Request[v1.UpdateAuthPageRequest]) (*connect.Response[v1.UpdateAuthPageResponse], error)
+	DeleteAuthPage(context.Context, *connect.Request[v1.DeleteAuthPageRequest]) (*connect.Response[v1.DeleteAuthPageResponse], error)
+	SetDefaultAuthPage(context.Context, *connect.Request[v1.SetDefaultAuthPageRequest]) (*connect.Response[v1.SetDefaultAuthPageResponse], error)
+	// Validate a draft without saving it, so the builder shows the same errors
+	// the save would produce.
+	PreviewAuthPage(context.Context, *connect.Request[v1.PreviewAuthPageRequest]) (*connect.Response[v1.PreviewAuthPageResponse], error)
 }
 
 // NewTenantAdminServiceClient constructs a client for the anubis.v1.TenantAdminService service. By
@@ -1774,6 +1810,48 @@ func NewTenantAdminServiceClient(httpClient connect.HTTPClient, baseURL string, 
 			connect.WithSchema(tenantAdminServiceMethods.ByName("PutSigninPage")),
 			connect.WithClientOptions(opts...),
 		),
+		listAuthPages: connect.NewClient[v1.ListAuthPagesRequest, v1.ListAuthPagesResponse](
+			httpClient,
+			baseURL+TenantAdminServiceListAuthPagesProcedure,
+			connect.WithSchema(tenantAdminServiceMethods.ByName("ListAuthPages")),
+			connect.WithClientOptions(opts...),
+		),
+		getAuthPage: connect.NewClient[v1.GetAuthPageRequest, v1.GetAuthPageResponse](
+			httpClient,
+			baseURL+TenantAdminServiceGetAuthPageProcedure,
+			connect.WithSchema(tenantAdminServiceMethods.ByName("GetAuthPage")),
+			connect.WithClientOptions(opts...),
+		),
+		createAuthPage: connect.NewClient[v1.CreateAuthPageRequest, v1.CreateAuthPageResponse](
+			httpClient,
+			baseURL+TenantAdminServiceCreateAuthPageProcedure,
+			connect.WithSchema(tenantAdminServiceMethods.ByName("CreateAuthPage")),
+			connect.WithClientOptions(opts...),
+		),
+		updateAuthPage: connect.NewClient[v1.UpdateAuthPageRequest, v1.UpdateAuthPageResponse](
+			httpClient,
+			baseURL+TenantAdminServiceUpdateAuthPageProcedure,
+			connect.WithSchema(tenantAdminServiceMethods.ByName("UpdateAuthPage")),
+			connect.WithClientOptions(opts...),
+		),
+		deleteAuthPage: connect.NewClient[v1.DeleteAuthPageRequest, v1.DeleteAuthPageResponse](
+			httpClient,
+			baseURL+TenantAdminServiceDeleteAuthPageProcedure,
+			connect.WithSchema(tenantAdminServiceMethods.ByName("DeleteAuthPage")),
+			connect.WithClientOptions(opts...),
+		),
+		setDefaultAuthPage: connect.NewClient[v1.SetDefaultAuthPageRequest, v1.SetDefaultAuthPageResponse](
+			httpClient,
+			baseURL+TenantAdminServiceSetDefaultAuthPageProcedure,
+			connect.WithSchema(tenantAdminServiceMethods.ByName("SetDefaultAuthPage")),
+			connect.WithClientOptions(opts...),
+		),
+		previewAuthPage: connect.NewClient[v1.PreviewAuthPageRequest, v1.PreviewAuthPageResponse](
+			httpClient,
+			baseURL+TenantAdminServicePreviewAuthPageProcedure,
+			connect.WithSchema(tenantAdminServiceMethods.ByName("PreviewAuthPage")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -1798,6 +1876,13 @@ type tenantAdminServiceClient struct {
 	getCatalogVersion   *connect.Client[v1.GetCatalogVersionRequest, v1.GetCatalogVersionResponse]
 	getSigninPage       *connect.Client[v1.GetSigninPageRequest, v1.GetSigninPageResponse]
 	putSigninPage       *connect.Client[v1.PutSigninPageRequest, v1.PutSigninPageResponse]
+	listAuthPages       *connect.Client[v1.ListAuthPagesRequest, v1.ListAuthPagesResponse]
+	getAuthPage         *connect.Client[v1.GetAuthPageRequest, v1.GetAuthPageResponse]
+	createAuthPage      *connect.Client[v1.CreateAuthPageRequest, v1.CreateAuthPageResponse]
+	updateAuthPage      *connect.Client[v1.UpdateAuthPageRequest, v1.UpdateAuthPageResponse]
+	deleteAuthPage      *connect.Client[v1.DeleteAuthPageRequest, v1.DeleteAuthPageResponse]
+	setDefaultAuthPage  *connect.Client[v1.SetDefaultAuthPageRequest, v1.SetDefaultAuthPageResponse]
+	previewAuthPage     *connect.Client[v1.PreviewAuthPageRequest, v1.PreviewAuthPageResponse]
 }
 
 // ListTenants calls anubis.v1.TenantAdminService.ListTenants.
@@ -1895,6 +1980,41 @@ func (c *tenantAdminServiceClient) PutSigninPage(ctx context.Context, req *conne
 	return c.putSigninPage.CallUnary(ctx, req)
 }
 
+// ListAuthPages calls anubis.v1.TenantAdminService.ListAuthPages.
+func (c *tenantAdminServiceClient) ListAuthPages(ctx context.Context, req *connect.Request[v1.ListAuthPagesRequest]) (*connect.Response[v1.ListAuthPagesResponse], error) {
+	return c.listAuthPages.CallUnary(ctx, req)
+}
+
+// GetAuthPage calls anubis.v1.TenantAdminService.GetAuthPage.
+func (c *tenantAdminServiceClient) GetAuthPage(ctx context.Context, req *connect.Request[v1.GetAuthPageRequest]) (*connect.Response[v1.GetAuthPageResponse], error) {
+	return c.getAuthPage.CallUnary(ctx, req)
+}
+
+// CreateAuthPage calls anubis.v1.TenantAdminService.CreateAuthPage.
+func (c *tenantAdminServiceClient) CreateAuthPage(ctx context.Context, req *connect.Request[v1.CreateAuthPageRequest]) (*connect.Response[v1.CreateAuthPageResponse], error) {
+	return c.createAuthPage.CallUnary(ctx, req)
+}
+
+// UpdateAuthPage calls anubis.v1.TenantAdminService.UpdateAuthPage.
+func (c *tenantAdminServiceClient) UpdateAuthPage(ctx context.Context, req *connect.Request[v1.UpdateAuthPageRequest]) (*connect.Response[v1.UpdateAuthPageResponse], error) {
+	return c.updateAuthPage.CallUnary(ctx, req)
+}
+
+// DeleteAuthPage calls anubis.v1.TenantAdminService.DeleteAuthPage.
+func (c *tenantAdminServiceClient) DeleteAuthPage(ctx context.Context, req *connect.Request[v1.DeleteAuthPageRequest]) (*connect.Response[v1.DeleteAuthPageResponse], error) {
+	return c.deleteAuthPage.CallUnary(ctx, req)
+}
+
+// SetDefaultAuthPage calls anubis.v1.TenantAdminService.SetDefaultAuthPage.
+func (c *tenantAdminServiceClient) SetDefaultAuthPage(ctx context.Context, req *connect.Request[v1.SetDefaultAuthPageRequest]) (*connect.Response[v1.SetDefaultAuthPageResponse], error) {
+	return c.setDefaultAuthPage.CallUnary(ctx, req)
+}
+
+// PreviewAuthPage calls anubis.v1.TenantAdminService.PreviewAuthPage.
+func (c *tenantAdminServiceClient) PreviewAuthPage(ctx context.Context, req *connect.Request[v1.PreviewAuthPageRequest]) (*connect.Response[v1.PreviewAuthPageResponse], error) {
+	return c.previewAuthPage.CallUnary(ctx, req)
+}
+
 // TenantAdminServiceHandler is an implementation of the anubis.v1.TenantAdminService service.
 type TenantAdminServiceHandler interface {
 	ListTenants(context.Context, *connect.Request[v1.ListTenantsRequest]) (*connect.Response[v1.ListTenantsResponse], error)
@@ -1917,8 +2037,23 @@ type TenantAdminServiceHandler interface {
 	// pending -> active -> retiring -> retired. Publish before signing.
 	RotateSigningKey(context.Context, *connect.Request[v1.RotateSigningKeyRequest]) (*connect.Response[v1.RotateSigningKeyResponse], error)
 	GetCatalogVersion(context.Context, *connect.Request[v1.GetCatalogVersionRequest]) (*connect.Response[v1.GetCatalogVersionResponse], error)
+	// Deprecated: operate on the tenant's DEFAULT sign-in page. Kept so the
+	// console keeps working while it moves to the multi-page API below.
 	GetSigninPage(context.Context, *connect.Request[v1.GetSigninPageRequest]) (*connect.Response[v1.GetSigninPageResponse], error)
 	PutSigninPage(context.Context, *connect.Request[v1.PutSigninPageRequest]) (*connect.Response[v1.PutSigninPageResponse], error)
+	// --- sign-in / sign-out page builder ------------------------------------
+	// A tenant may publish many of each. Every page has its own URL
+	// (/p/{tenant}/{kind}/{slug}); exactly one per kind is the default that
+	// /v1/authorize and /v1/logout fall back to.
+	ListAuthPages(context.Context, *connect.Request[v1.ListAuthPagesRequest]) (*connect.Response[v1.ListAuthPagesResponse], error)
+	GetAuthPage(context.Context, *connect.Request[v1.GetAuthPageRequest]) (*connect.Response[v1.GetAuthPageResponse], error)
+	CreateAuthPage(context.Context, *connect.Request[v1.CreateAuthPageRequest]) (*connect.Response[v1.CreateAuthPageResponse], error)
+	UpdateAuthPage(context.Context, *connect.Request[v1.UpdateAuthPageRequest]) (*connect.Response[v1.UpdateAuthPageResponse], error)
+	DeleteAuthPage(context.Context, *connect.Request[v1.DeleteAuthPageRequest]) (*connect.Response[v1.DeleteAuthPageResponse], error)
+	SetDefaultAuthPage(context.Context, *connect.Request[v1.SetDefaultAuthPageRequest]) (*connect.Response[v1.SetDefaultAuthPageResponse], error)
+	// Validate a draft without saving it, so the builder shows the same errors
+	// the save would produce.
+	PreviewAuthPage(context.Context, *connect.Request[v1.PreviewAuthPageRequest]) (*connect.Response[v1.PreviewAuthPageResponse], error)
 }
 
 // NewTenantAdminServiceHandler builds an HTTP handler from the service implementation. It returns
@@ -2042,6 +2177,48 @@ func NewTenantAdminServiceHandler(svc TenantAdminServiceHandler, opts ...connect
 		connect.WithSchema(tenantAdminServiceMethods.ByName("PutSigninPage")),
 		connect.WithHandlerOptions(opts...),
 	)
+	tenantAdminServiceListAuthPagesHandler := connect.NewUnaryHandler(
+		TenantAdminServiceListAuthPagesProcedure,
+		svc.ListAuthPages,
+		connect.WithSchema(tenantAdminServiceMethods.ByName("ListAuthPages")),
+		connect.WithHandlerOptions(opts...),
+	)
+	tenantAdminServiceGetAuthPageHandler := connect.NewUnaryHandler(
+		TenantAdminServiceGetAuthPageProcedure,
+		svc.GetAuthPage,
+		connect.WithSchema(tenantAdminServiceMethods.ByName("GetAuthPage")),
+		connect.WithHandlerOptions(opts...),
+	)
+	tenantAdminServiceCreateAuthPageHandler := connect.NewUnaryHandler(
+		TenantAdminServiceCreateAuthPageProcedure,
+		svc.CreateAuthPage,
+		connect.WithSchema(tenantAdminServiceMethods.ByName("CreateAuthPage")),
+		connect.WithHandlerOptions(opts...),
+	)
+	tenantAdminServiceUpdateAuthPageHandler := connect.NewUnaryHandler(
+		TenantAdminServiceUpdateAuthPageProcedure,
+		svc.UpdateAuthPage,
+		connect.WithSchema(tenantAdminServiceMethods.ByName("UpdateAuthPage")),
+		connect.WithHandlerOptions(opts...),
+	)
+	tenantAdminServiceDeleteAuthPageHandler := connect.NewUnaryHandler(
+		TenantAdminServiceDeleteAuthPageProcedure,
+		svc.DeleteAuthPage,
+		connect.WithSchema(tenantAdminServiceMethods.ByName("DeleteAuthPage")),
+		connect.WithHandlerOptions(opts...),
+	)
+	tenantAdminServiceSetDefaultAuthPageHandler := connect.NewUnaryHandler(
+		TenantAdminServiceSetDefaultAuthPageProcedure,
+		svc.SetDefaultAuthPage,
+		connect.WithSchema(tenantAdminServiceMethods.ByName("SetDefaultAuthPage")),
+		connect.WithHandlerOptions(opts...),
+	)
+	tenantAdminServicePreviewAuthPageHandler := connect.NewUnaryHandler(
+		TenantAdminServicePreviewAuthPageProcedure,
+		svc.PreviewAuthPage,
+		connect.WithSchema(tenantAdminServiceMethods.ByName("PreviewAuthPage")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/anubis.v1.TenantAdminService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case TenantAdminServiceListTenantsProcedure:
@@ -2082,6 +2259,20 @@ func NewTenantAdminServiceHandler(svc TenantAdminServiceHandler, opts ...connect
 			tenantAdminServiceGetSigninPageHandler.ServeHTTP(w, r)
 		case TenantAdminServicePutSigninPageProcedure:
 			tenantAdminServicePutSigninPageHandler.ServeHTTP(w, r)
+		case TenantAdminServiceListAuthPagesProcedure:
+			tenantAdminServiceListAuthPagesHandler.ServeHTTP(w, r)
+		case TenantAdminServiceGetAuthPageProcedure:
+			tenantAdminServiceGetAuthPageHandler.ServeHTTP(w, r)
+		case TenantAdminServiceCreateAuthPageProcedure:
+			tenantAdminServiceCreateAuthPageHandler.ServeHTTP(w, r)
+		case TenantAdminServiceUpdateAuthPageProcedure:
+			tenantAdminServiceUpdateAuthPageHandler.ServeHTTP(w, r)
+		case TenantAdminServiceDeleteAuthPageProcedure:
+			tenantAdminServiceDeleteAuthPageHandler.ServeHTTP(w, r)
+		case TenantAdminServiceSetDefaultAuthPageProcedure:
+			tenantAdminServiceSetDefaultAuthPageHandler.ServeHTTP(w, r)
+		case TenantAdminServicePreviewAuthPageProcedure:
+			tenantAdminServicePreviewAuthPageHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -2165,4 +2356,32 @@ func (UnimplementedTenantAdminServiceHandler) GetSigninPage(context.Context, *co
 
 func (UnimplementedTenantAdminServiceHandler) PutSigninPage(context.Context, *connect.Request[v1.PutSigninPageRequest]) (*connect.Response[v1.PutSigninPageResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.TenantAdminService.PutSigninPage is not implemented"))
+}
+
+func (UnimplementedTenantAdminServiceHandler) ListAuthPages(context.Context, *connect.Request[v1.ListAuthPagesRequest]) (*connect.Response[v1.ListAuthPagesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.TenantAdminService.ListAuthPages is not implemented"))
+}
+
+func (UnimplementedTenantAdminServiceHandler) GetAuthPage(context.Context, *connect.Request[v1.GetAuthPageRequest]) (*connect.Response[v1.GetAuthPageResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.TenantAdminService.GetAuthPage is not implemented"))
+}
+
+func (UnimplementedTenantAdminServiceHandler) CreateAuthPage(context.Context, *connect.Request[v1.CreateAuthPageRequest]) (*connect.Response[v1.CreateAuthPageResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.TenantAdminService.CreateAuthPage is not implemented"))
+}
+
+func (UnimplementedTenantAdminServiceHandler) UpdateAuthPage(context.Context, *connect.Request[v1.UpdateAuthPageRequest]) (*connect.Response[v1.UpdateAuthPageResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.TenantAdminService.UpdateAuthPage is not implemented"))
+}
+
+func (UnimplementedTenantAdminServiceHandler) DeleteAuthPage(context.Context, *connect.Request[v1.DeleteAuthPageRequest]) (*connect.Response[v1.DeleteAuthPageResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.TenantAdminService.DeleteAuthPage is not implemented"))
+}
+
+func (UnimplementedTenantAdminServiceHandler) SetDefaultAuthPage(context.Context, *connect.Request[v1.SetDefaultAuthPageRequest]) (*connect.Response[v1.SetDefaultAuthPageResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.TenantAdminService.SetDefaultAuthPage is not implemented"))
+}
+
+func (UnimplementedTenantAdminServiceHandler) PreviewAuthPage(context.Context, *connect.Request[v1.PreviewAuthPageRequest]) (*connect.Response[v1.PreviewAuthPageResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.TenantAdminService.PreviewAuthPage is not implemented"))
 }

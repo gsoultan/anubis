@@ -346,6 +346,84 @@ Rules that make this safe to run unattended:
   `scope_move_node`, so an illegal placement is captured as that row's error
   without aborting the run.
 
+### Sign-in and sign-out pages
+
+A tenant serves **many** of each, because one login screen rarely fits every
+audience: staff, partners and customers differ in branding, wording and which
+options should even appear. Each page has its own URL.
+
+```http
+GET /p/{tenant}/{kind}/{slug}        # kind = signin | signout
+```
+
+```jsonc
+POST /v1/admin/auth-pages
+{ "kind": "signin", "slug": "partners", "name": "Partner portal",
+  "application_id": "01a0…",          // optional: binds the page to an app
+  "config": {
+    "brand":  { "title": "Impack Partners", "logo_url": "https://cdn…/logo.svg",
+                "primary_color": "#0f766e", "background_color": "#f8fafc",
+                "text_color": "#111827", "corner_radius": "lg", "font": "system" },
+    "layout": "split",                 // centered | split | minimal
+    "copy":   { "heading": "Partner sign-in",
+                "subheading": "Use the account your account manager issued.",
+                "username_label": "Company email", "submit_label": "Continue" },
+    "links":  [ { "label": "Contact support", "url": "https://help…" } ],
+    "features": { "show_realm_picker": false, "show_registration": false,
+                  "show_forgot_password": true, "remember_me": false }
+  } }
+```
+
+Sign-out pages use the same brand/layout/copy plus:
+
+```jsonc
+{ "copy": { "confirm_heading": "Sign out?", "confirm_body": "…",
+            "heading": "You have been signed out", "return_label": "Back to the app" },
+  "behavior": { "confirm": true, "auto_redirect_seconds": 0,
+                "default_return_url": "https://app.example.com/" } }
+```
+
+| Endpoint | Purpose |
+| :--- | :--- |
+| `ListAuthPages` · `GetAuthPage` | Inventory, with the URL each page is served at |
+| `CreateAuthPage` · `UpdateAuthPage` · `DeleteAuthPage` | Manage pages. `kind` and `slug` are immutable — the URL is published |
+| `SetDefaultAuthPage` | Promote a page; exactly one default per kind, enforced by a partial unique index |
+| `PreviewAuthPage` | Validate a draft without saving, so the builder shows the same errors the save would |
+
+**Which page renders.** Most specific first: `?page=<slug>` → the application's
+own page → the tenant default. A missing or disabled page falls through rather
+than failing the flow: losing branding must never cost a user the ability to
+sign in.
+
+> **Configuration, never markup.** Every field is an enum, a bounded string, a
+> validated `#rrggbb` colour or an `http(s)` URL. There is no `custom_html` or
+> `custom_css` knob, and there will not be one: these pages are served on
+> Anubis's own origin on the screen where users type their password, so a
+> markup field would hand every tenant admin stored XSS against their own
+> users. Text is escaped and rendered; `<script>` in a heading shows up as
+> text. Pages ship `X-Frame-Options: DENY` and a `default-src 'none'` CSP.
+
+### RP-initiated sign-out
+
+```http
+GET  /v1/logout?tenant=…&post_logout_redirect_uri=…&page=…    # asks first
+POST /v1/logout                                               # confirmed
+```
+
+`GET` renders the tenant's sign-out page and **asks**. That confirmation is
+not politeness: a bare GET that ends sessions is reachable from any page on
+the internet with an `<img>` tag. The POST carries a CSRF token bound to a
+cookie, and the token rotates on every render — a token that survived a
+rejected attempt would be replayable.
+
+> `post_logout_redirect_uri` is matched **exactly** against the application's
+> `post_logout_redirect_uris`, a separate allowlist from `redirect_uris`. A
+> login callback is not a place to land after signing out, and an open
+> redirect here is a phishing primitive: "you have been signed out, sign in
+> again" is far more convincing when the link really did come from the
+> identity provider. An unregistered address is refused and the user is told,
+> rather than silently sent somewhere unexpected.
+
 ### Manifests
 
 ```http

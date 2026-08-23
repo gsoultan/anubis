@@ -66,6 +66,9 @@ type application struct {
 	issuer    authapp.TokenIssuer
 	issuerURL string
 	masterKey []byte
+	// bootstrapTenantSlug is only used to render example page URLs for the
+	// console; page lookup itself always resolves the tenant from the request.
+	bootstrapTenantSlug string
 
 	identity *identitypg.Repository
 	auth     *authpg.Repository
@@ -78,16 +81,17 @@ type application struct {
 
 func newApplication(ctx context.Context, cfg *config.Config, db *database.DB, logger *slog.Logger) (*application, error) {
 	a := &application{
-		clock:     systemClock{},
-		masterKey: cfg.MasterKey,
-		issuerURL: cfg.Issuer,
-		identity:  identitypg.New(db),
-		auth:      authpg.New(db),
-		authz:     authzpg.New(db),
-		scope:     scopepg.New(db),
-		tenancy:   tenancypg.New(db),
-		audit:     auditpg.New(db),
-		gate:      gatepg.New(db),
+		clock:               systemClock{},
+		masterKey:           cfg.MasterKey,
+		issuerURL:           cfg.Issuer,
+		bootstrapTenantSlug: cfg.DefaultTenant,
+		identity:            identitypg.New(db),
+		auth:                authpg.New(db),
+		authz:               authzpg.New(db),
+		scope:               scopepg.New(db),
+		tenancy:             tenancypg.New(db),
+		audit:               auditpg.New(db),
+		gate:                gatepg.New(db),
 	}
 	ring, err := loadRing(ctx, logger, a.auth, cfg.MasterKey, cfg.AutoKeys)
 	if err != nil {
@@ -182,8 +186,11 @@ func (a *application) registerRPC(rpc *http.ServeMux, opts connect.HandlerOption
 	tenantAdmin := tenancyapp.NewTenantAdminInteractor(a.authz, a.tenancy, a.identity,
 		a.tenancy, a.tenancy, a.audit, a.auth, a.tenancy, a.auditor,
 		&storeKeyRotator{keys: a.auth, master: a.masterKey}, a.auditor)
+	pageAdmin := tenancyapp.NewPageAdminInteractor(a.authz, a.tenancy, a.tenancy, a.auditor)
 	rpc.Handle(anubisv1connect.NewTenantAdminServiceHandler(
-		tenancyrpc.NewTenantAdminHandler(tenancysvc.NewTenantAdminService(tenantAdmin), f), opts))
+		tenancyrpc.NewTenantAdminHandler(
+			tenancysvc.NewTenantAdminService(tenantAdmin, pageAdmin), f,
+			a.issuerURL, a.bootstrapTenantSlug), opts))
 }
 
 // registerHTTP lets each context mount its protocol-shaped routes (OIDC,
@@ -197,11 +204,16 @@ func (a *application) registerHTTP(ctx context.Context, srv *apihttp.Server,
 	srv.HandleFunc("GET /.well-known/openid-configuration", wellKnown.OpenIDConfiguration)
 
 	oidc := authhttp.NewOIDCHandler(cfg.Issuer, a.tenancy, a.identity, a.identity,
-		a.identity, a.auth, a.auth, a.tenancy, a.tenancy, a.issuer, a.clock,
-		a.auditor, limiter, logger)
+		a.identity, a.identity, a.auth, a.auth, a.tenancy, a.tenancy, a.auth,
+		cfg.DefaultTenant, cfg.Env == "prod", a.issuer, a.clock, a.auditor, limiter, logger)
 	srv.HandleFunc("GET /v1/authorize", oidc.Authorize)
 	srv.HandleFunc("POST /v1/login", oidc.LoginForm)
 	srv.HandleFunc("POST /v1/token", oidc.Token)
+	// RP-initiated logout, OIDC-shaped: GET asks, POST performs.
+	srv.HandleFunc("GET /v1/logout", oidc.LogoutPage)
+	srv.HandleFunc("POST /v1/logout", oidc.LogoutSubmit)
+	// Each page has its own URL, which is the point of having many of them.
+	srv.HandleFunc("GET /p/{tenant}/{kind}/{slug}", oidc.ServePage)
 
 	snaps := gateapp.NewManager(a.gate, a.gate, cfg.SnapshotMaxAge, logger)
 	go snaps.Run(ctx)

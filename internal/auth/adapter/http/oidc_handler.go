@@ -4,7 +4,6 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
-	"html/template"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -30,40 +29,50 @@ import (
 )
 
 const (
-	ssoCookieName = "__Host-anubis_sso"
-	authCodeTTL   = 60 * time.Second
+	authCodeTTL = 60 * time.Second
 )
 
 // OIDCHandler implements the browser SSO surface: the authorization code
 // flow with PKCE, the hosted login page, and the code exchange. Wire shapes
 // here are fixed by OIDC — that is why this lives on the stdlib mux.
 type OIDCHandler struct {
-	issuer   string
-	tenants  tenancyport.TenantRepository
-	realms   identityport.RealmRepository
-	ids      identityport.IdentityRepository
-	creds    identityport.CredentialRepository
-	sessions authport.SessionRepository
-	onetime  authport.OneTimeRepository
-	apps     tenancyport.ApplicationRepository
-	signin   tenancyport.SigninPageRepository
-	issuerUC authapp.TokenIssuer
-	clock    clock.Clock
-	audit    auditport.Auditor
-	limiter  *ratelimit.Limiter
-	logger   *slog.Logger
+	issuer        string
+	tenants       tenancyport.TenantRepository
+	realms        identityport.RealmRepository
+	realmsAdmin   identityport.RealmAdminRepository
+	ids           identityport.IdentityRepository
+	creds         identityport.CredentialRepository
+	sessions      authport.SessionRepository
+	onetime       authport.OneTimeRepository
+	apps          tenancyport.ApplicationRepository
+	pages         tenancyport.AuthPageRepository
+	refresh       authport.RefreshRepository
+	renderer      *PageRenderer
+	defaultTenant string
+	issuerUC      authapp.TokenIssuer
+	// cookies decides `__Host-`/Secure versus the development fallback; see
+	// cookies.go for why that fallback exists and how narrow it is.
+	cookies cookiePolicy
+	clock   clock.Clock
+	audit   auditport.Auditor
+	limiter *ratelimit.Limiter
+	logger  *slog.Logger
 }
 
 func NewOIDCHandler(
 	issuer string,
 	tenants tenancyport.TenantRepository,
 	realms identityport.RealmRepository,
+	realmsAdmin identityport.RealmAdminRepository,
 	ids identityport.IdentityRepository,
 	creds identityport.CredentialRepository,
 	sessions authport.SessionRepository,
 	onetime authport.OneTimeRepository,
 	apps tenancyport.ApplicationRepository,
-	signin tenancyport.SigninPageRepository,
+	pages tenancyport.AuthPageRepository,
+	refresh authport.RefreshRepository,
+	defaultTenant string,
+	prod bool,
 	issuerUC authapp.TokenIssuer,
 	clock clock.Clock,
 	audit auditport.Auditor,
@@ -73,7 +82,9 @@ func NewOIDCHandler(
 	return &OIDCHandler{
 		issuer: issuer, tenants: tenants, realms: realms, ids: ids,
 		creds: creds, sessions: sessions, onetime: onetime, apps: apps,
-		signin: signin, issuerUC: issuerUC, clock: clock, audit: audit,
+		pages: pages, refresh: refresh, renderer: NewPageRenderer(),
+		defaultTenant: defaultTenant, issuerUC: issuerUC,
+		cookies: cookiePolicy{prod: prod}, clock: clock, audit: audit,
 		limiter: limiter, logger: logger,
 	}
 }
@@ -128,15 +139,17 @@ func (h *OIDCHandler) Authorize(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Existing SSO session?
-	if cookie, cerr := r.Cookie(ssoCookieName); cerr == nil {
-		if view, verr := h.sessions.SessionByCookieHash(r.Context(), secret.Hash(cookie.Value)); verr == nil && view.TenantID == tenant.ID {
+	if raw := h.cookies.get(r, ssoCookieBase); raw != "" {
+		if view, verr := h.sessions.SessionByCookieHash(r.Context(), secret.Hash(raw)); verr == nil && view.TenantID == tenant.ID {
 			h.issueCode(w, r, tenant, view.IdentityID, view.ID, app.Slug, redirectURI, state, challenge, method, q.Get("nonce"))
 			return
 		}
 	}
 	h.renderLogin(w, r, tenant.ID, loginPageData{
-		Tenant: tenantSlug, ClientID: clientID, RedirectURI: redirectURI,
+		Tenant: tenantSlug, Realm: firstNonEmpty(q.Get("realm"), "internal"),
+		ClientID: clientID, RedirectURI: redirectURI,
 		State: state, Challenge: challenge, Method: method, Nonce: q.Get("nonce"),
+		Page: q.Get("page"), ApplicationID: app.ID,
 	})
 }
 
@@ -187,10 +200,11 @@ func (h *OIDCHandler) LoginForm(w http.ResponseWriter, r *http.Request) {
 	if kerr != nil || identity == nil || credential == nil || !ok ||
 		identity.CanAuthenticate() != nil {
 		h.renderLogin(w, r, tenantID(tenant), loginPageData{
-			Tenant: tenantSlug, ClientID: r.PostFormValue("client_id"),
+			Tenant: tenantSlug, Realm: realmCode, ClientID: r.PostFormValue("client_id"),
 			RedirectURI: r.PostFormValue("redirect_uri"), State: r.PostFormValue("state"),
 			Challenge: r.PostFormValue("code_challenge"), Method: r.PostFormValue("code_challenge_method"),
-			Nonce: r.PostFormValue("nonce"), Error: "Invalid username or password",
+			Nonce: r.PostFormValue("nonce"), Page: r.PostFormValue("page"),
+			Error: "Invalid username or password",
 		})
 		return
 	}
@@ -216,11 +230,7 @@ func (h *OIDCHandler) LoginForm(w http.ResponseWriter, r *http.Request) {
 		apihttp.WriteError(w, r, apperr.ErrInternal.Wrap(err))
 		return
 	}
-	http.SetCookie(w, &http.Cookie{
-		Name: ssoCookieName, Value: cookieSecret,
-		Path: "/", Secure: true, HttpOnly: true, SameSite: http.SameSiteLaxMode,
-		MaxAge: int(realm.SessionTTL / time.Second),
-	})
+	h.cookies.set(w, r, ssoCookieBase, cookieSecret, int(realm.SessionTTL/time.Second))
 	h.audit.Emit(r.Context(), auditdomain.AuditEvent{
 		TenantID: tenant.ID, ActorID: identity.ID, ActorKind: "identity",
 		SessionID: sess.ID, Action: "auth.login", Result: "allow", IP: ip,
@@ -360,88 +370,70 @@ func tenantID(t *tenancydomain.TenantRef) string {
 }
 
 // ---------------------------------------------------------------------------
-// Hosted login page. Rendered from signin_pages.config — a CONSTRAINED token
-// set (brand color, title, logo text), never arbitrary markup: the login page
-// is the one page that must never break.
+// Hosted login page. The page itself comes from the tenant's configured
+// sign-in pages (migrations/0024) and is rendered by PageRenderer from a
+// CONSTRAINED token set — never markup. Which page is chosen is decided by
+// resolvePage: explicit ?page=, else the application's own page, else the
+// tenant default.
 // ---------------------------------------------------------------------------
 
+// loginPageData is the flow state a sign-in page carries through its POST.
 type loginPageData struct {
-	Tenant, ClientID, RedirectURI, State, Challenge, Method, Nonce string
-	Error                                                          string
-	Title, Brand                                                   string
+	Tenant, Realm, ClientID, RedirectURI, State, Challenge, Method, Nonce string
+	// Page selects a specific sign-in page by slug; ApplicationID lets an
+	// app-initiated flow keep its own branding.
+	Page, ApplicationID string
+	Error               string
 }
 
-var loginTmpl = template.Must(template.New("login").Parse(`<!doctype html>
-<html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>{{.Title}} — Sign in</title>
-<style>
-:root{--brand:{{.Brand}}}
-body{font-family:system-ui,sans-serif;display:grid;place-items:center;min-height:100vh;margin:0;background:#f6f6f7}
-form{background:#fff;padding:2rem;border-radius:12px;box-shadow:0 4px 24px rgba(0,0,0,.08);width:min(90vw,22rem)}
-h1{font-size:1.25rem;margin:0 0 1rem}
-label{display:block;font-size:.85rem;margin:.75rem 0 .25rem;color:#444}
-input{width:100%;padding:.6rem;border:1px solid #ccc;border-radius:8px;box-sizing:border-box}
-button{width:100%;margin-top:1.25rem;padding:.7rem;border:0;border-radius:8px;background:var(--brand);color:#fff;font-weight:600;cursor:pointer}
-.err{color:#b00020;font-size:.85rem;margin-top:.75rem}
-</style></head><body>
-<form method="post" action="/v1/login">
-<h1>Sign in to {{.Title}}</h1>
-<input type="hidden" name="tenant" value="{{.Tenant}}">
-<input type="hidden" name="client_id" value="{{.ClientID}}">
-<input type="hidden" name="redirect_uri" value="{{.RedirectURI}}">
-<input type="hidden" name="state" value="{{.State}}">
-<input type="hidden" name="code_challenge" value="{{.Challenge}}">
-<input type="hidden" name="code_challenge_method" value="{{.Method}}">
-<input type="hidden" name="nonce" value="{{.Nonce}}">
-<label for="u">Username</label>
-<input id="u" name="username" autocomplete="username" required autofocus>
-<label for="p">Password</label>
-<input id="p" name="password" type="password" autocomplete="current-password" required>
-{{if .Error}}<div class="err">{{.Error}}</div>{{end}}
-<button type="submit">Sign in</button>
-</form></body></html>`))
-
+// renderLogin draws the sign-in page for the current flow.
 func (h *OIDCHandler) renderLogin(w http.ResponseWriter, r *http.Request, tenantID string, data loginPageData) {
-	data.Title = "Anubis"
-	data.Brand = "#4f46e5"
-	if tenantID != "" {
-		if cfg, _, err := h.signin.SigninPage(r.Context(), tenantID); err == nil {
-			var page struct {
-				Title string `json:"title"`
-				Brand string `json:"brand_color"`
-			}
-			if json.Unmarshal(cfg, &page) == nil {
-				if page.Title != "" {
-					data.Title = page.Title
-				}
-				if validColor(page.Brand) {
-					data.Brand = page.Brand
+	status := http.StatusOK
+	if data.Error != "" {
+		status = http.StatusUnauthorized
+	}
+	cfg := h.resolvePage(r, tenantID, "signin", data.Page, data.ApplicationID)
+
+	view := PageView{
+		Cfg: cfg, Kind: "signin",
+		Tenant: data.Tenant, Realm: data.Realm, ClientID: data.ClientID,
+		RedirectURI: data.RedirectURI, State: data.State,
+		Challenge: data.Challenge, Method: data.Method, Nonce: data.Nonce,
+		Error: data.Error,
+	}
+	// Only offer what the server will actually accept: a realm picker listing
+	// realms that forbid passwords, or a registration link for a realm with
+	// self-registration off, advertises doors that do not open.
+	if tenantID != "" && cfg.Features.ShowRealmPicker {
+		if realms, err := h.realmsAdmin.ListRealms(r.Context(), tenantID); err == nil {
+			for _, rl := range realms {
+				if containsString(rl.AllowedFactors, "password") {
+					view.Realms = append(view.Realms, RealmChoice{Code: rl.Code, Name: rl.DisplayName})
 				}
 			}
 		}
 	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Header().Set("Cache-Control", "no-store")
-	if data.Error != "" {
-		w.WriteHeader(http.StatusUnauthorized)
+	if tenantID != "" && cfg.Features.ShowRegistration && data.Realm != "" {
+		if realm, err := h.realms.RealmByCode(r.Context(), tenantID, data.Realm); err == nil &&
+			realm.SelfRegistration {
+			view.RegistrationURL = "/p/" + data.Tenant + "/signin/" + firstNonEmpty(data.Page, "default") + "#register"
+		}
 	}
-	_ = loginTmpl.Execute(w, data)
+	h.renderer.Render(w, status, view)
 }
 
-// validColor allows only #rgb/#rrggbb — the config must not become a CSS
-// injection vector on the one page that must never break.
-func validColor(s string) bool {
-	if len(s) != 4 && len(s) != 7 {
-		return false
-	}
-	if s[0] != '#' {
-		return false
-	}
-	for _, c := range s[1:] {
-		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
-			return false
+func containsString(list []string, want string) bool {
+	for _, v := range list {
+		if v == want {
+			return true
 		}
 	}
-	return true
+	return false
+}
+
+func firstNonEmpty(a, b string) string {
+	if a != "" {
+		return a
+	}
+	return b
 }

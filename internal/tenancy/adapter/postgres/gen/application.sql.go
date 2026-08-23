@@ -24,29 +24,32 @@ func (q *Queries) BumpManifestVersion(ctx context.Context, id string) (int32, er
 
 const createApplication = `-- name: CreateApplication :one
 INSERT INTO applications (tenant_id, slug, name, kind, redirect_uris,
+                          post_logout_redirect_uris,
                           backchannel_logout_uri, token_format,
                           client_secret_hash, access_token_ttl, refresh_token_ttl)
 VALUES ($1, $2, $3, $4,
         $5::text[],
-        nullif($6, ''),
-        $7,
-        nullif($8, ''),
-        $9::text::interval,
-        $10::text::interval)
+        $6::text[],
+        nullif($7, ''),
+        $8,
+        nullif($9, ''),
+        $10::text::interval,
+        $11::text::interval)
 RETURNING id, manifest_version
 `
 
 type CreateApplicationParams struct {
-	TenantID             string
-	Slug                 string
-	Name                 string
-	Kind                 string
-	RedirectUris         []string
-	BackchannelLogoutUri interface{}
-	TokenFormat          string
-	ClientSecretHash     interface{}
-	AccessTokenTtl       string
-	RefreshTokenTtl      string
+	TenantID               string
+	Slug                   string
+	Name                   string
+	Kind                   string
+	RedirectUris           []string
+	PostLogoutRedirectUris []string
+	BackchannelLogoutUri   interface{}
+	TokenFormat            string
+	ClientSecretHash       interface{}
+	AccessTokenTtl         string
+	RefreshTokenTtl        string
 }
 
 type CreateApplicationRow struct {
@@ -61,6 +64,7 @@ func (q *Queries) CreateApplication(ctx context.Context, arg CreateApplicationPa
 		arg.Name,
 		arg.Kind,
 		arg.RedirectUris,
+		arg.PostLogoutRedirectUris,
 		arg.BackchannelLogoutUri,
 		arg.TokenFormat,
 		arg.ClientSecretHash,
@@ -83,6 +87,7 @@ func (q *Queries) DeleteRoutePoliciesByApp(ctx context.Context, applicationID st
 
 const getApplication = `-- name: GetApplication :one
 SELECT id, tenant_id, slug, name, kind, status, redirect_uris,
+       post_logout_redirect_uris,
        backchannel_logout_uri, token_format, client_secret_hash,
        manifest_version,
        access_token_ttl::text AS access_token_ttl,
@@ -97,19 +102,20 @@ type GetApplicationParams struct {
 }
 
 type GetApplicationRow struct {
-	ID                   string
-	TenantID             string
-	Slug                 string
-	Name                 string
-	Kind                 string
-	Status               string
-	RedirectUris         []string
-	BackchannelLogoutUri *string
-	TokenFormat          string
-	ClientSecretHash     *string
-	ManifestVersion      int32
-	AccessTokenTtl       string
-	RefreshTokenTtl      string
+	ID                     string
+	TenantID               string
+	Slug                   string
+	Name                   string
+	Kind                   string
+	Status                 string
+	RedirectUris           []string
+	PostLogoutRedirectUris []string
+	BackchannelLogoutUri   *string
+	TokenFormat            string
+	ClientSecretHash       *string
+	ManifestVersion        int32
+	AccessTokenTtl         string
+	RefreshTokenTtl        string
 }
 
 func (q *Queries) GetApplication(ctx context.Context, arg GetApplicationParams) (GetApplicationRow, error) {
@@ -123,6 +129,7 @@ func (q *Queries) GetApplication(ctx context.Context, arg GetApplicationParams) 
 		&i.Kind,
 		&i.Status,
 		&i.RedirectUris,
+		&i.PostLogoutRedirectUris,
 		&i.BackchannelLogoutUri,
 		&i.TokenFormat,
 		&i.ClientSecretHash,
@@ -135,6 +142,7 @@ func (q *Queries) GetApplication(ctx context.Context, arg GetApplicationParams) 
 
 const getApplicationBySlug = `-- name: GetApplicationBySlug :one
 SELECT id, tenant_id, slug, name, kind, status, redirect_uris,
+       post_logout_redirect_uris,
        backchannel_logout_uri, token_format, client_secret_hash,
        manifest_version,
        access_token_ttl::text AS access_token_ttl,
@@ -151,21 +159,22 @@ type GetApplicationBySlugParams struct {
 }
 
 type GetApplicationBySlugRow struct {
-	ID                   string
-	TenantID             string
-	Slug                 string
-	Name                 string
-	Kind                 string
-	Status               string
-	RedirectUris         []string
-	BackchannelLogoutUri *string
-	TokenFormat          string
-	ClientSecretHash     *string
-	ManifestVersion      int32
-	AccessTokenTtl       string
-	RefreshTokenTtl      string
-	AccessTokenTtlSecs   int64
-	RefreshTokenTtlSecs  int64
+	ID                     string
+	TenantID               string
+	Slug                   string
+	Name                   string
+	Kind                   string
+	Status                 string
+	RedirectUris           []string
+	PostLogoutRedirectUris []string
+	BackchannelLogoutUri   *string
+	TokenFormat            string
+	ClientSecretHash       *string
+	ManifestVersion        int32
+	AccessTokenTtl         string
+	RefreshTokenTtl        string
+	AccessTokenTtlSecs     int64
+	RefreshTokenTtlSecs    int64
 }
 
 func (q *Queries) GetApplicationBySlug(ctx context.Context, arg GetApplicationBySlugParams) (GetApplicationBySlugRow, error) {
@@ -179,6 +188,7 @@ func (q *Queries) GetApplicationBySlug(ctx context.Context, arg GetApplicationBy
 		&i.Kind,
 		&i.Status,
 		&i.RedirectUris,
+		&i.PostLogoutRedirectUris,
 		&i.BackchannelLogoutUri,
 		&i.TokenFormat,
 		&i.ClientSecretHash,
@@ -230,6 +240,7 @@ func (q *Queries) InsertRoutePolicy(ctx context.Context, arg InsertRoutePolicyPa
 
 const listApplications = `-- name: ListApplications :many
 SELECT id, tenant_id, slug, name, kind, status, redirect_uris,
+       post_logout_redirect_uris,
        backchannel_logout_uri, token_format, manifest_version,
        access_token_ttl::text AS access_token_ttl,
        refresh_token_ttl::text AS refresh_token_ttl
@@ -239,18 +250,19 @@ ORDER BY slug
 `
 
 type ListApplicationsRow struct {
-	ID                   string
-	TenantID             string
-	Slug                 string
-	Name                 string
-	Kind                 string
-	Status               string
-	RedirectUris         []string
-	BackchannelLogoutUri *string
-	TokenFormat          string
-	ManifestVersion      int32
-	AccessTokenTtl       string
-	RefreshTokenTtl      string
+	ID                     string
+	TenantID               string
+	Slug                   string
+	Name                   string
+	Kind                   string
+	Status                 string
+	RedirectUris           []string
+	PostLogoutRedirectUris []string
+	BackchannelLogoutUri   *string
+	TokenFormat            string
+	ManifestVersion        int32
+	AccessTokenTtl         string
+	RefreshTokenTtl        string
 }
 
 func (q *Queries) ListApplications(ctx context.Context, tenantID string) ([]ListApplicationsRow, error) {
@@ -270,6 +282,7 @@ func (q *Queries) ListApplications(ctx context.Context, tenantID string) ([]List
 			&i.Kind,
 			&i.Status,
 			&i.RedirectUris,
+			&i.PostLogoutRedirectUris,
 			&i.BackchannelLogoutUri,
 			&i.TokenFormat,
 			&i.ManifestVersion,
@@ -396,24 +409,26 @@ UPDATE applications
 SET name = $1,
     status = $2,
     redirect_uris = $3::text[],
-    backchannel_logout_uri = nullif($4, ''),
-    token_format = $5,
-    access_token_ttl = $6::text::interval,
-    refresh_token_ttl = $7::text::interval,
+    post_logout_redirect_uris = $4::text[],
+    backchannel_logout_uri = nullif($5, ''),
+    token_format = $6,
+    access_token_ttl = $7::text::interval,
+    refresh_token_ttl = $8::text::interval,
     updated_at = now()
-WHERE id = $8 AND tenant_id = $9
+WHERE id = $9 AND tenant_id = $10
 `
 
 type UpdateApplicationParams struct {
-	Name                 string
-	Status               string
-	RedirectUris         []string
-	BackchannelLogoutUri interface{}
-	TokenFormat          string
-	AccessTokenTtl       string
-	RefreshTokenTtl      string
-	ID                   string
-	TenantID             string
+	Name                   string
+	Status                 string
+	RedirectUris           []string
+	PostLogoutRedirectUris []string
+	BackchannelLogoutUri   interface{}
+	TokenFormat            string
+	AccessTokenTtl         string
+	RefreshTokenTtl        string
+	ID                     string
+	TenantID               string
 }
 
 func (q *Queries) UpdateApplication(ctx context.Context, arg UpdateApplicationParams) (int64, error) {
@@ -421,6 +436,7 @@ func (q *Queries) UpdateApplication(ctx context.Context, arg UpdateApplicationPa
 		arg.Name,
 		arg.Status,
 		arg.RedirectUris,
+		arg.PostLogoutRedirectUris,
 		arg.BackchannelLogoutUri,
 		arg.TokenFormat,
 		arg.AccessTokenTtl,
