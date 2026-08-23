@@ -98,3 +98,23 @@ still applies). Enrol-or-deny for required-but-unenrolled is deliberately
 NOT implemented (policy flip would lock out existing users).
 TOTP codes are single-use (last_step in credentials.params) — tests must
 wait for the step boundary, not generate a future code (skew=1).
+
+## Auth pages (sign-in / sign-out builder, migration 0024)
+auth_pages: many per tenant per kind (signin|signout), slug = URL segment at
+/p/{tenant}/{kind}/{slug}; ONE default per kind (partial unique index) that
+/v1/authorize and /v1/logout fall back to — not deletable/disable-able without
+promoting another. Optional application_id binding (unique per app+kind) so an
+app-initiated flow keeps its branding. Page choice: ?page= > app binding >
+default; a missing/disabled page falls through rather than breaking sign-in.
+Config is a CONSTRAINED TOKEN SET in internal/tenancy/domain/pagecfg (enums,
+#rrggbb colours, http(s) URLs, bounded text) — NEVER markup, no custom_html.
+Rendering: html/template + X-Frame-Options DENY + default-src 'none' CSP.
+RP-initiated logout: GET /v1/logout asks (bare GET ending sessions is
+reachable from any <img>), POST carries a CSRF token that ROTATES on every
+render; post_logout_redirect_uri exact-matched against applications
+.post_logout_redirect_uris (a SEPARATE allowlist from redirect_uris).
+Gotcha: __Host- cookies need TLS, so outside prod + non-TLS requests get
+un-prefixed non-Secure cookies (internal/auth/adapter/http/cookies.go) —
+without this the browser flows cannot be developed or tested over localhost.
+Test gotcha: e2e shares the credential rate-limit budget; enrolment/MFA calls
+use retryRateLimited.
