@@ -23,14 +23,14 @@ export function CreatePermission({ opened }: { opened: boolean }) {
     },
     onSubmit: async ({ value }) => {
       try {
-        const created = await api.createPermission({
+        await api.createPermission({
           app_slug: value.app_slug, resource: value.resource, action: value.action,
           description: value.description, risk: value.risk as Risk,
           min_assurance: Number(value.min_assurance) as Ial,
           requires_amr: value.requires_amr,
           max_auth_age: value.requires_amr.length ? value.max_auth_age : null,
         })
-        notifyCreated('Permission registered', created.key)
+        notifyCreated('Permission registered', `${value.app_slug}:${value.resource}:${value.action}`)
         await queryClient.invalidateQueries({ queryKey: qk.permissions() })
         form.reset(); close()
       } catch (e) { notifyRejected(e) }

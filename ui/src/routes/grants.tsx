@@ -12,22 +12,35 @@ import { api } from '@/lib/api/client'
 import { qk } from '@/lib/query/keys'
 import type { Grant } from '@/lib/api/types'
 
+/** A search hit carries the holder's name, so the table needs no per-row lookup. */
+type GrantRow = Grant & { username: string }
+
 export const Route = createFileRoute('/grants')({ component: Grants })
 
 function Grants() {
   const { openCreate } = useCreate()
-  const { data: grants } = useQuery({ queryKey: qk.grants(), queryFn: () => api.grants() })
-  const { data: memberships } = useQuery({ queryKey: qk.memberships(), queryFn: api.memberships })
   const [q, setQ] = useState('')
   const [source, setSource] = useState('all')
-  const needle = q.trim().toLowerCase()
-  const shown = (grants ?? []).filter((g) => {
-    if (source === 'direct' && g.via_membership_id) return false
-    if (source === 'membership' && !g.via_membership_id) return false
-    if (!needle) return true
-    const who = identities?.find((i) => i.id === g.identity_id)?.username ?? ''
-    return who.toLowerCase().includes(needle) || g.role_name.toLowerCase().includes(needle)
+  /* Search-first, not a listing: this tenant holds 150,000 grants, so the
+     screen narrows on the server and pages through what is left rather than
+     pulling a list it could never render. */
+  const [trail, setTrail] = useState<string[]>([''])
+  const cursor = trail[trail.length - 1] ?? ''
+  const { data: page } = useQuery({
+    queryKey: ['grant-search', q, source, cursor],
+    queryFn: () => api.searchGrants({
+      query: q.trim(),
+      source: source === 'all' ? '' : source,
+      cursor,
+      pageSize: 50,
+    }),
+    placeholderData: (prev) => prev,
   })
+  const grants = page?.rows
+  const { data: memberships } = useQuery({ queryKey: qk.memberships(), queryFn: api.memberships })
+  // The server applied the filters; re-doing it here would only hide rows
+  // it deliberately returned.
+  const shown = grants ?? []
 
   async function revoke(id: string, who: string, role: string) {
     await api.revokeGrant(id)
@@ -49,9 +62,9 @@ function Grants() {
   })
   const nodeName = (id: string) => nodes?.find((n) => n.id === id)?.name ?? id
 
-  const columns: Column<Grant>[] = [
+  const columns: Column<GrantRow>[] = [
     { key: 'who', header: 'Identity', width: 190, render: (g) => (
-        <Cell top={identities?.find((i) => i.id === g.identity_id)?.username ?? '—'}
+        <Cell top={g.username || '—'}
           bottom={<span className="chip">{g.identity_id}</span>} />
       ) },
     { key: 'role', header: 'Role', width: 190, render: (g) => (
@@ -156,8 +169,9 @@ function Grants() {
         <>
           <TextInput w={210} placeholder="Search person or role"
             leftSection={<IconSearch size={14} />}
-            value={q} onChange={(e) => setQ(e.currentTarget.value)} />
-          <SegmentedControl size="xs" value={source} onChange={setSource}
+            value={q} onChange={(e) => { setQ(e.currentTarget.value); setTrail(['']) }} />
+          <SegmentedControl size="xs" value={source}
+            onChange={(v) => { setSource(v); setTrail(['']) }}
             data={[{ value: 'all', label: 'All' }, { value: 'direct', label: 'Direct' },
                    { value: 'membership', label: 'Via membership' }]} />
           <Button size="xs" leftSection={<IconCirclePlus size={14} />}
@@ -177,16 +191,24 @@ function Grants() {
           </div>
         </div>
         <div className="t-xs tnum" style={{ alignSelf: 'flex-end' }}>
-          {shown.length} of {grants?.length ?? 0}
+          {shown.length} on this page
         </div>
         <DataTable columns={columns} rows={shown} rowKey={(g) => g.id}
           empty={{
-            title: needle || source !== 'all' ? 'No access matches' : 'Nobody has access yet',
-            hint: needle || source !== 'all'
+            title: q.trim() || source !== 'all' ? 'No access matches' : 'Nobody has access yet',
+            hint: q.trim() || source !== 'all'
               ? 'Try another search or source filter.'
               : 'Grants connect an identity to a role within a scope.',
             action: <Button size="xs" variant="light" onClick={() => openCreate('grant')}>Give access</Button>,
           }} />
+        {(trail.length > 1 || page?.next) && (
+          <div className="mt-3 flex items-center gap-2">
+            <Button variant="default" size="compact-sm" disabled={trail.length <= 1}
+              onClick={() => setTrail((t) => t.slice(0, -1))}>Previous</Button>
+            <Button variant="default" size="compact-sm" disabled={!page?.next}
+              onClick={() => setTrail((t) => [...t, page?.next ?? ''])}>Next</Button>
+          </div>
+        )}
       </div>
     </Page>
   )

@@ -619,15 +619,6 @@ export const audit: AuditEntry[] = [
     target_id: null, ip: null, detail: { axis: 'customer', nodes_synced: 66 }, chain_ok: true },
 ]
 
-export function strictDryRun(axisCode: string): StrictDryRun {
-  const relying = grants.filter((g) => !g.scopes.some((s) => s.axis_code === axisCode)).length
-  const before = grants.length
-  return {
-    axis_code: axisCode, decisions_sampled: 2000,
-    allowed_before: 800, allowed_after: Math.max(0, 800 - Math.round(800 * (relying / before))),
-    grants_relying_on_absence: relying,
-  }
-}
 
 /* ===========================================================================
    WRITE OPERATIONS
@@ -743,56 +734,7 @@ function remoteRows(source: SyncSource): { ref: string; name: string }[] {
   return rows
 }
 
-export function syncPlan(sourceId: string): SyncPlan {
-  const source = syncSources.find((s) => s.id === sourceId)
-  if (!source) throw new Error('Unknown sync source.')
-  const rows = remoteRows(source)
-  const byRef = new Map(nodes
-    .filter((n) => n.axis_code === source.axis_code && n.external_ref)
-    .map((n) => [n.external_ref!, n]))
-  const plan: SyncPlan = { added: [], renamed: [], archived: [], unchanged: 0 }
-  for (const r of rows) {
-    const n = byRef.get(r.ref)
-    if (!n || n.status === 'archived') {
-      if (n) plan.renamed.push({ ref: r.ref, from: `${n.name} (archived)`, to: r.name })
-      else plan.added.push(r)
-    } else if (n.name !== r.name) plan.renamed.push({ ref: r.ref, from: n.name, to: r.name })
-    else plan.unchanged++
-  }
-  for (const [ref, n] of byRef) {
-    if (n.status === 'active' && !rows.some((r) => r.ref === ref)) {
-      plan.archived.push({ ref, name: n.name })
-    }
-  }
-  return plan
-}
 
-export function syncApply(sourceId: string): SyncRun {
-  const source = syncSources.find((s) => s.id === sourceId)!
-  const plan = syncPlan(sourceId)
-  const root = nodes.find((n) => n.axis_code === source.axis_code && n.is_axis_root)!
-  for (const a of plan.added) {
-    const n = addNode(source.axis_code, source.default_node_type, root.id,
-      a.name.toLowerCase().replace(/[^a-z0-9]+/g, '-'), a.name)
-    n.external_ref = a.ref
-  }
-  for (const r of plan.renamed) {
-    const n = nodes.find((x) => x.axis_code === source.axis_code && x.external_ref === r.ref)!
-    n.name = r.to; n.status = 'active'
-  }
-  for (const g of plan.archived) {
-    const n = nodes.find((x) => x.axis_code === source.axis_code && x.external_ref === g.ref)!
-    n.status = 'archived'
-  }
-  const run: SyncRun = {
-    id: uid('run'), source_id: source.id, at: new Date().toISOString(), dry: false,
-    added: plan.added.length, renamed: plan.renamed.length,
-    archived: plan.archived.length, unchanged: plan.unchanged,
-  }
-  syncRuns.unshift(run)
-  source.last_run_at = run.at
-  return run
-}
 
 export function createSyncSource(input: {
   axis_code: string; kind: SyncSource['kind']; target: string; default_node_type: string

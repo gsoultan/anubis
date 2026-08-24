@@ -158,12 +158,12 @@ export function CreateGrant({ opened }: { opened: boolean }) {
       const validUntil = validityDays
         ? new Date(Date.now() + Number(validityDays) * 86_400_000).toISOString()
         : null
-      const g = await api.createGrant({
+      await api.createGrant({
         identity_id: identityId, role_id: roleId,
         self_scoped: selfScoped, valid_until: validUntil, scopes,
       })
       notifyCreated('Access given',
-        `${subject?.username} → ${g.role_name}${scopes.length ? ` across ${scopes.length} axis constraint${scopes.length > 1 ? 's' : ''}` : selfScoped ? ' (own records only)' : ' (unconstrained)'}`)
+        `${subject?.username} → ${roles?.find((r) => r.id === roleId)?.name ?? 'role'}${scopes.length ? ` across ${scopes.length} axis constraint${scopes.length > 1 ? 's' : ''}` : selfScoped ? ' (own records only)' : ' (unconstrained)'}`)
       await queryClient.invalidateQueries({ queryKey: ['grants'] })
       await queryClient.invalidateQueries({ queryKey: qk.dashboard() })
       reset(); close()

@@ -10,21 +10,31 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ApplicationsRouteImport } from './routes/applications'
 import { Route as AuditRouteImport } from './routes/audit'
 import { Route as GrantsRouteImport } from './routes/grants'
 import { Route as IdentitiesRouteImport } from './routes/identities'
+import { Route as ImportRouteImport } from './routes/import'
 import { Route as KeysRouteImport } from './routes/keys'
 import { Route as MembershipsRouteImport } from './routes/memberships'
+import { Route as OperatorsRouteImport } from './routes/operators'
 import { Route as PlaygroundRouteImport } from './routes/playground'
 import { Route as RealmsRouteImport } from './routes/realms'
 import { Route as RolesRouteImport } from './routes/roles'
 import { Route as ScopeRouteImport } from './routes/scope'
+import { Route as SetupRouteImport } from './routes/setup'
+import { Route as SigninRouteImport } from './routes/signin'
 import { Route as SigninPageRouteImport } from './routes/signin-page'
 import { Route as TenantsRouteImport } from './routes/tenants'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApplicationsRoute = ApplicationsRouteImport.update({
+  id: '/applications',
+  path: '/applications',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuditRoute = AuditRouteImport.update({
@@ -42,6 +52,11 @@ const IdentitiesRoute = IdentitiesRouteImport.update({
   path: '/identities',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ImportRoute = ImportRouteImport.update({
+  id: '/import',
+  path: '/import',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const KeysRoute = KeysRouteImport.update({
   id: '/keys',
   path: '/keys',
@@ -50,6 +65,11 @@ const KeysRoute = KeysRouteImport.update({
 const MembershipsRoute = MembershipsRouteImport.update({
   id: '/memberships',
   path: '/memberships',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OperatorsRoute = OperatorsRouteImport.update({
+  id: '/operators',
+  path: '/operators',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PlaygroundRoute = PlaygroundRouteImport.update({
@@ -72,6 +92,16 @@ const ScopeRoute = ScopeRouteImport.update({
   path: '/scope',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SetupRoute = SetupRouteImport.update({
+  id: '/setup',
+  path: '/setup',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SigninRoute = SigninRouteImport.update({
+  id: '/signin',
+  path: '/signin',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SigninPageRoute = SigninPageRouteImport.update({
   id: '/signin-page',
   path: '/signin-page',
@@ -85,44 +115,59 @@ const TenantsRoute = TenantsRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/applications': typeof ApplicationsRoute
   '/audit': typeof AuditRoute
   '/grants': typeof GrantsRoute
   '/identities': typeof IdentitiesRoute
+  '/import': typeof ImportRoute
   '/keys': typeof KeysRoute
   '/memberships': typeof MembershipsRoute
+  '/operators': typeof OperatorsRoute
   '/playground': typeof PlaygroundRoute
   '/realms': typeof RealmsRoute
   '/roles': typeof RolesRoute
   '/scope': typeof ScopeRoute
+  '/setup': typeof SetupRoute
+  '/signin': typeof SigninRoute
   '/signin-page': typeof SigninPageRoute
   '/tenants': typeof TenantsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/applications': typeof ApplicationsRoute
   '/audit': typeof AuditRoute
   '/grants': typeof GrantsRoute
   '/identities': typeof IdentitiesRoute
+  '/import': typeof ImportRoute
   '/keys': typeof KeysRoute
   '/memberships': typeof MembershipsRoute
+  '/operators': typeof OperatorsRoute
   '/playground': typeof PlaygroundRoute
   '/realms': typeof RealmsRoute
   '/roles': typeof RolesRoute
   '/scope': typeof ScopeRoute
+  '/setup': typeof SetupRoute
+  '/signin': typeof SigninRoute
   '/signin-page': typeof SigninPageRoute
   '/tenants': typeof TenantsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/applications': typeof ApplicationsRoute
   '/audit': typeof AuditRoute
   '/grants': typeof GrantsRoute
   '/identities': typeof IdentitiesRoute
+  '/import': typeof ImportRoute
   '/keys': typeof KeysRoute
   '/memberships': typeof MembershipsRoute
+  '/operators': typeof OperatorsRoute
   '/playground': typeof PlaygroundRoute
   '/realms': typeof RealmsRoute
   '/roles': typeof RolesRoute
   '/scope': typeof ScopeRoute
+  '/setup': typeof SetupRoute
+  '/signin': typeof SigninRoute
   '/signin-page': typeof SigninPageRoute
   '/tenants': typeof TenantsRoute
 }
@@ -130,58 +175,78 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/applications'
     | '/audit'
     | '/grants'
     | '/identities'
+    | '/import'
     | '/keys'
     | '/memberships'
+    | '/operators'
     | '/playground'
     | '/realms'
     | '/roles'
     | '/scope'
+    | '/setup'
+    | '/signin'
     | '/signin-page'
     | '/tenants'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/applications'
     | '/audit'
     | '/grants'
     | '/identities'
+    | '/import'
     | '/keys'
     | '/memberships'
+    | '/operators'
     | '/playground'
     | '/realms'
     | '/roles'
     | '/scope'
+    | '/setup'
+    | '/signin'
     | '/signin-page'
     | '/tenants'
   id:
     | '__root__'
     | '/'
+    | '/applications'
     | '/audit'
     | '/grants'
     | '/identities'
+    | '/import'
     | '/keys'
     | '/memberships'
+    | '/operators'
     | '/playground'
     | '/realms'
     | '/roles'
     | '/scope'
+    | '/setup'
+    | '/signin'
     | '/signin-page'
     | '/tenants'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ApplicationsRoute: typeof ApplicationsRoute
   AuditRoute: typeof AuditRoute
   GrantsRoute: typeof GrantsRoute
   IdentitiesRoute: typeof IdentitiesRoute
+  ImportRoute: typeof ImportRoute
   KeysRoute: typeof KeysRoute
   MembershipsRoute: typeof MembershipsRoute
+  OperatorsRoute: typeof OperatorsRoute
   PlaygroundRoute: typeof PlaygroundRoute
   RealmsRoute: typeof RealmsRoute
   RolesRoute: typeof RolesRoute
   ScopeRoute: typeof ScopeRoute
+  SetupRoute: typeof SetupRoute
+  SigninRoute: typeof SigninRoute
   SigninPageRoute: typeof SigninPageRoute
   TenantsRoute: typeof TenantsRoute
 }
@@ -193,6 +258,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/applications': {
+      id: '/applications'
+      path: '/applications'
+      fullPath: '/applications'
+      preLoaderRoute: typeof ApplicationsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/audit': {
@@ -216,6 +288,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IdentitiesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/import': {
+      id: '/import'
+      path: '/import'
+      fullPath: '/import'
+      preLoaderRoute: typeof ImportRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/keys': {
       id: '/keys'
       path: '/keys'
@@ -228,6 +307,13 @@ declare module '@tanstack/react-router' {
       path: '/memberships'
       fullPath: '/memberships'
       preLoaderRoute: typeof MembershipsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/operators': {
+      id: '/operators'
+      path: '/operators'
+      fullPath: '/operators'
+      preLoaderRoute: typeof OperatorsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/playground': {
@@ -258,6 +344,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ScopeRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/setup': {
+      id: '/setup'
+      path: '/setup'
+      fullPath: '/setup'
+      preLoaderRoute: typeof SetupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/signin': {
+      id: '/signin'
+      path: '/signin'
+      fullPath: '/signin'
+      preLoaderRoute: typeof SigninRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/signin-page': {
       id: '/signin-page'
       path: '/signin-page'
@@ -277,15 +377,20 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ApplicationsRoute: ApplicationsRoute,
   AuditRoute: AuditRoute,
   GrantsRoute: GrantsRoute,
   IdentitiesRoute: IdentitiesRoute,
+  ImportRoute: ImportRoute,
   KeysRoute: KeysRoute,
   MembershipsRoute: MembershipsRoute,
+  OperatorsRoute: OperatorsRoute,
   PlaygroundRoute: PlaygroundRoute,
   RealmsRoute: RealmsRoute,
   RolesRoute: RolesRoute,
   ScopeRoute: ScopeRoute,
+  SetupRoute: SetupRoute,
+  SigninRoute: SigninRoute,
   SigninPageRoute: SigninPageRoute,
   TenantsRoute: TenantsRoute,
 }

@@ -23,6 +23,7 @@ function MembershipCard({ m }: { m: Membership }) {
   const [pick, setPick] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const nodeName = (id: string) => nodes?.find((n) => n.id === id)?.name ?? id
+  const count = m.member_count ?? m.member_ids.length
 
   const refresh = async () => {
     await queryClient.invalidateQueries({ queryKey: qk.memberships() })
@@ -50,6 +51,8 @@ function MembershipCard({ m }: { m: Membership }) {
     group: r.display_name,
     items: (identities ?? [])
       .filter((i) => i.realm_id === r.id && !m.member_ids.includes(i.id))
+      /* member_ids is empty when the server reported a count instead of a
+         roster; adding somebody twice is a no-op, so nothing is lost. */
       .map((i) => ({ value: i.id, label: i.username })),
   })).filter((g) => g.items.length > 0)
 
@@ -57,7 +60,7 @@ function MembershipCard({ m }: { m: Membership }) {
     <div className="panel p-4">
       <div className="mb-1 flex items-baseline justify-between gap-2">
         <span className="t-h1">{m.name}</span>
-        <span className="t-xs">{m.member_ids.length} member{m.member_ids.length === 1 ? '' : 's'}</span>
+        <span className="t-xs">{count} member{count === 1 ? '' : 's'}</span>
       </div>
       {m.description && <div className="t-sm mb-3">{m.description}</div>}
 

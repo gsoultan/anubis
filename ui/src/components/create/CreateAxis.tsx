@@ -20,7 +20,7 @@ export function CreateAxis({ opened }: { opened: boolean }) {
     },
     onSubmit: async ({ value }) => {
       try {
-        const axis = await api.createAxis({
+        await api.createAxis({
           code: value.code, display_name: value.display_name,
           default_effect: value.default_effect as AxisDefaultEffect,
           resolution_from: value.resolution_from as 'token' | 'context',
@@ -28,7 +28,7 @@ export function CreateAxis({ opened }: { opened: boolean }) {
           picker: value.picker as 'tree' | 'select' | 'search',
           icon: value.icon,
         })
-        notifyCreated(`Structure "${axis.display_name}" added`,
+        notifyCreated(`Structure "${value.display_name}" added`,
           'It now appears in every picker — add items to it next.')
         await queryClient.invalidateQueries({ queryKey: qk.axes() })
         await queryClient.invalidateQueries({ queryKey: qk.nodeTypes() })

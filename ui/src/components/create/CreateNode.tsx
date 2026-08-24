@@ -79,11 +79,11 @@ export function CreateNode({ opened }: { opened: boolean }) {
     if (!axisCode || !parentId || !nodeType || !name) return
     setSubmitting(true)
     try {
-      const node = await api.createScopeNode({
+      await api.createScopeNode({
         axis_code: axisCode, parent_id: parentId, node_type: nodeType,
         name, slug: slug || slugify(name), external_ref: externalRef || null,
       })
-      notifyCreated('Item added', `${node.name} under ${parent?.name}. Grants can target it immediately.`)
+      notifyCreated('Item added', `${name} under ${parent?.name}. Grants can target it immediately.`)
       await queryClient.invalidateQueries({ queryKey: qk.scope() })
       await queryClient.invalidateQueries({ queryKey: qk.dashboard() })
       reset(); close()

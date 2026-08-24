@@ -16,8 +16,10 @@ import type { ScopeNode, StrictDryRun } from '@/lib/api/types'
 export const Route = createFileRoute('/scope')({ component: Scope })
 
 function DryRun({ r }: { r: StrictDryRun }) {
-  const delta = r.allowed_before - r.allowed_after
-  const severe = delta > r.allowed_before * 0.2
+  /* The server replays REAL recent decisions with the axis forced strict and
+     counts how many flip to deny. That is the whole honest answer: no
+     before/after totals are narrated, so none are shown. */
+  const severe = r.sampled > 0 && r.would_deny > r.sampled * 0.2
   return (
     <div className="panel rise mt-3 overflow-hidden"
       style={{ borderColor: severe ? 'color-mix(in srgb, var(--deny) 24%, transparent)' : 'color-mix(in srgb, var(--warn) 24%, transparent)' }}>
@@ -26,26 +28,19 @@ function DryRun({ r }: { r: StrictDryRun }) {
         <IconAlertTriangle size={15}
           style={{ color: severe ? 'var(--deny)' : 'var(--warn)', marginTop: 1, flexShrink: 0 }} />
         <div className="t-body">
-          Flipping <span className="chip">{r.axis_code}</span> to strict changes{' '}
-          <b className="tnum">{delta}</b> of {r.decisions_sampled.toLocaleString()} sampled decisions.
+          Flipping <span className="chip">{r.axis_code}</span> to strict would deny{' '}
+          <b className="tnum">{r.would_deny.toLocaleString()}</b> of{' '}
+          {r.sampled.toLocaleString()} recently sampled decisions.
         </div>
       </div>
-      <div className="grid grid-cols-3 gap-px" style={{ background: 'var(--line-soft)' }}>
-        {[
-          ['allowed today', r.allowed_before.toLocaleString(), 'var(--ink)'],
-          ['allowed after', r.allowed_after.toLocaleString(), severe ? 'var(--deny)' : 'var(--ink)'],
-          ['relying on absence', r.grants_relying_on_absence.toLocaleString(), 'var(--ink)'],
-        ].map(([label, value, colour]) => (
-          <div key={label} className="px-3.5 py-2.5" style={{ background: 'var(--s-raised)' }}>
-            <div className="t-label">{label}</div>
-            <div className="tnum mt-1" style={{ fontSize: 16, fontWeight: 620, color: colour }}>{value}</div>
-          </div>
-        ))}
-      </div>
-      <div className="t-xs px-3.5 py-2.5" style={{ borderTop: '1px solid var(--line-soft)' }}>
-        Attach constraints to those grants first. Flipping without this is how an axis change becomes
-        an outage that looks like a security incident.
-      </div>
+      {r.would_deny > 0 && r.examples.length > 0 && (
+        <div className="px-3.5 py-2.5">
+          <div className="t-label mb-1">examples that would break</div>
+          <pre className="t-xs" style={{ margin: 0, maxHeight: 160, overflow: 'auto' }}>
+            {JSON.stringify(r.examples.slice(0, 5), null, 1)}
+          </pre>
+        </div>
+      )}
     </div>
   )
 }
@@ -71,8 +66,8 @@ function ItemKinds({ axisCode }: { axisCode: string }) {
   const add = async () => {
     setBusy(true)
     try {
-      const t = await api.createNodeType({ axis_code: axisCode, display_name: name, parent_types: parents })
-      notifyCreated('Kind added', `“${t.display_name}” can now be created under: ${parents.join(', ')}.`)
+      await api.createNodeType({ axis_code: axisCode, display_name: name, parent_types: parents })
+      notifyCreated('Kind added', `“${name}” can now be created under: ${parents.join(', ')}.`)
       await queryClient.invalidateQueries({ queryKey: qk.nodeTypes() })
       setName(''); setParents([])
     } catch (e) { notifyRejected(e) }
@@ -194,32 +189,32 @@ function SyncCard({ axisCode }: { axisCode: string }) {
       <Modal opened={!!preview} onClose={() => setPreview(null)} title="Preview — nothing applied yet" size={440}>
         {preview && (
           <div className="flex flex-col gap-3">
-            {preview.added.length + preview.renamed.length + preview.archived.length === 0 ? (
+            {preview.added + preview.renamed + preview.moved + preview.archived === 0 ? (
               <div className="t-sm">In sync — the source and the tree already agree.</div>
             ) : (
-              <>
-                {preview.added.map((a) => (
-                  <div key={a.ref} className="t-body"><span style={{ color: 'var(--allow)' }}>+ </span>
-                    {a.name} <span className="chip">{a.ref}</span></div>
+              <div className="grid grid-cols-2 gap-2">
+                {([
+                  ['would add', preview.added, 'var(--allow)'],
+                  ['would rename', preview.renamed, 'var(--warn)'],
+                  ['would move', preview.moved, 'var(--warn)'],
+                  ['would archive', preview.archived, 'var(--deny)'],
+                ] as const).map(([label, n, colour]) => (
+                  <div key={label} className="panel-inset px-3 py-2">
+                    <div className="t-h1 tnum" style={{ color: n > 0 ? colour : 'var(--ink-3)' }}>{n}</div>
+                    <div className="t-xs">{label}</div>
+                  </div>
                 ))}
-                {preview.renamed.map((r) => (
-                  <div key={r.ref} className="t-body"><span style={{ color: 'var(--warn)' }}>~ </span>
-                    {r.from} → <b>{r.to}</b></div>
-                ))}
-                {preview.archived.map((g) => (
-                  <div key={g.ref} className="t-body"><span style={{ color: 'var(--deny)' }}>− </span>
-                    {g.name} <span className="t-xs">will be archived — existing access keeps working</span></div>
-                ))}
-              </>
+              </div>
             )}
             <div className="t-xs">{preview.unchanged} unchanged.</div>
-            <div className="flex justify-end gap-2">
-              <Button size="xs" variant="default" onClick={() => setPreview(null)}>Close</Button>
-              <Button size="xs" loading={busy === 'apply'} onClick={() => void doApply()}
-                disabled={preview.added.length + preview.renamed.length + preview.archived.length === 0}>
-                Apply these changes
-              </Button>
-            </div>
+            {preview.errors.length > 0 && (
+              <div>
+                <div className="t-label mb-1">{preview.errors.length} row{preview.errors.length === 1 ? '' : 's'} the feed could not place</div>
+                {preview.errors.slice(0, 6).map((e) => (
+                  <div key={e.ref} className="t-xs"><span className="chip">{e.ref}</span> {e.error}</div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </Modal>

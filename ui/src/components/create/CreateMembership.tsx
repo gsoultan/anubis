@@ -39,9 +39,9 @@ export function CreateMembership({ opened }: { opened: boolean }) {
   const submit = async () => {
     setBusy(true)
     try {
-      const m = await api.createMembership({ name, description, entries })
+      await api.createMembership({ name, description, entries })
       notifyCreated('Membership created',
-        `“${m.name}” — ${m.entries.length} role${m.entries.length > 1 ? 's' : ''}. Assign people on the Memberships page.`)
+        `“${name}” — ${entries.length} role${entries.length > 1 ? 's' : ''}. Assign people on the Memberships page.`)
       await queryClient.invalidateQueries({ queryKey: qk.memberships() })
       setName(''); setDescription(''); setEntries([]); close()
     } catch (e) { notifyRejected(e) }

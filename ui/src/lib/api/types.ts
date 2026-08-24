@@ -153,7 +153,11 @@ export interface Membership {
   name: string
   description: string
   entries: MembershipEntry[]
+  /** Empty when the server reported a count instead of a roster. */
   member_ids: Uuid[]
+  /** How many people are in this membership. Falls back to member_ids.length
+      for the sample data, which carries a roster rather than a count. */
+  member_count?: number
 }
 
 export interface Grant {
@@ -318,11 +322,17 @@ export interface SyncSource {
   last_run_at: string | null
 }
 
+/** The reconciler's report, as the server actually emits it: counts plus the
+    rows it could not place. Per-row before/after listings were the sample
+    data's invention — the server does not narrate them. */
 export interface SyncPlan {
-  added: { ref: string; name: string }[]
-  renamed: { ref: string; from: string; to: string }[]
-  archived: { ref: string; name: string }[]
+  dry: boolean
+  added: number
+  renamed: number
+  moved: number
+  archived: number
   unchanged: number
+  errors: { ref: string; error: string }[]
 }
 
 export interface SyncRun {
@@ -338,10 +348,10 @@ export interface SyncRun {
 
 export interface StrictDryRun {
   axis_code: string
-  decisions_sampled: number
-  allowed_before: number
-  allowed_after: number
-  grants_relying_on_absence: number
+  /** Real authorize decisions replayed with the axis forced strict. */
+  sampled: number
+  would_deny: number
+  examples: unknown[]
 }
 
 /* ---------------------------------------------------------------------------

@@ -15,9 +15,16 @@ import {
   ScopeAdminService,
   AuthzAdminService,
   TenantAdminService,
+  ProvisioningService,
+  PlatformAdminService,
+  PlatformAuthService,
 } from "../gen/anubis/v1/admin_pb";
 
 const STORAGE_KEY = "anubis.tokens";
+/* The platform token is kept beside the active one. Entering a tenant swaps
+   the active token for a tenant-scoped one; without holding the original,
+   leaving the tenant again would mean signing in from scratch. */
+
 
 type StoredTokens = {
   accessToken: string;
@@ -38,10 +45,27 @@ function load(): StoredTokens | null {
   }
 }
 
+type SessionListener = () => void;
+const listeners = new Set<SessionListener>();
+
+/** Subscribe to session changes. The console cannot get away with only
+ * observing its own sign-in and sign-out calls: refreshIfNeeded clears the
+ * session by itself when the server reports a stolen refresh token, and a
+ * shell still painted over a dead session is how an operator ends up
+ * clicking through screens that will every one of them fail. */
+export function onSessionChange(fn: SessionListener): () => void {
+  listeners.add(fn);
+  return () => {
+    listeners.delete(fn);
+  };
+}
+
 function store(next: StoredTokens | null) {
+  const had = tokens !== null;
   tokens = next;
   if (next) sessionStorage.setItem(STORAGE_KEY, JSON.stringify(next));
   else sessionStorage.removeItem(STORAGE_KEY);
+  if (had !== (next !== null)) for (const fn of listeners) fn();
 }
 
 export function setTokens(pair: TokenPair) {
@@ -54,6 +78,7 @@ export function setTokens(pair: TokenPair) {
 }
 
 export function clearTokens() {
+  sessionStorage.removeItem(TENANT_KEY);
   store(null);
 }
 
@@ -85,6 +110,8 @@ async function refreshIfNeeded(): Promise<void> {
 const authInterceptor: Interceptor = (next) => async (req) => {
   await refreshIfNeeded();
   if (tokens) req.header.set("Authorization", `Bearer ${tokens.accessToken}`);
+  const tenant = currentTenant();
+  if (tenant) req.header.set("X-Anubis-Tenant", tenant);
   return next(req);
 };
 
@@ -104,30 +131,79 @@ export const api = {
   scopeAdmin: createClient(ScopeAdminService, authed),
   authzAdmin: createClient(AuthzAdminService, authed),
   tenantAdmin: createClient(TenantAdminService, authed),
+  provisioning: createClient(ProvisioningService, authed),
+  platformAdmin: createClient(PlatformAdminService, authed),
+  /* Two clients for one service, on purpose. PlatformLogin has to work with
+     no token — that is the point of it — while MyTenants is a session call
+     and is meaningless without one. Putting the whole service on the
+     unauthenticated transport is what made the tenant picker render nothing:
+     the call failed, and a failed query looks exactly like "no tenants". */
+  platformAuth: createClient(PlatformAuthService, base),
+  platformSession: createClient(PlatformAuthService, authed),
 } satisfies Record<string, Client<never> | unknown>;
 
-/** Password sign-in for the console itself. */
-export async function login(tenant: string, username: string, password: string) {
-  const resp = await api.auth.login({ tenant, username, password, clientId: "console" });
-  if (resp.result.case === "tokens" && resp.result.value) {
-    setTokens(resp.result.value);
-    return { mfa: false as const };
-  }
-  if (resp.result.case === "mfa") {
-    return { mfa: true as const, challenge: resp.result.value };
-  }
-  throw new Error("unexpected login response");
+/** Sign in a PLATFORM USER — the console's own door.
+ *
+ * Not AuthService.Login: that resolves a tenant identity through a realm, and
+ * an operator is deliberately not one. A tenant's people sign in through
+ * their own page instead (the sign-in page builder), never here. */
+export async function platformLogin(username: string, password: string) {
+  const resp = await api.platformAuth.platformLogin({ username, password });
+  // An operator with a second factor gets a challenge, not a session: a
+  // password alone is not enough for an account that runs the installation.
+  if (resp.mfaToken) return { mfa: true as const, mfaToken: resp.mfaToken, username: resp.username };
+  store({
+    accessToken: resp.accessToken,
+    // Platform tokens have no refresh yet: the console asks for the password
+    // again rather than holding a long-lived operator credential.
+    refreshToken: "",
+    sessionId: "",
+    expiresAt: Date.now() + resp.expiresIn * 1000,
+  });
+  return { mfa: false as const, username: resp.username, owner: resp.owner };
 }
 
-export async function verifyMfa(mfaToken: string, code: string) {
-  const resp = await api.auth.verifyMfa({ mfaToken, method: "totp", code });
-  if (resp.tokens) setTokens(resp.tokens);
+/** Complete a challenge. Only this turns a password into a session. */
+export async function platformVerifyMfa(mfaToken: string, code: string) {
+  const resp = await api.platformAuth.platformVerifyMfa({ mfaToken, code });
+  store({
+    accessToken: resp.accessToken,
+    refreshToken: "",
+    sessionId: "",
+    expiresAt: Date.now() + resp.expiresIn * 1000,
+  });
+  return { username: resp.username, owner: resp.owner };
 }
 
-export async function logout() {
-  try {
-    await api.auth.logout({});
-  } finally {
-    clearTokens();
-  }
+export async function beginTotpEnrolment() {
+  const resp = await api.platformSession.beginTotpEnrolment({});
+  return { secret: resp.secret, uri: resp.uri };
+}
+
+export async function confirmTotpEnrolment(code: string) {
+  await api.platformSession.confirmTotpEnrolment({ code });
+}
+
+
+/** Which tenants the signed-in operator may administer. */
+export async function myTenants() {
+  const resp = await api.platformSession.myTenants({});
+  return resp.tenants.map((t) => ({ slug: t.slug, name: t.name, role: t.role, all: t.all }));
+}
+
+/* The tenant an operator is working in. It travels as a request header and is
+   checked against their assignments on EVERY call, so revoking somebody's
+   access to a tenant takes effect immediately rather than whenever a token
+   happens to expire. Nothing here grants anything — it only says which
+   tenant is being asked about. */
+const TENANT_KEY = "anubis.tenant";
+
+export function currentTenant(): string {
+  return sessionStorage.getItem(TENANT_KEY) ?? "";
+}
+
+export function setCurrentTenant(slug: string) {
+  if (slug) sessionStorage.setItem(TENANT_KEY, slug);
+  else sessionStorage.removeItem(TENANT_KEY);
+  for (const fn of listeners) fn();
 }

@@ -25,11 +25,11 @@ export function CreateRole({ opened }: { opened: boolean }) {
     },
     onSubmit: async ({ value }) => {
       try {
-        const created = await api.createRole({
+        await api.createRole({
           name: value.name, description: value.description,
           allowed_realm_kinds: value.kinds, permission_keys: value.permission_keys,
         })
-        notifyCreated('Role created', `${created.name} · ${created.permission_count} permissions`)
+        notifyCreated('Role created', `${value.name} · ${value.permission_keys.length} permissions`)
         await queryClient.invalidateQueries({ queryKey: qk.roles() })
         form.reset(); close()
       } catch (e) { notifyRejected(e) }

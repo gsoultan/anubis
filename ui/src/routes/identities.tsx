@@ -12,6 +12,7 @@ import { useState } from 'react'
 import { Page } from '@/components/shell/Page'
 import { DataTable, Cell, type Column } from '@/components/ui/DataTable'
 import { api } from '@/lib/api/client'
+import * as live from '@/lib/api/live'
 import { qk } from '@/lib/query/keys'
 import { useSession } from '@/stores/session'
 import type { Ial, Identity } from '@/lib/api/types'
@@ -44,10 +45,20 @@ function Identities() {
   }
   const [q, setQ] = useState('')
   const { data: realms } = useQuery({ queryKey: qk.realms(), queryFn: api.realms })
-  const { data: rows } = useQuery({
-    queryKey: qk.identities(realmFilter, q),
-    queryFn: () => api.identities(realmFilter ?? undefined, q || undefined),
+  /* Keyset paging, and it is not optional here: a realm in this installation
+     holds fifty thousand people. The screen used to ask for all of them and
+     render whatever came back, which is a wrong answer dressed as a slow one.
+
+     A stack of cursors rather than a page number, because keyset paging can
+     step forward and back but cannot jump to page 40. */
+  const [trail, setTrail] = useState<string[]>([''])
+  const cursor = trail[trail.length - 1] ?? ''
+  const { data: page } = useQuery({
+    queryKey: ['identities-page', realmFilter, q, cursor],
+    queryFn: () => live.identitiesPage(realmFilter ?? undefined, q || undefined, cursor, 50),
+    placeholderData: (prev) => prev,
   })
+  const rows = page?.rows
   const { data: categories } = useQuery({
     queryKey: qk.realmCategories(), queryFn: () => api.realmCategories(),
   })
@@ -135,7 +146,7 @@ function Identities() {
         <>
           <TextInput w={230} placeholder="Search username or email"
             leftSection={<IconSearch size={14} />}
-            value={q} onChange={(e) => setQ(e.currentTarget.value)} />
+            value={q} onChange={(e) => { setQ(e.currentTarget.value); setTrail(['']) }} />
           <Button size="xs" leftSection={<IconUserPlus size={14} />}
             onClick={() => openCreate('identity')}>
             Add person
@@ -150,7 +161,7 @@ function Identities() {
           }))].map((t) => {
             const active = realmFilter === t.id
             return (
-              <button key={t.id ?? 'all'} onClick={() => setRealmFilter(t.id)}
+              <button key={t.id ?? 'all'} onClick={() => { setRealmFilter(t.id); setTrail(['']) }}
                 className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5"
                 style={{
                   background: active ? 'var(--s-overlay)' : 'transparent',
@@ -180,6 +191,19 @@ function Identities() {
             hint: 'Try a different realm filter or clear the search.',
             action: <Button size="xs" variant="light" onClick={() => openCreate('identity')}>Add person</Button>,
           }} />
+
+        {(trail.length > 1 || page?.next) && (
+          <div className="flex items-center gap-2">
+            <Button variant="default" size="compact-sm" disabled={trail.length <= 1}
+              onClick={() => setTrail((t) => t.slice(0, -1))}>Previous</Button>
+            <Button variant="default" size="compact-sm" disabled={!page?.next}
+              onClick={() => setTrail((t) => [...t, page?.next ?? ''])}>Next</Button>
+            <span className="t-xs">
+              {rows?.length ?? 0} on this page
+              {trail.length > 1 && ` · page ${trail.length}`}
+            </span>
+          </div>
+        )}
       </div>
     </Page>
   )

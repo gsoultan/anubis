@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
-import { Button, Menu, ActionIcon, TextInput } from '@mantine/core'
+import { Button, Menu, ActionIcon, TextInput, Tooltip } from '@mantine/core'
 import {
   IconBuildingBank, IconDots, IconBrush, IconPlayerPause, IconPlayerPlay,
   IconArrowRight, IconPlus,
@@ -96,10 +96,17 @@ function TenantCard({ t }: { t: Tenant }) {
   )
 }
 
+/** Mirrors the slug the seam derives, so what is shown is what gets created. */
+function slugify(nameInput: string): string {
+  return nameInput.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 63)
+}
+
 function Tenants() {
   const { data: tenants } = useQuery({ queryKey: qk.tenants(), queryFn: api.tenants })
   const [name, setName] = useState('')
   const [busy, setBusy] = useState(false)
+  const slug = slugify(name)
+  const ready = name.trim().length >= 2 && slug.length >= 2
 
   const add = async () => {
     if (name.trim().length < 2) return
@@ -120,13 +127,27 @@ function Tenants() {
       description="Every organisation on this Anubis. Each is a sealed universe — people, structures and access in one tenant can never reference another; the schema makes it impossible, not just impolite."
       actions={
         <>
-          <TextInput w={220} placeholder="New tenant name…" value={name}
-            onChange={(e) => setName(e.currentTarget.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') void add() }} />
-          <Button size="xs" leftSection={<IconPlus size={13} />} loading={busy}
-            disabled={name.trim().length < 2} onClick={() => void add()}>
-            Create tenant
-          </Button>
+          <div className="flex flex-col">
+            <TextInput w={240} placeholder="New tenant name…" value={name}
+              onChange={(e) => setName(e.currentTarget.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') void add() }} />
+            {/* The slug is derived once and never editable: it appears in
+                URLs, tokens and every hosted page path, so showing it before
+                the tenant exists beats discovering it afterwards. */}
+            {slug && (
+              <span className="t-xs" style={{ marginTop: 3 }}>
+                URL slug: <span className="chip">{slug}</span>
+              </span>
+            )}
+          </div>
+          <Tooltip label="Enter a name of at least two characters" disabled={ready}>
+            <div>
+              <Button size="xs" leftSection={<IconPlus size={13} />} loading={busy}
+                disabled={!ready} onClick={() => void add()}>
+                Create tenant
+              </Button>
+            </div>
+          </Tooltip>
         </>
       }
     >

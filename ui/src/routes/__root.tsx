@@ -1,4 +1,4 @@
-import { createRootRoute, Link, Outlet, useRouterState } from '@tanstack/react-router'
+import { createRootRoute, Link, Outlet, redirect, useNavigate, useRouterState } from '@tanstack/react-router'
 import { Tooltip } from '@mantine/core'
 import {
   IconLayoutDashboard, IconUsers, IconSitemap, IconKey, IconShieldCheck,
@@ -8,13 +8,18 @@ import {
 import { ActionIcon, Button, Menu, useComputedColorScheme, useMantineColorScheme } from '@mantine/core'
 import {
   IconPlus, IconUserPlus, IconLicense, IconShieldPlus, IconCirclePlus,
-  IconSitemapFilled, IconAxisY, IconSun, IconMoon, IconUsersGroup,
+  IconSitemapFilled, IconAxisY, IconSun, IconMoon, IconUsersGroup, IconTableImport,
+  IconLogout, IconUserCircle, IconShieldCog, IconAppWindow,
 } from '@tabler/icons-react'
 import type { ReactNode } from 'react'
 import { CommandPalette } from '@/components/shell/CommandPalette'
 import { CreateDrawers } from '@/components/create'
 import { useCreate } from '@/stores/create'
-import { useSession } from '@/stores/session'
+import { signOut, useAuthed, useIsOwner, useWho } from '@/stores/auth'
+import { currentTenant, myTenants, setCurrentTenant } from '@/lib/anubis'
+import { queryClient } from '@/lib/query/client'
+import { useEffect, useState } from 'react'
+import { isAuthenticated } from '@/lib/anubis'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api/client'
 import { qk } from '@/lib/query/keys'
@@ -31,14 +36,8 @@ const PLATFORM_GROUPS: { title: string | null; items: Item[] }[] = [
     items: [
       { to: '/tenants', label: 'Tenants', icon: <IconBuildingBank size={15} />,
         hint: 'Every organisation on this Anubis' },
-      { to: '/signin-page', label: 'Sign-in pages', icon: <IconBrush size={15} />,
-        hint: 'Brand each tenant’s login page' },
-    ],
-  },
-  {
-    title: 'System',
-    items: [
-      { to: '/keys', label: 'Signing keys', icon: <IconKey size={15} /> },
+      { to: '/operators', label: 'Platform users', icon: <IconShieldCog size={15} />,
+        hint: 'Who operates this installation, and which tenants they may administer' },
     ],
   },
 ]
@@ -58,6 +57,10 @@ const GROUPS: { title: string | null; items: Item[] }[] = [
       { to: '/identities', label: 'People', icon: <IconUsers size={15} /> },
       { to: '/realms', label: 'Populations', icon: <IconWorld size={15} />,
         hint: 'Internal, partners and public — and their sign-in rules' },
+      { to: '/signin-page', label: 'Sign-in pages', icon: <IconBrush size={15} />,
+        hint: 'Brand the login page this tenant’s people see' },
+      { to: '/import', label: 'Import', icon: <IconTableImport size={15} />,
+        hint: 'Bring people and their access in from a spreadsheet' },
     ],
   },
   {
@@ -68,6 +71,8 @@ const GROUPS: { title: string | null; items: Item[] }[] = [
       { to: '/memberships', label: 'Memberships', icon: <IconUsersGroup size={15} />,
         hint: 'Role bundles — onboard a hire in one action' },
       { to: '/roles', label: 'Roles & permissions', icon: <IconShieldCheck size={15} /> },
+      { to: '/applications', label: 'Applications', icon: <IconAppWindow size={15} />,
+        hint: 'The relying parties that own permissions' },
     ],
   },
   {
@@ -96,46 +101,6 @@ function NavItem({ to, label, icon, hint }: Item) {
     </Link>
   )
   return hint ? <Tooltip label={hint} position="right" openDelay={600}>{el}</Tooltip> : el
-}
-
-function WorkspaceSwitcher() {
-  const { currentTenantId, setCurrentTenant } = useSession()
-  const { data: tenants } = useQuery({ queryKey: qk.tenants(), queryFn: api.tenants })
-  const current = tenants?.find((t) => t.id === currentTenantId)
-  return (
-    <Menu position="bottom-start" width={230} shadow="xl">
-      <Menu.Target>
-        <button className="panel-inset mx-3 mb-1 flex items-center justify-between gap-2 px-2.5 py-2 text-left"
-          style={{ width: 'calc(100% - 24px)' }}>
-          <span className="flex min-w-0 items-center gap-2">
-            <IconBuildingBank size={14} style={{ color: 'var(--gold)', flexShrink: 0 }} />
-            <span className="t-body truncate" style={{ fontWeight: 570 }}>
-              {currentTenantId === null ? 'Platform' : current?.name ?? '…'}
-            </span>
-          </span>
-          <IconChevronDown size={13} style={{ color: 'var(--ink-3)', flexShrink: 0 }} />
-        </button>
-      </Menu.Target>
-      <Menu.Dropdown>
-        <Menu.Label>Workspace</Menu.Label>
-        <Menu.Item leftSection={<IconBuildingBank size={14} />}
-          rightSection={currentTenantId === null ? <IconCheck size={13} /> : null}
-          onClick={() => setCurrentTenant(null)}>
-          Platform <span className="t-xs block">tenants, keys — the super-admin view</span>
-        </Menu.Item>
-        <Menu.Divider />
-        {tenants?.map((t) => (
-          <Menu.Item key={t.id}
-            rightSection={currentTenantId === t.id ? <IconCheck size={13} /> : null}
-            disabled={t.status === 'suspended'}
-            onClick={() => setCurrentTenant(t.id)}>
-            {t.name}
-            <span className="t-xs block">{t.status === 'suspended' ? 'suspended' : `manage ${t.slug}`}</span>
-          </Menu.Item>
-        ))}
-      </Menu.Dropdown>
-    </Menu>
-  )
 }
 
 function Jackal() {
@@ -200,8 +165,10 @@ function ThemeToggle() {
 }
 
 function SideNav() {
-  const currentTenantId = useSession((st) => st.currentTenantId)
-  const groups = currentTenantId === null ? PLATFORM_GROUPS : GROUPS
+  /* An owner runs the installation AND can administer any tenant, so they see
+     both. An operator sees only the tenant work they were assigned. */
+  const owner = useIsOwner()
+  const groups = owner ? [...PLATFORM_GROUPS, ...GROUPS] : GROUPS
   return (
     <nav className="flex-1 overflow-y-auto px-3 pb-3">
       {groups.map((g, gi) => (
@@ -216,8 +183,133 @@ function SideNav() {
   )
 }
 
-export const Route = createRootRoute({
-  component: () => (
+/* The tenant this operator is administering.
+
+   Defaults to the first one they are assigned to, so somebody with a single
+   tenant never has to choose. The selection is context, not authority: it
+   rides along with every request and the server checks it against their
+   assignments each time. */
+function TenantPicker() {
+  const authed = useAuthed()
+  const { data: tenants, error } = useQuery({
+    queryKey: ['my-tenants'],
+    queryFn: myTenants,
+    enabled: authed,
+    staleTime: 60_000,
+    retry: false,
+  })
+  const [current, setCurrent] = useState(currentTenant())
+
+  useEffect(() => {
+    if (!tenants?.length) return
+    const known = tenants.some((t) => t.slug === current)
+    if (!current || !known) {
+      const first = tenants[0]
+      if (first) {
+        setCurrentTenant(first.slug)
+        setCurrent(first.slug)
+      }
+    }
+  }, [tenants, current])
+
+  if (!authed) return null
+  /* A failed lookup is not "no tenants". Rendering nothing for both is how
+     this went unnoticed: the picker simply was not there, and nothing said
+     why. */
+  if (error) {
+    return (
+      <Tooltip label={(error as Error).message}>
+        <div className="chip" style={{ color: 'var(--warn)' }}>tenants unavailable</div>
+      </Tooltip>
+    )
+  }
+  if (!tenants?.length) return null
+
+  const active = tenants.find((t) => t.slug === current)
+  // One tenant is not a choice; showing a menu implies there is somewhere
+  // else to go.
+  if (tenants.length === 1) {
+    return (
+      <Tooltip label={`Administering ${active?.name ?? current} as ${active?.role ?? ''}`}>
+        <div className="chip">{active?.name ?? current}</div>
+      </Tooltip>
+    )
+  }
+  return (
+    <Menu position="bottom-end" width={240}>
+      <Menu.Target>
+        <button className="panel-inset flex items-center gap-2 px-2.5 py-1.5" style={{ cursor: 'pointer' }}>
+          <IconBuildingBank size={13} style={{ color: 'var(--gold)' }} />
+          <span className="t-xs" style={{ fontWeight: 550 }}>{active?.name ?? current}</span>
+          <IconChevronDown size={12} style={{ color: 'var(--ink-3)' }} />
+        </button>
+      </Menu.Target>
+      <Menu.Dropdown>
+        <Menu.Label>Administering</Menu.Label>
+        {tenants.map((t) => (
+          <Menu.Item key={t.slug}
+            rightSection={t.slug === current ? <IconCheck size={13} /> : null}
+            onClick={() => {
+              setCurrentTenant(t.slug)
+              setCurrent(t.slug)
+              // Everything on screen was fetched for the previous tenant.
+              queryClient.clear()
+            }}>
+            {t.name}
+            <span className="t-xs block">{t.role}</span>
+          </Menu.Item>
+        ))}
+      </Menu.Dropdown>
+    </Menu>
+  )
+}
+
+/** The account control. The tenant chip used to be hardcoded to "impack";
+    once a screen could really sign in, a chip that names a tenant nobody is
+    signed into is worse than no chip at all. */
+function Account() {
+  const authed = useAuthed()
+  const who = useWho()
+  const navigate = useNavigate()
+
+  if (!authed) {
+    return (
+      <Button variant="default" size="compact-sm" leftSection={<IconUserCircle size={15} />}
+        onClick={() => navigate({ to: '/signin', search: { next: '/' } })}>
+        Sign in
+      </Button>
+    )
+  }
+  return (
+    <Menu position="bottom-end" width={200}>
+      <Menu.Target>
+        <button className="chip chip-gold" style={{ cursor: 'pointer' }}>
+          {who?.username ?? 'signed in'}
+        </button>
+      </Menu.Target>
+      <Menu.Dropdown>
+        <Menu.Label>platform operator</Menu.Label>
+        <Menu.Item
+          leftSection={<IconLogout size={15} />}
+          onClick={async () => { await signOut(); navigate({ to: '/signin', search: { next: '/' } }) }}
+        >
+          Sign out
+        </Menu.Item>
+      </Menu.Dropdown>
+    </Menu>
+  )
+}
+
+function RootLayout() {
+  const pathname = useRouterState({ select: (s) => s.location.pathname })
+  const authed = useAuthed()
+
+  /* Sign-in renders on its own. Wrapping it in the shell would put a nav
+     full of links behind a form whose whole point is that you are not
+     through yet. */
+  if (pathname === '/signin' || pathname === '/setup') return <Outlet />
+
+  return (
     <div className="flex h-full" style={{ background: 'var(--s-base)' }}>
       <CommandPalette />
       <CreateDrawers />
@@ -236,16 +328,17 @@ export const Route = createRootRoute({
           </div>
         </div>
 
-        <WorkspaceSwitcher />
         <SideNav />
         <div className="px-3 pb-3">
           <div className="panel-inset flex items-center gap-2 px-2.5 py-2">
             <IconPointFilled size={11} style={{ color: 'var(--warn)' }} />
             <div className="min-w-0">
               <div className="t-xs" style={{ color: 'var(--ink-2)', fontWeight: 550 }}>
-                Mock backend
+                {authed ? 'Platform console' : 'Sample data'}
               </div>
-              <div className="t-xs" style={{ fontSize: 10 }}>API not built yet</div>
+              <div className="t-xs" style={{ fontSize: 10 }}>
+                {authed ? 'Operating this installation' : 'Most screens use built-in data'}
+              </div>
             </div>
           </div>
         </div>
@@ -268,8 +361,9 @@ export const Route = createRootRoute({
               <kbd className="chip" style={{ fontSize: 9.5 }}>⌘K</kbd>
             </button>
             <NewMenu />
+            <TenantPicker />
             <ThemeToggle />
-            <div className="chip chip-gold">impack</div>
+            <Account />
           </div>
         </header>
 
@@ -278,7 +372,26 @@ export const Route = createRootRoute({
         </main>
       </div>
     </div>
-  ),
+  )
+}
+
+/* One gate for the whole console.
+
+   This started per-route, because most screens read the built-in sample data
+   and worked with no server at all. That stopped being true the moment
+   realms, identities, roles and permissions began reaching the API: a signed
+   out visitor would now get a wall of failed requests instead of a sign-in
+   form. One gate is also one place to get right. */
+export const Route = createRootRoute({
+  beforeLoad: ({ location }) => {
+    // The installer and the sign-in form are the two pages that exist before
+    // anybody is signed in.
+    if (location.pathname === '/signin' || location.pathname === '/setup') return
+    if (!isAuthenticated()) {
+      throw redirect({ to: '/signin', search: { next: location.href } })
+    }
+  },
+  component: RootLayout,
 })
 
 const TITLES: Record<string, string> = {
@@ -287,6 +400,8 @@ const TITLES: Record<string, string> = {
   '/roles': 'Roles & permissions', '/memberships': 'Memberships',
   '/audit': 'Audit', '/keys': 'Signing keys',
   '/tenants': 'Tenants', '/signin-page': 'Sign-in pages',
+  '/import': 'Import', '/signin': 'Sign in', '/operators': 'Platform users',
+  '/setup': 'Set up Anubis', '/applications': 'Applications',
 }
 
 function Breadcrumb() {
