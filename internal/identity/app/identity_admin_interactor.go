@@ -8,12 +8,10 @@ import (
 	auditport "github.com/gsoultan/anubis/internal/audit/port"
 	authport "github.com/gsoultan/anubis/internal/auth/port"
 	"github.com/gsoultan/anubis/internal/authz/guard"
-	authzport "github.com/gsoultan/anubis/internal/authz/port"
 	identitydomain "github.com/gsoultan/anubis/internal/identity/domain"
 	"github.com/gsoultan/anubis/internal/identity/domain/credential"
 	identityport "github.com/gsoultan/anubis/internal/identity/port"
 	"github.com/gsoultan/anubis/internal/platform/crypto/kdf"
-	"github.com/gsoultan/anubis/internal/platform/crypto/secret"
 	"github.com/gsoultan/anubis/internal/shared/apperr"
 	"github.com/gsoultan/anubis/internal/shared/authctx"
 	"github.com/gsoultan/anubis/internal/shared/clock"
@@ -41,7 +39,11 @@ type identityAdminInteractor struct {
 }
 
 func NewIdentityAdminInteractor(
-	authz authzport.AuthzRepository,
+	// ops lets a PLATFORM OPERATOR administer this tenant (ADR-0011). Their
+	// authority is an assignment, not a grant, so the guard has to ask the
+	// control plane rather than authorize().
+	ops guard.OperatorAuthority,
+	clockNow func() time.Time,
 	dir identityport.IdentityDirectoryRepository,
 	ids identityport.IdentityRepository,
 	creds identityport.CredentialRepository,
@@ -56,7 +58,7 @@ func NewIdentityAdminInteractor(
 	audit auditport.Auditor,
 ) IdentityAdminUsecase {
 	return &identityAdminInteractor{
-		guard: guard.New(authz), dir: dir, ids: ids, creds: creds,
+		guard: guard.New().WithOperators(ops, clockNow), dir: dir, ids: ids, creds: creds,
 		realms: realms, catalog: catalog, consents: consents,
 		sessions: sessions, refresh: refresh, tenants: tenants,
 		tx: tx, clock: clock, audit: audit,
@@ -304,38 +306,6 @@ func (u *identityAdminInteractor) RevokeCredential(ctx context.Context, credenti
 	}
 	u.emit(ctx, p, "credential.revoke", credentialID, nil)
 	return nil
-}
-
-func (u *identityAdminInteractor) CreateAPIKey(ctx context.Context, identityID, label string, expiresAt int64) (string, string, string, error) {
-	p, err := u.guard.Require(ctx, "anubis:credential:write")
-	if err != nil {
-		return "", "", "", err
-	}
-	full, lookup, hash, err := secret.NewAPIKey()
-	if err != nil {
-		return "", "", "", apperr.ErrInternal.Wrap(err)
-	}
-	var exp *time.Time
-	if expiresAt > 0 {
-		t := time.Unix(expiresAt, 0)
-		exp = &t
-	}
-	credID, err := u.creds.CreateCredential(ctx, credential.CredentialInput{
-		IdentityID: identityID, TenantID: p.TenantID, Kind: "api_key",
-		Secret: secret.Hex(hash), LookupKey: lookup, Label: label, ExpiresAt: exp,
-	})
-	if err != nil {
-		return "", "", "", err
-	}
-	u.emit(ctx, p, "credential.api_key_create", identityID, map[string]string{"prefix": lookup})
-	return full, lookup, credID, nil
-}
-
-func (u *identityAdminInteractor) ListAPIKeys(ctx context.Context, identityID string) ([]credential.CredentialInfo, error) {
-	if _, err := u.guard.Require(ctx, "anubis:identity:read"); err != nil {
-		return nil, err
-	}
-	return u.creds.ListCredentials(ctx, identityID, "api_key")
 }
 
 func (u *identityAdminInteractor) ListConsents(ctx context.Context, identityID string) ([]identitydomain.ConsentRecord, error) {

@@ -47,3 +47,43 @@ SELECT scope_move_node(
   (SELECT c.descendant_id FROM scope_closure c
      WHERE c.ancestor_id=(SELECT id FROM scope_nodes WHERE node_type='office' LIMIT 1)
        AND c.depth=2 LIMIT 1));
+
+-- ---------------------------------------------------------------------------
+-- 8. The control plane (ADR-0011). Platform users are a SEPARATE population
+--    from identities, with no path between them: a tenant's user becoming an
+--    operator has to be UNSTORABLE, not merely refused by application code.
+-- ---------------------------------------------------------------------------
+\echo '--- 8. a tenant identity given operator authority ---'
+INSERT INTO platform_assignments (operator_id, tenant_id, role)
+SELECT i.id, i.tenant_id, 'owner' FROM identities i LIMIT 1;
+
+\echo '--- 8b. an operator role outside the defined set ---'
+INSERT INTO platform_assignments (operator_id, tenant_id, role)
+SELECT u.id, NULL, 'root' FROM platform_users u LIMIT 1;
+
+\echo '--- 8c. two live installation owners for one operator ---'
+INSERT INTO platform_assignments (operator_id, tenant_id, role)
+SELECT u.id, NULL, 'owner' FROM platform_users u LIMIT 1;
+INSERT INTO platform_assignments (operator_id, tenant_id, role)
+SELECT u.id, NULL, 'owner' FROM platform_users u LIMIT 1;
+
+\echo '--- 8d. duplicate platform username, different case ---'
+INSERT INTO platform_users (username, password_hash)
+SELECT upper(u.username), 'x' FROM platform_users u LIMIT 1;
+
+-- ---------------------------------------------------------------------------
+-- 9. The control plane must not leak into a tenant's directory. A platform
+--    user is not an identity, so nothing that keys on identity_id may ever
+--    reference one — the FK makes it unstorable, and this proves it stays so.
+-- ---------------------------------------------------------------------------
+\echo '--- 9. a grant issued to a platform user ---'
+INSERT INTO grants (tenant_id, identity_id, role_id, granted_by, reason)
+SELECT t.id, u.id, r.id, u.id, 'should be impossible'
+  FROM tenants t, platform_users u, roles r
+ WHERE r.tenant_id = t.id
+ LIMIT 1;
+
+\echo '--- 10. an api_key credential on a PERSON (must FAIL — keys are the tenant''s, 0030) ---'
+INSERT INTO credentials (identity_id, tenant_id, kind, secret, lookup_key)
+SELECT i.id, i.tenant_id, 'api_key', 'deadbeef', 'anb_live_negtest'
+  FROM identities i LIMIT 1;

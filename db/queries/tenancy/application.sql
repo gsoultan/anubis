@@ -20,6 +20,9 @@ SELECT id, tenant_id, slug, name, kind, status, redirect_uris,
 FROM applications
 WHERE id = sqlc.arg(id) AND tenant_id = sqlc.arg(tenant_id);
 
+-- ListApplications is the TENANT's relying parties: the things its people
+-- sign in to. Since 0029 nothing else lives in this table — Anubis itself
+-- registers no applications anywhere.
 -- name: ListApplications :many
 SELECT id, tenant_id, slug, name, kind, status, redirect_uris,
        post_logout_redirect_uris,
@@ -28,7 +31,29 @@ SELECT id, tenant_id, slug, name, kind, status, redirect_uris,
        refresh_token_ttl::text AS refresh_token_ttl
 FROM applications
 WHERE tenant_id = sqlc.arg(tenant_id)
+  AND (sqlc.arg(query)::text = ''
+       OR slug ILIKE '%' || sqlc.arg(query)::text || '%'
+       OR name ILIKE '%' || sqlc.arg(query)::text || '%')
+  AND (sqlc.arg(after)::text = '' OR slug > sqlc.arg(after)::text)
+ORDER BY slug
+LIMIT sqlc.arg(page_size);
+
+-- AllApplications is the unpaged read for internal checks: validating a
+-- post-logout redirect walks every registered URI, and paging that would
+-- silently reject valid redirects past the first page.
+-- name: AllApplications :many
+SELECT id, tenant_id, slug, name, kind, status, redirect_uris,
+       post_logout_redirect_uris,
+       backchannel_logout_uri, token_format, manifest_version,
+       access_token_ttl::text AS access_token_ttl,
+       refresh_token_ttl::text AS refresh_token_ttl
+FROM applications
+WHERE tenant_id = sqlc.arg(tenant_id)
 ORDER BY slug;
+
+-- name: CountApplications :one
+SELECT count(*) FROM applications
+ WHERE tenant_id = sqlc.arg(tenant_id);
 
 -- name: CreateApplication :one
 INSERT INTO applications (tenant_id, slug, name, kind, redirect_uris,

@@ -201,34 +201,6 @@ func (h *IdentityAdminHandler) RevokeCredential(ctx context.Context, req *connec
 	return connect.NewResponse(&anubisv1.RevokeCredentialResponse{}), nil
 }
 
-func (h *IdentityAdminHandler) CreateApiKey(ctx context.Context, req *connect.Request[anubisv1.CreateApiKeyRequest]) (*connect.Response[anubisv1.CreateApiKeyResponse], error) {
-	out, err := h.f.Do(ctx, "admin.credential.api_key", func(ctx context.Context) (any, error) {
-		key, prefix, credID, err := h.svc.CreateAPIKey(ctx, req.Msg.IdentityId, req.Msg.Label, req.Msg.ExpiresAt)
-		if err != nil {
-			return nil, err
-		}
-		return &anubisv1.CreateApiKeyResponse{ApiKey: key, Prefix: prefix, CredentialId: credID}, nil
-	})
-	if err != nil {
-		return nil, apiconnect.Err(ctx, err)
-	}
-	return connect.NewResponse(out.(*anubisv1.CreateApiKeyResponse)), nil
-}
-
-func (h *IdentityAdminHandler) ListApiKeys(ctx context.Context, req *connect.Request[anubisv1.ListApiKeysRequest]) (*connect.Response[anubisv1.ListApiKeysResponse], error) {
-	out, err := h.f.Do(ctx, "admin.credential.api_keys", func(ctx context.Context) (any, error) {
-		return h.svc.ListAPIKeys(ctx, req.Msg.IdentityId)
-	})
-	if err != nil {
-		return nil, apiconnect.Err(ctx, err)
-	}
-	resp := &anubisv1.ListApiKeysResponse{}
-	for _, c := range out.([]credential.CredentialInfo) {
-		resp.Keys = append(resp.Keys, credentialProto(c))
-	}
-	return connect.NewResponse(resp), nil
-}
-
 func consentProto(c identitydomain.ConsentRecord) *anubisv1.Consent {
 	out := &anubisv1.Consent{
 		Id: c.ID, Purpose: c.Purpose, PolicyVersion: c.PolicyVersion,

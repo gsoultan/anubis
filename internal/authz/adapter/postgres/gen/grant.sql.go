@@ -206,3 +206,106 @@ func (q *Queries) RevokeGrant(ctx context.Context, arg RevokeGrantParams) (Revok
 	err := row.Scan(&i.ID, &i.IdentityID, &i.RoleID)
 	return i, err
 }
+
+const searchGrants = `-- name: SearchGrants :many
+SELECT g.id, g.identity_id, i.username, g.role_id, r.name AS role_name,
+       g.self_scoped, g.valid_from, g.valid_until, g.revoked_at, g.granted_by,
+       g.reason, g.via_membership_id, g.created_at
+  FROM grants g
+  JOIN roles r      ON r.id = g.role_id
+  JOIN identities i ON i.id = g.identity_id
+ WHERE g.tenant_id = $1
+   AND ($2::boolean OR g.revoked_at IS NULL)
+   AND ($3::text = '' OR g.identity_id::text = $3::text)
+   AND ($4::text = ''     OR g.role_id::text = $4::text)
+   -- 'direct' excludes grants derived from a membership; 'membership' keeps
+   -- only those. Anything else means no filter.
+   AND ($5::text <> 'direct'     OR g.via_membership_id IS NULL)
+   AND ($5::text <> 'membership' OR g.via_membership_id IS NOT NULL)
+   AND ($6::text = ''
+        OR i.username ILIKE '%' || $6::text || '%'
+        OR r.name     ILIKE '%' || $6::text || '%')
+   AND ($7::text = ''
+        OR (g.created_at, g.id) < (
+              SELECT g2.created_at, g2.id FROM grants g2
+               WHERE g2.id::text = $7::text))
+ ORDER BY g.created_at DESC, g.id DESC
+ LIMIT $8
+`
+
+type SearchGrantsParams struct {
+	TenantID       string
+	IncludeRevoked bool
+	IdentityID     string
+	RoleID         string
+	Source         string
+	Query          string
+	After          string
+	PageSize       int32
+}
+
+type SearchGrantsRow struct {
+	ID              string
+	IdentityID      string
+	Username        string
+	RoleID          string
+	RoleName        string
+	SelfScoped      bool
+	ValidFrom       time.Time
+	ValidUntil      *time.Time
+	RevokedAt       *time.Time
+	GrantedBy       string
+	Reason          *string
+	ViaMembershipID *string
+	CreatedAt       time.Time
+}
+
+// SearchGrants backs the Access screen.
+//
+// There is deliberately no "list every grant": a tenant here holds 150k of
+// them, and a screen that asked for all of them would be answering a question
+// nobody can read. Filters narrow first, keyset paging carries the rest.
+// Ordered by (created_at, id) so the cursor is stable when two grants share a
+// timestamp — which they do, in bulk imports.
+func (q *Queries) SearchGrants(ctx context.Context, arg SearchGrantsParams) ([]SearchGrantsRow, error) {
+	rows, err := q.db.Query(ctx, searchGrants,
+		arg.TenantID,
+		arg.IncludeRevoked,
+		arg.IdentityID,
+		arg.RoleID,
+		arg.Source,
+		arg.Query,
+		arg.After,
+		arg.PageSize,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SearchGrantsRow
+	for rows.Next() {
+		var i SearchGrantsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.IdentityID,
+			&i.Username,
+			&i.RoleID,
+			&i.RoleName,
+			&i.SelfScoped,
+			&i.ValidFrom,
+			&i.ValidUntil,
+			&i.RevokedAt,
+			&i.GrantedBy,
+			&i.Reason,
+			&i.ViaMembershipID,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

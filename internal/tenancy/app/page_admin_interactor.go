@@ -2,6 +2,7 @@ package tenancyapp
 
 import (
 	"context"
+	"time"
 
 	auditdomain "github.com/gsoultan/anubis/internal/audit/domain"
 	auditport "github.com/gsoultan/anubis/internal/audit/port"
@@ -24,12 +25,16 @@ type pageAdminInteractor struct {
 }
 
 func NewPageAdminInteractor(
-	authz authzRepo,
+	// ops lets a PLATFORM OPERATOR administer this tenant's sign-in pages
+	// (ADR-0011). Their authority is an assignment, not a grant, so the
+	// guard has to ask the control plane rather than authorize().
+	ops guard.OperatorAuthority,
+	clockNow func() time.Time,
 	pages tenancyport.AuthPageRepository,
 	apps tenancyport.ApplicationRepository,
 	audit auditport.Auditor,
 ) PageAdminUsecase {
-	return &pageAdminInteractor{guard: guard.New(authz), pages: pages, apps: apps, audit: audit}
+	return &pageAdminInteractor{guard: guard.New().WithOperators(ops, clockNow), pages: pages, apps: apps, audit: audit}
 }
 
 func (u *pageAdminInteractor) ListAuthPages(ctx context.Context, kind string) ([]tenancydomain.AuthPage, error) {

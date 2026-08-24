@@ -8,7 +8,7 @@ import (
 
 	"connectrpc.com/connect"
 
-	identityport "github.com/gsoultan/anubis/internal/identity/port"
+	authport "github.com/gsoultan/anubis/internal/auth/port"
 	"github.com/gsoultan/anubis/internal/platform/crypto/keyring"
 	"github.com/gsoultan/anubis/internal/platform/crypto/secret"
 	"github.com/gsoultan/anubis/internal/shared/authctx"
@@ -27,23 +27,26 @@ type AuthnInterceptor struct {
 	issuer  string
 	ring    *keyring.Manager
 	tenants tenancyport.TenantRepository
-	creds   identityport.CredentialRepository
+	apiKeys authport.APIKeyRepository
 	clock   clock.Clock
 }
 
-func NewAuthnInterceptor(issuer string, ring *keyring.Manager, tenants tenancyport.TenantRepository, creds identityport.CredentialRepository, clock clock.Clock) *AuthnInterceptor {
-	return &AuthnInterceptor{issuer: issuer, ring: ring, tenants: tenants, creds: creds, clock: clock}
+func NewAuthnInterceptor(issuer string, ring *keyring.Manager, tenants tenancyport.TenantRepository, apiKeys authport.APIKeyRepository, clock clock.Clock) *AuthnInterceptor {
+	return &AuthnInterceptor{issuer: issuer, ring: ring, tenants: tenants, apiKeys: apiKeys, clock: clock}
 }
 
 func (i *AuthnInterceptor) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
 	return func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
 		auth := req.Header().Get("Authorization")
+		// Which tenant an operator is working in. It is only ever a request
+		// for one — the guard decides whether they may.
+		wanted := req.Header().Get(TenantHeader)
 		const bearer = "Bearer "
 		if len(auth) > len(bearer) && strings.EqualFold(auth[:len(bearer)], bearer) {
 			cred := auth[len(bearer):]
 			switch {
 			case strings.HasPrefix(cred, "v4.public."):
-				if p := i.principalFromToken(ctx, cred); p != nil {
+				if p := i.principalFromToken(ctx, cred, wanted); p != nil {
 					ctx = authctx.With(ctx, p)
 				}
 			case strings.HasPrefix(cred, "anb_live_"):
@@ -64,7 +67,17 @@ func (i *AuthnInterceptor) WrapStreamingHandler(next connect.StreamingHandlerFun
 	return next
 }
 
-func (i *AuthnInterceptor) principalFromToken(ctx context.Context, token string) *authctx.Principal {
+// platformAudience mirrors controlapp.PlatformAudience. It is repeated rather
+// than imported because this transport package must not depend on a bounded
+// context; the pair is pinned by a test.
+const platformAudience = "anubis-platform"
+
+// TenantHeader names the tenant a platform operator is administering. It is
+// meaningless on a tenant identity's token, whose tenant is already fixed by
+// the token itself and cannot be asked to change.
+const TenantHeader = "X-Anubis-Tenant"
+
+func (i *AuthnInterceptor) principalFromToken(ctx context.Context, token, wantTenant string) *authctx.Principal {
 	_, _, footer, err := paseto.Parse(token)
 	if err != nil {
 		return nil
@@ -93,10 +106,42 @@ func (i *AuthnInterceptor) principalFromToken(ctx context.Context, token string)
 		(claims.NotBefore != 0 && now < claims.NotBefore-60) {
 		return nil
 	}
+	// A platform token carries no tenant, because an operator belongs to
+	// none (ADR-0011). The audience is what separates the two: a tenant's
+	// verifier must never accept one of these, and this must never mistake a
+	// tenant token for an operator's.
+	if claims.Tenant == "" {
+		for _, aud := range claims.Audience {
+			if aud != platformAudience {
+				continue
+			}
+			p := &authctx.Principal{
+				IdentityID: claims.Subject,
+				Roles:      claims.Roles,
+				Epoch:      claims.Epoch,
+				Platform:   true,
+				Token:      token,
+			}
+			// The operator asked to work in a tenant. Resolving it here only
+			// records WHICH tenant; whether they may is the guard's call,
+			// against their assignments, on every request — so a revoked
+			// assignment stops working immediately rather than when a token
+			// happens to expire.
+			if wantTenant != "" {
+				if t, terr := i.tenants.TenantBySlug(ctx, wantTenant); terr == nil && t != nil {
+					p.TenantID, p.TenantSlug = t.ID, t.Slug
+				}
+			}
+			return p
+		}
+		return nil
+	}
+
 	tenant, err := i.tenants.TenantBySlug(ctx, claims.Tenant)
 	if err != nil || tenant == nil {
 		return nil
 	}
+
 	return &authctx.Principal{
 		IdentityID: claims.Subject,
 		TenantID:   tenant.ID,
@@ -119,27 +164,28 @@ func (i *AuthnInterceptor) principalFromAPIKey(ctx context.Context, key string) 
 	if !ok {
 		return nil
 	}
-	cred, err := i.creds.CredentialByLookup(ctx, lookup)
-	if err != nil || cred == nil || cred.Blocked || cred.IdentityStatus != "active" {
+	// The tenant's machine credential (migration 0030): it authenticates as
+	// the tenant's SYSTEM, never as any person, so there is no identity to
+	// resolve and no identity status to consult. The tenant's own status
+	// stands in for it — a suspended tenant's keys stop with it.
+	k, err := i.apiKeys.APIKeyByLookup(ctx, lookup)
+	if err != nil || k == nil || k.TenantStatus != "active" {
 		return nil
 	}
-	if cred.ExpiresAt != nil && !cred.ExpiresAt.After(i.clock.Now()) {
+	if k.ExpiresAt != nil && !k.ExpiresAt.After(i.clock.Now()) {
 		return nil
 	}
-	if !secret.Equal(secret.Hash(secretPart), mustHexOrRaw(cred.SecretHash)) {
+	if !secret.Equal(secret.Hash(secretPart), mustHexOrRaw(k.SecretHash)) {
 		return nil
 	}
-	i.creds.TouchCredentialUsed(ctx, cred.ID, 0)
-	tenant, err := i.tenants.TenantByID(ctx, cred.TenantID)
-	if err != nil || tenant == nil {
-		return nil
-	}
+	i.apiKeys.TouchAPIKeyUsed(ctx, k.ID)
 	return &authctx.Principal{
-		IdentityID: cred.IdentityID,
-		TenantID:   cred.TenantID,
-		TenantSlug: tenant.Slug,
+		// The key's own id is the subject, so audit names WHICH credential
+		// acted without pretending a person did.
+		IdentityID: k.ID,
+		TenantID:   k.TenantID,
+		TenantSlug: k.TenantSlug,
 		Service:    true,
-		Epoch:      cred.TokenEpoch,
 	}
 }
 

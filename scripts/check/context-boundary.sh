@@ -6,8 +6,8 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 fail=0
-for ctx in identity auth authz scope tenancy audit gate; do
-  for other in identity auth authz scope tenancy audit gate; do
+for ctx in identity auth authz scope tenancy audit gate provisioning; do
+  for other in identity auth authz scope tenancy audit gate provisioning; do
     [ "$ctx" = "$other" ] && continue
     hits=$(grep -rn --include='*.go' \
       "gsoultan/anubis/internal/$other/adapter" "internal/$ctx" 2>/dev/null || true)

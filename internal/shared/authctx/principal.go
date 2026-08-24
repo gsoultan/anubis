@@ -20,5 +20,11 @@ type Principal struct {
 	Epoch      int
 	Audience   []string
 	Service    bool
-	Token      string
+	// Platform marks a PLATFORM USER: somebody who operates the installation
+	// rather than belonging to a tenant (ADR-0011). Such a principal has no
+	// tenant and no grants, so authorize() would deny it everything — its
+	// authority comes from platform_assignments instead, and only the control
+	// context knows how to read it.
+	Platform bool
+	Token    string
 }

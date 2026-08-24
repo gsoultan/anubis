@@ -5,6 +5,13 @@ import "net/http"
 // corsMiddleware exists for DEV ONLY (console on :7447 talking to :7448
 // directly). Production is same-origin behind the gateway; an empty origin
 // disables this entirely — no wildcard, no reflection.
+// CORS wraps a handler with the same origin policy the API server applies.
+// Exported for the installer, which serves a handful of routes without the
+// full server around them and must not invent its own policy.
+func CORS(origin string, next http.Handler) http.Handler {
+	return corsMiddleware(origin, next)
+}
+
 func corsMiddleware(origin string, next http.Handler) http.Handler {
 	if origin == "" {
 		return next

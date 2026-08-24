@@ -29,6 +29,12 @@ const (
 	AuthzAdminServiceName = "anubis.v1.AuthzAdminService"
 	// TenantAdminServiceName is the fully-qualified name of the TenantAdminService service.
 	TenantAdminServiceName = "anubis.v1.TenantAdminService"
+	// ProvisioningServiceName is the fully-qualified name of the ProvisioningService service.
+	ProvisioningServiceName = "anubis.v1.ProvisioningService"
+	// PlatformAdminServiceName is the fully-qualified name of the PlatformAdminService service.
+	PlatformAdminServiceName = "anubis.v1.PlatformAdminService"
+	// PlatformAuthServiceName is the fully-qualified name of the PlatformAuthService service.
+	PlatformAuthServiceName = "anubis.v1.PlatformAuthService"
 )
 
 // These constants are the fully-qualified names of the RPCs defined in this package. They're
@@ -72,12 +78,6 @@ const (
 	// IdentityAdminServiceRevokeCredentialProcedure is the fully-qualified name of the
 	// IdentityAdminService's RevokeCredential RPC.
 	IdentityAdminServiceRevokeCredentialProcedure = "/anubis.v1.IdentityAdminService/RevokeCredential"
-	// IdentityAdminServiceCreateApiKeyProcedure is the fully-qualified name of the
-	// IdentityAdminService's CreateApiKey RPC.
-	IdentityAdminServiceCreateApiKeyProcedure = "/anubis.v1.IdentityAdminService/CreateApiKey"
-	// IdentityAdminServiceListApiKeysProcedure is the fully-qualified name of the
-	// IdentityAdminService's ListApiKeys RPC.
-	IdentityAdminServiceListApiKeysProcedure = "/anubis.v1.IdentityAdminService/ListApiKeys"
 	// IdentityAdminServiceListConsentsProcedure is the fully-qualified name of the
 	// IdentityAdminService's ListConsents RPC.
 	IdentityAdminServiceListConsentsProcedure = "/anubis.v1.IdentityAdminService/ListConsents"
@@ -108,6 +108,12 @@ const (
 	// ScopeAdminServiceListScopeNodesProcedure is the fully-qualified name of the ScopeAdminService's
 	// ListScopeNodes RPC.
 	ScopeAdminServiceListScopeNodesProcedure = "/anubis.v1.ScopeAdminService/ListScopeNodes"
+	// ScopeAdminServiceGetScopeNodeProcedure is the fully-qualified name of the ScopeAdminService's
+	// GetScopeNode RPC.
+	ScopeAdminServiceGetScopeNodeProcedure = "/anubis.v1.ScopeAdminService/GetScopeNode"
+	// ScopeAdminServiceScopeAncestorsProcedure is the fully-qualified name of the ScopeAdminService's
+	// ScopeAncestors RPC.
+	ScopeAdminServiceScopeAncestorsProcedure = "/anubis.v1.ScopeAdminService/ScopeAncestors"
 	// ScopeAdminServiceCreateScopeNodeProcedure is the fully-qualified name of the ScopeAdminService's
 	// CreateScopeNode RPC.
 	ScopeAdminServiceCreateScopeNodeProcedure = "/anubis.v1.ScopeAdminService/CreateScopeNode"
@@ -153,6 +159,9 @@ const (
 	// AuthzAdminServiceListGrantsProcedure is the fully-qualified name of the AuthzAdminService's
 	// ListGrants RPC.
 	AuthzAdminServiceListGrantsProcedure = "/anubis.v1.AuthzAdminService/ListGrants"
+	// AuthzAdminServiceSearchGrantsProcedure is the fully-qualified name of the AuthzAdminService's
+	// SearchGrants RPC.
+	AuthzAdminServiceSearchGrantsProcedure = "/anubis.v1.AuthzAdminService/SearchGrants"
 	// AuthzAdminServiceCreateGrantProcedure is the fully-qualified name of the AuthzAdminService's
 	// CreateGrant RPC.
 	AuthzAdminServiceCreateGrantProcedure = "/anubis.v1.AuthzAdminService/CreateGrant"
@@ -186,6 +195,24 @@ const (
 	// TenantAdminServiceCreateTenantProcedure is the fully-qualified name of the TenantAdminService's
 	// CreateTenant RPC.
 	TenantAdminServiceCreateTenantProcedure = "/anubis.v1.TenantAdminService/CreateTenant"
+	// TenantAdminServiceUpdateTenantProcedure is the fully-qualified name of the TenantAdminService's
+	// UpdateTenant RPC.
+	TenantAdminServiceUpdateTenantProcedure = "/anubis.v1.TenantAdminService/UpdateTenant"
+	// TenantAdminServiceGetTenantStatsProcedure is the fully-qualified name of the TenantAdminService's
+	// GetTenantStats RPC.
+	TenantAdminServiceGetTenantStatsProcedure = "/anubis.v1.TenantAdminService/GetTenantStats"
+	// TenantAdminServiceListApiKeysProcedure is the fully-qualified name of the TenantAdminService's
+	// ListApiKeys RPC.
+	TenantAdminServiceListApiKeysProcedure = "/anubis.v1.TenantAdminService/ListApiKeys"
+	// TenantAdminServiceCreateApiKeyProcedure is the fully-qualified name of the TenantAdminService's
+	// CreateApiKey RPC.
+	TenantAdminServiceCreateApiKeyProcedure = "/anubis.v1.TenantAdminService/CreateApiKey"
+	// TenantAdminServiceRevokeApiKeyProcedure is the fully-qualified name of the TenantAdminService's
+	// RevokeApiKey RPC.
+	TenantAdminServiceRevokeApiKeyProcedure = "/anubis.v1.TenantAdminService/RevokeApiKey"
+	// TenantAdminServiceSetTenantStatusProcedure is the fully-qualified name of the
+	// TenantAdminService's SetTenantStatus RPC.
+	TenantAdminServiceSetTenantStatusProcedure = "/anubis.v1.TenantAdminService/SetTenantStatus"
 	// TenantAdminServiceListRealmsProcedure is the fully-qualified name of the TenantAdminService's
 	// ListRealms RPC.
 	TenantAdminServiceListRealmsProcedure = "/anubis.v1.TenantAdminService/ListRealms"
@@ -258,6 +285,42 @@ const (
 	// TenantAdminServicePreviewAuthPageProcedure is the fully-qualified name of the
 	// TenantAdminService's PreviewAuthPage RPC.
 	TenantAdminServicePreviewAuthPageProcedure = "/anubis.v1.TenantAdminService/PreviewAuthPage"
+	// ProvisioningServiceDownloadImportTemplateProcedure is the fully-qualified name of the
+	// ProvisioningService's DownloadImportTemplate RPC.
+	ProvisioningServiceDownloadImportTemplateProcedure = "/anubis.v1.ProvisioningService/DownloadImportTemplate"
+	// ProvisioningServiceImportWorkbookProcedure is the fully-qualified name of the
+	// ProvisioningService's ImportWorkbook RPC.
+	ProvisioningServiceImportWorkbookProcedure = "/anubis.v1.ProvisioningService/ImportWorkbook"
+	// PlatformAdminServiceListOperatorsProcedure is the fully-qualified name of the
+	// PlatformAdminService's ListOperators RPC.
+	PlatformAdminServiceListOperatorsProcedure = "/anubis.v1.PlatformAdminService/ListOperators"
+	// PlatformAdminServiceCreateOperatorProcedure is the fully-qualified name of the
+	// PlatformAdminService's CreateOperator RPC.
+	PlatformAdminServiceCreateOperatorProcedure = "/anubis.v1.PlatformAdminService/CreateOperator"
+	// PlatformAdminServiceAssignOperatorProcedure is the fully-qualified name of the
+	// PlatformAdminService's AssignOperator RPC.
+	PlatformAdminServiceAssignOperatorProcedure = "/anubis.v1.PlatformAdminService/AssignOperator"
+	// PlatformAdminServiceRevokeAssignmentProcedure is the fully-qualified name of the
+	// PlatformAdminService's RevokeAssignment RPC.
+	PlatformAdminServiceRevokeAssignmentProcedure = "/anubis.v1.PlatformAdminService/RevokeAssignment"
+	// PlatformAdminServiceSetOperatorStatusProcedure is the fully-qualified name of the
+	// PlatformAdminService's SetOperatorStatus RPC.
+	PlatformAdminServiceSetOperatorStatusProcedure = "/anubis.v1.PlatformAdminService/SetOperatorStatus"
+	// PlatformAuthServicePlatformLoginProcedure is the fully-qualified name of the
+	// PlatformAuthService's PlatformLogin RPC.
+	PlatformAuthServicePlatformLoginProcedure = "/anubis.v1.PlatformAuthService/PlatformLogin"
+	// PlatformAuthServicePlatformVerifyMfaProcedure is the fully-qualified name of the
+	// PlatformAuthService's PlatformVerifyMfa RPC.
+	PlatformAuthServicePlatformVerifyMfaProcedure = "/anubis.v1.PlatformAuthService/PlatformVerifyMfa"
+	// PlatformAuthServiceBeginTotpEnrolmentProcedure is the fully-qualified name of the
+	// PlatformAuthService's BeginTotpEnrolment RPC.
+	PlatformAuthServiceBeginTotpEnrolmentProcedure = "/anubis.v1.PlatformAuthService/BeginTotpEnrolment"
+	// PlatformAuthServiceConfirmTotpEnrolmentProcedure is the fully-qualified name of the
+	// PlatformAuthService's ConfirmTotpEnrolment RPC.
+	PlatformAuthServiceConfirmTotpEnrolmentProcedure = "/anubis.v1.PlatformAuthService/ConfirmTotpEnrolment"
+	// PlatformAuthServiceMyTenantsProcedure is the fully-qualified name of the PlatformAuthService's
+	// MyTenants RPC.
+	PlatformAuthServiceMyTenantsProcedure = "/anubis.v1.PlatformAuthService/MyTenants"
 )
 
 // IdentityAdminServiceClient is a client for the anubis.v1.IdentityAdminService service.
@@ -279,8 +342,6 @@ type IdentityAdminServiceClient interface {
 	RequestErasure(context.Context, *connect.Request[v1.RequestErasureRequest]) (*connect.Response[v1.RequestErasureResponse], error)
 	ListCredentials(context.Context, *connect.Request[v1.ListCredentialsRequest]) (*connect.Response[v1.ListCredentialsResponse], error)
 	RevokeCredential(context.Context, *connect.Request[v1.RevokeCredentialRequest]) (*connect.Response[v1.RevokeCredentialResponse], error)
-	CreateApiKey(context.Context, *connect.Request[v1.CreateApiKeyRequest]) (*connect.Response[v1.CreateApiKeyResponse], error)
-	ListApiKeys(context.Context, *connect.Request[v1.ListApiKeysRequest]) (*connect.Response[v1.ListApiKeysResponse], error)
 	ListConsents(context.Context, *connect.Request[v1.ListConsentsRequest]) (*connect.Response[v1.ListConsentsResponse], error)
 	RecordConsent(context.Context, *connect.Request[v1.RecordConsentRequest]) (*connect.Response[v1.RecordConsentResponse], error)
 	// Withdrawal appends a row; the record of what was consented to survives.
@@ -364,18 +425,6 @@ func NewIdentityAdminServiceClient(httpClient connect.HTTPClient, baseURL string
 			connect.WithSchema(identityAdminServiceMethods.ByName("RevokeCredential")),
 			connect.WithClientOptions(opts...),
 		),
-		createApiKey: connect.NewClient[v1.CreateApiKeyRequest, v1.CreateApiKeyResponse](
-			httpClient,
-			baseURL+IdentityAdminServiceCreateApiKeyProcedure,
-			connect.WithSchema(identityAdminServiceMethods.ByName("CreateApiKey")),
-			connect.WithClientOptions(opts...),
-		),
-		listApiKeys: connect.NewClient[v1.ListApiKeysRequest, v1.ListApiKeysResponse](
-			httpClient,
-			baseURL+IdentityAdminServiceListApiKeysProcedure,
-			connect.WithSchema(identityAdminServiceMethods.ByName("ListApiKeys")),
-			connect.WithClientOptions(opts...),
-		),
 		listConsents: connect.NewClient[v1.ListConsentsRequest, v1.ListConsentsResponse](
 			httpClient,
 			baseURL+IdentityAdminServiceListConsentsProcedure,
@@ -410,8 +459,6 @@ type identityAdminServiceClient struct {
 	requestErasure   *connect.Client[v1.RequestErasureRequest, v1.RequestErasureResponse]
 	listCredentials  *connect.Client[v1.ListCredentialsRequest, v1.ListCredentialsResponse]
 	revokeCredential *connect.Client[v1.RevokeCredentialRequest, v1.RevokeCredentialResponse]
-	createApiKey     *connect.Client[v1.CreateApiKeyRequest, v1.CreateApiKeyResponse]
-	listApiKeys      *connect.Client[v1.ListApiKeysRequest, v1.ListApiKeysResponse]
 	listConsents     *connect.Client[v1.ListConsentsRequest, v1.ListConsentsResponse]
 	recordConsent    *connect.Client[v1.RecordConsentRequest, v1.RecordConsentResponse]
 	withdrawConsent  *connect.Client[v1.WithdrawConsentRequest, v1.WithdrawConsentResponse]
@@ -472,16 +519,6 @@ func (c *identityAdminServiceClient) RevokeCredential(ctx context.Context, req *
 	return c.revokeCredential.CallUnary(ctx, req)
 }
 
-// CreateApiKey calls anubis.v1.IdentityAdminService.CreateApiKey.
-func (c *identityAdminServiceClient) CreateApiKey(ctx context.Context, req *connect.Request[v1.CreateApiKeyRequest]) (*connect.Response[v1.CreateApiKeyResponse], error) {
-	return c.createApiKey.CallUnary(ctx, req)
-}
-
-// ListApiKeys calls anubis.v1.IdentityAdminService.ListApiKeys.
-func (c *identityAdminServiceClient) ListApiKeys(ctx context.Context, req *connect.Request[v1.ListApiKeysRequest]) (*connect.Response[v1.ListApiKeysResponse], error) {
-	return c.listApiKeys.CallUnary(ctx, req)
-}
-
 // ListConsents calls anubis.v1.IdentityAdminService.ListConsents.
 func (c *identityAdminServiceClient) ListConsents(ctx context.Context, req *connect.Request[v1.ListConsentsRequest]) (*connect.Response[v1.ListConsentsResponse], error) {
 	return c.listConsents.CallUnary(ctx, req)
@@ -516,8 +553,6 @@ type IdentityAdminServiceHandler interface {
 	RequestErasure(context.Context, *connect.Request[v1.RequestErasureRequest]) (*connect.Response[v1.RequestErasureResponse], error)
 	ListCredentials(context.Context, *connect.Request[v1.ListCredentialsRequest]) (*connect.Response[v1.ListCredentialsResponse], error)
 	RevokeCredential(context.Context, *connect.Request[v1.RevokeCredentialRequest]) (*connect.Response[v1.RevokeCredentialResponse], error)
-	CreateApiKey(context.Context, *connect.Request[v1.CreateApiKeyRequest]) (*connect.Response[v1.CreateApiKeyResponse], error)
-	ListApiKeys(context.Context, *connect.Request[v1.ListApiKeysRequest]) (*connect.Response[v1.ListApiKeysResponse], error)
 	ListConsents(context.Context, *connect.Request[v1.ListConsentsRequest]) (*connect.Response[v1.ListConsentsResponse], error)
 	RecordConsent(context.Context, *connect.Request[v1.RecordConsentRequest]) (*connect.Response[v1.RecordConsentResponse], error)
 	// Withdrawal appends a row; the record of what was consented to survives.
@@ -597,18 +632,6 @@ func NewIdentityAdminServiceHandler(svc IdentityAdminServiceHandler, opts ...con
 		connect.WithSchema(identityAdminServiceMethods.ByName("RevokeCredential")),
 		connect.WithHandlerOptions(opts...),
 	)
-	identityAdminServiceCreateApiKeyHandler := connect.NewUnaryHandler(
-		IdentityAdminServiceCreateApiKeyProcedure,
-		svc.CreateApiKey,
-		connect.WithSchema(identityAdminServiceMethods.ByName("CreateApiKey")),
-		connect.WithHandlerOptions(opts...),
-	)
-	identityAdminServiceListApiKeysHandler := connect.NewUnaryHandler(
-		IdentityAdminServiceListApiKeysProcedure,
-		svc.ListApiKeys,
-		connect.WithSchema(identityAdminServiceMethods.ByName("ListApiKeys")),
-		connect.WithHandlerOptions(opts...),
-	)
 	identityAdminServiceListConsentsHandler := connect.NewUnaryHandler(
 		IdentityAdminServiceListConsentsProcedure,
 		svc.ListConsents,
@@ -651,10 +674,6 @@ func NewIdentityAdminServiceHandler(svc IdentityAdminServiceHandler, opts ...con
 			identityAdminServiceListCredentialsHandler.ServeHTTP(w, r)
 		case IdentityAdminServiceRevokeCredentialProcedure:
 			identityAdminServiceRevokeCredentialHandler.ServeHTTP(w, r)
-		case IdentityAdminServiceCreateApiKeyProcedure:
-			identityAdminServiceCreateApiKeyHandler.ServeHTTP(w, r)
-		case IdentityAdminServiceListApiKeysProcedure:
-			identityAdminServiceListApiKeysHandler.ServeHTTP(w, r)
 		case IdentityAdminServiceListConsentsProcedure:
 			identityAdminServiceListConsentsHandler.ServeHTTP(w, r)
 		case IdentityAdminServiceRecordConsentProcedure:
@@ -714,14 +733,6 @@ func (UnimplementedIdentityAdminServiceHandler) RevokeCredential(context.Context
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.IdentityAdminService.RevokeCredential is not implemented"))
 }
 
-func (UnimplementedIdentityAdminServiceHandler) CreateApiKey(context.Context, *connect.Request[v1.CreateApiKeyRequest]) (*connect.Response[v1.CreateApiKeyResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.IdentityAdminService.CreateApiKey is not implemented"))
-}
-
-func (UnimplementedIdentityAdminServiceHandler) ListApiKeys(context.Context, *connect.Request[v1.ListApiKeysRequest]) (*connect.Response[v1.ListApiKeysResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.IdentityAdminService.ListApiKeys is not implemented"))
-}
-
 func (UnimplementedIdentityAdminServiceHandler) ListConsents(context.Context, *connect.Request[v1.ListConsentsRequest]) (*connect.Response[v1.ListConsentsResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.IdentityAdminService.ListConsents is not implemented"))
 }
@@ -745,6 +756,12 @@ type ScopeAdminServiceClient interface {
 	ListScopeNodeTypes(context.Context, *connect.Request[v1.ListScopeNodeTypesRequest]) (*connect.Response[v1.ListScopeNodeTypesResponse], error)
 	CreateScopeNodeType(context.Context, *connect.Request[v1.CreateScopeNodeTypeRequest]) (*connect.Response[v1.CreateScopeNodeTypeResponse], error)
 	ListScopeNodes(context.Context, *connect.Request[v1.ListScopeNodesRequest]) (*connect.Response[v1.ListScopeNodesResponse], error)
+	// GetScopeNode fetches one node. Without it the console would have to pull
+	// an entire axis to display a single selected value.
+	GetScopeNode(context.Context, *connect.Request[v1.GetScopeNodeRequest]) (*connect.Response[v1.GetScopeNodeResponse], error)
+	// ScopeAncestors is the chain from the axis root down, which is what makes
+	// a scope decision explainable rather than a bare yes or no.
+	ScopeAncestors(context.Context, *connect.Request[v1.ScopeAncestorsRequest]) (*connect.Response[v1.ScopeAncestorsResponse], error)
 	CreateScopeNode(context.Context, *connect.Request[v1.CreateScopeNodeRequest]) (*connect.Response[v1.CreateScopeNodeResponse], error)
 	EnsureAxisRoot(context.Context, *connect.Request[v1.EnsureAxisRootRequest]) (*connect.Response[v1.EnsureAxisRootResponse], error)
 	MoveScopeNode(context.Context, *connect.Request[v1.MoveScopeNodeRequest]) (*connect.Response[v1.MoveScopeNodeResponse], error)
@@ -813,6 +830,18 @@ func NewScopeAdminServiceClient(httpClient connect.HTTPClient, baseURL string, o
 			connect.WithSchema(scopeAdminServiceMethods.ByName("ListScopeNodes")),
 			connect.WithClientOptions(opts...),
 		),
+		getScopeNode: connect.NewClient[v1.GetScopeNodeRequest, v1.GetScopeNodeResponse](
+			httpClient,
+			baseURL+ScopeAdminServiceGetScopeNodeProcedure,
+			connect.WithSchema(scopeAdminServiceMethods.ByName("GetScopeNode")),
+			connect.WithClientOptions(opts...),
+		),
+		scopeAncestors: connect.NewClient[v1.ScopeAncestorsRequest, v1.ScopeAncestorsResponse](
+			httpClient,
+			baseURL+ScopeAdminServiceScopeAncestorsProcedure,
+			connect.WithSchema(scopeAdminServiceMethods.ByName("ScopeAncestors")),
+			connect.WithClientOptions(opts...),
+		),
 		createScopeNode: connect.NewClient[v1.CreateScopeNodeRequest, v1.CreateScopeNodeResponse](
 			httpClient,
 			baseURL+ScopeAdminServiceCreateScopeNodeProcedure,
@@ -879,6 +908,8 @@ type scopeAdminServiceClient struct {
 	listScopeNodeTypes  *connect.Client[v1.ListScopeNodeTypesRequest, v1.ListScopeNodeTypesResponse]
 	createScopeNodeType *connect.Client[v1.CreateScopeNodeTypeRequest, v1.CreateScopeNodeTypeResponse]
 	listScopeNodes      *connect.Client[v1.ListScopeNodesRequest, v1.ListScopeNodesResponse]
+	getScopeNode        *connect.Client[v1.GetScopeNodeRequest, v1.GetScopeNodeResponse]
+	scopeAncestors      *connect.Client[v1.ScopeAncestorsRequest, v1.ScopeAncestorsResponse]
 	createScopeNode     *connect.Client[v1.CreateScopeNodeRequest, v1.CreateScopeNodeResponse]
 	ensureAxisRoot      *connect.Client[v1.EnsureAxisRootRequest, v1.EnsureAxisRootResponse]
 	moveScopeNode       *connect.Client[v1.MoveScopeNodeRequest, v1.MoveScopeNodeResponse]
@@ -923,6 +954,16 @@ func (c *scopeAdminServiceClient) CreateScopeNodeType(ctx context.Context, req *
 // ListScopeNodes calls anubis.v1.ScopeAdminService.ListScopeNodes.
 func (c *scopeAdminServiceClient) ListScopeNodes(ctx context.Context, req *connect.Request[v1.ListScopeNodesRequest]) (*connect.Response[v1.ListScopeNodesResponse], error) {
 	return c.listScopeNodes.CallUnary(ctx, req)
+}
+
+// GetScopeNode calls anubis.v1.ScopeAdminService.GetScopeNode.
+func (c *scopeAdminServiceClient) GetScopeNode(ctx context.Context, req *connect.Request[v1.GetScopeNodeRequest]) (*connect.Response[v1.GetScopeNodeResponse], error) {
+	return c.getScopeNode.CallUnary(ctx, req)
+}
+
+// ScopeAncestors calls anubis.v1.ScopeAdminService.ScopeAncestors.
+func (c *scopeAdminServiceClient) ScopeAncestors(ctx context.Context, req *connect.Request[v1.ScopeAncestorsRequest]) (*connect.Response[v1.ScopeAncestorsResponse], error) {
+	return c.scopeAncestors.CallUnary(ctx, req)
 }
 
 // CreateScopeNode calls anubis.v1.ScopeAdminService.CreateScopeNode.
@@ -981,6 +1022,12 @@ type ScopeAdminServiceHandler interface {
 	ListScopeNodeTypes(context.Context, *connect.Request[v1.ListScopeNodeTypesRequest]) (*connect.Response[v1.ListScopeNodeTypesResponse], error)
 	CreateScopeNodeType(context.Context, *connect.Request[v1.CreateScopeNodeTypeRequest]) (*connect.Response[v1.CreateScopeNodeTypeResponse], error)
 	ListScopeNodes(context.Context, *connect.Request[v1.ListScopeNodesRequest]) (*connect.Response[v1.ListScopeNodesResponse], error)
+	// GetScopeNode fetches one node. Without it the console would have to pull
+	// an entire axis to display a single selected value.
+	GetScopeNode(context.Context, *connect.Request[v1.GetScopeNodeRequest]) (*connect.Response[v1.GetScopeNodeResponse], error)
+	// ScopeAncestors is the chain from the axis root down, which is what makes
+	// a scope decision explainable rather than a bare yes or no.
+	ScopeAncestors(context.Context, *connect.Request[v1.ScopeAncestorsRequest]) (*connect.Response[v1.ScopeAncestorsResponse], error)
 	CreateScopeNode(context.Context, *connect.Request[v1.CreateScopeNodeRequest]) (*connect.Response[v1.CreateScopeNodeResponse], error)
 	EnsureAxisRoot(context.Context, *connect.Request[v1.EnsureAxisRootRequest]) (*connect.Response[v1.EnsureAxisRootResponse], error)
 	MoveScopeNode(context.Context, *connect.Request[v1.MoveScopeNodeRequest]) (*connect.Response[v1.MoveScopeNodeResponse], error)
@@ -1043,6 +1090,18 @@ func NewScopeAdminServiceHandler(svc ScopeAdminServiceHandler, opts ...connect.H
 		ScopeAdminServiceListScopeNodesProcedure,
 		svc.ListScopeNodes,
 		connect.WithSchema(scopeAdminServiceMethods.ByName("ListScopeNodes")),
+		connect.WithHandlerOptions(opts...),
+	)
+	scopeAdminServiceGetScopeNodeHandler := connect.NewUnaryHandler(
+		ScopeAdminServiceGetScopeNodeProcedure,
+		svc.GetScopeNode,
+		connect.WithSchema(scopeAdminServiceMethods.ByName("GetScopeNode")),
+		connect.WithHandlerOptions(opts...),
+	)
+	scopeAdminServiceScopeAncestorsHandler := connect.NewUnaryHandler(
+		ScopeAdminServiceScopeAncestorsProcedure,
+		svc.ScopeAncestors,
+		connect.WithSchema(scopeAdminServiceMethods.ByName("ScopeAncestors")),
 		connect.WithHandlerOptions(opts...),
 	)
 	scopeAdminServiceCreateScopeNodeHandler := connect.NewUnaryHandler(
@@ -1115,6 +1174,10 @@ func NewScopeAdminServiceHandler(svc ScopeAdminServiceHandler, opts ...connect.H
 			scopeAdminServiceCreateScopeNodeTypeHandler.ServeHTTP(w, r)
 		case ScopeAdminServiceListScopeNodesProcedure:
 			scopeAdminServiceListScopeNodesHandler.ServeHTTP(w, r)
+		case ScopeAdminServiceGetScopeNodeProcedure:
+			scopeAdminServiceGetScopeNodeHandler.ServeHTTP(w, r)
+		case ScopeAdminServiceScopeAncestorsProcedure:
+			scopeAdminServiceScopeAncestorsHandler.ServeHTTP(w, r)
 		case ScopeAdminServiceCreateScopeNodeProcedure:
 			scopeAdminServiceCreateScopeNodeHandler.ServeHTTP(w, r)
 		case ScopeAdminServiceEnsureAxisRootProcedure:
@@ -1170,6 +1233,14 @@ func (UnimplementedScopeAdminServiceHandler) ListScopeNodes(context.Context, *co
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.ScopeAdminService.ListScopeNodes is not implemented"))
 }
 
+func (UnimplementedScopeAdminServiceHandler) GetScopeNode(context.Context, *connect.Request[v1.GetScopeNodeRequest]) (*connect.Response[v1.GetScopeNodeResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.ScopeAdminService.GetScopeNode is not implemented"))
+}
+
+func (UnimplementedScopeAdminServiceHandler) ScopeAncestors(context.Context, *connect.Request[v1.ScopeAncestorsRequest]) (*connect.Response[v1.ScopeAncestorsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.ScopeAdminService.ScopeAncestors is not implemented"))
+}
+
 func (UnimplementedScopeAdminServiceHandler) CreateScopeNode(context.Context, *connect.Request[v1.CreateScopeNodeRequest]) (*connect.Response[v1.CreateScopeNodeResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.ScopeAdminService.CreateScopeNode is not implemented"))
 }
@@ -1214,6 +1285,10 @@ type AuthzAdminServiceClient interface {
 	GetRoleEffective(context.Context, *connect.Request[v1.GetRoleEffectiveRequest]) (*connect.Response[v1.GetRoleEffectiveResponse], error)
 	ListPermissions(context.Context, *connect.Request[v1.ListPermissionsRequest]) (*connect.Response[v1.ListPermissionsResponse], error)
 	ListGrants(context.Context, *connect.Request[v1.ListGrantsRequest]) (*connect.Response[v1.ListGrantsResponse], error)
+	// SearchGrants backs the Access screen. There is deliberately no
+	// "every grant": a tenant can hold hundreds of thousands, and a screen
+	// that asked for all of them would answer a question nobody can read.
+	SearchGrants(context.Context, *connect.Request[v1.SearchGrantsRequest]) (*connect.Response[v1.SearchGrantsResponse], error)
 	CreateGrant(context.Context, *connect.Request[v1.CreateGrantRequest]) (*connect.Response[v1.CreateGrantResponse], error)
 	RevokeGrant(context.Context, *connect.Request[v1.RevokeGrantRequest]) (*connect.Response[v1.RevokeGrantResponse], error)
 	ListMemberships(context.Context, *connect.Request[v1.ListMembershipsRequest]) (*connect.Response[v1.ListMembershipsResponse], error)
@@ -1272,6 +1347,12 @@ func NewAuthzAdminServiceClient(httpClient connect.HTTPClient, baseURL string, o
 			httpClient,
 			baseURL+AuthzAdminServiceListGrantsProcedure,
 			connect.WithSchema(authzAdminServiceMethods.ByName("ListGrants")),
+			connect.WithClientOptions(opts...),
+		),
+		searchGrants: connect.NewClient[v1.SearchGrantsRequest, v1.SearchGrantsResponse](
+			httpClient,
+			baseURL+AuthzAdminServiceSearchGrantsProcedure,
+			connect.WithSchema(authzAdminServiceMethods.ByName("SearchGrants")),
 			connect.WithClientOptions(opts...),
 		),
 		createGrant: connect.NewClient[v1.CreateGrantRequest, v1.CreateGrantResponse](
@@ -1339,6 +1420,7 @@ type authzAdminServiceClient struct {
 	getRoleEffective     *connect.Client[v1.GetRoleEffectiveRequest, v1.GetRoleEffectiveResponse]
 	listPermissions      *connect.Client[v1.ListPermissionsRequest, v1.ListPermissionsResponse]
 	listGrants           *connect.Client[v1.ListGrantsRequest, v1.ListGrantsResponse]
+	searchGrants         *connect.Client[v1.SearchGrantsRequest, v1.SearchGrantsResponse]
 	createGrant          *connect.Client[v1.CreateGrantRequest, v1.CreateGrantResponse]
 	revokeGrant          *connect.Client[v1.RevokeGrantRequest, v1.RevokeGrantResponse]
 	listMemberships      *connect.Client[v1.ListMembershipsRequest, v1.ListMembershipsResponse]
@@ -1378,6 +1460,11 @@ func (c *authzAdminServiceClient) ListPermissions(ctx context.Context, req *conn
 // ListGrants calls anubis.v1.AuthzAdminService.ListGrants.
 func (c *authzAdminServiceClient) ListGrants(ctx context.Context, req *connect.Request[v1.ListGrantsRequest]) (*connect.Response[v1.ListGrantsResponse], error) {
 	return c.listGrants.CallUnary(ctx, req)
+}
+
+// SearchGrants calls anubis.v1.AuthzAdminService.SearchGrants.
+func (c *authzAdminServiceClient) SearchGrants(ctx context.Context, req *connect.Request[v1.SearchGrantsRequest]) (*connect.Response[v1.SearchGrantsResponse], error) {
+	return c.searchGrants.CallUnary(ctx, req)
 }
 
 // CreateGrant calls anubis.v1.AuthzAdminService.CreateGrant.
@@ -1433,6 +1520,10 @@ type AuthzAdminServiceHandler interface {
 	GetRoleEffective(context.Context, *connect.Request[v1.GetRoleEffectiveRequest]) (*connect.Response[v1.GetRoleEffectiveResponse], error)
 	ListPermissions(context.Context, *connect.Request[v1.ListPermissionsRequest]) (*connect.Response[v1.ListPermissionsResponse], error)
 	ListGrants(context.Context, *connect.Request[v1.ListGrantsRequest]) (*connect.Response[v1.ListGrantsResponse], error)
+	// SearchGrants backs the Access screen. There is deliberately no
+	// "every grant": a tenant can hold hundreds of thousands, and a screen
+	// that asked for all of them would answer a question nobody can read.
+	SearchGrants(context.Context, *connect.Request[v1.SearchGrantsRequest]) (*connect.Response[v1.SearchGrantsResponse], error)
 	CreateGrant(context.Context, *connect.Request[v1.CreateGrantRequest]) (*connect.Response[v1.CreateGrantResponse], error)
 	RevokeGrant(context.Context, *connect.Request[v1.RevokeGrantRequest]) (*connect.Response[v1.RevokeGrantResponse], error)
 	ListMemberships(context.Context, *connect.Request[v1.ListMembershipsRequest]) (*connect.Response[v1.ListMembershipsResponse], error)
@@ -1487,6 +1578,12 @@ func NewAuthzAdminServiceHandler(svc AuthzAdminServiceHandler, opts ...connect.H
 		AuthzAdminServiceListGrantsProcedure,
 		svc.ListGrants,
 		connect.WithSchema(authzAdminServiceMethods.ByName("ListGrants")),
+		connect.WithHandlerOptions(opts...),
+	)
+	authzAdminServiceSearchGrantsHandler := connect.NewUnaryHandler(
+		AuthzAdminServiceSearchGrantsProcedure,
+		svc.SearchGrants,
+		connect.WithSchema(authzAdminServiceMethods.ByName("SearchGrants")),
 		connect.WithHandlerOptions(opts...),
 	)
 	authzAdminServiceCreateGrantHandler := connect.NewUnaryHandler(
@@ -1557,6 +1654,8 @@ func NewAuthzAdminServiceHandler(svc AuthzAdminServiceHandler, opts ...connect.H
 			authzAdminServiceListPermissionsHandler.ServeHTTP(w, r)
 		case AuthzAdminServiceListGrantsProcedure:
 			authzAdminServiceListGrantsHandler.ServeHTTP(w, r)
+		case AuthzAdminServiceSearchGrantsProcedure:
+			authzAdminServiceSearchGrantsHandler.ServeHTTP(w, r)
 		case AuthzAdminServiceCreateGrantProcedure:
 			authzAdminServiceCreateGrantHandler.ServeHTTP(w, r)
 		case AuthzAdminServiceRevokeGrantProcedure:
@@ -1608,6 +1707,10 @@ func (UnimplementedAuthzAdminServiceHandler) ListGrants(context.Context, *connec
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.AuthzAdminService.ListGrants is not implemented"))
 }
 
+func (UnimplementedAuthzAdminServiceHandler) SearchGrants(context.Context, *connect.Request[v1.SearchGrantsRequest]) (*connect.Response[v1.SearchGrantsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.AuthzAdminService.SearchGrants is not implemented"))
+}
+
 func (UnimplementedAuthzAdminServiceHandler) CreateGrant(context.Context, *connect.Request[v1.CreateGrantRequest]) (*connect.Response[v1.CreateGrantResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.AuthzAdminService.CreateGrant is not implemented"))
 }
@@ -1648,6 +1751,21 @@ func (UnimplementedAuthzAdminServiceHandler) ApplyManifest(context.Context, *con
 type TenantAdminServiceClient interface {
 	ListTenants(context.Context, *connect.Request[v1.ListTenantsRequest]) (*connect.Response[v1.ListTenantsResponse], error)
 	CreateTenant(context.Context, *connect.Request[v1.CreateTenantRequest]) (*connect.Response[v1.CreateTenantResponse], error)
+	// UpdateTenant renames. The slug is not editable: it is in URLs, tokens and
+	// every hosted page path, and changing it breaks links already in the world.
+	UpdateTenant(context.Context, *connect.Request[v1.UpdateTenantRequest]) (*connect.Response[v1.UpdateTenantResponse], error)
+	GetTenantStats(context.Context, *connect.Request[v1.GetTenantStatsRequest]) (*connect.Response[v1.GetTenantStatsResponse], error)
+	// API keys are the TENANT's machine credentials (migration 0030): a
+	// gateway asking authorize(), an integration reading the decision API.
+	// They authenticate as the tenant's system, never as any person, and are
+	// created by platform users.
+	ListApiKeys(context.Context, *connect.Request[v1.ListApiKeysRequest]) (*connect.Response[v1.ListApiKeysResponse], error)
+	CreateApiKey(context.Context, *connect.Request[v1.CreateApiKeyRequest]) (*connect.Response[v1.CreateApiKeyResponse], error)
+	RevokeApiKey(context.Context, *connect.Request[v1.RevokeApiKeyRequest]) (*connect.Response[v1.RevokeApiKeyResponse], error)
+	// SetTenantStatus suspends or retires. There is no delete — every grant,
+	// identity and audit record hangs off the tenant row, and dropping it would
+	// take the evidence with it. "archived" is what delete means here.
+	SetTenantStatus(context.Context, *connect.Request[v1.SetTenantStatusRequest]) (*connect.Response[v1.SetTenantStatusResponse], error)
 	ListRealms(context.Context, *connect.Request[v1.ListRealmsRequest]) (*connect.Response[v1.ListRealmsResponse], error)
 	CreateRealm(context.Context, *connect.Request[v1.CreateRealmRequest]) (*connect.Response[v1.CreateRealmResponse], error)
 	UpdateRealm(context.Context, *connect.Request[v1.UpdateRealmRequest]) (*connect.Response[v1.UpdateRealmResponse], error)
@@ -1706,6 +1824,42 @@ func NewTenantAdminServiceClient(httpClient connect.HTTPClient, baseURL string, 
 			httpClient,
 			baseURL+TenantAdminServiceCreateTenantProcedure,
 			connect.WithSchema(tenantAdminServiceMethods.ByName("CreateTenant")),
+			connect.WithClientOptions(opts...),
+		),
+		updateTenant: connect.NewClient[v1.UpdateTenantRequest, v1.UpdateTenantResponse](
+			httpClient,
+			baseURL+TenantAdminServiceUpdateTenantProcedure,
+			connect.WithSchema(tenantAdminServiceMethods.ByName("UpdateTenant")),
+			connect.WithClientOptions(opts...),
+		),
+		getTenantStats: connect.NewClient[v1.GetTenantStatsRequest, v1.GetTenantStatsResponse](
+			httpClient,
+			baseURL+TenantAdminServiceGetTenantStatsProcedure,
+			connect.WithSchema(tenantAdminServiceMethods.ByName("GetTenantStats")),
+			connect.WithClientOptions(opts...),
+		),
+		listApiKeys: connect.NewClient[v1.ListApiKeysRequest, v1.ListApiKeysResponse](
+			httpClient,
+			baseURL+TenantAdminServiceListApiKeysProcedure,
+			connect.WithSchema(tenantAdminServiceMethods.ByName("ListApiKeys")),
+			connect.WithClientOptions(opts...),
+		),
+		createApiKey: connect.NewClient[v1.CreateApiKeyRequest, v1.CreateApiKeyResponse](
+			httpClient,
+			baseURL+TenantAdminServiceCreateApiKeyProcedure,
+			connect.WithSchema(tenantAdminServiceMethods.ByName("CreateApiKey")),
+			connect.WithClientOptions(opts...),
+		),
+		revokeApiKey: connect.NewClient[v1.RevokeApiKeyRequest, v1.RevokeApiKeyResponse](
+			httpClient,
+			baseURL+TenantAdminServiceRevokeApiKeyProcedure,
+			connect.WithSchema(tenantAdminServiceMethods.ByName("RevokeApiKey")),
+			connect.WithClientOptions(opts...),
+		),
+		setTenantStatus: connect.NewClient[v1.SetTenantStatusRequest, v1.SetTenantStatusResponse](
+			httpClient,
+			baseURL+TenantAdminServiceSetTenantStatusProcedure,
+			connect.WithSchema(tenantAdminServiceMethods.ByName("SetTenantStatus")),
 			connect.WithClientOptions(opts...),
 		),
 		listRealms: connect.NewClient[v1.ListRealmsRequest, v1.ListRealmsResponse](
@@ -1859,6 +2013,12 @@ func NewTenantAdminServiceClient(httpClient connect.HTTPClient, baseURL string, 
 type tenantAdminServiceClient struct {
 	listTenants         *connect.Client[v1.ListTenantsRequest, v1.ListTenantsResponse]
 	createTenant        *connect.Client[v1.CreateTenantRequest, v1.CreateTenantResponse]
+	updateTenant        *connect.Client[v1.UpdateTenantRequest, v1.UpdateTenantResponse]
+	getTenantStats      *connect.Client[v1.GetTenantStatsRequest, v1.GetTenantStatsResponse]
+	listApiKeys         *connect.Client[v1.ListApiKeysRequest, v1.ListApiKeysResponse]
+	createApiKey        *connect.Client[v1.CreateApiKeyRequest, v1.CreateApiKeyResponse]
+	revokeApiKey        *connect.Client[v1.RevokeApiKeyRequest, v1.RevokeApiKeyResponse]
+	setTenantStatus     *connect.Client[v1.SetTenantStatusRequest, v1.SetTenantStatusResponse]
 	listRealms          *connect.Client[v1.ListRealmsRequest, v1.ListRealmsResponse]
 	createRealm         *connect.Client[v1.CreateRealmRequest, v1.CreateRealmResponse]
 	updateRealm         *connect.Client[v1.UpdateRealmRequest, v1.UpdateRealmResponse]
@@ -1893,6 +2053,36 @@ func (c *tenantAdminServiceClient) ListTenants(ctx context.Context, req *connect
 // CreateTenant calls anubis.v1.TenantAdminService.CreateTenant.
 func (c *tenantAdminServiceClient) CreateTenant(ctx context.Context, req *connect.Request[v1.CreateTenantRequest]) (*connect.Response[v1.CreateTenantResponse], error) {
 	return c.createTenant.CallUnary(ctx, req)
+}
+
+// UpdateTenant calls anubis.v1.TenantAdminService.UpdateTenant.
+func (c *tenantAdminServiceClient) UpdateTenant(ctx context.Context, req *connect.Request[v1.UpdateTenantRequest]) (*connect.Response[v1.UpdateTenantResponse], error) {
+	return c.updateTenant.CallUnary(ctx, req)
+}
+
+// GetTenantStats calls anubis.v1.TenantAdminService.GetTenantStats.
+func (c *tenantAdminServiceClient) GetTenantStats(ctx context.Context, req *connect.Request[v1.GetTenantStatsRequest]) (*connect.Response[v1.GetTenantStatsResponse], error) {
+	return c.getTenantStats.CallUnary(ctx, req)
+}
+
+// ListApiKeys calls anubis.v1.TenantAdminService.ListApiKeys.
+func (c *tenantAdminServiceClient) ListApiKeys(ctx context.Context, req *connect.Request[v1.ListApiKeysRequest]) (*connect.Response[v1.ListApiKeysResponse], error) {
+	return c.listApiKeys.CallUnary(ctx, req)
+}
+
+// CreateApiKey calls anubis.v1.TenantAdminService.CreateApiKey.
+func (c *tenantAdminServiceClient) CreateApiKey(ctx context.Context, req *connect.Request[v1.CreateApiKeyRequest]) (*connect.Response[v1.CreateApiKeyResponse], error) {
+	return c.createApiKey.CallUnary(ctx, req)
+}
+
+// RevokeApiKey calls anubis.v1.TenantAdminService.RevokeApiKey.
+func (c *tenantAdminServiceClient) RevokeApiKey(ctx context.Context, req *connect.Request[v1.RevokeApiKeyRequest]) (*connect.Response[v1.RevokeApiKeyResponse], error) {
+	return c.revokeApiKey.CallUnary(ctx, req)
+}
+
+// SetTenantStatus calls anubis.v1.TenantAdminService.SetTenantStatus.
+func (c *tenantAdminServiceClient) SetTenantStatus(ctx context.Context, req *connect.Request[v1.SetTenantStatusRequest]) (*connect.Response[v1.SetTenantStatusResponse], error) {
+	return c.setTenantStatus.CallUnary(ctx, req)
 }
 
 // ListRealms calls anubis.v1.TenantAdminService.ListRealms.
@@ -2019,6 +2209,21 @@ func (c *tenantAdminServiceClient) PreviewAuthPage(ctx context.Context, req *con
 type TenantAdminServiceHandler interface {
 	ListTenants(context.Context, *connect.Request[v1.ListTenantsRequest]) (*connect.Response[v1.ListTenantsResponse], error)
 	CreateTenant(context.Context, *connect.Request[v1.CreateTenantRequest]) (*connect.Response[v1.CreateTenantResponse], error)
+	// UpdateTenant renames. The slug is not editable: it is in URLs, tokens and
+	// every hosted page path, and changing it breaks links already in the world.
+	UpdateTenant(context.Context, *connect.Request[v1.UpdateTenantRequest]) (*connect.Response[v1.UpdateTenantResponse], error)
+	GetTenantStats(context.Context, *connect.Request[v1.GetTenantStatsRequest]) (*connect.Response[v1.GetTenantStatsResponse], error)
+	// API keys are the TENANT's machine credentials (migration 0030): a
+	// gateway asking authorize(), an integration reading the decision API.
+	// They authenticate as the tenant's system, never as any person, and are
+	// created by platform users.
+	ListApiKeys(context.Context, *connect.Request[v1.ListApiKeysRequest]) (*connect.Response[v1.ListApiKeysResponse], error)
+	CreateApiKey(context.Context, *connect.Request[v1.CreateApiKeyRequest]) (*connect.Response[v1.CreateApiKeyResponse], error)
+	RevokeApiKey(context.Context, *connect.Request[v1.RevokeApiKeyRequest]) (*connect.Response[v1.RevokeApiKeyResponse], error)
+	// SetTenantStatus suspends or retires. There is no delete — every grant,
+	// identity and audit record hangs off the tenant row, and dropping it would
+	// take the evidence with it. "archived" is what delete means here.
+	SetTenantStatus(context.Context, *connect.Request[v1.SetTenantStatusRequest]) (*connect.Response[v1.SetTenantStatusResponse], error)
 	ListRealms(context.Context, *connect.Request[v1.ListRealmsRequest]) (*connect.Response[v1.ListRealmsResponse], error)
 	CreateRealm(context.Context, *connect.Request[v1.CreateRealmRequest]) (*connect.Response[v1.CreateRealmResponse], error)
 	UpdateRealm(context.Context, *connect.Request[v1.UpdateRealmRequest]) (*connect.Response[v1.UpdateRealmResponse], error)
@@ -2073,6 +2278,42 @@ func NewTenantAdminServiceHandler(svc TenantAdminServiceHandler, opts ...connect
 		TenantAdminServiceCreateTenantProcedure,
 		svc.CreateTenant,
 		connect.WithSchema(tenantAdminServiceMethods.ByName("CreateTenant")),
+		connect.WithHandlerOptions(opts...),
+	)
+	tenantAdminServiceUpdateTenantHandler := connect.NewUnaryHandler(
+		TenantAdminServiceUpdateTenantProcedure,
+		svc.UpdateTenant,
+		connect.WithSchema(tenantAdminServiceMethods.ByName("UpdateTenant")),
+		connect.WithHandlerOptions(opts...),
+	)
+	tenantAdminServiceGetTenantStatsHandler := connect.NewUnaryHandler(
+		TenantAdminServiceGetTenantStatsProcedure,
+		svc.GetTenantStats,
+		connect.WithSchema(tenantAdminServiceMethods.ByName("GetTenantStats")),
+		connect.WithHandlerOptions(opts...),
+	)
+	tenantAdminServiceListApiKeysHandler := connect.NewUnaryHandler(
+		TenantAdminServiceListApiKeysProcedure,
+		svc.ListApiKeys,
+		connect.WithSchema(tenantAdminServiceMethods.ByName("ListApiKeys")),
+		connect.WithHandlerOptions(opts...),
+	)
+	tenantAdminServiceCreateApiKeyHandler := connect.NewUnaryHandler(
+		TenantAdminServiceCreateApiKeyProcedure,
+		svc.CreateApiKey,
+		connect.WithSchema(tenantAdminServiceMethods.ByName("CreateApiKey")),
+		connect.WithHandlerOptions(opts...),
+	)
+	tenantAdminServiceRevokeApiKeyHandler := connect.NewUnaryHandler(
+		TenantAdminServiceRevokeApiKeyProcedure,
+		svc.RevokeApiKey,
+		connect.WithSchema(tenantAdminServiceMethods.ByName("RevokeApiKey")),
+		connect.WithHandlerOptions(opts...),
+	)
+	tenantAdminServiceSetTenantStatusHandler := connect.NewUnaryHandler(
+		TenantAdminServiceSetTenantStatusProcedure,
+		svc.SetTenantStatus,
+		connect.WithSchema(tenantAdminServiceMethods.ByName("SetTenantStatus")),
 		connect.WithHandlerOptions(opts...),
 	)
 	tenantAdminServiceListRealmsHandler := connect.NewUnaryHandler(
@@ -2225,6 +2466,18 @@ func NewTenantAdminServiceHandler(svc TenantAdminServiceHandler, opts ...connect
 			tenantAdminServiceListTenantsHandler.ServeHTTP(w, r)
 		case TenantAdminServiceCreateTenantProcedure:
 			tenantAdminServiceCreateTenantHandler.ServeHTTP(w, r)
+		case TenantAdminServiceUpdateTenantProcedure:
+			tenantAdminServiceUpdateTenantHandler.ServeHTTP(w, r)
+		case TenantAdminServiceGetTenantStatsProcedure:
+			tenantAdminServiceGetTenantStatsHandler.ServeHTTP(w, r)
+		case TenantAdminServiceListApiKeysProcedure:
+			tenantAdminServiceListApiKeysHandler.ServeHTTP(w, r)
+		case TenantAdminServiceCreateApiKeyProcedure:
+			tenantAdminServiceCreateApiKeyHandler.ServeHTTP(w, r)
+		case TenantAdminServiceRevokeApiKeyProcedure:
+			tenantAdminServiceRevokeApiKeyHandler.ServeHTTP(w, r)
+		case TenantAdminServiceSetTenantStatusProcedure:
+			tenantAdminServiceSetTenantStatusHandler.ServeHTTP(w, r)
 		case TenantAdminServiceListRealmsProcedure:
 			tenantAdminServiceListRealmsHandler.ServeHTTP(w, r)
 		case TenantAdminServiceCreateRealmProcedure:
@@ -2288,6 +2541,30 @@ func (UnimplementedTenantAdminServiceHandler) ListTenants(context.Context, *conn
 
 func (UnimplementedTenantAdminServiceHandler) CreateTenant(context.Context, *connect.Request[v1.CreateTenantRequest]) (*connect.Response[v1.CreateTenantResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.TenantAdminService.CreateTenant is not implemented"))
+}
+
+func (UnimplementedTenantAdminServiceHandler) UpdateTenant(context.Context, *connect.Request[v1.UpdateTenantRequest]) (*connect.Response[v1.UpdateTenantResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.TenantAdminService.UpdateTenant is not implemented"))
+}
+
+func (UnimplementedTenantAdminServiceHandler) GetTenantStats(context.Context, *connect.Request[v1.GetTenantStatsRequest]) (*connect.Response[v1.GetTenantStatsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.TenantAdminService.GetTenantStats is not implemented"))
+}
+
+func (UnimplementedTenantAdminServiceHandler) ListApiKeys(context.Context, *connect.Request[v1.ListApiKeysRequest]) (*connect.Response[v1.ListApiKeysResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.TenantAdminService.ListApiKeys is not implemented"))
+}
+
+func (UnimplementedTenantAdminServiceHandler) CreateApiKey(context.Context, *connect.Request[v1.CreateApiKeyRequest]) (*connect.Response[v1.CreateApiKeyResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.TenantAdminService.CreateApiKey is not implemented"))
+}
+
+func (UnimplementedTenantAdminServiceHandler) RevokeApiKey(context.Context, *connect.Request[v1.RevokeApiKeyRequest]) (*connect.Response[v1.RevokeApiKeyResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.TenantAdminService.RevokeApiKey is not implemented"))
+}
+
+func (UnimplementedTenantAdminServiceHandler) SetTenantStatus(context.Context, *connect.Request[v1.SetTenantStatusRequest]) (*connect.Response[v1.SetTenantStatusResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.TenantAdminService.SetTenantStatus is not implemented"))
 }
 
 func (UnimplementedTenantAdminServiceHandler) ListRealms(context.Context, *connect.Request[v1.ListRealmsRequest]) (*connect.Response[v1.ListRealmsResponse], error) {
@@ -2384,4 +2661,484 @@ func (UnimplementedTenantAdminServiceHandler) SetDefaultAuthPage(context.Context
 
 func (UnimplementedTenantAdminServiceHandler) PreviewAuthPage(context.Context, *connect.Request[v1.PreviewAuthPageRequest]) (*connect.Response[v1.PreviewAuthPageResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.TenantAdminService.PreviewAuthPage is not implemented"))
+}
+
+// ProvisioningServiceClient is a client for the anubis.v1.ProvisioningService service.
+type ProvisioningServiceClient interface {
+	// DownloadImportTemplate hands out the workbook to fill in. Its columns
+	// are generated from the same schema the importer parses, so a template
+	// and the server that reads it back cannot drift apart.
+	DownloadImportTemplate(context.Context, *connect.Request[v1.DownloadImportTemplateRequest]) (*connect.Response[v1.DownloadImportTemplateResponse], error)
+	// ImportWorkbook reads a filled-in workbook. Call it with dry set first:
+	// nothing is written, and the report lists every problem in the file at
+	// once. An import applies in full or not at all.
+	ImportWorkbook(context.Context, *connect.Request[v1.ImportWorkbookRequest]) (*connect.Response[v1.ImportWorkbookResponse], error)
+}
+
+// NewProvisioningServiceClient constructs a client for the anubis.v1.ProvisioningService service.
+// By default, it uses the Connect protocol with the binary Protobuf Codec, asks for gzipped
+// responses, and sends uncompressed requests. To use the gRPC or gRPC-Web protocols, supply the
+// connect.WithGRPC() or connect.WithGRPCWeb() options.
+//
+// The URL supplied here should be the base URL for the Connect or gRPC server (for example,
+// http://api.acme.com or https://acme.com/grpc).
+func NewProvisioningServiceClient(httpClient connect.HTTPClient, baseURL string, opts ...connect.ClientOption) ProvisioningServiceClient {
+	baseURL = strings.TrimRight(baseURL, "/")
+	provisioningServiceMethods := v1.File_anubis_v1_admin_proto.Services().ByName("ProvisioningService").Methods()
+	return &provisioningServiceClient{
+		downloadImportTemplate: connect.NewClient[v1.DownloadImportTemplateRequest, v1.DownloadImportTemplateResponse](
+			httpClient,
+			baseURL+ProvisioningServiceDownloadImportTemplateProcedure,
+			connect.WithSchema(provisioningServiceMethods.ByName("DownloadImportTemplate")),
+			connect.WithClientOptions(opts...),
+		),
+		importWorkbook: connect.NewClient[v1.ImportWorkbookRequest, v1.ImportWorkbookResponse](
+			httpClient,
+			baseURL+ProvisioningServiceImportWorkbookProcedure,
+			connect.WithSchema(provisioningServiceMethods.ByName("ImportWorkbook")),
+			connect.WithClientOptions(opts...),
+		),
+	}
+}
+
+// provisioningServiceClient implements ProvisioningServiceClient.
+type provisioningServiceClient struct {
+	downloadImportTemplate *connect.Client[v1.DownloadImportTemplateRequest, v1.DownloadImportTemplateResponse]
+	importWorkbook         *connect.Client[v1.ImportWorkbookRequest, v1.ImportWorkbookResponse]
+}
+
+// DownloadImportTemplate calls anubis.v1.ProvisioningService.DownloadImportTemplate.
+func (c *provisioningServiceClient) DownloadImportTemplate(ctx context.Context, req *connect.Request[v1.DownloadImportTemplateRequest]) (*connect.Response[v1.DownloadImportTemplateResponse], error) {
+	return c.downloadImportTemplate.CallUnary(ctx, req)
+}
+
+// ImportWorkbook calls anubis.v1.ProvisioningService.ImportWorkbook.
+func (c *provisioningServiceClient) ImportWorkbook(ctx context.Context, req *connect.Request[v1.ImportWorkbookRequest]) (*connect.Response[v1.ImportWorkbookResponse], error) {
+	return c.importWorkbook.CallUnary(ctx, req)
+}
+
+// ProvisioningServiceHandler is an implementation of the anubis.v1.ProvisioningService service.
+type ProvisioningServiceHandler interface {
+	// DownloadImportTemplate hands out the workbook to fill in. Its columns
+	// are generated from the same schema the importer parses, so a template
+	// and the server that reads it back cannot drift apart.
+	DownloadImportTemplate(context.Context, *connect.Request[v1.DownloadImportTemplateRequest]) (*connect.Response[v1.DownloadImportTemplateResponse], error)
+	// ImportWorkbook reads a filled-in workbook. Call it with dry set first:
+	// nothing is written, and the report lists every problem in the file at
+	// once. An import applies in full or not at all.
+	ImportWorkbook(context.Context, *connect.Request[v1.ImportWorkbookRequest]) (*connect.Response[v1.ImportWorkbookResponse], error)
+}
+
+// NewProvisioningServiceHandler builds an HTTP handler from the service implementation. It returns
+// the path on which to mount the handler and the handler itself.
+//
+// By default, handlers support the Connect, gRPC, and gRPC-Web protocols with the binary Protobuf
+// and JSON codecs. They also support gzip compression.
+func NewProvisioningServiceHandler(svc ProvisioningServiceHandler, opts ...connect.HandlerOption) (string, http.Handler) {
+	provisioningServiceMethods := v1.File_anubis_v1_admin_proto.Services().ByName("ProvisioningService").Methods()
+	provisioningServiceDownloadImportTemplateHandler := connect.NewUnaryHandler(
+		ProvisioningServiceDownloadImportTemplateProcedure,
+		svc.DownloadImportTemplate,
+		connect.WithSchema(provisioningServiceMethods.ByName("DownloadImportTemplate")),
+		connect.WithHandlerOptions(opts...),
+	)
+	provisioningServiceImportWorkbookHandler := connect.NewUnaryHandler(
+		ProvisioningServiceImportWorkbookProcedure,
+		svc.ImportWorkbook,
+		connect.WithSchema(provisioningServiceMethods.ByName("ImportWorkbook")),
+		connect.WithHandlerOptions(opts...),
+	)
+	return "/anubis.v1.ProvisioningService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case ProvisioningServiceDownloadImportTemplateProcedure:
+			provisioningServiceDownloadImportTemplateHandler.ServeHTTP(w, r)
+		case ProvisioningServiceImportWorkbookProcedure:
+			provisioningServiceImportWorkbookHandler.ServeHTTP(w, r)
+		default:
+			http.NotFound(w, r)
+		}
+	})
+}
+
+// UnimplementedProvisioningServiceHandler returns CodeUnimplemented from all methods.
+type UnimplementedProvisioningServiceHandler struct{}
+
+func (UnimplementedProvisioningServiceHandler) DownloadImportTemplate(context.Context, *connect.Request[v1.DownloadImportTemplateRequest]) (*connect.Response[v1.DownloadImportTemplateResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.ProvisioningService.DownloadImportTemplate is not implemented"))
+}
+
+func (UnimplementedProvisioningServiceHandler) ImportWorkbook(context.Context, *connect.Request[v1.ImportWorkbookRequest]) (*connect.Response[v1.ImportWorkbookResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.ProvisioningService.ImportWorkbook is not implemented"))
+}
+
+// PlatformAdminServiceClient is a client for the anubis.v1.PlatformAdminService service.
+type PlatformAdminServiceClient interface {
+	// ListOperators is everyone who can administer this installation, with the
+	// assignments that say where.
+	ListOperators(context.Context, *connect.Request[v1.ListOperatorsRequest]) (*connect.Response[v1.ListOperatorsResponse], error)
+	// CreateOperator adds a platform administrator: an account in the platform
+	// tenant, which is a separate population from any tenant's own people.
+	CreateOperator(context.Context, *connect.Request[v1.CreateOperatorRequest]) (*connect.Response[v1.CreateOperatorResponse], error)
+	// AssignOperator gives an operator authority over one tenant, or over every
+	// tenant when tenant_slug is empty.
+	AssignOperator(context.Context, *connect.Request[v1.AssignOperatorRequest]) (*connect.Response[v1.AssignOperatorResponse], error)
+	RevokeAssignment(context.Context, *connect.Request[v1.RevokeAssignmentRequest]) (*connect.Response[v1.RevokeAssignmentResponse], error)
+	// SetOperatorStatus disables or restores a platform user. Disabling takes
+	// effect on their live tokens, not when those tokens expire.
+	SetOperatorStatus(context.Context, *connect.Request[v1.SetOperatorStatusRequest]) (*connect.Response[v1.SetOperatorStatusResponse], error)
+}
+
+// NewPlatformAdminServiceClient constructs a client for the anubis.v1.PlatformAdminService service.
+// By default, it uses the Connect protocol with the binary Protobuf Codec, asks for gzipped
+// responses, and sends uncompressed requests. To use the gRPC or gRPC-Web protocols, supply the
+// connect.WithGRPC() or connect.WithGRPCWeb() options.
+//
+// The URL supplied here should be the base URL for the Connect or gRPC server (for example,
+// http://api.acme.com or https://acme.com/grpc).
+func NewPlatformAdminServiceClient(httpClient connect.HTTPClient, baseURL string, opts ...connect.ClientOption) PlatformAdminServiceClient {
+	baseURL = strings.TrimRight(baseURL, "/")
+	platformAdminServiceMethods := v1.File_anubis_v1_admin_proto.Services().ByName("PlatformAdminService").Methods()
+	return &platformAdminServiceClient{
+		listOperators: connect.NewClient[v1.ListOperatorsRequest, v1.ListOperatorsResponse](
+			httpClient,
+			baseURL+PlatformAdminServiceListOperatorsProcedure,
+			connect.WithSchema(platformAdminServiceMethods.ByName("ListOperators")),
+			connect.WithClientOptions(opts...),
+		),
+		createOperator: connect.NewClient[v1.CreateOperatorRequest, v1.CreateOperatorResponse](
+			httpClient,
+			baseURL+PlatformAdminServiceCreateOperatorProcedure,
+			connect.WithSchema(platformAdminServiceMethods.ByName("CreateOperator")),
+			connect.WithClientOptions(opts...),
+		),
+		assignOperator: connect.NewClient[v1.AssignOperatorRequest, v1.AssignOperatorResponse](
+			httpClient,
+			baseURL+PlatformAdminServiceAssignOperatorProcedure,
+			connect.WithSchema(platformAdminServiceMethods.ByName("AssignOperator")),
+			connect.WithClientOptions(opts...),
+		),
+		revokeAssignment: connect.NewClient[v1.RevokeAssignmentRequest, v1.RevokeAssignmentResponse](
+			httpClient,
+			baseURL+PlatformAdminServiceRevokeAssignmentProcedure,
+			connect.WithSchema(platformAdminServiceMethods.ByName("RevokeAssignment")),
+			connect.WithClientOptions(opts...),
+		),
+		setOperatorStatus: connect.NewClient[v1.SetOperatorStatusRequest, v1.SetOperatorStatusResponse](
+			httpClient,
+			baseURL+PlatformAdminServiceSetOperatorStatusProcedure,
+			connect.WithSchema(platformAdminServiceMethods.ByName("SetOperatorStatus")),
+			connect.WithClientOptions(opts...),
+		),
+	}
+}
+
+// platformAdminServiceClient implements PlatformAdminServiceClient.
+type platformAdminServiceClient struct {
+	listOperators     *connect.Client[v1.ListOperatorsRequest, v1.ListOperatorsResponse]
+	createOperator    *connect.Client[v1.CreateOperatorRequest, v1.CreateOperatorResponse]
+	assignOperator    *connect.Client[v1.AssignOperatorRequest, v1.AssignOperatorResponse]
+	revokeAssignment  *connect.Client[v1.RevokeAssignmentRequest, v1.RevokeAssignmentResponse]
+	setOperatorStatus *connect.Client[v1.SetOperatorStatusRequest, v1.SetOperatorStatusResponse]
+}
+
+// ListOperators calls anubis.v1.PlatformAdminService.ListOperators.
+func (c *platformAdminServiceClient) ListOperators(ctx context.Context, req *connect.Request[v1.ListOperatorsRequest]) (*connect.Response[v1.ListOperatorsResponse], error) {
+	return c.listOperators.CallUnary(ctx, req)
+}
+
+// CreateOperator calls anubis.v1.PlatformAdminService.CreateOperator.
+func (c *platformAdminServiceClient) CreateOperator(ctx context.Context, req *connect.Request[v1.CreateOperatorRequest]) (*connect.Response[v1.CreateOperatorResponse], error) {
+	return c.createOperator.CallUnary(ctx, req)
+}
+
+// AssignOperator calls anubis.v1.PlatformAdminService.AssignOperator.
+func (c *platformAdminServiceClient) AssignOperator(ctx context.Context, req *connect.Request[v1.AssignOperatorRequest]) (*connect.Response[v1.AssignOperatorResponse], error) {
+	return c.assignOperator.CallUnary(ctx, req)
+}
+
+// RevokeAssignment calls anubis.v1.PlatformAdminService.RevokeAssignment.
+func (c *platformAdminServiceClient) RevokeAssignment(ctx context.Context, req *connect.Request[v1.RevokeAssignmentRequest]) (*connect.Response[v1.RevokeAssignmentResponse], error) {
+	return c.revokeAssignment.CallUnary(ctx, req)
+}
+
+// SetOperatorStatus calls anubis.v1.PlatformAdminService.SetOperatorStatus.
+func (c *platformAdminServiceClient) SetOperatorStatus(ctx context.Context, req *connect.Request[v1.SetOperatorStatusRequest]) (*connect.Response[v1.SetOperatorStatusResponse], error) {
+	return c.setOperatorStatus.CallUnary(ctx, req)
+}
+
+// PlatformAdminServiceHandler is an implementation of the anubis.v1.PlatformAdminService service.
+type PlatformAdminServiceHandler interface {
+	// ListOperators is everyone who can administer this installation, with the
+	// assignments that say where.
+	ListOperators(context.Context, *connect.Request[v1.ListOperatorsRequest]) (*connect.Response[v1.ListOperatorsResponse], error)
+	// CreateOperator adds a platform administrator: an account in the platform
+	// tenant, which is a separate population from any tenant's own people.
+	CreateOperator(context.Context, *connect.Request[v1.CreateOperatorRequest]) (*connect.Response[v1.CreateOperatorResponse], error)
+	// AssignOperator gives an operator authority over one tenant, or over every
+	// tenant when tenant_slug is empty.
+	AssignOperator(context.Context, *connect.Request[v1.AssignOperatorRequest]) (*connect.Response[v1.AssignOperatorResponse], error)
+	RevokeAssignment(context.Context, *connect.Request[v1.RevokeAssignmentRequest]) (*connect.Response[v1.RevokeAssignmentResponse], error)
+	// SetOperatorStatus disables or restores a platform user. Disabling takes
+	// effect on their live tokens, not when those tokens expire.
+	SetOperatorStatus(context.Context, *connect.Request[v1.SetOperatorStatusRequest]) (*connect.Response[v1.SetOperatorStatusResponse], error)
+}
+
+// NewPlatformAdminServiceHandler builds an HTTP handler from the service implementation. It returns
+// the path on which to mount the handler and the handler itself.
+//
+// By default, handlers support the Connect, gRPC, and gRPC-Web protocols with the binary Protobuf
+// and JSON codecs. They also support gzip compression.
+func NewPlatformAdminServiceHandler(svc PlatformAdminServiceHandler, opts ...connect.HandlerOption) (string, http.Handler) {
+	platformAdminServiceMethods := v1.File_anubis_v1_admin_proto.Services().ByName("PlatformAdminService").Methods()
+	platformAdminServiceListOperatorsHandler := connect.NewUnaryHandler(
+		PlatformAdminServiceListOperatorsProcedure,
+		svc.ListOperators,
+		connect.WithSchema(platformAdminServiceMethods.ByName("ListOperators")),
+		connect.WithHandlerOptions(opts...),
+	)
+	platformAdminServiceCreateOperatorHandler := connect.NewUnaryHandler(
+		PlatformAdminServiceCreateOperatorProcedure,
+		svc.CreateOperator,
+		connect.WithSchema(platformAdminServiceMethods.ByName("CreateOperator")),
+		connect.WithHandlerOptions(opts...),
+	)
+	platformAdminServiceAssignOperatorHandler := connect.NewUnaryHandler(
+		PlatformAdminServiceAssignOperatorProcedure,
+		svc.AssignOperator,
+		connect.WithSchema(platformAdminServiceMethods.ByName("AssignOperator")),
+		connect.WithHandlerOptions(opts...),
+	)
+	platformAdminServiceRevokeAssignmentHandler := connect.NewUnaryHandler(
+		PlatformAdminServiceRevokeAssignmentProcedure,
+		svc.RevokeAssignment,
+		connect.WithSchema(platformAdminServiceMethods.ByName("RevokeAssignment")),
+		connect.WithHandlerOptions(opts...),
+	)
+	platformAdminServiceSetOperatorStatusHandler := connect.NewUnaryHandler(
+		PlatformAdminServiceSetOperatorStatusProcedure,
+		svc.SetOperatorStatus,
+		connect.WithSchema(platformAdminServiceMethods.ByName("SetOperatorStatus")),
+		connect.WithHandlerOptions(opts...),
+	)
+	return "/anubis.v1.PlatformAdminService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case PlatformAdminServiceListOperatorsProcedure:
+			platformAdminServiceListOperatorsHandler.ServeHTTP(w, r)
+		case PlatformAdminServiceCreateOperatorProcedure:
+			platformAdminServiceCreateOperatorHandler.ServeHTTP(w, r)
+		case PlatformAdminServiceAssignOperatorProcedure:
+			platformAdminServiceAssignOperatorHandler.ServeHTTP(w, r)
+		case PlatformAdminServiceRevokeAssignmentProcedure:
+			platformAdminServiceRevokeAssignmentHandler.ServeHTTP(w, r)
+		case PlatformAdminServiceSetOperatorStatusProcedure:
+			platformAdminServiceSetOperatorStatusHandler.ServeHTTP(w, r)
+		default:
+			http.NotFound(w, r)
+		}
+	})
+}
+
+// UnimplementedPlatformAdminServiceHandler returns CodeUnimplemented from all methods.
+type UnimplementedPlatformAdminServiceHandler struct{}
+
+func (UnimplementedPlatformAdminServiceHandler) ListOperators(context.Context, *connect.Request[v1.ListOperatorsRequest]) (*connect.Response[v1.ListOperatorsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.PlatformAdminService.ListOperators is not implemented"))
+}
+
+func (UnimplementedPlatformAdminServiceHandler) CreateOperator(context.Context, *connect.Request[v1.CreateOperatorRequest]) (*connect.Response[v1.CreateOperatorResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.PlatformAdminService.CreateOperator is not implemented"))
+}
+
+func (UnimplementedPlatformAdminServiceHandler) AssignOperator(context.Context, *connect.Request[v1.AssignOperatorRequest]) (*connect.Response[v1.AssignOperatorResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.PlatformAdminService.AssignOperator is not implemented"))
+}
+
+func (UnimplementedPlatformAdminServiceHandler) RevokeAssignment(context.Context, *connect.Request[v1.RevokeAssignmentRequest]) (*connect.Response[v1.RevokeAssignmentResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.PlatformAdminService.RevokeAssignment is not implemented"))
+}
+
+func (UnimplementedPlatformAdminServiceHandler) SetOperatorStatus(context.Context, *connect.Request[v1.SetOperatorStatusRequest]) (*connect.Response[v1.SetOperatorStatusResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.PlatformAdminService.SetOperatorStatus is not implemented"))
+}
+
+// PlatformAuthServiceClient is a client for the anubis.v1.PlatformAuthService service.
+type PlatformAuthServiceClient interface {
+	PlatformLogin(context.Context, *connect.Request[v1.PlatformLoginRequest]) (*connect.Response[v1.PlatformLoginResponse], error)
+	// PlatformVerifyMfa completes a challenge. A password alone is not a
+	// session for an operator who has enrolled a second factor.
+	PlatformVerifyMfa(context.Context, *connect.Request[v1.PlatformVerifyMfaRequest]) (*connect.Response[v1.PlatformVerifyMfaResponse], error)
+	// BeginTotpEnrolment issues a secret. Nothing is demanded until confirmed.
+	BeginTotpEnrolment(context.Context, *connect.Request[v1.BeginTotpEnrolmentRequest]) (*connect.Response[v1.BeginTotpEnrolmentResponse], error)
+	ConfirmTotpEnrolment(context.Context, *connect.Request[v1.ConfirmTotpEnrolmentRequest]) (*connect.Response[v1.ConfirmTotpEnrolmentResponse], error)
+	// MyTenants is which tenants this operator may administer.
+	MyTenants(context.Context, *connect.Request[v1.MyTenantsRequest]) (*connect.Response[v1.MyTenantsResponse], error)
+}
+
+// NewPlatformAuthServiceClient constructs a client for the anubis.v1.PlatformAuthService service.
+// By default, it uses the Connect protocol with the binary Protobuf Codec, asks for gzipped
+// responses, and sends uncompressed requests. To use the gRPC or gRPC-Web protocols, supply the
+// connect.WithGRPC() or connect.WithGRPCWeb() options.
+//
+// The URL supplied here should be the base URL for the Connect or gRPC server (for example,
+// http://api.acme.com or https://acme.com/grpc).
+func NewPlatformAuthServiceClient(httpClient connect.HTTPClient, baseURL string, opts ...connect.ClientOption) PlatformAuthServiceClient {
+	baseURL = strings.TrimRight(baseURL, "/")
+	platformAuthServiceMethods := v1.File_anubis_v1_admin_proto.Services().ByName("PlatformAuthService").Methods()
+	return &platformAuthServiceClient{
+		platformLogin: connect.NewClient[v1.PlatformLoginRequest, v1.PlatformLoginResponse](
+			httpClient,
+			baseURL+PlatformAuthServicePlatformLoginProcedure,
+			connect.WithSchema(platformAuthServiceMethods.ByName("PlatformLogin")),
+			connect.WithClientOptions(opts...),
+		),
+		platformVerifyMfa: connect.NewClient[v1.PlatformVerifyMfaRequest, v1.PlatformVerifyMfaResponse](
+			httpClient,
+			baseURL+PlatformAuthServicePlatformVerifyMfaProcedure,
+			connect.WithSchema(platformAuthServiceMethods.ByName("PlatformVerifyMfa")),
+			connect.WithClientOptions(opts...),
+		),
+		beginTotpEnrolment: connect.NewClient[v1.BeginTotpEnrolmentRequest, v1.BeginTotpEnrolmentResponse](
+			httpClient,
+			baseURL+PlatformAuthServiceBeginTotpEnrolmentProcedure,
+			connect.WithSchema(platformAuthServiceMethods.ByName("BeginTotpEnrolment")),
+			connect.WithClientOptions(opts...),
+		),
+		confirmTotpEnrolment: connect.NewClient[v1.ConfirmTotpEnrolmentRequest, v1.ConfirmTotpEnrolmentResponse](
+			httpClient,
+			baseURL+PlatformAuthServiceConfirmTotpEnrolmentProcedure,
+			connect.WithSchema(platformAuthServiceMethods.ByName("ConfirmTotpEnrolment")),
+			connect.WithClientOptions(opts...),
+		),
+		myTenants: connect.NewClient[v1.MyTenantsRequest, v1.MyTenantsResponse](
+			httpClient,
+			baseURL+PlatformAuthServiceMyTenantsProcedure,
+			connect.WithSchema(platformAuthServiceMethods.ByName("MyTenants")),
+			connect.WithClientOptions(opts...),
+		),
+	}
+}
+
+// platformAuthServiceClient implements PlatformAuthServiceClient.
+type platformAuthServiceClient struct {
+	platformLogin        *connect.Client[v1.PlatformLoginRequest, v1.PlatformLoginResponse]
+	platformVerifyMfa    *connect.Client[v1.PlatformVerifyMfaRequest, v1.PlatformVerifyMfaResponse]
+	beginTotpEnrolment   *connect.Client[v1.BeginTotpEnrolmentRequest, v1.BeginTotpEnrolmentResponse]
+	confirmTotpEnrolment *connect.Client[v1.ConfirmTotpEnrolmentRequest, v1.ConfirmTotpEnrolmentResponse]
+	myTenants            *connect.Client[v1.MyTenantsRequest, v1.MyTenantsResponse]
+}
+
+// PlatformLogin calls anubis.v1.PlatformAuthService.PlatformLogin.
+func (c *platformAuthServiceClient) PlatformLogin(ctx context.Context, req *connect.Request[v1.PlatformLoginRequest]) (*connect.Response[v1.PlatformLoginResponse], error) {
+	return c.platformLogin.CallUnary(ctx, req)
+}
+
+// PlatformVerifyMfa calls anubis.v1.PlatformAuthService.PlatformVerifyMfa.
+func (c *platformAuthServiceClient) PlatformVerifyMfa(ctx context.Context, req *connect.Request[v1.PlatformVerifyMfaRequest]) (*connect.Response[v1.PlatformVerifyMfaResponse], error) {
+	return c.platformVerifyMfa.CallUnary(ctx, req)
+}
+
+// BeginTotpEnrolment calls anubis.v1.PlatformAuthService.BeginTotpEnrolment.
+func (c *platformAuthServiceClient) BeginTotpEnrolment(ctx context.Context, req *connect.Request[v1.BeginTotpEnrolmentRequest]) (*connect.Response[v1.BeginTotpEnrolmentResponse], error) {
+	return c.beginTotpEnrolment.CallUnary(ctx, req)
+}
+
+// ConfirmTotpEnrolment calls anubis.v1.PlatformAuthService.ConfirmTotpEnrolment.
+func (c *platformAuthServiceClient) ConfirmTotpEnrolment(ctx context.Context, req *connect.Request[v1.ConfirmTotpEnrolmentRequest]) (*connect.Response[v1.ConfirmTotpEnrolmentResponse], error) {
+	return c.confirmTotpEnrolment.CallUnary(ctx, req)
+}
+
+// MyTenants calls anubis.v1.PlatformAuthService.MyTenants.
+func (c *platformAuthServiceClient) MyTenants(ctx context.Context, req *connect.Request[v1.MyTenantsRequest]) (*connect.Response[v1.MyTenantsResponse], error) {
+	return c.myTenants.CallUnary(ctx, req)
+}
+
+// PlatformAuthServiceHandler is an implementation of the anubis.v1.PlatformAuthService service.
+type PlatformAuthServiceHandler interface {
+	PlatformLogin(context.Context, *connect.Request[v1.PlatformLoginRequest]) (*connect.Response[v1.PlatformLoginResponse], error)
+	// PlatformVerifyMfa completes a challenge. A password alone is not a
+	// session for an operator who has enrolled a second factor.
+	PlatformVerifyMfa(context.Context, *connect.Request[v1.PlatformVerifyMfaRequest]) (*connect.Response[v1.PlatformVerifyMfaResponse], error)
+	// BeginTotpEnrolment issues a secret. Nothing is demanded until confirmed.
+	BeginTotpEnrolment(context.Context, *connect.Request[v1.BeginTotpEnrolmentRequest]) (*connect.Response[v1.BeginTotpEnrolmentResponse], error)
+	ConfirmTotpEnrolment(context.Context, *connect.Request[v1.ConfirmTotpEnrolmentRequest]) (*connect.Response[v1.ConfirmTotpEnrolmentResponse], error)
+	// MyTenants is which tenants this operator may administer.
+	MyTenants(context.Context, *connect.Request[v1.MyTenantsRequest]) (*connect.Response[v1.MyTenantsResponse], error)
+}
+
+// NewPlatformAuthServiceHandler builds an HTTP handler from the service implementation. It returns
+// the path on which to mount the handler and the handler itself.
+//
+// By default, handlers support the Connect, gRPC, and gRPC-Web protocols with the binary Protobuf
+// and JSON codecs. They also support gzip compression.
+func NewPlatformAuthServiceHandler(svc PlatformAuthServiceHandler, opts ...connect.HandlerOption) (string, http.Handler) {
+	platformAuthServiceMethods := v1.File_anubis_v1_admin_proto.Services().ByName("PlatformAuthService").Methods()
+	platformAuthServicePlatformLoginHandler := connect.NewUnaryHandler(
+		PlatformAuthServicePlatformLoginProcedure,
+		svc.PlatformLogin,
+		connect.WithSchema(platformAuthServiceMethods.ByName("PlatformLogin")),
+		connect.WithHandlerOptions(opts...),
+	)
+	platformAuthServicePlatformVerifyMfaHandler := connect.NewUnaryHandler(
+		PlatformAuthServicePlatformVerifyMfaProcedure,
+		svc.PlatformVerifyMfa,
+		connect.WithSchema(platformAuthServiceMethods.ByName("PlatformVerifyMfa")),
+		connect.WithHandlerOptions(opts...),
+	)
+	platformAuthServiceBeginTotpEnrolmentHandler := connect.NewUnaryHandler(
+		PlatformAuthServiceBeginTotpEnrolmentProcedure,
+		svc.BeginTotpEnrolment,
+		connect.WithSchema(platformAuthServiceMethods.ByName("BeginTotpEnrolment")),
+		connect.WithHandlerOptions(opts...),
+	)
+	platformAuthServiceConfirmTotpEnrolmentHandler := connect.NewUnaryHandler(
+		PlatformAuthServiceConfirmTotpEnrolmentProcedure,
+		svc.ConfirmTotpEnrolment,
+		connect.WithSchema(platformAuthServiceMethods.ByName("ConfirmTotpEnrolment")),
+		connect.WithHandlerOptions(opts...),
+	)
+	platformAuthServiceMyTenantsHandler := connect.NewUnaryHandler(
+		PlatformAuthServiceMyTenantsProcedure,
+		svc.MyTenants,
+		connect.WithSchema(platformAuthServiceMethods.ByName("MyTenants")),
+		connect.WithHandlerOptions(opts...),
+	)
+	return "/anubis.v1.PlatformAuthService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case PlatformAuthServicePlatformLoginProcedure:
+			platformAuthServicePlatformLoginHandler.ServeHTTP(w, r)
+		case PlatformAuthServicePlatformVerifyMfaProcedure:
+			platformAuthServicePlatformVerifyMfaHandler.ServeHTTP(w, r)
+		case PlatformAuthServiceBeginTotpEnrolmentProcedure:
+			platformAuthServiceBeginTotpEnrolmentHandler.ServeHTTP(w, r)
+		case PlatformAuthServiceConfirmTotpEnrolmentProcedure:
+			platformAuthServiceConfirmTotpEnrolmentHandler.ServeHTTP(w, r)
+		case PlatformAuthServiceMyTenantsProcedure:
+			platformAuthServiceMyTenantsHandler.ServeHTTP(w, r)
+		default:
+			http.NotFound(w, r)
+		}
+	})
+}
+
+// UnimplementedPlatformAuthServiceHandler returns CodeUnimplemented from all methods.
+type UnimplementedPlatformAuthServiceHandler struct{}
+
+func (UnimplementedPlatformAuthServiceHandler) PlatformLogin(context.Context, *connect.Request[v1.PlatformLoginRequest]) (*connect.Response[v1.PlatformLoginResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.PlatformAuthService.PlatformLogin is not implemented"))
+}
+
+func (UnimplementedPlatformAuthServiceHandler) PlatformVerifyMfa(context.Context, *connect.Request[v1.PlatformVerifyMfaRequest]) (*connect.Response[v1.PlatformVerifyMfaResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.PlatformAuthService.PlatformVerifyMfa is not implemented"))
+}
+
+func (UnimplementedPlatformAuthServiceHandler) BeginTotpEnrolment(context.Context, *connect.Request[v1.BeginTotpEnrolmentRequest]) (*connect.Response[v1.BeginTotpEnrolmentResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.PlatformAuthService.BeginTotpEnrolment is not implemented"))
+}
+
+func (UnimplementedPlatformAuthServiceHandler) ConfirmTotpEnrolment(context.Context, *connect.Request[v1.ConfirmTotpEnrolmentRequest]) (*connect.Response[v1.ConfirmTotpEnrolmentResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.PlatformAuthService.ConfirmTotpEnrolment is not implemented"))
+}
+
+func (UnimplementedPlatformAuthServiceHandler) MyTenants(context.Context, *connect.Request[v1.MyTenantsRequest]) (*connect.Response[v1.MyTenantsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.PlatformAuthService.MyTenants is not implemented"))
 }

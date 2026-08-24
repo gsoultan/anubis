@@ -16,6 +16,17 @@ import (
 type TenantOpsUsecase interface {
 	ListTenants(ctx context.Context) ([]tenancydomain.TenantRef, error)
 	CreateTenant(ctx context.Context, slug, name string) (*tenancydomain.TenantRef, error)
+	UpdateTenant(ctx context.Context, id, name string) error
+	// SetTenantStatus is how a tenant is suspended or retired; "archived" is
+	// what deleting one means, because the row is what every record in the
+	// installation hangs off.
+	SetTenantStatus(ctx context.Context, id, status string) error
+	TenantStats(ctx context.Context, id string) (*tenancydomain.TenantStats, error)
+	// API keys are the TENANT's machine credentials: they authenticate as
+	// the tenant's system, never as any person (migration 0030).
+	ListAPIKeys(ctx context.Context) ([]authdomain.APIKeyRecord, error)
+	CreateAPIKey(ctx context.Context, label string, expiresAt int64) (fullKey, prefix, id string, err error)
+	RevokeAPIKey(ctx context.Context, id string) error
 }
 
 type RealmAdminUsecase interface {
@@ -27,7 +38,10 @@ type RealmAdminUsecase interface {
 }
 
 type ApplicationAdminUsecase interface {
-	ListApplications(ctx context.Context) ([]tenancydomain.ApplicationRecord, error)
+	// ListApplications is one page of the TENANT's relying parties. Anubis's
+	// own applications are not among them: they own the permission catalog
+	// and are nothing a tenant's people sign in to.
+	ListApplications(ctx context.Context, query, cursor string, pageSize int) ([]tenancydomain.ApplicationRecord, int, error)
 	CreateApplication(ctx context.Context, a tenancydomain.ApplicationRecord) (*tenancydomain.ApplicationRecord, string, error)
 	UpdateApplication(ctx context.Context, a tenancydomain.ApplicationRecord) (*tenancydomain.ApplicationRecord, error)
 	RotateClientSecret(ctx context.Context, applicationID string) (string, error)

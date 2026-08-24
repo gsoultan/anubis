@@ -35,15 +35,6 @@ UPDATE credentials SET revoked_at = now(), updated_at = now()
 WHERE identity_id = sqlc.arg(identity_id) AND kind = sqlc.arg(kind)
   AND revoked_at IS NULL;
 
--- name: GetCredentialByLookup :one
--- API-key auth: one index probe on credentials_lookup, never a scan.
-SELECT c.id, c.identity_id, c.tenant_id, c.secret, c.expires_at,
-       i.status AS identity_status, i.token_epoch,
-       i.disabled_at, i.anonymized_at
-FROM credentials c
-JOIN identities i ON i.id = c.identity_id AND i.tenant_id = c.tenant_id
-WHERE c.lookup_key = sqlc.arg(lookup_key) AND c.revoked_at IS NULL;
-
 -- name: TouchCredentialUsed :exec
 UPDATE credentials
 SET last_used_at = now(),

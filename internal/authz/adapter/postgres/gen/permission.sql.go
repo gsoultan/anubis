@@ -78,6 +78,7 @@ type ListPermissionsRow struct {
 	DeprecatedAt *time.Time
 }
 
+// ListPermissions is the TENANT's catalog: what its own applications define.
 func (q *Queries) ListPermissions(ctx context.Context, arg ListPermissionsParams) ([]ListPermissionsRow, error) {
 	rows, err := q.db.Query(ctx, listPermissions, arg.TenantID, arg.ApplicationID, arg.IncludeDeprecated)
 	if err != nil {

@@ -112,3 +112,31 @@ func (s *Repository) RenameScopeNode(ctx context.Context, tenantID, id, name str
 	}
 	return nil
 }
+
+// ScopeAncestors is the chain from the axis root down to a node.
+func (s *Repository) ScopeAncestors(ctx context.Context, nodeID string) ([]scopedomain.ScopeAncestor, error) {
+	rows, err := s.q(ctx).ScopeAncestors(ctx, nodeID)
+	if err != nil {
+		return nil, database.MapErr(err)
+	}
+	out := make([]scopedomain.ScopeAncestor, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, scopedomain.ScopeAncestor{
+			Depth: int(r.Depth),
+			Node: scopedomain.ScopeNodeRecord{
+				ID: r.ID, Axis: r.AxisCode, NodeType: r.NodeType,
+				Slug: r.Slug, Name: r.Name, Status: r.Status,
+				IsAxisRoot: r.IsAxisRoot,
+				ParentID:   derefStr(r.ParentID), ExternalRef: derefStr(r.ExternalRef),
+			},
+		})
+	}
+	return out, nil
+}
+
+func derefStr(p *string) string {
+	if p == nil {
+		return ""
+	}
+	return *p
+}

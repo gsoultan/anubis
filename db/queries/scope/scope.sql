@@ -110,3 +110,15 @@ INSERT INTO scope_sync_sources (tenant_id, axis_code, kind, config)
 VALUES (sqlc.arg(tenant_id), sqlc.arg(axis_code), sqlc.arg(kind),
         sqlc.arg(config)::jsonb)
 RETURNING id;
+
+-- ScopeAncestors is the chain from an axis root down to a node, which is what
+-- makes a scope decision explainable: "this grant reaches here BECAUSE it was
+-- given on that ancestor". Read from the closure table, so it costs one index
+-- scan rather than a recursive walk.
+-- name: ScopeAncestors :many
+SELECT n.id, n.axis_code, n.node_type, n.parent_id, n.slug, n.name,
+       n.external_ref, n.status, n.is_axis_root, c.depth
+  FROM scope_closure c
+  JOIN scope_nodes n ON n.id = c.ancestor_id
+ WHERE c.descendant_id = sqlc.arg(node_id)
+ ORDER BY c.depth DESC;

@@ -89,8 +89,30 @@ func Load() (*Config, error) {
 	if c.MaxConns < 2 {
 		c.MaxConns = 2
 	}
+	// The installer writes config.yaml; the environment still wins, so a
+	// container that sets ANUBIS_DB_URL keeps behaving exactly as before and
+	// nothing here changes for deployments that never run the installer.
 	if c.DatabaseURL == "" {
-		return nil, errors.New("config: ANUBIS_DB_URL is required")
+		if key, kerr := MasterKey(); kerr == nil {
+			if fc, ferr := LoadFile(ConfigPath(), key); ferr == nil {
+				c.DatabaseURL = fc.DatabaseURL()
+				if os.Getenv("ANUBIS_LISTEN") == "" && fc.Listen != "" {
+					c.Listen = fc.Listen
+				}
+				if os.Getenv("ANUBIS_ISSUER") == "" && fc.Issuer != "" {
+					c.Issuer = fc.Issuer
+				}
+				if os.Getenv("ANUBIS_UI_ORIGIN") == "" && fc.UIOrigin != "" {
+					c.UIOrigin = fc.UIOrigin
+				}
+			} else {
+				return nil, ferr
+			}
+		}
+	}
+
+	if c.DatabaseURL == "" {
+		return nil, errors.New("config: no database configured — set ANUBIS_DB_URL, or run the installer to write " + ConfigPath())
 	}
 	c.AutoKeys = c.Env != "prod" || os.Getenv("ANUBIS_AUTOKEYS") == "1"
 
@@ -109,6 +131,7 @@ func Load() (*Config, error) {
 		c.MasterKey = []byte("anubis-dev-master-key-32-bytes!!")
 	}
 	return c, nil
+
 }
 
 // PoolURL appends the server-side guards every connection must carry. Doing

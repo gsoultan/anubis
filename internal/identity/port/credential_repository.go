@@ -16,7 +16,6 @@ type CredentialRepository interface {
 	UpdateCredentialParams(ctx context.Context, id string, params []byte) error
 	ActiveCredentialOfKind(ctx context.Context, identityID, kind string) (*credential.Credential, error)
 	ActiveCredentialKinds(ctx context.Context, identityID string) ([]string, error)
-	CredentialByLookup(ctx context.Context, lookupKey string) (*credential.APIKeyCredential, error)
 	TouchCredentialUsed(ctx context.Context, id string, signCounter int64)
 	ListCredentials(ctx context.Context, identityID, kind string) ([]credential.CredentialInfo, error)
 	CredentialOwner(ctx context.Context, id string) (identityID string, tenantID string, kind string, err error)

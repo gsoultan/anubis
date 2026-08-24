@@ -274,3 +274,33 @@ func (h *ScopeAdminHandler) RunSync(ctx context.Context, req *connect.Request[an
 	}
 	return connect.NewResponse(&anubisv1.RunSyncResponse{ReportJson: out.(string)}), nil
 }
+
+func (h *ScopeAdminHandler) GetScopeNode(ctx context.Context, req *connect.Request[anubisv1.GetScopeNodeRequest]) (*connect.Response[anubisv1.GetScopeNodeResponse], error) {
+	out, err := h.f.Do(ctx, "admin.scope.node", func(ctx context.Context) (any, error) {
+		return h.svc.ScopeNode(ctx, req.Msg.Id)
+	})
+	if err != nil {
+		return nil, apiconnect.Err(ctx, err)
+	}
+	n, _ := out.(*scopedomain.ScopeNodeRecord)
+	if n == nil {
+		return connect.NewResponse(&anubisv1.GetScopeNodeResponse{}), nil
+	}
+	return connect.NewResponse(&anubisv1.GetScopeNodeResponse{Node: nodeProto(*n)}), nil
+}
+
+func (h *ScopeAdminHandler) ScopeAncestors(ctx context.Context, req *connect.Request[anubisv1.ScopeAncestorsRequest]) (*connect.Response[anubisv1.ScopeAncestorsResponse], error) {
+	out, err := h.f.Do(ctx, "admin.scope.ancestors", func(ctx context.Context) (any, error) {
+		return h.svc.ScopeAncestors(ctx, req.Msg.Id)
+	})
+	if err != nil {
+		return nil, apiconnect.Err(ctx, err)
+	}
+	resp := &anubisv1.ScopeAncestorsResponse{}
+	for _, a := range out.([]scopedomain.ScopeAncestor) {
+		resp.Ancestors = append(resp.Ancestors, &anubisv1.ScopeAncestor{
+			Node: nodeProto(a.Node), Depth: int32(a.Depth),
+		})
+	}
+	return connect.NewResponse(resp), nil
+}

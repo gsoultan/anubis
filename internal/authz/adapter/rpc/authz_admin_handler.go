@@ -319,3 +319,49 @@ func (h *AuthzAdminHandler) ApplyManifest(ctx context.Context, req *connect.Requ
 	}
 	return connect.NewResponse(out.(*anubisv1.ApplyManifestResponse)), nil
 }
+
+func (h *AuthzAdminHandler) SearchGrants(ctx context.Context, req *connect.Request[anubisv1.SearchGrantsRequest]) (*connect.Response[anubisv1.SearchGrantsResponse], error) {
+	out, err := h.f.Do(ctx, "admin.grant.search", func(ctx context.Context) (any, error) {
+		hits, scopes, serr := h.svc.SearchGrants(ctx, grant.GrantSearch{
+			Query:          req.Msg.Query,
+			IdentityID:     req.Msg.IdentityId,
+			RoleID:         req.Msg.RoleId,
+			Source:         req.Msg.Source,
+			IncludeRevoked: req.Msg.IncludeRevoked,
+			Cursor:         req.Msg.PageToken,
+			PageSize:       int(req.Msg.PageSize),
+		})
+		if serr != nil {
+			return nil, serr
+		}
+		resp := &anubisv1.SearchGrantsResponse{}
+		for _, hit := range hits {
+			g := hit.Grant
+			pg := &anubisv1.Grant{
+				Id: g.ID, IdentityId: g.IdentityID, RoleId: g.RoleID,
+				RoleName: g.RoleName, SelfScoped: g.SelfScoped,
+				ValidFrom: g.ValidFrom.Unix(), GrantedBy: g.GrantedBy,
+				ViaMembershipId: g.ViaMembershipID, Reason: g.Reason,
+				Scopes: grantScopeProtos(scopes, g.ID),
+			}
+			if g.ValidUntil != nil {
+				pg.ValidUntil = g.ValidUntil.Unix()
+			}
+			if g.RevokedAt != nil {
+				pg.RevokedAt = g.RevokedAt.Unix()
+			}
+			resp.Grants = append(resp.Grants, pg)
+			resp.Usernames = append(resp.Usernames, hit.Username)
+		}
+		// The cursor is the last row's id; an empty one means this was the
+		// last page.
+		if n := len(resp.Grants); n > 0 && n == int(req.Msg.PageSize) {
+			resp.NextPageToken = resp.Grants[n-1].Id
+		}
+		return resp, nil
+	})
+	if err != nil {
+		return nil, apiconnect.Err(ctx, err)
+	}
+	return connect.NewResponse(out.(*anubisv1.SearchGrantsResponse)), nil
+}

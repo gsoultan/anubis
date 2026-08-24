@@ -1,3 +1,4 @@
+-- ListPermissions is the TENANT's catalog: what its own applications define.
 -- name: ListPermissions :many
 SELECT p.id, p.key, p.app_slug, p.resource, p.action, p.risk, p.description,
        p.min_assurance, p.requires_amr, COALESCE(p.max_auth_age::text, '')::text AS max_auth_age,

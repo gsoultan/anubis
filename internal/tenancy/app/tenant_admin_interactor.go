@@ -3,6 +3,7 @@ package tenancyapp
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"time"
 
 	auditdomain "github.com/gsoultan/anubis/internal/audit/domain"
@@ -10,7 +11,6 @@ import (
 	authdomain "github.com/gsoultan/anubis/internal/auth/domain"
 	authport "github.com/gsoultan/anubis/internal/auth/port"
 	"github.com/gsoultan/anubis/internal/authz/guard"
-	authzport "github.com/gsoultan/anubis/internal/authz/port"
 	identitydomain "github.com/gsoultan/anubis/internal/identity/domain"
 	identityport "github.com/gsoultan/anubis/internal/identity/port"
 	"github.com/gsoultan/anubis/internal/platform/crypto/secret"
@@ -37,6 +37,7 @@ type KeyRotator interface {
 // tenantAdminInteractor implements TenantAdminUsecase.
 type tenantAdminInteractor struct {
 	guard    *guard.Guard
+	apiKeys  authport.APIKeyRepository
 	tenants  tenancyport.TenantRepository
 	realms   identityport.RealmAdminRepository
 	apps     tenancyport.ApplicationRepository
@@ -50,8 +51,13 @@ type tenantAdminInteractor struct {
 }
 
 func NewTenantAdminInteractor(
-	authz authzport.AuthzRepository,
+	// ops lets a PLATFORM OPERATOR administer this tenant (ADR-0011). Their
+	// authority is an assignment, not a grant, so the guard has to ask the
+	// control plane rather than authorize().
+	ops guard.OperatorAuthority,
+	clockNow func() time.Time,
 	tenants tenancyport.TenantRepository,
+	apiKeys authport.APIKeyRepository,
 	realms identityport.RealmAdminRepository,
 	apps tenancyport.ApplicationRepository,
 	routes tenancyport.RouteRepository,
@@ -63,7 +69,7 @@ func NewTenantAdminInteractor(
 	audit auditport.Auditor,
 ) TenantAdminUsecase {
 	return &tenantAdminInteractor{
-		guard: guard.New(authz), tenants: tenants, realms: realms,
+		guard: guard.New().WithOperators(ops, clockNow), tenants: tenants, apiKeys: apiKeys, realms: realms,
 		apps: apps, routes: routes, auditRd: auditRd, keys: keys,
 		signin: signin, verifier: verifier, rotator: rotator, audit: audit,
 	}
@@ -84,8 +90,14 @@ func (u *tenantAdminInteractor) ListTenants(ctx context.Context) ([]tenancydomai
 	return u.tenants.ListTenants(ctx)
 }
 
+// permManageTenants gates the tenant lifecycle. It mirrors
+// controldomain.PermManageTenants and is NOT in the tenant permission
+// catalog, so no grant can confer it: only a platform owner holds it,
+// through their operator role.
+const permManageTenants = "anubis:platform:tenants"
+
 func (u *tenantAdminInteractor) CreateTenant(ctx context.Context, slug, name string) (*tenancydomain.TenantRef, error) {
-	p, err := u.guard.Require(ctx, "anubis:tenant:admin")
+	p, err := u.guard.Require(ctx, permManageTenants)
 	if err != nil {
 		return nil, err
 	}
@@ -98,6 +110,44 @@ func (u *tenantAdminInteractor) CreateTenant(ctx context.Context, slug, name str
 	}
 	u.emit(ctx, p, "tenant.create", t.ID, map[string]string{"slug": slug})
 	return t, nil
+}
+
+func (u *tenantAdminInteractor) UpdateTenant(ctx context.Context, id, name string) error {
+	p, err := u.guard.Require(ctx, permManageTenants)
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(name) == "" {
+		return apperr.ErrInvalidArgument.With("name", "required")
+	}
+	if err := u.tenants.UpdateTenant(ctx, id, name); err != nil {
+		return err
+	}
+	u.emit(ctx, p, "tenant.update", id, map[string]string{"name": name})
+	return nil
+}
+
+// SetTenantStatus suspends or retires a tenant.
+//
+// Retiring is not deleting, and the difference is the point: every identity,
+// grant and audit record in the installation hangs off this row, so removing
+// it would take the record of what happened with it. An archived tenant stops
+// serving and keeps its history.
+func (u *tenantAdminInteractor) SetTenantStatus(ctx context.Context, id, status string) error {
+	p, err := u.guard.Require(ctx, permManageTenants)
+	if err != nil {
+		return err
+	}
+	switch status {
+	case "active", "suspended", "archived":
+	default:
+		return apperr.ErrInvalidArgument.With("status", status)
+	}
+	if err := u.tenants.SetTenantStatus(ctx, id, status); err != nil {
+		return err
+	}
+	u.emit(ctx, p, "tenant.status", id, map[string]string{"status": status})
+	return nil
 }
 
 func (u *tenantAdminInteractor) ListRealms(ctx context.Context) ([]identitydomain.RealmRecord, error) {
@@ -170,12 +220,20 @@ func (u *tenantAdminInteractor) CreateRealmCategory(ctx context.Context, c ident
 	return &c, nil
 }
 
-func (u *tenantAdminInteractor) ListApplications(ctx context.Context) ([]tenancydomain.ApplicationRecord, error) {
+func (u *tenantAdminInteractor) ListApplications(ctx context.Context, query, cursor string, pageSize int) ([]tenancydomain.ApplicationRecord, int, error) {
 	p, err := u.guard.Require(ctx, "anubis:identity:read")
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	return u.apps.ListApplications(ctx, p.TenantID)
+	apps, err := u.apps.ListApplications(ctx, p.TenantID, query, cursor, int32(pageSize))
+	if err != nil {
+		return nil, 0, err
+	}
+	total, err := u.apps.CountApplications(ctx, p.TenantID)
+	if err != nil {
+		return nil, 0, err
+	}
+	return apps, total, nil
 }
 
 // CreateApplication returns the client secret exactly once for confidential
@@ -344,4 +402,61 @@ func encodeSeq(n int64) string {
 		n /= 10
 	}
 	return string(digits)
+}
+
+func (u *tenantAdminInteractor) TenantStats(ctx context.Context, id string) (*tenancydomain.TenantStats, error) {
+	if _, err := u.guard.Require(ctx, "anubis:tenant:admin"); err != nil {
+		return nil, err
+	}
+	return u.tenants.TenantStats(ctx, id)
+}
+
+// permAPIKeys gates the tenant's machine credentials. A string in the
+// operator allow-lists, like every admin permission since 0029.
+const permAPIKeys = "anubis:apikey:admin"
+
+func (u *tenantAdminInteractor) ListAPIKeys(ctx context.Context) ([]authdomain.APIKeyRecord, error) {
+	p, err := u.guard.Require(ctx, permAPIKeys)
+	if err != nil {
+		return nil, err
+	}
+	return u.apiKeys.ListAPIKeys(ctx, p.TenantID)
+}
+
+// CreateAPIKey returns the full key exactly once; only prefix + hash persist.
+func (u *tenantAdminInteractor) CreateAPIKey(ctx context.Context, label string, expiresAt int64) (string, string, string, error) {
+	p, err := u.guard.Require(ctx, permAPIKeys)
+	if err != nil {
+		return "", "", "", err
+	}
+	full, lookup, hash, err := secret.NewAPIKey()
+	if err != nil {
+		return "", "", "", apperr.ErrInternal.Wrap(err)
+	}
+	var exp *int64
+	if expiresAt > 0 {
+		exp = &expiresAt
+	}
+	// created_by is the OPERATOR: machine access is created by the people who
+	// run the installation, and the audit answer to "who made this key" must
+	// name one of them, never a tenant identity.
+	id, err := u.apiKeys.CreateAPIKey(ctx, p.TenantID, label, lookup, secret.Hex(hash), p.IdentityID, exp)
+	if err != nil {
+		return "", "", "", err
+	}
+	u.emit(ctx, p, "apikey.create", id, map[string]string{"label": label, "prefix": lookup})
+	// lookup already carries the anb_live_ prefix — NewAPIKey mints it whole.
+	return full, lookup, id, nil
+}
+
+func (u *tenantAdminInteractor) RevokeAPIKey(ctx context.Context, id string) error {
+	p, err := u.guard.Require(ctx, permAPIKeys)
+	if err != nil {
+		return err
+	}
+	if err := u.apiKeys.RevokeAPIKey(ctx, p.TenantID, id); err != nil {
+		return err
+	}
+	u.emit(ctx, p, "apikey.revoke", id, nil)
+	return nil
 }

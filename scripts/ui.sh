@@ -16,6 +16,6 @@ cd "$ROOT/ui"
 [ -d node_modules ] || { info "installing dependencies"; bun install; }
 
 info "console   http://localhost:$ANUBIS_UI_PORT"
-dim  "  /v1 → http://localhost:$ANUBIS_API_PORT (API not built yet; the console uses its in-memory backend)"
+dim  "  /v1 and /anubis.v1.* → http://localhost:$ANUBIS_API_PORT"
 echo
 exec bun run --bun vite --port "$ANUBIS_UI_PORT" --strictPort

@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/gsoultan/anubis/internal/platform/database"
+	"github.com/gsoultan/anubis/internal/shared/apperr"
 	gen "github.com/gsoultan/anubis/internal/tenancy/adapter/postgres/gen"
 	tenancydomain "github.com/gsoultan/anubis/internal/tenancy/domain"
 )
@@ -55,4 +56,54 @@ func (s *Repository) CatalogVersion(ctx context.Context, tenantID string) (int64
 		return 0, time.Time{}, database.MapErr(err)
 	}
 	return row.Version, row.ChangedAt, nil
+}
+
+// UpdateTenant renames a tenant. The slug is deliberately not editable: it
+// appears in URLs, tokens and every hosted page path, and changing it would
+// break links that already exist in the world.
+func (s *Repository) UpdateTenant(ctx context.Context, id, name string) error {
+	n, err := s.q(ctx).UpdateTenant(ctx, gen.UpdateTenantParams{ID: id, Name: name})
+	if err != nil {
+		return database.MapErr(err)
+	}
+	if n == 0 {
+		return apperr.ErrNotFound.With("tenant", id)
+	}
+	return nil
+}
+
+// SetTenantStatus suspends or retires a tenant.
+func (s *Repository) SetTenantStatus(ctx context.Context, id, status string) error {
+	n, err := s.q(ctx).SetTenantStatus(ctx, gen.SetTenantStatusParams{ID: id, Status: status})
+	if err != nil {
+		return database.MapErr(err)
+	}
+	if n == 0 {
+		return apperr.ErrNotFound.With("tenant", id)
+	}
+	return nil
+}
+
+// CountTenantIdentities backs the "this holds N people" warning before a
+// tenant is retired.
+func (s *Repository) CountTenantIdentities(ctx context.Context, tenantID string) (int, error) {
+	n, err := s.q(ctx).CountTenantIdentities(ctx, tenantID)
+	if err != nil {
+		return 0, database.MapErr(err)
+	}
+	return int(n), nil
+}
+
+// TenantStats counts what a tenant holds.
+func (s *Repository) TenantStats(ctx context.Context, tenantID string) (*tenancydomain.TenantStats, error) {
+	row, err := s.q(ctx).GetTenantStats(ctx, tenantID)
+	if err != nil {
+		return nil, database.MapErr(err)
+	}
+	return &tenancydomain.TenantStats{
+		Identities:  int(row.Identities),
+		Grants:      int(row.Grants),
+		ScopeNodes:  int(row.ScopeNodes),
+		Memberships: int(row.Memberships),
+	}, nil
 }

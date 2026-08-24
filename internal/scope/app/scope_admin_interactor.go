@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"regexp"
 	"strings"
+	"time"
 
 	auditdomain "github.com/gsoultan/anubis/internal/audit/domain"
 	auditport "github.com/gsoultan/anubis/internal/audit/port"
@@ -32,7 +33,14 @@ type scopeAdminInteractor struct {
 }
 
 func NewScopeAdminInteractor(
+	// authz is NOT for the guard (administration is operator-only): strict
+	// dry runs replay real authorize decisions to predict what flipping an
+	// axis to strict would deny.
 	authz authzport.AuthzRepository,
+	// ops lets a PLATFORM OPERATOR do this inside a tenant they are assigned
+	// to (ADR-0011): their authority is an assignment, not a grant.
+	ops guard.OperatorAuthority,
+	clockNow func() time.Time,
 	axes scopeport.ScopeAxisRepository,
 	nodes scopeport.ScopeNodeRepository,
 	sync scopeport.ScopeSyncRepository,
@@ -41,7 +49,7 @@ func NewScopeAdminInteractor(
 	audit auditport.Auditor,
 ) ScopeAdminUsecase {
 	return &scopeAdminInteractor{
-		guard: guard.New(authz), axes: axes, nodes: nodes, sync: sync,
+		guard: guard.New().WithOperators(ops, clockNow), axes: axes, nodes: nodes, sync: sync,
 		authz: authz, fetcher: fetcher, tx: tx, audit: audit,
 	}
 }
@@ -538,4 +546,23 @@ func validateSyncConfig(s scopedomain.SyncSourceRecord) error {
 		return apperr.ErrInvalidArgument.With("kind", s.Kind)
 	}
 	return nil
+}
+
+// ScopeNode fetches one node. Without it the console would have to pull a
+// whole axis to display a single selected value.
+func (u *scopeAdminInteractor) ScopeNode(ctx context.Context, id string) (*scopedomain.ScopeNodeRecord, error) {
+	p, err := u.guard.Require(ctx, "anubis:identity:read")
+	if err != nil {
+		return nil, err
+	}
+	return u.nodes.ScopeNode(ctx, p.TenantID, id)
+}
+
+// ScopeAncestors is the chain from the axis root down, which is what turns a
+// scope decision into an explanation rather than a bare yes or no.
+func (u *scopeAdminInteractor) ScopeAncestors(ctx context.Context, id string) ([]scopedomain.ScopeAncestor, error) {
+	if _, err := u.guard.Require(ctx, "anubis:identity:read"); err != nil {
+		return nil, err
+	}
+	return u.nodes.ScopeAncestors(ctx, id)
 }

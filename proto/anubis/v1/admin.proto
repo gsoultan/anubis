@@ -31,8 +31,6 @@ service IdentityAdminService {
   rpc RequestErasure(RequestErasureRequest) returns (RequestErasureResponse);
   rpc ListCredentials(ListCredentialsRequest) returns (ListCredentialsResponse);
   rpc RevokeCredential(RevokeCredentialRequest) returns (RevokeCredentialResponse);
-  rpc CreateApiKey(CreateApiKeyRequest) returns (CreateApiKeyResponse);
-  rpc ListApiKeys(ListApiKeysRequest) returns (ListApiKeysResponse);
   rpc ListConsents(ListConsentsRequest) returns (ListConsentsResponse);
   rpc RecordConsent(RecordConsentRequest) returns (RecordConsentResponse);
   // Withdrawal appends a row; the record of what was consented to survives.
@@ -160,27 +158,6 @@ message RevokeCredentialRequest {
 
 message RevokeCredentialResponse {}
 
-message CreateApiKeyRequest {
-  string identity_id = 1;
-  string label = 2;
-  int64 expires_at = 3;  // unix seconds; 0 = no expiry
-}
-
-message CreateApiKeyResponse {
-  // Full key, returned exactly once; only prefix + hash are stored.
-  string api_key = 1;
-  string prefix = 2;
-  string credential_id = 3;
-}
-
-message ListApiKeysRequest {
-  string identity_id = 1;
-}
-
-message ListApiKeysResponse {
-  repeated CredentialInfo keys = 1;
-}
-
 message Consent {
   string id = 1;
   string purpose = 2;
@@ -230,6 +207,12 @@ service ScopeAdminService {
   rpc ListScopeNodeTypes(ListScopeNodeTypesRequest) returns (ListScopeNodeTypesResponse);
   rpc CreateScopeNodeType(CreateScopeNodeTypeRequest) returns (CreateScopeNodeTypeResponse);
   rpc ListScopeNodes(ListScopeNodesRequest) returns (ListScopeNodesResponse);
+  // GetScopeNode fetches one node. Without it the console would have to pull
+  // an entire axis to display a single selected value.
+  rpc GetScopeNode(GetScopeNodeRequest) returns (GetScopeNodeResponse);
+  // ScopeAncestors is the chain from the axis root down, which is what makes
+  // a scope decision explainable rather than a bare yes or no.
+  rpc ScopeAncestors(ScopeAncestorsRequest) returns (ScopeAncestorsResponse);
   rpc CreateScopeNode(CreateScopeNodeRequest) returns (CreateScopeNodeResponse);
   rpc EnsureAxisRoot(EnsureAxisRootRequest) returns (EnsureAxisRootResponse);
   rpc MoveScopeNode(MoveScopeNodeRequest) returns (MoveScopeNodeResponse);
@@ -440,6 +423,10 @@ service AuthzAdminService {
   rpc GetRoleEffective(GetRoleEffectiveRequest) returns (GetRoleEffectiveResponse);
   rpc ListPermissions(ListPermissionsRequest) returns (ListPermissionsResponse);
   rpc ListGrants(ListGrantsRequest) returns (ListGrantsResponse);
+  // SearchGrants backs the Access screen. There is deliberately no
+  // "every grant": a tenant can hold hundreds of thousands, and a screen
+  // that asked for all of them would answer a question nobody can read.
+  rpc SearchGrants(SearchGrantsRequest) returns (SearchGrantsResponse);
   rpc CreateGrant(CreateGrantRequest) returns (CreateGrantResponse);
   rpc RevokeGrant(RevokeGrantRequest) returns (RevokeGrantResponse);
   rpc ListMemberships(ListMembershipsRequest) returns (ListMembershipsResponse);
@@ -668,6 +655,21 @@ message ApplyManifestResponse {
 service TenantAdminService {
   rpc ListTenants(ListTenantsRequest) returns (ListTenantsResponse);
   rpc CreateTenant(CreateTenantRequest) returns (CreateTenantResponse);
+  // UpdateTenant renames. The slug is not editable: it is in URLs, tokens and
+  // every hosted page path, and changing it breaks links already in the world.
+  rpc UpdateTenant(UpdateTenantRequest) returns (UpdateTenantResponse);
+  rpc GetTenantStats(GetTenantStatsRequest) returns (GetTenantStatsResponse);
+  // API keys are the TENANT's machine credentials (migration 0030): a
+  // gateway asking authorize(), an integration reading the decision API.
+  // They authenticate as the tenant's system, never as any person, and are
+  // created by platform users.
+  rpc ListApiKeys(ListApiKeysRequest) returns (ListApiKeysResponse);
+  rpc CreateApiKey(CreateApiKeyRequest) returns (CreateApiKeyResponse);
+  rpc RevokeApiKey(RevokeApiKeyRequest) returns (RevokeApiKeyResponse);
+  // SetTenantStatus suspends or retires. There is no delete — every grant,
+  // identity and audit record hangs off the tenant row, and dropping it would
+  // take the evidence with it. "archived" is what delete means here.
+  rpc SetTenantStatus(SetTenantStatusRequest) returns (SetTenantStatusResponse);
   rpc ListRealms(ListRealmsRequest) returns (ListRealmsResponse);
   rpc CreateRealm(CreateRealmRequest) returns (CreateRealmResponse);
   rpc UpdateRealm(UpdateRealmRequest) returns (UpdateRealmResponse);
@@ -887,10 +889,18 @@ message Application {
   int32 manifest_version = 11;
 }
 
-message ListApplicationsRequest {}
+message ListApplicationsRequest {
+  string query = 1;      // slug or name substring
+  int32 page_size = 2;   // default 50, max 200
+  string page_token = 3; // slug of the last row on the previous page
+}
 
 message ListApplicationsResponse {
   repeated Application applications = 1;
+  string next_page_token = 2;
+  // The tenant's whole application count, so a page can say "20 of 138"
+  // instead of implying it is everything.
+  int32 total = 3;
 }
 
 message CreateApplicationRequest {
@@ -1021,3 +1031,357 @@ message PutSigninPageRequest {
 }
 
 message PutSigninPageResponse {}
+
+// ============================================================================
+// Bulk provisioning: people and the access they hold, from a spreadsheet.
+// Gated per sheet — a People-only workbook needs anubis:identity:write, and
+// only a workbook carrying grants or memberships needs anubis:grant:admin.
+// ============================================================================
+
+service ProvisioningService {
+  // DownloadImportTemplate hands out the workbook to fill in. Its columns
+  // are generated from the same schema the importer parses, so a template
+  // and the server that reads it back cannot drift apart.
+  rpc DownloadImportTemplate(DownloadImportTemplateRequest) returns (DownloadImportTemplateResponse);
+  // ImportWorkbook reads a filled-in workbook. Call it with dry set first:
+  // nothing is written, and the report lists every problem in the file at
+  // once. An import applies in full or not at all.
+  rpc ImportWorkbook(ImportWorkbookRequest) returns (ImportWorkbookResponse);
+}
+
+message DownloadImportTemplateRequest {}
+
+message DownloadImportTemplateResponse {
+  bytes workbook = 1;
+  string filename = 2;
+  string content_type = 3;
+}
+
+message ImportWorkbookRequest {
+  bytes workbook = 1;
+  // dry asks what the import would do without changing anything.
+  bool dry = 2;
+}
+
+// ImportIssue is one problem with one row, addressed the way the operator
+// sees their own file. row is the spreadsheet row number; zero means the
+// problem is with the sheet as a whole.
+message ImportIssue {
+  string sheet = 1;
+  int32 row = 2;
+  string column = 3;
+  string message = 4;
+}
+
+message ImportWorkbookResponse {
+  bool dry = 1;
+  // applied is true only when the work was committed. A dry run and an
+  // import refused over its issues both come back with counters filled in
+  // and applied false.
+  bool applied = 2;
+  int32 people_created = 3;
+  int32 people_existing = 4;
+  int32 grants_created = 5;
+  int32 grants_skipped = 6;
+  // memberships_assigned counts people added. On a dry run it is an upper
+  // bound: somebody who is already a member is only detected once the
+  // assignment actually runs.
+  int32 memberships_assigned = 7;
+  int32 memberships_existing = 8;
+  repeated ImportIssue issues = 9;
+  // issues_omitted counts problems past the report's cap, so a truncated
+  // report never reads as a clean one.
+  int32 issues_omitted = 10;
+}
+
+// ============================================================================
+// Platform user management (ADR-0011). The people who operate this
+// installation — including the owner created by setup — and which tenants each
+// of them may administer. Gated on anubis:platform:assign.
+// ============================================================================
+
+service PlatformAdminService {
+  // ListOperators is everyone who can administer this installation, with the
+  // assignments that say where.
+  rpc ListOperators(ListOperatorsRequest) returns (ListOperatorsResponse);
+  // CreateOperator adds a platform administrator: an account in the platform
+  // tenant, which is a separate population from any tenant's own people.
+  rpc CreateOperator(CreateOperatorRequest) returns (CreateOperatorResponse);
+  // AssignOperator gives an operator authority over one tenant, or over every
+  // tenant when tenant_slug is empty.
+  rpc AssignOperator(AssignOperatorRequest) returns (AssignOperatorResponse);
+  rpc RevokeAssignment(RevokeAssignmentRequest) returns (RevokeAssignmentResponse);
+  // SetOperatorStatus disables or restores a platform user. Disabling takes
+  // effect on their live tokens, not when those tokens expire.
+  rpc SetOperatorStatus(SetOperatorStatusRequest) returns (SetOperatorStatusResponse);
+}
+
+// OperatorAssignment is one operator's authority over one tenant. An empty
+// tenant_slug means every tenant: the installation owner.
+message OperatorAssignment {
+  string id = 1;
+  string tenant_slug = 2;
+  string role = 3;      // support | admin | owner
+  string reason = 4;
+  int64 valid_until = 5;
+  int64 created_at = 6;
+}
+
+message Operator {
+  string identity_id = 1;
+  string username = 2;
+  string email = 3;
+  string status = 4;
+  int64 created_at = 5;
+  int64 last_login_at = 6;
+  repeated OperatorAssignment assignments = 7;
+  // owner is true when this operator holds authority over every tenant. The
+  // console uses it to stop the last owner being stripped of it.
+  bool owner = 8;
+  // Whether this operator has a second factor. An owner needs to see who
+  // does not.
+  bool mfa_enrolled = 9;
+}
+
+message ListOperatorsRequest {
+  string query = 1;      // username substring
+  int32 page_size = 2;   // default 50, max 200
+  string page_token = 3; // last username of the previous page
+}
+
+message ListOperatorsResponse {
+  repeated Operator operators = 1;
+  // next_page_token is empty on the last page.
+  string next_page_token = 2;
+  // total is the whole population, so a screen can say "50 of 4,812" rather
+  // than implying the page is everything there is.
+  int32 total = 3;
+}
+
+message AssignOperatorRequest {
+  // Either identifies the operator. A username is what somebody doing the
+  // assigning has to hand; the page that lists operators has the id.
+  string operator_id = 1;
+  string tenant_slug = 2;  // empty = every tenant
+  string role = 3;
+  string reason = 4;
+  int64 valid_until = 5;
+  string operator_username = 6;
+}
+
+message AssignOperatorResponse {
+  string assignment_id = 1;
+}
+
+message RevokeAssignmentRequest {
+  string assignment_id = 1;
+}
+
+message RevokeAssignmentResponse {}
+
+// CreateOperatorRequest adds a person who administers the PLATFORM. They are
+// created in the platform tenant, which is a different population from a
+// tenant's own people — a tenant's users never appear here and vice versa.
+message CreateOperatorRequest {
+  string username = 1;
+  string email = 2;
+  string password = 3;
+  // The authority they start with. Required: a platform user with no
+  // assignment can sign in and administer nothing, which is never what
+  // anybody meant to create.
+  string tenant_slug = 4;  // empty = every tenant
+  string role = 5;         // support | admin | owner
+  string reason = 6;
+}
+
+message CreateOperatorResponse {
+  string operator_id = 1;
+  string assignment_id = 2;
+}
+
+// ============================================================================
+// Platform sign-in (ADR-0011). A DIFFERENT door from tenant sign-in: a
+// tenant's people authenticate through their realm against identities, and
+// may be sent to a page built for them; an operator authenticates here
+// against platform_users, with no tenant involved. Neither can use the
+// other's door.
+// ============================================================================
+
+service PlatformAuthService {
+  rpc PlatformLogin(PlatformLoginRequest) returns (PlatformLoginResponse);
+  // PlatformVerifyMfa completes a challenge. A password alone is not a
+  // session for an operator who has enrolled a second factor.
+  rpc PlatformVerifyMfa(PlatformVerifyMfaRequest) returns (PlatformVerifyMfaResponse);
+  // BeginTotpEnrolment issues a secret. Nothing is demanded until confirmed.
+  rpc BeginTotpEnrolment(BeginTotpEnrolmentRequest) returns (BeginTotpEnrolmentResponse);
+  rpc ConfirmTotpEnrolment(ConfirmTotpEnrolmentRequest) returns (ConfirmTotpEnrolmentResponse);
+  // MyTenants is which tenants this operator may administer.
+  rpc MyTenants(MyTenantsRequest) returns (MyTenantsResponse);
+}
+
+message PlatformLoginRequest {
+  // No tenant. Platform usernames are globally unique because an operator
+  // belongs to none.
+  string username = 1;
+  string password = 2;
+}
+
+message PlatformLoginResponse {
+  string access_token = 1;
+  int32 expires_in = 2;
+  string username = 3;
+  bool owner = 4;
+  // Set when a second factor is required; access_token is empty then.
+  string mfa_token = 5;
+}
+
+message PlatformVerifyMfaRequest {
+  string mfa_token = 1;
+  string code = 2;
+}
+
+message PlatformVerifyMfaResponse {
+  string access_token = 1;
+  int32 expires_in = 2;
+  string username = 3;
+  bool owner = 4;
+}
+
+message BeginTotpEnrolmentRequest {}
+
+message BeginTotpEnrolmentResponse {
+  // The shared secret, base32, for operators who cannot scan a code.
+  string secret = 1;
+  // otpauth:// URI for an authenticator app.
+  string uri = 2;
+}
+
+message ConfirmTotpEnrolmentRequest {
+  string code = 1;
+}
+
+message ConfirmTotpEnrolmentResponse {}
+
+// MyTenantsRequest asks which tenants this operator may administer. The
+// console picks the first by default and offers the rest in the header.
+message MyTenantsRequest {}
+
+message MyTenant {
+  string slug = 1;
+  string name = 2;
+  string role = 3;
+  // all is true for an installation owner, who may enter any tenant.
+  bool all = 4;
+}
+
+message MyTenantsResponse {
+  repeated MyTenant tenants = 1;
+}
+
+message UpdateTenantRequest {
+  string id = 1;
+  string name = 2;
+}
+
+message UpdateTenantResponse {}
+
+message SetTenantStatusRequest {
+  string id = 1;
+  string status = 2;  // active | suspended | archived
+}
+
+message SetTenantStatusResponse {}
+
+message GetTenantStatsRequest {
+  string id = 1;
+}
+
+message GetTenantStatsResponse {
+  int32 identities = 1;
+  int32 grants = 2;
+  int32 scope_nodes = 3;
+  int32 memberships = 4;
+}
+
+message GetScopeNodeRequest {
+  string id = 1;
+}
+
+message GetScopeNodeResponse {
+  ScopeNode node = 1;
+}
+
+message ScopeAncestorsRequest {
+  string id = 1;
+}
+
+message ScopeAncestor {
+  ScopeNode node = 1;
+  int32 depth = 2;
+}
+
+message ScopeAncestorsResponse {
+  repeated ScopeAncestor ancestors = 1;
+}
+
+message SearchGrantsRequest {
+  string query = 1;        // username or role name substring
+  string identity_id = 2;  // narrow to one person
+  string role_id = 3;      // narrow to one role
+  string source = 4;       // direct | membership | empty for both
+  bool include_revoked = 5;
+  int32 page_size = 6;     // default 50, max 200
+  string page_token = 7;   // id of the last row on the previous page
+}
+
+message SearchGrantsResponse {
+  repeated Grant grants = 1;
+  // The username is carried on the row: resolving it per grant in the
+  // console would be one lookup per line.
+  repeated string usernames = 2;
+  string next_page_token = 3;
+}
+
+message SetOperatorStatusRequest {
+  string operator_id = 1;
+  string status = 2;  // active | disabled
+}
+
+message SetOperatorStatusResponse {}
+
+message ApiKey {
+  string id = 1;
+  string label = 2;
+  // The public half, e.g. anb_live_abc123 — enough to recognise a key in a
+  // config file without being able to use it.
+  string prefix = 3;
+  string created_by = 4;  // platform user's name; empty if since removed
+  int64 created_at = 5;
+  int64 last_used_at = 6;
+  int64 expires_at = 7;
+  int64 revoked_at = 8;
+}
+
+message ListApiKeysRequest {}
+
+message ListApiKeysResponse {
+  repeated ApiKey keys = 1;
+}
+
+message CreateApiKeyRequest {
+  string label = 1;
+  int64 expires_at = 2;  // unix seconds; 0 = no expiry
+}
+
+message CreateApiKeyResponse {
+  // Full key, returned exactly once; only prefix + hash are stored.
+  string api_key = 1;
+  string prefix = 2;
+  string id = 3;
+}
+
+message RevokeApiKeyRequest {
+  string id = 1;
+}
+
+message RevokeApiKeyResponse {}

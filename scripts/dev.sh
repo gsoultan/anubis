@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Bring up the whole Anubis dev environment.
 #
-#   scripts/dev.sh              database + api (if built) + console
+#   scripts/dev.sh              database + api + console, seeded and signable-into
 #   scripts/dev.sh --no-db      skip the database
 #   scripts/dev.sh --ui-only    console only
 #
@@ -38,13 +38,14 @@ printf '%s' "$C_OFF"
 dim "  console :$ANUBIS_UI_PORT   api :$ANUBIS_API_PORT   database :$ANUBIS_DB_PORT"
 echo
 
-[ "$WITH_DB" = 1 ] && "$ROOT/scripts/db.sh" up
+# seed does up + migrate + dataset + an account that can sign in. Without the
+# last of those the console comes up against a database holding fifty thousand
+# people and no way to authenticate as any of them.
+[ "$WITH_DB" = 1 ] && "$ROOT/scripts/db.sh" seed
 
-if [ "$WITH_API" = 1 ] && [ -f "$ROOT/go.mod" ]; then
+if [ "$WITH_API" = 1 ]; then
   require_port "$ANUBIS_API_PORT" "api" "API"
   "$ROOT/scripts/api.sh" & PIDS+=($!)
-elif [ "$WITH_API" = 1 ]; then
-  warn "api not built yet — console will use its in-memory backend"
 fi
 
 # The console runs in the foreground so its output is the one you watch and

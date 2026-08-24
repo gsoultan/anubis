@@ -12,6 +12,7 @@ type ScopeNodeRepository interface {
 	ListScopeNodes(ctx context.Context, tenantID, axis, parentID, query string, includeArchived bool) ([]scopedomain.ScopeNodeRecord, error)
 	ScopeNode(ctx context.Context, tenantID, id string) (*scopedomain.ScopeNodeRecord, error)
 	ScopeNodeByRef(ctx context.Context, tenantID, axis, ref string) (*scopedomain.ScopeNodeRecord, error)
+	ScopeAncestors(ctx context.Context, nodeID string) ([]scopedomain.ScopeAncestor, error)
 	EnsureAxisRoot(ctx context.Context, tenantID, axis string) (string, error)
 	AddScopeNode(ctx context.Context, tenantID, axis, nodeType, parentID, slug, name, externalRef string) (string, error)
 	MoveScopeNode(ctx context.Context, nodeID, newParentID string) error

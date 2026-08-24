@@ -180,45 +180,6 @@ func (q *Queries) GetCredential(ctx context.Context, id string) (GetCredentialRo
 	return i, err
 }
 
-const getCredentialByLookup = `-- name: GetCredentialByLookup :one
-SELECT c.id, c.identity_id, c.tenant_id, c.secret, c.expires_at,
-       i.status AS identity_status, i.token_epoch,
-       i.disabled_at, i.anonymized_at
-FROM credentials c
-JOIN identities i ON i.id = c.identity_id AND i.tenant_id = c.tenant_id
-WHERE c.lookup_key = $1 AND c.revoked_at IS NULL
-`
-
-type GetCredentialByLookupRow struct {
-	ID             string
-	IdentityID     string
-	TenantID       string
-	Secret         *string
-	ExpiresAt      *time.Time
-	IdentityStatus string
-	TokenEpoch     int32
-	DisabledAt     *time.Time
-	AnonymizedAt   *time.Time
-}
-
-// API-key auth: one index probe on credentials_lookup, never a scan.
-func (q *Queries) GetCredentialByLookup(ctx context.Context, lookupKey *string) (GetCredentialByLookupRow, error) {
-	row := q.db.QueryRow(ctx, getCredentialByLookup, lookupKey)
-	var i GetCredentialByLookupRow
-	err := row.Scan(
-		&i.ID,
-		&i.IdentityID,
-		&i.TenantID,
-		&i.Secret,
-		&i.ExpiresAt,
-		&i.IdentityStatus,
-		&i.TokenEpoch,
-		&i.DisabledAt,
-		&i.AnonymizedAt,
-	)
-	return i, err
-}
-
 const getPasswordCredential = `-- name: GetPasswordCredential :one
 SELECT id, identity_id, tenant_id, secret, params, expires_at
 FROM credentials

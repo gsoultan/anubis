@@ -81,19 +81,6 @@ func (s *Repository) ActiveCredentialKinds(ctx context.Context, identityID strin
 	return kinds, database.MapErr(err)
 }
 
-func (s *Repository) CredentialByLookup(ctx context.Context, lookupKey string) (*credential.APIKeyCredential, error) {
-	row, err := s.q(ctx).GetCredentialByLookup(ctx, database.OptStr(lookupKey))
-	if err != nil {
-		return nil, database.MapErr(err)
-	}
-	return &credential.APIKeyCredential{
-		ID: row.ID, IdentityID: row.IdentityID, TenantID: row.TenantID,
-		SecretHash: database.Deref(row.Secret), ExpiresAt: row.ExpiresAt,
-		IdentityStatus: row.IdentityStatus, TokenEpoch: int(row.TokenEpoch),
-		Blocked: row.DisabledAt != nil || row.AnonymizedAt != nil,
-	}, nil
-}
-
 func (s *Repository) TouchCredentialUsed(ctx context.Context, id string, signCounter int64) {
 	_ = s.q(ctx).TouchCredentialUsed(ctx, gen.TouchCredentialUsedParams{
 		ID: id, SignCounter: signCounter,

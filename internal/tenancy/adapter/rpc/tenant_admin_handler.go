@@ -174,17 +174,29 @@ func (h *TenantAdminHandler) CreateRealmCategory(ctx context.Context, req *conne
 	}), nil
 }
 
-func (h *TenantAdminHandler) ListApplications(ctx context.Context, _ *connect.Request[anubisv1.ListApplicationsRequest]) (*connect.Response[anubisv1.ListApplicationsResponse], error) {
+func (h *TenantAdminHandler) ListApplications(ctx context.Context, req *connect.Request[anubisv1.ListApplicationsRequest]) (*connect.Response[anubisv1.ListApplicationsResponse], error) {
+	type page struct {
+		apps  []tenancydomain.ApplicationRecord
+		total int
+	}
+	size := int(req.Msg.PageSize)
 	out, err := h.f.Do(ctx, "admin.application.list", func(ctx context.Context) (any, error) {
-		return h.svc.ListApplications(ctx)
+		apps, total, lerr := h.svc.ListApplications(ctx, req.Msg.Query, req.Msg.PageToken, size)
+		return page{apps: apps, total: total}, lerr
 	})
 	if err != nil {
 		return nil, apiconnect.Err(ctx, err)
 	}
-	resp := &anubisv1.ListApplicationsResponse{}
-	for i := range out.([]tenancydomain.ApplicationRecord) {
-		a := out.([]tenancydomain.ApplicationRecord)[i]
+	pg := out.(page)
+	resp := &anubisv1.ListApplicationsResponse{Total: int32(pg.total)}
+	for i := range pg.apps {
+		a := pg.apps[i]
 		resp.Applications = append(resp.Applications, appProto(&a))
+	}
+	// A full page means there is probably another; the cursor is the last
+	// slug, which is what the query orders by.
+	if size > 0 && len(pg.apps) == size {
+		resp.NextPageToken = pg.apps[len(pg.apps)-1].Slug
 	}
 	return connect.NewResponse(resp), nil
 }
@@ -516,4 +528,98 @@ func pageInput(p *anubisv1.AuthPage) tenancydomain.AuthPageInput {
 		Status: p.Status, ApplicationID: p.ApplicationId,
 		Config: []byte(p.ConfigJson),
 	}
+}
+
+func (h *TenantAdminHandler) UpdateTenant(ctx context.Context,
+	req *connect.Request[anubisv1.UpdateTenantRequest],
+) (*connect.Response[anubisv1.UpdateTenantResponse], error) {
+	if _, err := h.f.Do(ctx, "admin.tenant.update", func(ctx context.Context) (any, error) {
+		return nil, h.svc.UpdateTenant(ctx, req.Msg.Id, req.Msg.Name)
+	}); err != nil {
+		return nil, apiconnect.Err(ctx, err)
+	}
+	return connect.NewResponse(&anubisv1.UpdateTenantResponse{}), nil
+}
+
+func (h *TenantAdminHandler) SetTenantStatus(ctx context.Context,
+	req *connect.Request[anubisv1.SetTenantStatusRequest],
+) (*connect.Response[anubisv1.SetTenantStatusResponse], error) {
+	if _, err := h.f.Do(ctx, "admin.tenant.status", func(ctx context.Context) (any, error) {
+		return nil, h.svc.SetTenantStatus(ctx, req.Msg.Id, req.Msg.Status)
+	}); err != nil {
+		return nil, apiconnect.Err(ctx, err)
+	}
+	return connect.NewResponse(&anubisv1.SetTenantStatusResponse{}), nil
+}
+
+func (h *TenantAdminHandler) GetTenantStats(ctx context.Context,
+	req *connect.Request[anubisv1.GetTenantStatsRequest],
+) (*connect.Response[anubisv1.GetTenantStatsResponse], error) {
+	out, err := h.f.Do(ctx, "admin.tenant.stats", func(ctx context.Context) (any, error) {
+		return h.svc.TenantStats(ctx, req.Msg.Id)
+	})
+	if err != nil {
+		return nil, apiconnect.Err(ctx, err)
+	}
+	st := out.(*tenancydomain.TenantStats)
+	return connect.NewResponse(&anubisv1.GetTenantStatsResponse{
+		Identities: int32(st.Identities), Grants: int32(st.Grants),
+		ScopeNodes: int32(st.ScopeNodes), Memberships: int32(st.Memberships),
+	}), nil
+}
+
+func (h *TenantAdminHandler) ListApiKeys(ctx context.Context,
+	_ *connect.Request[anubisv1.ListApiKeysRequest],
+) (*connect.Response[anubisv1.ListApiKeysResponse], error) {
+	out, err := h.f.Do(ctx, "admin.apikey.list", func(ctx context.Context) (any, error) {
+		return h.svc.ListAPIKeys(ctx)
+	})
+	if err != nil {
+		return nil, apiconnect.Err(ctx, err)
+	}
+	resp := &anubisv1.ListApiKeysResponse{}
+	for _, k := range out.([]authdomain.APIKeyRecord) {
+		pk := &anubisv1.ApiKey{
+			Id: k.ID, Label: k.Label, Prefix: k.Lookup,
+			CreatedBy: k.CreatedBy, CreatedAt: k.CreatedAt.Unix(),
+		}
+		if k.LastUsedAt != nil {
+			pk.LastUsedAt = k.LastUsedAt.Unix()
+		}
+		if k.ExpiresAt != nil {
+			pk.ExpiresAt = k.ExpiresAt.Unix()
+		}
+		if k.RevokedAt != nil {
+			pk.RevokedAt = k.RevokedAt.Unix()
+		}
+		resp.Keys = append(resp.Keys, pk)
+	}
+	return connect.NewResponse(resp), nil
+}
+
+func (h *TenantAdminHandler) CreateApiKey(ctx context.Context,
+	req *connect.Request[anubisv1.CreateApiKeyRequest],
+) (*connect.Response[anubisv1.CreateApiKeyResponse], error) {
+	out, err := h.f.Do(ctx, "admin.apikey.create", func(ctx context.Context) (any, error) {
+		full, prefix, id, cerr := h.svc.CreateAPIKey(ctx, req.Msg.Label, req.Msg.ExpiresAt)
+		if cerr != nil {
+			return nil, cerr
+		}
+		return &anubisv1.CreateApiKeyResponse{ApiKey: full, Prefix: prefix, Id: id}, nil
+	})
+	if err != nil {
+		return nil, apiconnect.Err(ctx, err)
+	}
+	return connect.NewResponse(out.(*anubisv1.CreateApiKeyResponse)), nil
+}
+
+func (h *TenantAdminHandler) RevokeApiKey(ctx context.Context,
+	req *connect.Request[anubisv1.RevokeApiKeyRequest],
+) (*connect.Response[anubisv1.RevokeApiKeyResponse], error) {
+	if _, err := h.f.Do(ctx, "admin.apikey.revoke", func(ctx context.Context) (any, error) {
+		return nil, h.svc.RevokeAPIKey(ctx, req.Msg.Id)
+	}); err != nil {
+		return nil, apiconnect.Err(ctx, err)
+	}
+	return connect.NewResponse(&anubisv1.RevokeApiKeyResponse{}), nil
 }

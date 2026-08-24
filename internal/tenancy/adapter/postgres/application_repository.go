@@ -39,8 +39,36 @@ func (s *Repository) ApplicationByID(ctx context.Context, tenantID, id string) (
 	}, nil
 }
 
-func (s *Repository) ListApplications(ctx context.Context, tenantID string) ([]tenancydomain.ApplicationRecord, error) {
-	rows, err := s.q(ctx).ListApplications(ctx, tenantID)
+// ListApplications is one keyset page of the TENANT's relying parties.
+// Anubis's own two are excluded by the query — see the SQL for why.
+func (s *Repository) ListApplications(ctx context.Context, tenantID, query, after string, pageSize int32) ([]tenancydomain.ApplicationRecord, error) {
+	if pageSize <= 0 {
+		pageSize = 50
+	}
+	if pageSize > 200 {
+		pageSize = 200
+	}
+	rows, err := s.q(ctx).ListApplications(ctx, gen.ListApplicationsParams{
+		TenantID: tenantID, Query: query, After: after, PageSize: pageSize,
+	})
+	if err != nil {
+		return nil, database.MapErr(err)
+	}
+	out := make([]tenancydomain.ApplicationRecord, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, tenancydomain.ApplicationRecord{
+			ID: r.ID, Slug: r.Slug, Name: r.Name, Kind: r.Kind, Status: r.Status,
+			RedirectURIs: r.RedirectUris, PostLogoutRedirectURIs: r.PostLogoutRedirectUris, BackchannelLogoutURI: database.Deref(r.BackchannelLogoutUri),
+			TokenFormat:    r.TokenFormat,
+			AccessTokenTTL: r.AccessTokenTtl, RefreshTokenTTL: r.RefreshTokenTtl,
+			ManifestVersion: int(r.ManifestVersion),
+		})
+	}
+	return out, nil
+}
+
+func (s *Repository) AllApplications(ctx context.Context, tenantID string) ([]tenancydomain.ApplicationRecord, error) {
+	rows, err := s.q(ctx).AllApplications(ctx, tenantID)
 	if err != nil {
 		return nil, database.MapErr(err)
 	}
@@ -109,4 +137,14 @@ func (s *Repository) BackchannelApps(ctx context.Context, tenantID string) ([]st
 		uris = append(uris, database.Deref(r.BackchannelLogoutUri))
 	}
 	return slugs, uris, nil
+}
+
+// CountApplications is the tenant's whole population, so a page can say
+// "20 of 138" rather than implying it is everything there is.
+func (s *Repository) CountApplications(ctx context.Context, tenantID string) (int, error) {
+	n, err := s.q(ctx).CountApplications(ctx, tenantID)
+	if err != nil {
+		return 0, database.MapErr(err)
+	}
+	return int(n), nil
 }

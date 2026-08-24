@@ -1,12 +1,6 @@
 #!/usr/bin/env bash
-# API dev server. Placeholder until the Go service exists (see docs/roadmap.md).
+# API dev server.
 source "$(dirname "${BASH_SOURCE[0]}")/lib/common.sh"
-
-if [ ! -f "$ROOT/go.mod" ]; then
-  warn "no Go module yet — the API is not built (docs/roadmap.md, phase 0-1)"
-  dim  "  the console runs against its in-memory backend until then"
-  exit 0
-fi
 
 need go
 require_port "$ANUBIS_API_PORT" "api" "API"

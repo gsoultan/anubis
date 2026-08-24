@@ -9,6 +9,70 @@ import (
 	"context"
 )
 
+const allApplications = `-- name: AllApplications :many
+SELECT id, tenant_id, slug, name, kind, status, redirect_uris,
+       post_logout_redirect_uris,
+       backchannel_logout_uri, token_format, manifest_version,
+       access_token_ttl::text AS access_token_ttl,
+       refresh_token_ttl::text AS refresh_token_ttl
+FROM applications
+WHERE tenant_id = $1
+ORDER BY slug
+`
+
+type AllApplicationsRow struct {
+	ID                     string
+	TenantID               string
+	Slug                   string
+	Name                   string
+	Kind                   string
+	Status                 string
+	RedirectUris           []string
+	PostLogoutRedirectUris []string
+	BackchannelLogoutUri   *string
+	TokenFormat            string
+	ManifestVersion        int32
+	AccessTokenTtl         string
+	RefreshTokenTtl        string
+}
+
+// AllApplications is the unpaged read for internal checks: validating a
+// post-logout redirect walks every registered URI, and paging that would
+// silently reject valid redirects past the first page.
+func (q *Queries) AllApplications(ctx context.Context, tenantID string) ([]AllApplicationsRow, error) {
+	rows, err := q.db.Query(ctx, allApplications, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []AllApplicationsRow
+	for rows.Next() {
+		var i AllApplicationsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.TenantID,
+			&i.Slug,
+			&i.Name,
+			&i.Kind,
+			&i.Status,
+			&i.RedirectUris,
+			&i.PostLogoutRedirectUris,
+			&i.BackchannelLogoutUri,
+			&i.TokenFormat,
+			&i.ManifestVersion,
+			&i.AccessTokenTtl,
+			&i.RefreshTokenTtl,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const bumpManifestVersion = `-- name: BumpManifestVersion :one
 UPDATE applications SET manifest_version = manifest_version + 1, updated_at = now()
 WHERE id = $1
@@ -20,6 +84,18 @@ func (q *Queries) BumpManifestVersion(ctx context.Context, id string) (int32, er
 	var manifest_version int32
 	err := row.Scan(&manifest_version)
 	return manifest_version, err
+}
+
+const countApplications = `-- name: CountApplications :one
+SELECT count(*) FROM applications
+ WHERE tenant_id = $1
+`
+
+func (q *Queries) CountApplications(ctx context.Context, tenantID string) (int64, error) {
+	row := q.db.QueryRow(ctx, countApplications, tenantID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
 }
 
 const createApplication = `-- name: CreateApplication :one
@@ -246,8 +322,20 @@ SELECT id, tenant_id, slug, name, kind, status, redirect_uris,
        refresh_token_ttl::text AS refresh_token_ttl
 FROM applications
 WHERE tenant_id = $1
+  AND ($2::text = ''
+       OR slug ILIKE '%' || $2::text || '%'
+       OR name ILIKE '%' || $2::text || '%')
+  AND ($3::text = '' OR slug > $3::text)
 ORDER BY slug
+LIMIT $4
 `
+
+type ListApplicationsParams struct {
+	TenantID string
+	Query    string
+	After    string
+	PageSize int32
+}
 
 type ListApplicationsRow struct {
 	ID                     string
@@ -265,8 +353,16 @@ type ListApplicationsRow struct {
 	RefreshTokenTtl        string
 }
 
-func (q *Queries) ListApplications(ctx context.Context, tenantID string) ([]ListApplicationsRow, error) {
-	rows, err := q.db.Query(ctx, listApplications, tenantID)
+// ListApplications is the TENANT's relying parties: the things its people
+// sign in to. Since 0029 nothing else lives in this table — Anubis itself
+// registers no applications anywhere.
+func (q *Queries) ListApplications(ctx context.Context, arg ListApplicationsParams) ([]ListApplicationsRow, error) {
+	rows, err := q.db.Query(ctx, listApplications,
+		arg.TenantID,
+		arg.Query,
+		arg.After,
+		arg.PageSize,
+	)
 	if err != nil {
 		return nil, err
 	}

@@ -10,6 +10,8 @@ type ScopeNodeAdminUsecase interface {
 	ListScopeNodeTypes(ctx context.Context, axis string) ([]scopedomain.ScopeNodeTypeRecord, error)
 	CreateScopeNodeType(ctx context.Context, t scopedomain.ScopeNodeTypeRecord) error
 	ListScopeNodes(ctx context.Context, axis, parentID, query string, includeArchived bool) ([]scopedomain.ScopeNodeRecord, error)
+	ScopeNode(ctx context.Context, id string) (*scopedomain.ScopeNodeRecord, error)
+	ScopeAncestors(ctx context.Context, id string) ([]scopedomain.ScopeAncestor, error)
 	CreateScopeNode(ctx context.Context, axis, nodeType, parentID, slug, name, externalRef string) (*scopedomain.ScopeNodeRecord, error)
 	EnsureAxisRoot(ctx context.Context, axis string) (string, error)
 	MoveScopeNode(ctx context.Context, nodeID, newParentID string) error

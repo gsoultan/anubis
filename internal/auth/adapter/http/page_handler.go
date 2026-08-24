@@ -148,7 +148,9 @@ func (h *OIDCHandler) allowedPostLogout(r *http.Request, tenantID, candidate str
 	if candidate == "" {
 		return false
 	}
-	apps, err := h.apps.ListApplications(r.Context(), tenantID)
+	// Every registered application, Anubis's own included: narrowing this to
+	// what an admin screen shows would silently reject valid redirects.
+	apps, err := h.apps.AllApplications(r.Context(), tenantID)
 	if err != nil {
 		return false
 	}

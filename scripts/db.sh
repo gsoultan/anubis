@@ -6,6 +6,7 @@
 #   scripts/db.sh status      state, port publishing, row counts
 #   scripts/db.sh migrate     apply pending migrations
 #   scripts/db.sh baseline    record existing files as applied (adopting a db)
+#   scripts/db.sh seed        migrate, load the dev dataset, ensure a login
 #   scripts/db.sh reset       DESTRUCTIVE: drop schema, migrate, seed, validate
 #   scripts/db.sh psql [...]  interactive shell, or run arguments
 #   scripts/db.sh recreate    DESTRUCTIVE: delete and rebuild the container
@@ -160,16 +161,95 @@ cmd_recreate() {
   info "schema is empty — run: scripts/db.sh reset"
 }
 
+# Bring the database to a state the console can actually be used against:
+# schema current, the development dataset loaded, and somebody who can sign in.
+#
+# Non-destructive on purpose. It is run on every `scripts/dev.sh`, and
+# reseeding 150k grants because someone opened the console twice would be
+# both slow and surprising.
+cmd_seed() {
+  cmd_up
+  cmd_migrate
+  local tenants
+  tenants="$(psql_db -tAc "SELECT count(*) FROM tenants" 2>/dev/null || echo 0)"
+  if [ "${tenants:-0}" -eq 0 ]; then
+    info "loading the development dataset (bench/seed.sql)"
+    psql_db -v ON_ERROR_STOP=1 -q < "$ROOT/bench/seed.sql" >/dev/null \
+      || die "seed failed — run: scripts/db.sh reset"
+    ok "dataset loaded"
+  else
+    dim "  $tenants tenants already present — not reseeding"
+  fi
+  cmd_devadmin
+}
+
+# bench/seed.sql creates tens of thousands of identities and NOT ONE password:
+# it exists to benchmark authorize(), not to be signed into. So nothing in a
+# freshly seeded database can use the console. This makes an account that can.
+#
+# The password is fixed and printed, because it is a development convenience
+# and pretending otherwise would just mean everyone greps for it. It is
+# refused outright when ANUBIS_ENV says this is production.
+cmd_devadmin() {
+  need go
+  if [ "${ANUBIS_ENV:-dev}" = "prod" ]; then
+    die "refusing to create a fixed-password admin with ANUBIS_ENV=prod"
+  fi
+  local pass="${ANUBIS_DEV_ADMIN_PASS:-anubis-dev-password}"
+  local tenant="${ANUBIS_DEV_TENANT:-impack}"
+  # A dedicated account, NOT 'admin'. bootstrap only creates an identity that
+  # is absent, so reusing a human-managed admin would print a password that
+  # does not open it — a dev script that lies is worse than no dev script.
+  local user="${ANUBIS_DEV_ADMIN_USER:-devadmin}"
+
+  # bootstrap looks each object up before creating it, so this is safe to run
+  # on every start.
+  # Two accounts, two populations: an ordinary PERSON inside $tenant for the
+  # tenant-facing flows, and a PLATFORM owner who belongs to no tenant and is
+  # the only kind of account that can administer anything.
+  ( cd "$ROOT" && ANUBIS_DB_URL="$(db_url)" go run ./cmd/anubisd bootstrap \
+      --tenant "$tenant" --name "Impack" \
+      --admin-user "$user" --admin-pass "$pass" \
+      --platform-user "$user" --platform-pass "$pass" >/dev/null 2>&1 ) \
+    || die "bootstrap failed — run it directly to see why:
+  ANUBIS_DB_URL='$(db_url)' go run ./cmd/anubisd bootstrap --tenant $tenant --admin-user $user --admin-pass '<pass>'"
+  # This account belongs to the dev script, so the script guarantees it can be
+  # signed into. A second factor enrolled during testing would otherwise lock
+  # the environment behind an authenticator nobody still has — which is
+  # exactly what happened once.
+  local cleared
+  cleared="$(psql_db -tAc "UPDATE platform_users
+                              SET totp_secret_enc = NULL, totp_enrolled_at = NULL,
+                                  totp_last_step = 0
+                            WHERE lower(username) = lower('$user')
+                              AND totp_enrolled_at IS NOT NULL
+                        RETURNING username" 2>/dev/null || true)"
+  if [ -n "$cleared" ]; then
+    warn "cleared the second factor on '$user' so this environment stays signable-into"
+    dim  "  to test 2FA, enrol from the console and keep the authenticator"
+  fi
+
+  ok "platform console: user '$user', password '$pass' (no tenant — operators belong to none)"
+  dim "  tenant '$tenant' also holds a person '$user' for tenant-facing flows (no admin power)"
+}
+
+db_url() {
+  printf 'postgres://%s:%s@localhost:%s/%s?sslmode=disable' \
+    "$ANUBIS_DB_USER" "$ANUBIS_DB_USER" "$ANUBIS_DB_PORT" "$ANUBIS_DB_NAME"
+}
+
 case "${1:-status}" in
   up)       cmd_up ;;
   down)     container stop "$ANUBIS_DB_CONTAINER" >/dev/null && ok "stopped" ;;
   status)   cmd_status ;;
   migrate)  cmd_migrate ;;
+  seed)     cmd_seed ;;
+  devadmin) cmd_devadmin ;;
   baseline) cmd_baseline ;;
   reset)    cmd_reset ;;
   recreate) cmd_recreate ;;
   psql)     shift; cmd_up >/dev/null; container exec -it "$ANUBIS_DB_CONTAINER" \
               psql -U "$ANUBIS_DB_USER" -d "$ANUBIS_DB_NAME" "$@" ;;
   *)        die "unknown command '$1'
-  usage: db.sh {up|down|status|migrate|baseline|reset|recreate|psql}" ;;
+  usage: db.sh {up|down|status|migrate|seed|devadmin|baseline|reset|recreate|psql}" ;;
 esac

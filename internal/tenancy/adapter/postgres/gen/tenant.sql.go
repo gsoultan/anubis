@@ -19,6 +19,17 @@ func (q *Queries) BumpCatalogVersion(ctx context.Context, tenantID string) error
 	return err
 }
 
+const countTenantIdentities = `-- name: CountTenantIdentities :one
+SELECT count(*) FROM identities i WHERE i.tenant_id = $1
+`
+
+func (q *Queries) CountTenantIdentities(ctx context.Context, id string) (int64, error) {
+	row := q.db.QueryRow(ctx, countTenantIdentities, id)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createTenant = `-- name: CreateTenant :one
 INSERT INTO tenants (slug, name)
 VALUES ($1, $2)
@@ -117,6 +128,36 @@ func (q *Queries) GetTenantBySlug(ctx context.Context, slug string) (GetTenantBy
 	return i, err
 }
 
+const getTenantStats = `-- name: GetTenantStats :one
+SELECT
+  (SELECT count(*) FROM identities  i WHERE i.tenant_id = $1) AS identities,
+  (SELECT count(*) FROM grants      g WHERE g.tenant_id = $1 AND g.revoked_at IS NULL) AS grants,
+  (SELECT count(*) FROM scope_nodes n WHERE n.tenant_id = $1 AND n.status = 'active') AS scope_nodes,
+  (SELECT count(*) FROM memberships m WHERE m.tenant_id = $1) AS memberships
+`
+
+type GetTenantStatsRow struct {
+	Identities  int64
+	Grants      int64
+	ScopeNodes  int64
+	Memberships int64
+}
+
+// TenantStats is the "what is in here" summary the tenants page shows beside
+// each row. Counted live rather than cached: a stale number next to a tenant
+// somebody is about to retire is worse than no number.
+func (q *Queries) GetTenantStats(ctx context.Context, id string) (GetTenantStatsRow, error) {
+	row := q.db.QueryRow(ctx, getTenantStats, id)
+	var i GetTenantStatsRow
+	err := row.Scan(
+		&i.Identities,
+		&i.Grants,
+		&i.ScopeNodes,
+		&i.Memberships,
+	)
+	return i, err
+}
+
 const listTenants = `-- name: ListTenants :many
 SELECT id, slug, name, status, created_at FROM tenants ORDER BY slug
 `
@@ -153,4 +194,44 @@ func (q *Queries) ListTenants(ctx context.Context) ([]ListTenantsRow, error) {
 		return nil, err
 	}
 	return items, nil
+}
+
+const setTenantStatus = `-- name: SetTenantStatus :execrows
+UPDATE tenants SET status = $1, updated_at = now()
+ WHERE id = $2
+`
+
+type SetTenantStatusParams struct {
+	Status string
+	ID     string
+}
+
+// SetTenantStatus is how a tenant is suspended or retired. There is no DELETE:
+// every grant, identity, scope node and audit record in the installation hangs
+// off this row, and dropping it would take the evidence with it. 'archived' is
+// what "delete" means here.
+func (q *Queries) SetTenantStatus(ctx context.Context, arg SetTenantStatusParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setTenantStatus, arg.Status, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const updateTenant = `-- name: UpdateTenant :execrows
+UPDATE tenants SET name = $1, updated_at = now()
+ WHERE id = $2
+`
+
+type UpdateTenantParams struct {
+	Name string
+	ID   string
+}
+
+func (q *Queries) UpdateTenant(ctx context.Context, arg UpdateTenantParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updateTenant, arg.Name, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }

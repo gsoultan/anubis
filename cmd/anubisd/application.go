@@ -29,6 +29,10 @@ import (
 	authzadmin "github.com/gsoultan/anubis/internal/authz/app/admin"
 	authzep "github.com/gsoultan/anubis/internal/authz/endpoint"
 	authzsvc "github.com/gsoultan/anubis/internal/authz/service"
+	controlpg "github.com/gsoultan/anubis/internal/control/adapter/postgres"
+	controlrpc "github.com/gsoultan/anubis/internal/control/adapter/rpc"
+	controlapp "github.com/gsoultan/anubis/internal/control/app"
+	controlsvc "github.com/gsoultan/anubis/internal/control/service"
 	gatehttp "github.com/gsoultan/anubis/internal/gate/adapter/http"
 	gatepg "github.com/gsoultan/anubis/internal/gate/adapter/postgres"
 	gateapp "github.com/gsoultan/anubis/internal/gate/app"
@@ -43,6 +47,9 @@ import (
 	"github.com/gsoultan/anubis/internal/platform/jobs"
 	"github.com/gsoultan/anubis/internal/platform/mw"
 	"github.com/gsoultan/anubis/internal/platform/ratelimit"
+	provisioningrpc "github.com/gsoultan/anubis/internal/provisioning/adapter/rpc"
+	provisioningapp "github.com/gsoultan/anubis/internal/provisioning/app"
+	provisioningsvc "github.com/gsoultan/anubis/internal/provisioning/service"
 	scopepg "github.com/gsoultan/anubis/internal/scope/adapter/postgres"
 	scoperpc "github.com/gsoultan/anubis/internal/scope/adapter/rpc"
 	scopeapp "github.com/gsoultan/anubis/internal/scope/app"
@@ -70,6 +77,7 @@ type application struct {
 	// console; page lookup itself always resolves the tenant from the request.
 	bootstrapTenantSlug string
 
+	control  *controlpg.Repository
 	identity *identitypg.Repository
 	auth     *authpg.Repository
 	authz    *authzpg.Repository
@@ -85,6 +93,7 @@ func newApplication(ctx context.Context, cfg *config.Config, db *database.DB, lo
 		masterKey:           cfg.MasterKey,
 		issuerURL:           cfg.Issuer,
 		bootstrapTenantSlug: cfg.DefaultTenant,
+		control:             controlpg.New(db),
 		identity:            identitypg.New(db),
 		auth:                authpg.New(db),
 		authz:               authzpg.New(db),
@@ -167,26 +176,60 @@ func (a *application) registerRPC(rpc *http.ServeMux, opts connect.HandlerOption
 	// --- admin planes -------------------------------------------------------
 	f := mw.NewFactory(logger)
 
-	identityAdmin := identityapp.NewIdentityAdminInteractor(a.authz, a.identity, a.identity,
+	identityAdmin := identityapp.NewIdentityAdminInteractor(a.control, a.clock.Now,
+		a.identity, a.identity,
 		a.identity, a.identity, a.identity, a.identity, a.auth, a.auth, a.tenancy,
 		a.auth, a.clock, a.auditor)
 	rpc.Handle(anubisv1connect.NewIdentityAdminServiceHandler(
 		identityrpc.NewIdentityAdminHandler(identitysvc.NewIdentityAdminService(identityAdmin), f), opts))
 
-	scopeAdmin := scopeapp.NewScopeAdminInteractor(a.authz, a.scope, a.scope, a.scope,
+	scopeAdmin := scopeapp.NewScopeAdminInteractor(a.authz, a.control, a.clock.Now,
+		a.scope, a.scope, a.scope,
 		feed.NewFetcher(), a.auth, a.auditor)
 	rpc.Handle(anubisv1connect.NewScopeAdminServiceHandler(
 		scoperpc.NewScopeAdminHandler(scopesvc.NewScopeAdminService(scopeAdmin), f), opts))
 
-	authzAdmin := authzadmin.NewAuthzAdminInteractor(a.authz, a.authz, a.authz, a.authz,
+	authzAdmin := authzadmin.NewAuthzAdminInteractor(a.control, a.clock.Now,
+		a.authz, a.authz, a.authz,
 		a.authz, a.tenancy, a.tenancy, a.auth, a.auditor)
 	rpc.Handle(anubisv1connect.NewAuthzAdminServiceHandler(
 		authzrpc.NewAuthzAdminHandler(authzsvc.NewAuthzAdminService(authzAdmin), f), opts))
 
-	tenantAdmin := tenancyapp.NewTenantAdminInteractor(a.authz, a.tenancy, a.identity,
+	// --- control plane (ADR-0011) -------------------------------------------
+	// Who operates this installation, and over which tenants. The owner that
+	// setup creates is an ordinary identity in the platform tenant, so it
+	// appears in this list like any other operator.
+	operatorAdmin := controlapp.NewOperatorAdminInteractor(a.control, a.tenancy,
+		a.control, a.control, a.clock, a.identity, a.auditor)
+	rpc.Handle(anubisv1connect.NewPlatformAdminServiceHandler(
+		controlrpc.NewPlatformAdminHandler(
+			controlsvc.NewControlService(operatorAdmin), f, a.clock.Now), opts))
+
+	// The operators' own door. Separate from AuthService, which resolves a
+	// tenant identity — a platform user is deliberately not one.
+	platformAuth := controlapp.NewPlatformAuthInteractor(a.control, a.control, a.tenancy,
+		a.ring, a.clock, a.auditor, a.issuerURL, a.masterKey)
+	rpc.Handle(anubisv1connect.NewPlatformAuthServiceHandler(
+		controlrpc.NewPlatformAuthHandler(platformAuth, f, limiter), opts))
+
+	// --- provisioning context -----------------------------------------------
+	// Bulk import is orchestration, not a second way in: every write goes
+	// through the identity and authz admin usecases wired just above, so it
+	// inherits their permission checks, their validation and their audit
+	// events instead of carrying a copy of any of them.
+	importer := provisioningapp.NewImportInteractor(a.control, a.clock.Now,
+		a.identity, identityAdmin,
+		a.authz, authzAdmin, a.scope, a.clock, a.identity, a.auditor)
+	rpc.Handle(anubisv1connect.NewProvisioningServiceHandler(
+		provisioningrpc.NewProvisioningHandler(
+			provisioningsvc.NewProvisioningService(importer), f), opts))
+
+	tenantAdmin := tenancyapp.NewTenantAdminInteractor(a.control, a.clock.Now,
+		a.tenancy, a.auth, a.identity,
 		a.tenancy, a.tenancy, a.audit, a.auth, a.tenancy, a.auditor,
 		&storeKeyRotator{keys: a.auth, master: a.masterKey}, a.auditor)
-	pageAdmin := tenancyapp.NewPageAdminInteractor(a.authz, a.tenancy, a.tenancy, a.auditor)
+	pageAdmin := tenancyapp.NewPageAdminInteractor(a.control, a.clock.Now,
+		a.tenancy, a.tenancy, a.auditor)
 	rpc.Handle(anubisv1connect.NewTenantAdminServiceHandler(
 		tenancyrpc.NewTenantAdminHandler(
 			tenancysvc.NewTenantAdminService(tenantAdmin, pageAdmin), f,
@@ -198,6 +241,11 @@ func (a *application) registerRPC(rpc *http.ServeMux, opts connect.HandlerOption
 func (a *application) registerHTTP(ctx context.Context, srv *apihttp.Server,
 	cfg *config.Config, health *apihttp.HealthHandler,
 	limiter *ratelimit.Limiter, logger *slog.Logger) {
+
+	// Read before sign-in, so the console can fill in the tenant instead of
+	// asking someone to recall a slug.
+	console := apihttp.NewConsoleHandler(a.control, cfg.Issuer, logger)
+	srv.HandleFunc("GET /v1/console-config", console.Config)
 
 	wellKnown := authhttp.NewWellKnownHandler(cfg.Issuer, a.ring)
 	srv.HandleFunc("GET /.well-known/anubis-keys.json", wellKnown.Keys)

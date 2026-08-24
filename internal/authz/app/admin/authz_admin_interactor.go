@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	auditdomain "github.com/gsoultan/anubis/internal/audit/domain"
 	auditport "github.com/gsoultan/anubis/internal/audit/port"
@@ -35,7 +36,10 @@ type authzAdminInteractor struct {
 }
 
 func NewAuthzAdminInteractor(
-	authz authzport.AuthzRepository,
+	// ops lets a PLATFORM OPERATOR do this inside a tenant they are assigned
+	// to (ADR-0011): their authority is an assignment, not a grant.
+	ops guard.OperatorAuthority,
+	clockNow func() time.Time,
 	roles authzport.RoleRepository,
 	perms authzport.PermissionCatalogRepository,
 	grants authzport.GrantRepository,
@@ -46,7 +50,7 @@ func NewAuthzAdminInteractor(
 	audit auditport.Auditor,
 ) AuthzAdminUsecase {
 	return &authzAdminInteractor{
-		guard: guard.New(authz), roles: roles, perms: perms,
+		guard: guard.New().WithOperators(ops, clockNow), roles: roles, perms: perms,
 		grants: grants, members: members, apps: apps, routes: routes,
 		tx: tx, audit: audit,
 	}
@@ -173,6 +177,29 @@ func (u *authzAdminInteractor) ListPermissions(ctx context.Context, applicationS
 		appID = app.ID
 	}
 	return u.perms.ListPermissions(ctx, p.TenantID, appID, includeDeprecated)
+}
+
+// SearchGrants backs the Access screen.
+func (u *authzAdminInteractor) SearchGrants(ctx context.Context, q grant.GrantSearch) ([]grant.GrantHit, []grant.GrantScopeRecord, error) {
+	p, err := u.guard.Require(ctx, "anubis:identity:read")
+	if err != nil {
+		return nil, nil, err
+	}
+	hits, err := u.grants.SearchGrants(ctx, p.TenantID, q)
+	if err != nil {
+		return nil, nil, err
+	}
+	ids := make([]string, len(hits))
+	for i, h := range hits {
+		ids[i] = h.Grant.ID
+	}
+	// Scopes for the page only. Fetching them for the whole result set is
+	// what made "list every grant" impossible in the first place.
+	scopes, err := u.grants.GrantScopes(ctx, ids)
+	if err != nil {
+		return nil, nil, err
+	}
+	return hits, scopes, nil
 }
 
 func (u *authzAdminInteractor) ListGrants(ctx context.Context, identityID string, includeRevoked bool) ([]grant.GrantRecord, []grant.GrantScopeRecord, error) {
@@ -394,8 +421,14 @@ func (u *authzAdminInteractor) ApplyManifest(ctx context.Context, applicationSlu
 			for _, ra := range mr.Permissions {
 				id, ok := keyByRA[ra]
 				if !ok {
+					// Naming the expected form matters: the obvious guess is
+					// the full permission key, and "invalid argument" against
+					// a value that looks right is a long afternoon.
 					return apperr.ErrInvalidArgument.
-						With("role", mr.Name).With("permission", ra)
+						With("role", mr.Name).
+						With("permission", ra).
+						With("expected", "resource:action, without the application slug — "+
+							"the manifest is already scoped to "+app.Slug)
 				}
 				permIDs = append(permIDs, id)
 			}

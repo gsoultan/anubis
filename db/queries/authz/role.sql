@@ -1,3 +1,6 @@
+-- ListRoles is the TENANT's roles: what its own people can be given. Who may
+-- ADMINISTER the tenant is never here — that is platform_assignments
+-- (ADR-0011), a different population in different tables.
 -- name: ListRoles :many
 SELECT r.id, r.tenant_id, r.name, r.description, r.is_system,
        r.allowed_realm_kinds, r.assignable_at, r.application_id,

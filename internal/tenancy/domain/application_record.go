@@ -15,5 +15,9 @@ type ApplicationRecord struct {
 	AccessTokenTTLSecs     int64
 	RefreshTokenTTLSecs    int64
 	ManifestVersion        int
-	ClientSecretHash       string
+	// IsSystem marks one of Anubis's own applications (ADR-0011). They own
+	// the permission catalog and are never something a tenant's people sign
+	// in to, so they stay out of the tenant's application list.
+	IsSystem         bool
+	ClientSecretHash string
 }

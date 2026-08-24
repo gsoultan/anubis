@@ -6,40 +6,14 @@ import (
 	"fmt"
 	"log/slog"
 
-	authzpg "github.com/gsoultan/anubis/internal/authz/adapter/postgres"
-	authzdomain "github.com/gsoultan/anubis/internal/authz/domain"
-	"github.com/gsoultan/anubis/internal/authz/domain/grant"
+	controlpg "github.com/gsoultan/anubis/internal/control/adapter/postgres"
+	controlapp "github.com/gsoultan/anubis/internal/control/app"
 	identitypg "github.com/gsoultan/anubis/internal/identity/adapter/postgres"
-	identitydomain "github.com/gsoultan/anubis/internal/identity/domain"
-	"github.com/gsoultan/anubis/internal/identity/domain/credential"
 	"github.com/gsoultan/anubis/internal/platform/config"
-	"github.com/gsoultan/anubis/internal/platform/crypto/kdf"
 	"github.com/gsoultan/anubis/internal/platform/database"
 	tenancypg "github.com/gsoultan/anubis/internal/tenancy/adapter/postgres"
-	tenancydomain "github.com/gsoultan/anubis/internal/tenancy/domain"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
-
-// selfPermissions is Anubis's own catalog — Anubis is its own relying party.
-// Delegated administration works through ordinary grants of these.
-var selfPermissions = []struct{ resource, action, description, risk string }{
-	{"identity", "read", "Read identities and their credentials", "normal"},
-	{"identity", "write", "Create, modify, disable identities", "sensitive"},
-	{"credential", "write", "Issue and revoke credentials and API keys", "sensitive"},
-	{"consent", "write", "Record and withdraw consents", "normal"},
-	{"realm", "admin", "Manage realms and categories", "critical"},
-	{"application", "admin", "Manage applications and secrets", "critical"},
-	{"scope", "admin", "Manage scope axes and nodes", "sensitive"},
-	{"role", "admin", "Manage roles and their permissions", "critical"},
-	{"grant", "admin", "Create and revoke grants", "critical"},
-	{"membership", "admin", "Manage memberships", "sensitive"},
-	{"manifest", "apply", "Apply application manifests", "sensitive"},
-	{"audit", "read", "Query the audit log", "sensitive"},
-	{"key", "admin", "Manage signing keys", "critical"},
-	{"signin", "admin", "Manage the sign-in page", "normal"},
-	{"tenant", "admin", "Manage tenants", "critical"},
-	{"sync", "admin", "Manage scope sync sources", "sensitive"},
-}
 
 // runBootstrap provisions a usable installation: tenant, internal realm,
 // admin identity, console + anubis applications, the anubis.admin role
@@ -50,7 +24,12 @@ func runBootstrap(ctx context.Context, logger *slog.Logger, args []string) error
 	tenantName := fs.String("name", "Impack", "tenant display name")
 	adminUser := fs.String("admin-user", "admin", "admin username")
 	adminPass := fs.String("admin-pass", "", "admin password (required)")
-	consoleOrigin := fs.String("console-origin", "http://localhost:7447", "console origin for redirect URIs")
+	// The platform owner is a different population from the tenant admin
+	// above (ADR-0011): they operate the installation rather than belonging
+	// to any tenant in it. Setup creates one; this is how a development or
+	// scripted install gets one without the wizard.
+	platformUser := fs.String("platform-user", "", "platform owner username (optional)")
+	platformPass := fs.String("platform-pass", "", "platform owner password")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -73,133 +52,33 @@ func runBootstrap(ctx context.Context, logger *slog.Logger, args []string) error
 	db := database.New(pool)
 	tenancyRepo := tenancypg.New(db)
 	identityRepo := identitypg.New(db)
-	authzRepo := authzpg.New(db)
 
 	return db.WithinTx(ctx, func(ctx context.Context) error {
-		tenant, err := tenancyRepo.TenantBySlug(ctx, *tenantSlug)
-		if err != nil {
-			if tenant, err = tenancyRepo.CreateTenant(ctx, *tenantSlug, *tenantName); err != nil {
-				return fmt.Errorf("create tenant: %w", err)
-			}
-			logger.Info("tenant created", "slug", *tenantSlug)
-		}
-
-		realm, err := identityRepo.RealmByCode(ctx, tenant.ID, "internal")
-		if err != nil {
-			id, cerr := identityRepo.CreateRealm(ctx, tenant.ID, identitydomain.RealmRecord{
-				Code: "internal", Kind: "internal", DisplayName: "Internal",
-				MinAssurance:    1,
-				AllowedFactors:  []string{"password", "totp", "device_key"},
-				RequiredFactors: []string{"password"},
-			})
-			if cerr != nil {
-				return fmt.Errorf("create realm: %w", cerr)
-			}
-			if realm, err = identityRepo.RealmByID(ctx, id); err != nil {
-				return err
-			}
-			logger.Info("internal realm created")
-		}
-
-		// Applications: the console (browser SPA) and anubis itself.
-		if _, err := tenancyRepo.ApplicationBySlug(ctx, tenant.ID, "console"); err != nil {
-			if _, err := tenancyRepo.CreateApplication(ctx, tenant.ID, tenancydomain.ApplicationRecord{
-				Slug: "console", Name: "Anubis Console", Kind: "spa",
-				RedirectURIs: []string{*consoleOrigin + "/callback"},
-			}); err != nil {
-				return fmt.Errorf("create console app: %w", err)
-			}
-		}
-		anubisApp, err := tenancyRepo.ApplicationBySlug(ctx, tenant.ID, "anubis")
-		if err != nil {
-			id, cerr := tenancyRepo.CreateApplication(ctx, tenant.ID, tenancydomain.ApplicationRecord{
-				Slug: "anubis", Name: "Anubis", Kind: "service",
-			})
-			if cerr != nil {
-				return fmt.Errorf("create anubis app: %w", cerr)
-			}
-			if anubisApp, err = tenancyRepo.ApplicationByID(ctx, tenant.ID, id); err != nil {
-				return err
-			}
-		}
-
-		// Self catalog + admin role with the anubis:* pattern.
-		keep := make([]string, 0, len(selfPermissions))
-		for _, p := range selfPermissions {
-			id, _, uerr := authzRepo.UpsertPermission(ctx, tenant.ID, anubisApp.ID, "anubis",
-				authzdomain.PermissionRecord{
-					Resource: p.resource, Action: p.action,
-					Description: p.description, Risk: p.risk, MinAssurance: 1,
-				})
-			if uerr != nil {
-				return fmt.Errorf("permission %s:%s: %w", p.resource, p.action, uerr)
-			}
-			keep = append(keep, id)
-		}
-		if _, err := authzRepo.DeprecatePermissionsExcept(ctx, anubisApp.ID, keep); err != nil {
-			return err
-		}
-
-		adminRole, err := authzRepo.RoleByName(ctx, tenant.ID, "anubis.admin")
-		if err != nil {
-			id, cerr := authzRepo.CreateRole(ctx, tenant.ID, authzdomain.RoleRecord{
-				Name: "anubis.admin", Description: "Full Anubis administration",
-				AllowedRealmKinds: []string{"internal"},
-			}, anubisApp.ID)
-			if cerr != nil {
-				return fmt.Errorf("create role: %w", cerr)
-			}
-			adminRole = &authzdomain.RoleRecord{ID: id, Name: "anubis.admin"}
-		}
-		if err := authzRepo.SetRolePatterns(ctx, adminRole.ID, []string{"anubis:*"}); err != nil {
-			return err
-		}
-		if err := authzRepo.RecomputeRole(ctx, adminRole.ID); err != nil {
-			return err
-		}
-
-		// Admin identity + password + grant.
-		identity, err := identityRepo.IdentityForLogin(ctx, tenant.ID, realm.ID, *adminUser)
-		if err != nil || identity == nil {
-			hash, herr := kdf.Hash(*adminPass)
-			if herr != nil {
-				return herr
-			}
-			id, cerr := identityRepo.CreateIdentity(ctx, identitydomain.IdentityCreate{
-				TenantID: tenant.ID, RealmID: realm.ID, Username: *adminUser,
-				AssuranceLevel: 3, Status: "active",
-			})
-			if cerr != nil {
-				return fmt.Errorf("create admin identity: %w", cerr)
-			}
-			if _, cerr := identityRepo.CreateCredential(ctx, credential.CredentialInput{
-				IdentityID: id, TenantID: tenant.ID, Kind: "password", Secret: hash,
-			}); cerr != nil {
-				return cerr
-			}
-			identity = &identitydomain.Identity{ID: id}
-			logger.Info("admin identity created", "username", *adminUser)
-		}
-
-		grants, err := authzRepo.ListGrants(ctx, tenant.ID, identity.ID, false)
+		res, err := controlapp.Provision(ctx, controlapp.ProvisionInput{
+			TenantSlug: *tenantSlug,
+			TenantName: *tenantName,
+			// An ordinary person for exercising tenant-facing flows. NOT an
+			// administrator: administration is operator-only (ADR-0011), and
+			// the tenant-side admin role no longer exists to grant.
+			FirstUsername: *adminUser,
+			FirstPassword: *adminPass,
+		}, tenancyRepo, identityRepo)
 		if err != nil {
 			return err
 		}
-		hasAdmin := false
-		for _, g := range grants {
-			if g.RoleID == adminRole.ID {
-				hasAdmin = true
+		if *platformUser != "" {
+			control := controlpg.New(db)
+			id, oerr := controlapp.CreatePlatformOwner(ctx, control, control,
+				*platformUser, "", *platformPass)
+			if oerr != nil {
+				return oerr
+			}
+			if id != "" {
+				logger.Info("platform owner created", "username", *platformUser)
 			}
 		}
-		if !hasAdmin {
-			if _, err := authzRepo.CreateGrant(ctx, grant.GrantCreate{
-				TenantID: tenant.ID, IdentityID: identity.ID, RoleID: adminRole.ID,
-				GrantedBy: identity.ID, Reason: "bootstrap",
-			}); err != nil {
-				return fmt.Errorf("grant admin role: %w", err)
-			}
-		}
-		logger.Info("bootstrap complete", "tenant", *tenantSlug, "admin", *adminUser)
+		logger.Info("bootstrap complete", "tenant", *tenantSlug,
+			"tenant_created", res.TenantCreated, "first_user_created", res.UserCreated)
 		return nil
 	})
 }

@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/gsoultan/anubis/cmd/anubisd/install"
 	"github.com/gsoultan/anubis/gen/go/anubis/v1/anubisv1connect"
 	apiconnect "github.com/gsoultan/anubis/internal/api/connect"
 	apihttp "github.com/gsoultan/anubis/internal/api/http"
@@ -23,6 +24,14 @@ import (
 )
 
 func runServe(ctx context.Context, logger *slog.Logger) error {
+	// A first run has no database to ask, so the installer runs first and
+	// this function only continues once it has written a config.
+	if !config.Configured() {
+		if err := install.Run(ctx, logger); err != nil {
+			return err
+		}
+	}
+
 	cfg, err := config.Load()
 	if err != nil {
 		return err
@@ -82,7 +91,7 @@ func runServe(ctx context.Context, logger *slog.Logger) error {
 	limiter := ratelimit.New()
 	opts := connect.WithInterceptors(
 		apiconnect.NewMetaInterceptor(),
-		apiconnect.NewAuthnInterceptor(cfg.Issuer, app.ring, app.tenancy, app.identity, app.clock),
+		apiconnect.NewAuthnInterceptor(cfg.Issuer, app.ring, app.tenancy, app.auth, app.clock),
 	)
 
 	rpc := http.NewServeMux()

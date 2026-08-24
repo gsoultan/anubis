@@ -40,6 +40,13 @@ func (u *authorizeInteractor) Execute(ctx context.Context, in AuthorizeInput) (*
 	if in.Subject == "" || in.Permission == "" {
 		return nil, apperr.ErrInvalidArgument
 	}
+	// A nil map marshals to the JSON literal null, and jsonb_each_text(null)
+	// blows the whole decision up as an internal error. A caller that sent no
+	// scopes asked about no targets — that is {}, and it must produce a
+	// DECISION (deny, most likely), never a 500 a gateway cannot act on.
+	if in.Scopes == nil {
+		in.Scopes = map[string]string{}
+	}
 	targets, err := json.Marshal(in.Scopes)
 	if err != nil {
 		return nil, apperr.ErrInvalidArgument.Wrap(err)

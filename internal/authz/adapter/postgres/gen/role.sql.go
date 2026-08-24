@@ -306,6 +306,9 @@ type ListRolesRow struct {
 	ApplicationSlug   *string
 }
 
+// ListRoles is the TENANT's roles: what its own people can be given. Who may
+// ADMINISTER the tenant is never here — that is platform_assignments
+// (ADR-0011), a different population in different tables.
 func (q *Queries) ListRoles(ctx context.Context, arg ListRolesParams) ([]ListRolesRow, error) {
 	rows, err := q.db.Query(ctx, listRoles, arg.TenantID, arg.Query)
 	if err != nil {

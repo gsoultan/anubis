@@ -11,6 +11,20 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+// The tenant's machine credentials (ADR-0011). Created by platform users; authenticate as the tenant's system, never as any person.
+type ApiKey struct {
+	CreatedAt  time.Time
+	ID         string
+	TenantID   string
+	Label      string
+	Lookup     string
+	SecretHash string
+	CreatedBy  *string
+	LastUsedAt *time.Time
+	ExpiresAt  *time.Time
+	RevokedAt  *time.Time
+}
+
 type Application struct {
 	CreatedAt              time.Time
 	UpdatedAt              time.Time
@@ -244,6 +258,39 @@ type PiiKeyTombstone struct {
 	Reason     string
 }
 
+// Which tenants a platform user may administer. Never a substitute for a grant, which is what a tenant's own members hold.
+type PlatformAssignment struct {
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
+	ID         string
+	OperatorID string
+	TenantID   *string
+	Role       string
+	GrantedBy  *string
+	Reason     string
+	ValidUntil *time.Time
+	RevokedAt  *time.Time
+}
+
+// Who operates this installation (ADR-0011). Deliberately unrelated to identities: a tenant user is not an operator and cannot become one.
+type PlatformUser struct {
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+	ID           string
+	Username     string
+	Email        *string
+	PasswordHash string
+	Status       string
+	TokenEpoch   int32
+	LastLoginAt  *time.Time
+	DisabledAt   *time.Time
+	// AES-256-GCM under the master key, AAD = platform_users.id.
+	TotpSecretEnc  []byte
+	TotpEnrolledAt *time.Time
+	// Monotonic single-use guard: a TOTP step is accepted at most once.
+	TotpLastStep int64
+}
+
 type Realm struct {
 	CreatedAt                 time.Time
 	UpdatedAt                 time.Time
@@ -307,6 +354,7 @@ type RefreshTokensDefault struct {
 	BoundKey    *string
 }
 
+// The tenant's own roles: what its people can be given. Administration of a tenant is never here — that is platform_assignments (ADR-0011).
 type Role struct {
 	CreatedAt         time.Time
 	UpdatedAt         time.Time

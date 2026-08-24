@@ -83,3 +83,38 @@ func (s *Repository) RevokeGrant(ctx context.Context, tenantID, id, reason strin
 }
 
 var _ = apperr.ErrNotFound // keep import if RevokeGrant mapping changes
+
+// SearchGrants backs the Access screen: filters narrow first, keyset paging
+// carries the rest. Ordered by (created_at, id) so the cursor stays stable
+// when two grants share a timestamp — which they do, in bulk imports.
+func (s *Repository) SearchGrants(ctx context.Context, tenantID string, q grant.GrantSearch) ([]grant.GrantHit, error) {
+	size := q.PageSize
+	if size <= 0 {
+		size = 50
+	}
+	if size > 200 {
+		size = 200
+	}
+	rows, err := s.q(ctx).SearchGrants(ctx, gen.SearchGrantsParams{
+		TenantID: tenantID, IncludeRevoked: q.IncludeRevoked,
+		IdentityID: q.IdentityID, RoleID: q.RoleID, Source: q.Source,
+		Query: q.Query, After: q.Cursor, PageSize: int32(size),
+	})
+	if err != nil {
+		return nil, database.MapErr(err)
+	}
+	out := make([]grant.GrantHit, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, grant.GrantHit{
+			Username: r.Username,
+			Grant: grant.GrantRecord{
+				ID: r.ID, IdentityID: r.IdentityID, RoleID: r.RoleID,
+				RoleName: r.RoleName, SelfScoped: r.SelfScoped,
+				ValidFrom: r.ValidFrom, ValidUntil: r.ValidUntil, RevokedAt: r.RevokedAt,
+				GrantedBy: r.GrantedBy, ViaMembershipID: database.Deref(r.ViaMembershipID),
+				Reason: database.Deref(r.Reason),
+			},
+		})
+	}
+	return out, nil
+}

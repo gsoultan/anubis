@@ -542,6 +542,63 @@ func (q *Queries) RenameScopeNode(ctx context.Context, arg RenameScopeNodeParams
 	return result.RowsAffected(), nil
 }
 
+const scopeAncestors = `-- name: ScopeAncestors :many
+SELECT n.id, n.axis_code, n.node_type, n.parent_id, n.slug, n.name,
+       n.external_ref, n.status, n.is_axis_root, c.depth
+  FROM scope_closure c
+  JOIN scope_nodes n ON n.id = c.ancestor_id
+ WHERE c.descendant_id = $1
+ ORDER BY c.depth DESC
+`
+
+type ScopeAncestorsRow struct {
+	ID          string
+	AxisCode    string
+	NodeType    string
+	ParentID    *string
+	Slug        string
+	Name        string
+	ExternalRef *string
+	Status      string
+	IsAxisRoot  bool
+	Depth       int16
+}
+
+// ScopeAncestors is the chain from an axis root down to a node, which is what
+// makes a scope decision explainable: "this grant reaches here BECAUSE it was
+// given on that ancestor". Read from the closure table, so it costs one index
+// scan rather than a recursive walk.
+func (q *Queries) ScopeAncestors(ctx context.Context, nodeID string) ([]ScopeAncestorsRow, error) {
+	rows, err := q.db.Query(ctx, scopeAncestors, nodeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ScopeAncestorsRow
+	for rows.Next() {
+		var i ScopeAncestorsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.AxisCode,
+			&i.NodeType,
+			&i.ParentID,
+			&i.Slug,
+			&i.Name,
+			&i.ExternalRef,
+			&i.Status,
+			&i.IsAxisRoot,
+			&i.Depth,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const scopeSyncApply = `-- name: ScopeSyncApply :one
 SELECT scope_sync_apply($1, $2::jsonb,
                         $3)::text AS report
