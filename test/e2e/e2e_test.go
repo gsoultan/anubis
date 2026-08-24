@@ -21,7 +21,6 @@ import (
 )
 
 const (
-	baseURL  = "http://localhost:7448"
 	tenant   = "impack"
 	admin    = "admin"
 	password = "anubis-dev-password"
@@ -29,6 +28,15 @@ const (
 	// operator-only since migration 0029, so admin-plane calls sign in here.
 	platformUser = "devadmin"
 )
+
+// baseURL points at the dev server by default; CI starts its own instance on
+// a throwaway port and overrides it.
+var baseURL = func() string {
+	if v := os.Getenv("ANUBIS_E2E_BASE_URL"); v != "" {
+		return v
+	}
+	return "http://localhost:7448"
+}()
 
 func requireServer(t *testing.T) {
 	t.Helper()

@@ -1,8 +1,9 @@
 # API reference
 
-> **Status: specification.** The database layer is built and validated; the HTTP
-> and gRPC transports are not yet implemented. This document is the contract they
-> will implement. See [roadmap.md](roadmap.md).
+> **Status: implemented.** The transports (Connect RPC + the browser-facing
+> HTTP flows) serve this contract on `:7448`. For the integration walkthrough —
+> how a relying party actually wires these endpoints together — see
+> [integration.md](integration.md).
 
 Base URL: `https://anubis.internal`
 

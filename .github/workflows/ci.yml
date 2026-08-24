@@ -1,0 +1,100 @@
+# The pipeline IS the enforcement: every invariant scripts/check/* pins is
+# only real when something runs it on every push. Jobs are thin wrappers over
+# scripts/ so the same steps run identically on a laptop.
+name: ci
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  BUF_VERSION: "1.72.0"
+  SQLC_VERSION: "1.31.1"
+
+jobs:
+  checks:
+    name: enforcement gates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: install buf + sqlc (pinned)
+        run: |
+          go install github.com/bufbuild/buf/cmd/buf@v${BUF_VERSION}
+          go install github.com/sqlc-dev/sqlc/cmd/sqlc@v${SQLC_VERSION}
+      - name: buf lint
+        run: buf lint
+      - name: enforcement gates
+        run: |
+          for s in scripts/check/*.sh; do
+            echo "== $s"
+            bash "$s"
+          done
+
+  build-unit:
+    name: build + unit (race)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go vet ./...
+      - run: go build ./...
+      - run: go test -race -shuffle=on ./...
+      - name: verifier SDK (nested module)
+        run: cd pkg/anubis && go vet ./... && go test -race -shuffle=on ./...
+
+  backend-suite:
+    name: integration + e2e + fuzz smoke
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: anubis
+          POSTGRES_PASSWORD: anubis
+          POSTGRES_DB: anubis_ci
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U anubis"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      ANUBIS_DB_URL: postgres://anubis:anubis@localhost:5432/anubis_ci?sslmode=disable
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: bash scripts/ci/backend-suite.sh
+
+  console:
+    name: console typecheck + build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+        working-directory: ui
+      - run: bun run build
+        working-directory: ui
+
+  image:
+    name: container image
+    runs-on: ubuntu-latest
+    needs: [checks, build-unit, backend-suite, console]
+    steps:
+      - uses: actions/checkout@v4
+      - name: build image
+        run: docker build --build-arg VERSION=${GITHUB_SHA::12} -t anubisd:${GITHUB_SHA::12} .
+      # Publishing waits on a registry decision (GHCR vs private); the build
+      # itself still proves the Dockerfile every run.

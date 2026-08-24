@@ -1,26 +1,56 @@
-# You can override the included template(s) by including variable overrides
-# SAST customization: https://docs.gitlab.com/ee/user/application_security/sast/#customizing-the-sast-settings
-# Secret Detection customization: https://docs.gitlab.com/ee/user/application_security/secret_detection/pipeline/#customization
-# Dependency Scanning customization: https://docs.gitlab.com/ee/user/application_security/dependency_scanning/#customizing-the-dependency-scanning-settings
-# Container Scanning customization: https://docs.gitlab.com/ee/user/application_security/container_scanning/#customizing-the-container-scanning-settings
-# Note that environment variables can be set in several places
-# See https://docs.gitlab.com/ee/ci/variables/#cicd-variable-precedence
-stages:
-- build
-- test
-- deploy
-- review
-- dast
-- staging
-- canary
-- production
-- incremental rollout 10%
-- incremental rollout 25%
-- incremental rollout 50%
-- incremental rollout 100%
-- performance
-- cleanup
-sast:
-  stage: test
+# Real pipeline. (The Auto-DevOps template that previously lived here ran
+# none of the project's own gates — see docs/adr/, "CI is a mirage".)
+# Mirrors .github/workflows/ci.yml; both are thin wrappers over scripts/ so
+# the same steps run identically on a laptop.
+stages: [check, test, package]
+
 include:
-- template: Auto-DevOps.gitlab-ci.yml
+  - template: Jobs/SAST.gitlab-ci.yml
+  - template: Jobs/Secret-Detection.gitlab-ci.yml
+  - template: Jobs/Dependency-Scanning.gitlab-ci.yml
+
+default:
+  image: golang:1.26
+
+checks:
+  stage: check
+  script:
+    - go install github.com/bufbuild/buf/cmd/buf@v1.72.0
+    - go install github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1
+    - export PATH="$(go env GOPATH)/bin:$PATH"
+    - buf lint
+    - for s in scripts/check/*.sh; do echo "== $s"; bash "$s"; done
+
+build-unit:
+  stage: test
+  script:
+    - go vet ./...
+    - go build ./...
+    - go test -race -shuffle=on ./...
+    - cd pkg/anubis && go vet ./... && go test -race -shuffle=on ./...
+
+backend-suite:
+  stage: test
+  services:
+    - name: postgres:18
+      alias: postgres
+  variables:
+    POSTGRES_USER: anubis
+    POSTGRES_PASSWORD: anubis
+    POSTGRES_DB: anubis_ci
+    ANUBIS_DB_URL: postgres://anubis:anubis@postgres:5432/anubis_ci?sslmode=disable
+  script:
+    - bash scripts/ci/backend-suite.sh
+
+console:
+  stage: test
+  image: oven/bun:1
+  script:
+    - cd ui && bun install --frozen-lockfile && bun run build
+
+image:
+  stage: package
+  image: docker:27
+  services: [docker:27-dind]
+  script:
+    - docker build --build-arg VERSION=${CI_COMMIT_SHORT_SHA} -t anubisd:${CI_COMMIT_SHORT_SHA} .
