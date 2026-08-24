@@ -26,13 +26,13 @@ import (
 func TestSecondFactorLifecycle(t *testing.T) {
 	requireServer(t)
 	ctx := context.Background()
-	adminToken := login(t).AccessToken
+	adminToken := platformLogin(t)
 
 	username := fmt.Sprintf("mfa-probe-%d", time.Now().UnixNano())
 	const password = "mfa-probe-password-1234"
 
 	idAdmin := anubisv1connect.NewIdentityAdminServiceClient(http.DefaultClient, baseURL)
-	if _, err := idAdmin.CreateIdentity(ctx, bearer(connect.NewRequest(&anubisv1.CreateIdentityRequest{
+	if _, err := idAdmin.CreateIdentity(ctx, operatorBearer(connect.NewRequest(&anubisv1.CreateIdentityRequest{
 		Realm: "internal", Username: username, Password: password, AssuranceLevel: 2,
 	}), adminToken)); err != nil {
 		t.Fatalf("create probe identity: %v", err)

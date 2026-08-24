@@ -25,6 +25,9 @@ const (
 	tenant   = "impack"
 	admin    = "admin"
 	password = "anubis-dev-password"
+	// The dev platform owner (scripts/db.sh devadmin). Administration is
+	// operator-only since migration 0029, so admin-plane calls sign in here.
+	platformUser = "devadmin"
 )
 
 func requireServer(t *testing.T) {
@@ -53,7 +56,7 @@ func login(t *testing.T) *anubisv1.TokenPair {
 	deadline := time.Now().Add(90 * time.Second)
 	for {
 		resp, err = authClient().Login(context.Background(), connect.NewRequest(&anubisv1.LoginRequest{
-			Tenant: tenant, Username: admin, Password: password, ClientId: "console",
+			Tenant: tenant, Username: admin, Password: password, ClientId: "",
 		}))
 		if connect.CodeOf(err) != connect.CodeResourceExhausted || time.Now().After(deadline) {
 			break
@@ -73,6 +76,46 @@ func login(t *testing.T) *anubisv1.TokenPair {
 func bearer[T any](req *connect.Request[T], token string) *connect.Request[T] {
 	req.Header().Set("Authorization", "Bearer "+token)
 	return req
+}
+
+// operatorBearer carries a PLATFORM token plus the tenant the operator is
+// working in — guard.requirePlatform reads X-Anubis-Tenant on every call.
+func operatorBearer[T any](req *connect.Request[T], token string) *connect.Request[T] {
+	req.Header().Set("Authorization", "Bearer "+token)
+	req.Header().Set("X-Anubis-Tenant", tenant)
+	return req
+}
+
+// platformLogin signs in the dev platform owner. The token is cached for the
+// whole run: PlatformLogin allows 5/min per account — tighter than tenant
+// sign-in on purpose — and a fresh login per test would drain that budget.
+var cachedPlatformToken string
+
+func platformLogin(t *testing.T) string {
+	t.Helper()
+	if cachedPlatformToken != "" {
+		return cachedPlatformToken
+	}
+	pc := anubisv1connect.NewPlatformAuthServiceClient(http.DefaultClient, baseURL)
+	deadline := time.Now().Add(90 * time.Second)
+	for {
+		resp, err := pc.PlatformLogin(context.Background(),
+			connect.NewRequest(&anubisv1.PlatformLoginRequest{
+				Username: platformUser, Password: password,
+			}))
+		if connect.CodeOf(err) == connect.CodeResourceExhausted && time.Now().Before(deadline) {
+			time.Sleep(5 * time.Second)
+			continue
+		}
+		if err != nil {
+			t.Fatalf("platform login: %v", err)
+		}
+		if resp.Msg.MfaToken != "" {
+			t.Fatal("dev platform owner has MFA enrolled; scripts/db.sh devadmin resets it")
+		}
+		cachedPlatformToken = resp.Msg.AccessToken
+		return cachedPlatformToken
+	}
 }
 
 func TestLoginIssuesVerifiableToken(t *testing.T) {
@@ -128,22 +171,66 @@ func TestRefreshTheftDetection(t *testing.T) {
 	}
 }
 
+// TestAuthorizeThroughEngine drives the decision API with a catalog the test
+// provisions itself: the anubis:* catalog died with migration 0029, so the
+// suite's operator publishes a manifest, grants its role to the shared tenant
+// person, and then the PERSON asks about their own access.
 func TestAuthorizeThroughEngine(t *testing.T) {
 	requireServer(t)
-	tokens := login(t)
 	ctx := context.Background()
+	opToken := platformLogin(t)
+
+	// Register the application (the permission key is namespaced by its
+	// slug, so the app must exist first) and its catalog. Both re-runnable.
+	if _, err := pageClient().CreateApplication(ctx, operatorBearer(connect.NewRequest(&anubisv1.CreateApplicationRequest{
+		Application: &anubisv1.Application{Slug: "e2e-authz", Name: "e2e authz probe", Kind: "service"},
+	}), opToken)); err != nil && connect.CodeOf(err) != connect.CodeAlreadyExists {
+		t.Fatalf("create application: %v", err)
+	}
+	aza := anubisv1connect.NewAuthzAdminServiceClient(http.DefaultClient, baseURL)
+	// Manifest roles reference "resource:action", NOT the app-prefixed key,
+	// and the role lands as "e2e-authz.reader".
+	if _, err := aza.ApplyManifest(ctx, operatorBearer(connect.NewRequest(&anubisv1.ApplyManifestRequest{
+		ApplicationSlug: "e2e-authz",
+		ManifestJson: `{"permissions":[{"resource":"probe","action":"read","description":"e2e probe"}],
+		                "roles":[{"name":"reader","description":"e2e reader","permissions":["probe:read"]}]}`,
+	}), opToken)); err != nil {
+		t.Fatalf("apply manifest: %v", err)
+	}
+	roles, err := aza.ListRoles(ctx, operatorBearer(connect.NewRequest(&anubisv1.ListRolesRequest{
+		Query: "e2e-authz.reader",
+	}), opToken))
+	if err != nil {
+		t.Fatalf("list roles: %v", err)
+	}
+	var roleID string
+	for _, r := range roles.Msg.Roles {
+		if r.Name == "e2e-authz.reader" {
+			roleID = r.Id
+		}
+	}
+	if roleID == "" {
+		t.Fatal("manifest role e2e-authz.reader not found after apply")
+	}
+
+	tokens := login(t)
 	sc := anubisv1connect.NewSessionServiceClient(http.DefaultClient, baseURL)
 	me, err := sc.GetMe(ctx, bearer(connect.NewRequest(&anubisv1.GetMeRequest{}), tokens.AccessToken))
 	if err != nil {
 		t.Fatalf("me: %v", err)
 	}
-	az := anubisv1connect.NewAuthzServiceClient(http.DefaultClient, baseURL)
+	if _, err := aza.CreateGrant(ctx, operatorBearer(connect.NewRequest(&anubisv1.CreateGrantRequest{
+		IdentityId: me.Msg.IdentityId, RoleId: roleID, Reason: "e2e authorize probe",
+	}), opToken)); err != nil && connect.CodeOf(err) != connect.CodeAlreadyExists {
+		t.Fatalf("create grant: %v", err)
+	}
 
+	az := anubisv1connect.NewAuthzServiceClient(http.DefaultClient, baseURL)
 	allow, err := az.Authorize(ctx, bearer(connect.NewRequest(&anubisv1.AuthorizeRequest{
-		Subject: me.Msg.IdentityId, Permission: "anubis:identity:read",
+		Subject: me.Msg.IdentityId, Permission: "e2e-authz:probe:read",
 	}), tokens.AccessToken))
 	if err != nil || !allow.Msg.Allow {
-		t.Fatalf("admin must hold anubis:identity:read: %v %+v", err, allow)
+		t.Fatalf("granted permission must allow: %v %+v", err, allow)
 	}
 
 	deny, err := az.Authorize(ctx, bearer(connect.NewRequest(&anubisv1.AuthorizeRequest{
@@ -157,7 +244,7 @@ func TestAuthorizeThroughEngine(t *testing.T) {
 	}
 
 	exp, err := az.Explain(ctx, bearer(connect.NewRequest(&anubisv1.ExplainRequest{
-		Subject: me.Msg.IdentityId, Permission: "anubis:identity:read",
+		Subject: me.Msg.IdentityId, Permission: "e2e-authz:probe:read",
 	}), tokens.AccessToken))
 	if err != nil || !exp.Msg.Allow || exp.Msg.DetailJson == "" {
 		t.Fatalf("explain: %v %+v", err, exp)

@@ -93,12 +93,12 @@ func TestRPInitiatedLogout(t *testing.T) {
 func TestLogoutRedirectMustBeRegistered(t *testing.T) {
 	requireServer(t)
 	ctx := context.Background()
-	token := login(t).AccessToken
+	token := platformLogin(t)
 
 	// Register an application that permits exactly one return address.
 	slug := fmt.Sprintf("logout-probe-%d", time.Now().UnixNano()%1_000_000)
 	const allowed = "https://allowed.example/after-logout"
-	if _, err := pageClient().CreateApplication(ctx, bearer(connect.NewRequest(&anubisv1.CreateApplicationRequest{
+	if _, err := pageClient().CreateApplication(ctx, operatorBearer(connect.NewRequest(&anubisv1.CreateApplicationRequest{
 		Application: &anubisv1.Application{
 			Slug: slug, Name: "Logout probe", Kind: "spa",
 			RedirectUris:           []string{"https://allowed.example/callback"},

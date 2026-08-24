@@ -27,10 +27,10 @@ func pageClient() anubisv1connect.TenantAdminServiceClient {
 func TestAuthPageLifecycle(t *testing.T) {
 	requireServer(t)
 	ctx := context.Background()
-	token := login(t).AccessToken
+	token := platformLogin(t)
 	slug := fmt.Sprintf("probe-%d", time.Now().UnixNano()%1_000_000)
 
-	created, err := pageClient().CreateAuthPage(ctx, bearer(connect.NewRequest(&anubisv1.CreateAuthPageRequest{
+	created, err := pageClient().CreateAuthPage(ctx, operatorBearer(connect.NewRequest(&anubisv1.CreateAuthPageRequest{
 		Page: &anubisv1.AuthPage{
 			Kind: "signin", Slug: slug, Name: "Probe page",
 			ConfigJson: `{"brand":{"title":"Probe Ltd","primary_color":"#0f766e"},
@@ -57,7 +57,7 @@ func TestAuthPageLifecycle(t *testing.T) {
 	}
 
 	// Updating changes appearance but never the published URL.
-	updated, err := pageClient().UpdateAuthPage(ctx, bearer(connect.NewRequest(&anubisv1.UpdateAuthPageRequest{
+	updated, err := pageClient().UpdateAuthPage(ctx, operatorBearer(connect.NewRequest(&anubisv1.UpdateAuthPageRequest{
 		Page: &anubisv1.AuthPage{
 			Id: page.Id, Name: "Probe page v2",
 			ConfigJson: `{"brand":{"title":"Probe Ltd"},"copy":{"heading":"Welcome back"}}`,
@@ -75,7 +75,7 @@ func TestAuthPageLifecycle(t *testing.T) {
 
 	// Disabling takes it off the internet: a retired design must not survive
 	// for anyone who kept the link.
-	if _, err := pageClient().UpdateAuthPage(ctx, bearer(connect.NewRequest(&anubisv1.UpdateAuthPageRequest{
+	if _, err := pageClient().UpdateAuthPage(ctx, operatorBearer(connect.NewRequest(&anubisv1.UpdateAuthPageRequest{
 		Page: &anubisv1.AuthPage{Id: page.Id, Name: "Probe page v2", Status: "disabled",
 			ConfigJson: `{}`},
 	}), token)); err != nil {
@@ -86,7 +86,7 @@ func TestAuthPageLifecycle(t *testing.T) {
 	}
 
 	if _, err := pageClient().DeleteAuthPage(ctx,
-		bearer(connect.NewRequest(&anubisv1.DeleteAuthPageRequest{Id: page.Id}), token)); err != nil {
+		operatorBearer(connect.NewRequest(&anubisv1.DeleteAuthPageRequest{Id: page.Id}), token)); err != nil {
 		t.Fatalf("delete: %v", err)
 	}
 }
@@ -97,10 +97,10 @@ func TestAuthPageLifecycle(t *testing.T) {
 func TestDefaultPageIsProtected(t *testing.T) {
 	requireServer(t)
 	ctx := context.Background()
-	token := login(t).AccessToken
+	token := platformLogin(t)
 
 	list, err := pageClient().ListAuthPages(ctx,
-		bearer(connect.NewRequest(&anubisv1.ListAuthPagesRequest{Kind: "signout"}), token))
+		operatorBearer(connect.NewRequest(&anubisv1.ListAuthPagesRequest{Kind: "signout"}), token))
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
@@ -114,24 +114,24 @@ func TestDefaultPageIsProtected(t *testing.T) {
 		t.Skip("no default sign-out page in this database")
 	}
 	if _, err := pageClient().DeleteAuthPage(ctx,
-		bearer(connect.NewRequest(&anubisv1.DeleteAuthPageRequest{Id: def.Id}), token)); err == nil {
+		operatorBearer(connect.NewRequest(&anubisv1.DeleteAuthPageRequest{Id: def.Id}), token)); err == nil {
 		t.Fatal("the default page was deletable, which would leave sign-out with nothing to render")
 	}
 
 	// Promote a second page and confirm the previous default steps down.
 	slug := fmt.Sprintf("alt-%d", time.Now().UnixNano()%1_000_000)
-	created, err := pageClient().CreateAuthPage(ctx, bearer(connect.NewRequest(&anubisv1.CreateAuthPageRequest{
+	created, err := pageClient().CreateAuthPage(ctx, operatorBearer(connect.NewRequest(&anubisv1.CreateAuthPageRequest{
 		Page: &anubisv1.AuthPage{Kind: "signout", Slug: slug, Name: "Alt sign-out", ConfigJson: `{}`},
 	}), token))
 	if err != nil {
 		t.Fatalf("create alt: %v", err)
 	}
-	if _, err := pageClient().SetDefaultAuthPage(ctx, bearer(connect.NewRequest(
+	if _, err := pageClient().SetDefaultAuthPage(ctx, operatorBearer(connect.NewRequest(
 		&anubisv1.SetDefaultAuthPageRequest{Id: created.Msg.Page.Id}), token)); err != nil {
 		t.Fatalf("promote: %v", err)
 	}
 	after, _ := pageClient().ListAuthPages(ctx,
-		bearer(connect.NewRequest(&anubisv1.ListAuthPagesRequest{Kind: "signout"}), token))
+		operatorBearer(connect.NewRequest(&anubisv1.ListAuthPagesRequest{Kind: "signout"}), token))
 	defaults := 0
 	for _, p := range after.Msg.Pages {
 		if p.IsDefault {
@@ -143,9 +143,9 @@ func TestDefaultPageIsProtected(t *testing.T) {
 	}
 	// Put the original back so the suite stays re-runnable.
 	_, _ = pageClient().SetDefaultAuthPage(ctx,
-		bearer(connect.NewRequest(&anubisv1.SetDefaultAuthPageRequest{Id: def.Id}), token))
+		operatorBearer(connect.NewRequest(&anubisv1.SetDefaultAuthPageRequest{Id: def.Id}), token))
 	_, _ = pageClient().DeleteAuthPage(ctx,
-		bearer(connect.NewRequest(&anubisv1.DeleteAuthPageRequest{Id: created.Msg.Page.Id}), token))
+		operatorBearer(connect.NewRequest(&anubisv1.DeleteAuthPageRequest{Id: created.Msg.Page.Id}), token))
 }
 
 // The builder stores configuration, not markup. Every one of these would end
@@ -153,7 +153,7 @@ func TestDefaultPageIsProtected(t *testing.T) {
 func TestBuilderRefusesHostileConfig(t *testing.T) {
 	requireServer(t)
 	ctx := context.Background()
-	token := login(t).AccessToken
+	token := platformLogin(t)
 
 	for name, cfg := range map[string]string{
 		"css injection":  `{"brand":{"primary_color":"red;} body{display:none"}}`,
@@ -162,7 +162,7 @@ func TestBuilderRefusesHostileConfig(t *testing.T) {
 		"script in link": `{"links":[{"label":"x","url":"javascript:fetch('/steal')"}]}`,
 	} {
 		t.Run(name, func(t *testing.T) {
-			_, err := pageClient().CreateAuthPage(ctx, bearer(connect.NewRequest(&anubisv1.CreateAuthPageRequest{
+			_, err := pageClient().CreateAuthPage(ctx, operatorBearer(connect.NewRequest(&anubisv1.CreateAuthPageRequest{
 				Page: &anubisv1.AuthPage{Kind: "signin", Slug: "hostile-probe",
 					Name: "Hostile", ConfigJson: cfg},
 			}), token))
@@ -174,7 +174,7 @@ func TestBuilderRefusesHostileConfig(t *testing.T) {
 			}
 			// Preview must agree with save, or the builder shows a green
 			// preview for something that cannot be stored.
-			pv, perr := pageClient().PreviewAuthPage(ctx, bearer(connect.NewRequest(
+			pv, perr := pageClient().PreviewAuthPage(ctx, operatorBearer(connect.NewRequest(
 				&anubisv1.PreviewAuthPageRequest{Kind: "signin", ConfigJson: cfg}), token))
 			if perr != nil {
 				t.Fatalf("preview errored: %v", perr)
@@ -191,10 +191,10 @@ func TestBuilderRefusesHostileConfig(t *testing.T) {
 func TestPageEscapesRatherThanRejectsText(t *testing.T) {
 	requireServer(t)
 	ctx := context.Background()
-	token := login(t).AccessToken
+	token := platformLogin(t)
 	slug := fmt.Sprintf("esc-%d", time.Now().UnixNano()%1_000_000)
 
-	created, err := pageClient().CreateAuthPage(ctx, bearer(connect.NewRequest(&anubisv1.CreateAuthPageRequest{
+	created, err := pageClient().CreateAuthPage(ctx, operatorBearer(connect.NewRequest(&anubisv1.CreateAuthPageRequest{
 		Page: &anubisv1.AuthPage{Kind: "signout", Slug: slug, Name: "Escaping probe",
 			// The CONFIRM screen renders confirm_heading; setting only
 			// `heading` would leave the probe text off the page entirely.
@@ -204,7 +204,7 @@ func TestPageEscapesRatherThanRejectsText(t *testing.T) {
 		t.Fatalf("create: %v", err)
 	}
 	defer pageClient().DeleteAuthPage(ctx,
-		bearer(connect.NewRequest(&anubisv1.DeleteAuthPageRequest{Id: created.Msg.Page.Id}), token))
+		operatorBearer(connect.NewRequest(&anubisv1.DeleteAuthPageRequest{Id: created.Msg.Page.Id}), token))
 
 	body := getBody(t, created.Msg.Page.Url)
 	if strings.Contains(body, "<script>alert(1)</script>") {

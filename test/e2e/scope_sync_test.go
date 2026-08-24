@@ -31,13 +31,13 @@ func ensureAxis(t *testing.T, token, axis, rootType, childType string) {
 	t.Helper()
 	ctx := context.Background()
 	sc := scopeClient()
-	_, _ = sc.CreateScopeAxis(ctx, bearer(connect.NewRequest(&anubisv1.CreateScopeAxisRequest{
+	_, _ = sc.CreateScopeAxis(ctx, operatorBearer(connect.NewRequest(&anubisv1.CreateScopeAxisRequest{
 		Axis: &anubisv1.ScopeAxis{Code: axis, DisplayName: axis, DefaultEffect: "unconstrained", SortOrder: 90},
 	}), token))
-	_, _ = sc.CreateScopeNodeType(ctx, bearer(connect.NewRequest(&anubisv1.CreateScopeNodeTypeRequest{
+	_, _ = sc.CreateScopeNodeType(ctx, operatorBearer(connect.NewRequest(&anubisv1.CreateScopeNodeTypeRequest{
 		Type: &anubisv1.ScopeNodeType{Code: rootType, Axis: axis, DisplayName: rootType},
 	}), token))
-	_, _ = sc.CreateScopeNodeType(ctx, bearer(connect.NewRequest(&anubisv1.CreateScopeNodeTypeRequest{
+	_, _ = sc.CreateScopeNodeType(ctx, operatorBearer(connect.NewRequest(&anubisv1.CreateScopeNodeTypeRequest{
 		Type: &anubisv1.ScopeNodeType{Code: childType, Axis: axis, DisplayName: childType,
 			ParentTypes: []string{rootType, childType}},
 	}), token))
@@ -50,7 +50,7 @@ func createSource(t *testing.T, token, axis, kind, config string) string {
 	t.Helper()
 	ctx := context.Background()
 	resp, err := scopeClient().CreateSyncSource(ctx,
-		bearer(connect.NewRequest(&anubisv1.CreateSyncSourceRequest{
+		operatorBearer(connect.NewRequest(&anubisv1.CreateSyncSourceRequest{
 			Source: &anubisv1.SyncSource{Axis: axis, Kind: kind, ConfigJson: config},
 		}), token))
 	if err == nil {
@@ -60,7 +60,7 @@ func createSource(t *testing.T, token, axis, kind, config string) string {
 		t.Fatalf("create sync source: %v", err)
 	}
 	list, lerr := scopeClient().ListSyncSources(ctx,
-		bearer(connect.NewRequest(&anubisv1.ListSyncSourcesRequest{}), token))
+		operatorBearer(connect.NewRequest(&anubisv1.ListSyncSourcesRequest{}), token))
 	if lerr != nil {
 		t.Fatalf("list sync sources: %v", lerr)
 	}
@@ -70,7 +70,7 @@ func createSource(t *testing.T, token, axis, kind, config string) string {
 			// run's httptest port is long gone) — the same call an operator
 			// makes to rotate a DSN password or move a feed.
 			if _, uerr := scopeClient().UpdateSyncSource(ctx,
-				bearer(connect.NewRequest(&anubisv1.UpdateSyncSourceRequest{
+				operatorBearer(connect.NewRequest(&anubisv1.UpdateSyncSourceRequest{
 					Source: &anubisv1.SyncSource{Id: s.Id, Status: "active", ConfigJson: config},
 				}), token)); uerr != nil {
 				t.Fatalf("update sync source: %v", uerr)
@@ -85,7 +85,7 @@ func createSource(t *testing.T, token, axis, kind, config string) string {
 func runSync(t *testing.T, token, sourceID string, dry bool) map[string]any {
 	t.Helper()
 	resp, err := scopeClient().RunSync(context.Background(),
-		bearer(connect.NewRequest(&anubisv1.RunSyncRequest{SourceId: sourceID, Dry: dry}), token))
+		operatorBearer(connect.NewRequest(&anubisv1.RunSyncRequest{SourceId: sourceID, Dry: dry}), token))
 	if err != nil {
 		t.Fatalf("run sync: %v", err)
 	}
@@ -113,7 +113,7 @@ func num(t *testing.T, report map[string]any, key string) int {
 // otherwise, so the server must sort before reconciling.
 func TestScopeSyncFromHTTPFeed(t *testing.T) {
 	requireServer(t)
-	token := login(t).AccessToken
+	token := platformLogin(t)
 	const axis = "e2e_http_axis"
 	ensureAxis(t, token, axis, "e2e_http_root", "e2e_http_node")
 
@@ -165,7 +165,7 @@ func TestScopeSyncFromExternalDatabase(t *testing.T) {
 	if dsn == "" {
 		t.Skip("ANUBIS_DB_URL not set")
 	}
-	token := login(t).AccessToken
+	token := platformLogin(t)
 	const axis = "e2e_db_axis"
 	ensureAxis(t, token, axis, "e2e_db_root", "e2e_db_node")
 
@@ -188,7 +188,7 @@ func TestScopeSyncFromExternalDatabase(t *testing.T) {
 
 	// The hierarchy must survive the trip: leaf under branch under root.
 	nodes, err := scopeClient().ListScopeNodes(context.Background(),
-		bearer(connect.NewRequest(&anubisv1.ListScopeNodesRequest{Axis: axis}), token))
+		operatorBearer(connect.NewRequest(&anubisv1.ListScopeNodesRequest{Axis: axis}), token))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -215,7 +215,7 @@ func TestScopeSyncFromExternalDatabase(t *testing.T) {
 // confirm.
 func TestScopeSyncUnreachableSourceDoesNotArchive(t *testing.T) {
 	requireServer(t)
-	token := login(t).AccessToken
+	token := platformLogin(t)
 	const axis = "e2e_dead_axis"
 	ensureAxis(t, token, axis, "e2e_dead_root", "e2e_dead_node")
 
@@ -223,7 +223,7 @@ func TestScopeSyncUnreachableSourceDoesNotArchive(t *testing.T) {
 		`{"url":"http://127.0.0.1:1/gone","default_node_type":"e2e_dead_node"}`)
 
 	_, err := scopeClient().RunSync(context.Background(),
-		bearer(connect.NewRequest(&anubisv1.RunSyncRequest{SourceId: src}), token))
+		operatorBearer(connect.NewRequest(&anubisv1.RunSyncRequest{SourceId: src}), token))
 	if err == nil {
 		t.Fatal("unreachable feed reported success")
 	}
@@ -235,7 +235,7 @@ func TestScopeSyncUnreachableSourceDoesNotArchive(t *testing.T) {
 // Config that cannot work must be rejected at creation, not at 3am.
 func TestScopeSyncRejectsBadConfig(t *testing.T) {
 	requireServer(t)
-	token := login(t).AccessToken
+	token := platformLogin(t)
 	ctx := context.Background()
 	cases := []struct{ kind, config string }{
 		{"http", `{}`},
@@ -245,7 +245,7 @@ func TestScopeSyncRejectsBadConfig(t *testing.T) {
 		{"carrier_pigeon", `{}`},
 	}
 	for _, c := range cases {
-		_, err := scopeClient().CreateSyncSource(ctx, bearer(connect.NewRequest(&anubisv1.CreateSyncSourceRequest{
+		_, err := scopeClient().CreateSyncSource(ctx, operatorBearer(connect.NewRequest(&anubisv1.CreateSyncSourceRequest{
 			Source: &anubisv1.SyncSource{Axis: "e2e_reject_axis", Kind: c.kind, ConfigJson: c.config},
 		}), token))
 		if err == nil {
