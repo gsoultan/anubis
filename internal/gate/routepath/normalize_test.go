@@ -50,6 +50,9 @@ func FuzzNormalizePath(f *testing.F) {
 	f.Add("/a/b/../c")
 	f.Add("/%2e%2e/etc/passwd")
 	f.Add("//a//b/")
+	f.Add("/..0") // a segment merely CONTAINING dots is a name, not traversal
+	f.Add("/0%23") // decoded '#' — delimiter to a re-parser, data to us
+	f.Add("/a%3fb")
 	f.Fuzz(func(t *testing.T, s string) {
 		out, err := NormalizePath(s)
 		if err != nil {
@@ -60,8 +63,16 @@ func FuzzNormalizePath(f *testing.F) {
 			t.Fatalf("accepted %q -> %q without leading slash", s, out)
 		}
 		if strings.Contains(out, "//") || strings.Contains(out, "%") ||
-			strings.Contains(out, "..") || strings.Contains(out, ";") {
+			strings.Contains(out, ";") {
 			t.Fatalf("accepted %q -> %q with ambiguity", s, out)
+		}
+		// No dot-SEGMENT survives normalisation. Segment-level on purpose:
+		// "..0" and "a..b" are legitimate names, and rejecting them would
+		// 403 real resources without closing any traversal.
+		for _, seg := range strings.Split(strings.TrimPrefix(out, "/"), "/") {
+			if seg == "." || seg == ".." {
+				t.Fatalf("accepted %q -> %q with a dot-segment", s, out)
+			}
 		}
 		// Idempotent: normalising a normalised path is identity.
 		again, err := NormalizePath(out)

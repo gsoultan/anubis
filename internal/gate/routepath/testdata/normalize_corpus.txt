@@ -24,3 +24,5 @@ relative/path	REJECT
 /a/%c0%af/b	REJECT
 /café	/café
 /a/%20b	/a/ b
+/0%23	REJECT
+/a%3fb	REJECT

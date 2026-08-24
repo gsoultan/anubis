@@ -23,6 +23,9 @@ var ErrAmbiguousPath = errors.New("gate: ambiguous path rejected")
 //     encoding) is ambiguous -> reject
 //   - NUL, control bytes, and backslashes are ambiguous -> reject
 //   - ';' (path-parameter trick) is ambiguous -> reject
+//   - a DECODED '#' or '?' is ambiguous -> reject: raw ones delimit the
+//     fragment/query and are stripped, so one that appears after decoding
+//     (%23/%3F) reads as data here and as a delimiter to any re-parser
 //   - '.' and '..' segments resolve; escaping the root -> reject
 //   - repeated slashes collapse
 //   - a trailing slash is preserved (distinct resources)
@@ -49,7 +52,8 @@ func NormalizePath(raw string) (string, error) {
 	encodedDots := strings.Contains(raw, "%2e") || strings.Contains(raw, "%2E")
 	for i := 0; i < len(decoded); i++ {
 		c := decoded[i]
-		if c < 0x20 || c == 0x7f || c == '\\' || c == ';' || c == '%' || c == 0 {
+		if c < 0x20 || c == 0x7f || c == '\\' || c == ';' || c == '%' || c == 0 ||
+			c == '#' || c == '?' {
 			return "", ErrAmbiguousPath
 		}
 	}
