@@ -18,7 +18,7 @@ CREATE TABLE api_keys (
     id           uuid PRIMARY KEY DEFAULT uuidv7(),
     tenant_id    uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     label        text NOT NULL DEFAULT '',
-    -- Indexed probe: 'anb_live_<lookup>.<secret>' splits, the lookup finds the
+    -- Indexed probe: 'anb_live_<prefix>_<secret>' splits, the lookup finds the
     -- row, the secret is compared against the hash. Same scheme as before.
     lookup       text NOT NULL,
     -- sha256 hex of the secret half. Never the secret.

@@ -56,16 +56,25 @@ func NewAPIKey() (full, lookup string, hash []byte, err error) {
 }
 
 // SplitAPIKey parses a presented key into its lookup key and secret part.
+//
+// The prefix is a FIXED WIDTH and is base64url — an alphabet that contains
+// '_'. Searching for the first '_' therefore lands INSIDE the prefix roughly
+// one time in eight (1 - (63/64)^8 ≈ 11.8%), and the key is rejected as
+// malformed: minted successfully, stored, and unable to authenticate for the
+// rest of its life, with nothing but "unauthenticated" to explain it.
+//
+// Splitting at the known offset is the fix, and it is backward compatible:
+// keys that used to parse still parse identically, and the ~12% that never
+// worked begin to work, which is what they were always meant to do.
 func SplitAPIKey(key string) (lookup, sec string, ok bool) {
 	if !strings.HasPrefix(key, "anb_live_") {
 		return "", "", false
 	}
 	rest := key[len("anb_live_"):]
-	i := strings.IndexByte(rest, '_')
-	if i != apiKeyPrefixLen || i+1 >= len(rest) {
+	if len(rest) <= apiKeyPrefixLen+1 || rest[apiKeyPrefixLen] != '_' {
 		return "", "", false
 	}
-	return "anb_live_" + rest[:i], rest[i+1:], true
+	return "anb_live_" + rest[:apiKeyPrefixLen], rest[apiKeyPrefixLen+1:], true
 }
 
 // Hex renders a hash for storage. Credentials keep hashes hex-encoded
