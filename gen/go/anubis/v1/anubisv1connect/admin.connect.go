@@ -201,6 +201,9 @@ const (
 	// TenantAdminServiceGetTenantStatsProcedure is the fully-qualified name of the TenantAdminService's
 	// GetTenantStats RPC.
 	TenantAdminServiceGetTenantStatsProcedure = "/anubis.v1.TenantAdminService/GetTenantStats"
+	// TenantAdminServiceGetDashboardProcedure is the fully-qualified name of the TenantAdminService's
+	// GetDashboard RPC.
+	TenantAdminServiceGetDashboardProcedure = "/anubis.v1.TenantAdminService/GetDashboard"
 	// TenantAdminServiceListApiKeysProcedure is the fully-qualified name of the TenantAdminService's
 	// ListApiKeys RPC.
 	TenantAdminServiceListApiKeysProcedure = "/anubis.v1.TenantAdminService/ListApiKeys"
@@ -1761,6 +1764,9 @@ type TenantAdminServiceClient interface {
 	// every hosted page path, and changing it breaks links already in the world.
 	UpdateTenant(context.Context, *connect.Request[v1.UpdateTenantRequest]) (*connect.Response[v1.UpdateTenantResponse], error)
 	GetTenantStats(context.Context, *connect.Request[v1.GetTenantStatsRequest]) (*connect.Response[v1.GetTenantStatsResponse], error)
+	// GetDashboard is the console overview: measured facts only — counts and
+	// signals, never invented deltas or percentiles.
+	GetDashboard(context.Context, *connect.Request[v1.GetDashboardRequest]) (*connect.Response[v1.GetDashboardResponse], error)
 	// API keys are the TENANT's machine credentials (migration 0030): a
 	// gateway asking authorize(), an integration reading the decision API.
 	// They authenticate as the tenant's system, never as any person, and are
@@ -1842,6 +1848,12 @@ func NewTenantAdminServiceClient(httpClient connect.HTTPClient, baseURL string, 
 			httpClient,
 			baseURL+TenantAdminServiceGetTenantStatsProcedure,
 			connect.WithSchema(tenantAdminServiceMethods.ByName("GetTenantStats")),
+			connect.WithClientOptions(opts...),
+		),
+		getDashboard: connect.NewClient[v1.GetDashboardRequest, v1.GetDashboardResponse](
+			httpClient,
+			baseURL+TenantAdminServiceGetDashboardProcedure,
+			connect.WithSchema(tenantAdminServiceMethods.ByName("GetDashboard")),
 			connect.WithClientOptions(opts...),
 		),
 		listApiKeys: connect.NewClient[v1.ListApiKeysRequest, v1.ListApiKeysResponse](
@@ -2021,6 +2033,7 @@ type tenantAdminServiceClient struct {
 	createTenant        *connect.Client[v1.CreateTenantRequest, v1.CreateTenantResponse]
 	updateTenant        *connect.Client[v1.UpdateTenantRequest, v1.UpdateTenantResponse]
 	getTenantStats      *connect.Client[v1.GetTenantStatsRequest, v1.GetTenantStatsResponse]
+	getDashboard        *connect.Client[v1.GetDashboardRequest, v1.GetDashboardResponse]
 	listApiKeys         *connect.Client[v1.ListApiKeysRequest, v1.ListApiKeysResponse]
 	createApiKey        *connect.Client[v1.CreateApiKeyRequest, v1.CreateApiKeyResponse]
 	revokeApiKey        *connect.Client[v1.RevokeApiKeyRequest, v1.RevokeApiKeyResponse]
@@ -2069,6 +2082,11 @@ func (c *tenantAdminServiceClient) UpdateTenant(ctx context.Context, req *connec
 // GetTenantStats calls anubis.v1.TenantAdminService.GetTenantStats.
 func (c *tenantAdminServiceClient) GetTenantStats(ctx context.Context, req *connect.Request[v1.GetTenantStatsRequest]) (*connect.Response[v1.GetTenantStatsResponse], error) {
 	return c.getTenantStats.CallUnary(ctx, req)
+}
+
+// GetDashboard calls anubis.v1.TenantAdminService.GetDashboard.
+func (c *tenantAdminServiceClient) GetDashboard(ctx context.Context, req *connect.Request[v1.GetDashboardRequest]) (*connect.Response[v1.GetDashboardResponse], error) {
+	return c.getDashboard.CallUnary(ctx, req)
 }
 
 // ListApiKeys calls anubis.v1.TenantAdminService.ListApiKeys.
@@ -2219,6 +2237,9 @@ type TenantAdminServiceHandler interface {
 	// every hosted page path, and changing it breaks links already in the world.
 	UpdateTenant(context.Context, *connect.Request[v1.UpdateTenantRequest]) (*connect.Response[v1.UpdateTenantResponse], error)
 	GetTenantStats(context.Context, *connect.Request[v1.GetTenantStatsRequest]) (*connect.Response[v1.GetTenantStatsResponse], error)
+	// GetDashboard is the console overview: measured facts only — counts and
+	// signals, never invented deltas or percentiles.
+	GetDashboard(context.Context, *connect.Request[v1.GetDashboardRequest]) (*connect.Response[v1.GetDashboardResponse], error)
 	// API keys are the TENANT's machine credentials (migration 0030): a
 	// gateway asking authorize(), an integration reading the decision API.
 	// They authenticate as the tenant's system, never as any person, and are
@@ -2296,6 +2317,12 @@ func NewTenantAdminServiceHandler(svc TenantAdminServiceHandler, opts ...connect
 		TenantAdminServiceGetTenantStatsProcedure,
 		svc.GetTenantStats,
 		connect.WithSchema(tenantAdminServiceMethods.ByName("GetTenantStats")),
+		connect.WithHandlerOptions(opts...),
+	)
+	tenantAdminServiceGetDashboardHandler := connect.NewUnaryHandler(
+		TenantAdminServiceGetDashboardProcedure,
+		svc.GetDashboard,
+		connect.WithSchema(tenantAdminServiceMethods.ByName("GetDashboard")),
 		connect.WithHandlerOptions(opts...),
 	)
 	tenantAdminServiceListApiKeysHandler := connect.NewUnaryHandler(
@@ -2476,6 +2503,8 @@ func NewTenantAdminServiceHandler(svc TenantAdminServiceHandler, opts ...connect
 			tenantAdminServiceUpdateTenantHandler.ServeHTTP(w, r)
 		case TenantAdminServiceGetTenantStatsProcedure:
 			tenantAdminServiceGetTenantStatsHandler.ServeHTTP(w, r)
+		case TenantAdminServiceGetDashboardProcedure:
+			tenantAdminServiceGetDashboardHandler.ServeHTTP(w, r)
 		case TenantAdminServiceListApiKeysProcedure:
 			tenantAdminServiceListApiKeysHandler.ServeHTTP(w, r)
 		case TenantAdminServiceCreateApiKeyProcedure:
@@ -2555,6 +2584,10 @@ func (UnimplementedTenantAdminServiceHandler) UpdateTenant(context.Context, *con
 
 func (UnimplementedTenantAdminServiceHandler) GetTenantStats(context.Context, *connect.Request[v1.GetTenantStatsRequest]) (*connect.Response[v1.GetTenantStatsResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.TenantAdminService.GetTenantStats is not implemented"))
+}
+
+func (UnimplementedTenantAdminServiceHandler) GetDashboard(context.Context, *connect.Request[v1.GetDashboardRequest]) (*connect.Response[v1.GetDashboardResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.TenantAdminService.GetDashboard is not implemented"))
 }
 
 func (UnimplementedTenantAdminServiceHandler) ListApiKeys(context.Context, *connect.Request[v1.ListApiKeysRequest]) (*connect.Response[v1.ListApiKeysResponse], error) {

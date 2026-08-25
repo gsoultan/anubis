@@ -126,3 +126,19 @@ SET anonymized_at = now(),
 WHERE id = sqlc.arg(id) AND tenant_id = sqlc.arg(tenant_id)
   AND anonymized_at IS NULL
 RETURNING id, pii_key_id;
+
+-- Dashboard: who is in this tenant, by population.
+-- name: CountIdentitiesByRealm :many
+SELECT r.code AS realm, r.kind, count(i.id) AS n
+FROM realms r
+LEFT JOIN identities i ON i.realm_id = r.id AND i.tenant_id = r.tenant_id
+WHERE r.tenant_id = $1
+GROUP BY r.code, r.kind
+ORDER BY r.code;
+
+-- Dashboard: rows past their retention deadline and not yet anonymised —
+-- each one is a compliance clock already ringing.
+-- name: CountRetentionBacklog :one
+SELECT count(*) FROM identities
+WHERE tenant_id = $1 AND retention_until IS NOT NULL
+  AND retention_until < now() AND anonymized_at IS NULL;

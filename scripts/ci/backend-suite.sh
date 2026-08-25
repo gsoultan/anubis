@@ -7,6 +7,11 @@
 #     scripts/ci/backend-suite.sh
 #
 # The suite provisions everything it needs; it never touches the dev database.
+#
+# The scratch database must be genuinely EMPTY. `DROP DATABASE` fails while
+# anything still holds a connection to it — a stray server, a psql session —
+# and a suite run against leftover rows reports failures that are nothing to
+# do with the code. Check that the DROP actually printed DROP DATABASE.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 

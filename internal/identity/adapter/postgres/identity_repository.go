@@ -121,3 +121,27 @@ func (s *Repository) LinkIdentities(ctx context.Context, tenantID, primaryID, se
 		LinkedBy: linkedBy, Method: method, Evidence: evidence,
 	}))
 }
+
+// CountIdentitiesByRealm backs the console's overview — one row per
+// population, zero rows counted honestly.
+func (s *Repository) CountIdentitiesByRealm(ctx context.Context, tenantID string) ([]identitydomain.RealmCount, error) {
+	rows, err := s.q(ctx).CountIdentitiesByRealm(ctx, tenantID)
+	if err != nil {
+		return nil, database.MapErr(err)
+	}
+	out := make([]identitydomain.RealmCount, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, identitydomain.RealmCount{Realm: r.Realm, Kind: r.Kind, Count: r.N})
+	}
+	return out, nil
+}
+
+// CountRetentionBacklog is the compliance clock: rows past retention_until
+// and not yet anonymised.
+func (s *Repository) CountRetentionBacklog(ctx context.Context, tenantID string) (int64, error) {
+	n, err := s.q(ctx).CountRetentionBacklog(ctx, tenantID)
+	if err != nil {
+		return 0, database.MapErr(err)
+	}
+	return n, nil
+}

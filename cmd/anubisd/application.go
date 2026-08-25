@@ -230,9 +230,13 @@ func (a *application) registerRPC(rpc *http.ServeMux, opts connect.HandlerOption
 		&storeKeyRotator{keys: a.auth, master: a.masterKey}, a.auditor)
 	pageAdmin := tenancyapp.NewPageAdminInteractor(a.control, a.clock.Now,
 		a.tenancy, a.tenancy, a.auditor)
+	// The overview reads a sliver of several contexts through narrow ports,
+	// each satisfied structurally by that context's repository.
+	dashboard := tenancyapp.NewDashboardInteractor(a.control, a.clock.Now,
+		a.identity, a.authz, a.scope, a.audit, a.ring)
 	rpc.Handle(anubisv1connect.NewTenantAdminServiceHandler(
 		tenancyrpc.NewTenantAdminHandler(
-			tenancysvc.NewTenantAdminService(tenantAdmin, pageAdmin), f,
+			tenancysvc.NewTenantAdminService(tenantAdmin, pageAdmin, dashboard), f,
 			a.issuerURL, a.bootstrapTenantSlug), opts))
 }
 

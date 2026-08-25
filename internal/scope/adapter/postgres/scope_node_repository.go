@@ -140,3 +140,12 @@ func derefStr(p *string) string {
 	}
 	return *p
 }
+
+// CountActiveScopeNodes backs the console's overview: the structure's size.
+func (s *Repository) CountActiveScopeNodes(ctx context.Context, tenantID string) (int64, error) {
+	n, err := s.q(ctx).CountActiveScopeNodes(ctx, tenantID)
+	if err != nil {
+		return 0, database.MapErr(err)
+	}
+	return n, nil
+}

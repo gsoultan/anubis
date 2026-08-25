@@ -97,6 +97,28 @@ func (q *Queries) AuditChainRange(ctx context.Context, arg AuditChainRangeParams
 	return items, nil
 }
 
+const countDecisions24h = `-- name: CountDecisions24h :one
+SELECT count(*) FILTER (WHERE result = 'allow') AS allows,
+       count(*) FILTER (WHERE result = 'deny')  AS denies
+FROM audit_log
+WHERE tenant_id = $1 AND action = 'authorize'
+  AND occurred_at > now() - interval '24 hours'
+`
+
+type CountDecisions24hRow struct {
+	Allows int64
+	Denies int64
+}
+
+// Dashboard: decision volume over the last day. Authorize events are
+// SAMPLED under pressure, so these are floors, not exact counts.
+func (q *Queries) CountDecisions24h(ctx context.Context, tenantID string) (CountDecisions24hRow, error) {
+	row := q.db.QueryRow(ctx, countDecisions24h, tenantID)
+	var i CountDecisions24hRow
+	err := row.Scan(&i.Allows, &i.Denies)
+	return i, err
+}
+
 const ensureAuditPartitions = `-- name: EnsureAuditPartitions :exec
 SELECT ensure_month_partitions('audit_log', 'occurred_at', 3)
 `
@@ -262,4 +284,24 @@ func (q *Queries) QueryAudit(ctx context.Context, arg QueryAuditParams) ([]Query
 		return nil, err
 	}
 	return items, nil
+}
+
+const reuseSignal = `-- name: ReuseSignal :one
+SELECT count(*) AS n, COALESCE(max(occurred_at), 'epoch'::timestamptz)::timestamptz AS latest
+FROM audit_log
+WHERE tenant_id = $1 AND action = 'token.reuse_detected'
+  AND occurred_at > now() - interval '7 days'
+`
+
+type ReuseSignalRow struct {
+	N      int64
+	Latest time.Time
+}
+
+// Dashboard: stolen-token events worth a red banner.
+func (q *Queries) ReuseSignal(ctx context.Context, tenantID string) (ReuseSignalRow, error) {
+	row := q.db.QueryRow(ctx, reuseSignal, tenantID)
+	var i ReuseSignalRow
+	err := row.Scan(&i.N, &i.Latest)
+	return i, err
 }

@@ -10,6 +10,20 @@ import (
 	"time"
 )
 
+const countLiveGrants = `-- name: CountLiveGrants :one
+SELECT count(*) FROM grants
+WHERE tenant_id = $1 AND revoked_at IS NULL
+  AND (valid_until IS NULL OR valid_until > now())
+`
+
+// Dashboard: access currently in force.
+func (q *Queries) CountLiveGrants(ctx context.Context, tenantID string) (int64, error) {
+	row := q.db.QueryRow(ctx, countLiveGrants, tenantID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createGrant = `-- name: CreateGrant :one
 INSERT INTO grants (tenant_id, identity_id, role_id, granted_by, reason,
                     self_scoped, valid_until)

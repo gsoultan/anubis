@@ -15,6 +15,7 @@ import (
 	identitydomain "github.com/gsoultan/anubis/internal/identity/domain"
 	"github.com/gsoultan/anubis/internal/platform/mw"
 	"github.com/gsoultan/anubis/internal/shared/apperr"
+	tenancyapp "github.com/gsoultan/anubis/internal/tenancy/app"
 	tenancydomain "github.com/gsoultan/anubis/internal/tenancy/domain"
 	tenancysvc "github.com/gsoultan/anubis/internal/tenancy/service"
 )
@@ -566,6 +567,36 @@ func (h *TenantAdminHandler) GetTenantStats(ctx context.Context,
 		Identities: int32(st.Identities), Grants: int32(st.Grants),
 		ScopeNodes: int32(st.ScopeNodes), Memberships: int32(st.Memberships),
 	}), nil
+}
+
+func (h *TenantAdminHandler) GetDashboard(ctx context.Context,
+	_ *connect.Request[anubisv1.GetDashboardRequest],
+) (*connect.Response[anubisv1.GetDashboardResponse], error) {
+	out, err := h.f.Do(ctx, "admin.tenant.dashboard", func(ctx context.Context) (any, error) {
+		return h.svc.GetDashboard(ctx)
+	})
+	if err != nil {
+		return nil, apiconnect.Err(ctx, err)
+	}
+	d := out.(*tenancyapp.Dashboard)
+	resp := &anubisv1.GetDashboardResponse{
+		GrantsTotal:     d.GrantsTotal,
+		ScopeNodesTotal: d.ScopeNodesTotal,
+		Decisions_24H:   d.Decisions24h,
+		Denies_24H:      d.Denies24h,
+	}
+	for _, r := range d.IdentitiesByRealm {
+		resp.IdentitiesByRealm = append(resp.IdentitiesByRealm, &anubisv1.RealmIdentityCount{
+			Realm: r.Realm, Kind: r.Kind, Count: r.Count,
+		})
+	}
+	for _, s := range d.Signals {
+		resp.Signals = append(resp.Signals, &anubisv1.DashboardSignal{
+			Kind: s.Kind, Severity: s.Severity, Count: s.Count,
+			Detail: s.Detail, Since: s.Since.Unix(),
+		})
+	}
+	return connect.NewResponse(resp), nil
 }
 
 func (h *TenantAdminHandler) ListApiKeys(ctx context.Context,

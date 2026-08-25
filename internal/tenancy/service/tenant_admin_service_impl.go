@@ -10,8 +10,9 @@ import tenancyapp "github.com/gsoultan/anubis/internal/tenancy/app"
 type tenantAdminService struct {
 	tenancyapp.TenantAdminUsecase
 	tenancyapp.PageAdminUsecase
+	tenancyapp.DashboardUsecase
 }
 
-func NewTenantAdminService(uc tenancyapp.TenantAdminUsecase, pages tenancyapp.PageAdminUsecase) TenantAdminService {
-	return &tenantAdminService{TenantAdminUsecase: uc, PageAdminUsecase: pages}
+func NewTenantAdminService(uc tenancyapp.TenantAdminUsecase, pages tenancyapp.PageAdminUsecase, dash tenancyapp.DashboardUsecase) TenantAdminService {
+	return &tenantAdminService{TenantAdminUsecase: uc, PageAdminUsecase: pages, DashboardUsecase: dash}
 }

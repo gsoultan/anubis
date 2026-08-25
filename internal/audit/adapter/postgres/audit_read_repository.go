@@ -63,3 +63,22 @@ func (s *Repository) AuditChainRange(ctx context.Context, tenantID string, after
 	}
 	return out, nil
 }
+
+// CountDecisions24h backs the console's overview. Sampled under pressure,
+// so floors rather than exact counts — the screen says "24h", not "exact".
+func (s *Repository) CountDecisions24h(ctx context.Context, tenantID string) (allows, denies int64, err error) {
+	row, err := s.q(ctx).CountDecisions24h(ctx, tenantID)
+	if err != nil {
+		return 0, 0, database.MapErr(err)
+	}
+	return row.Allows, row.Denies, nil
+}
+
+// ReuseSignal reports stolen-token events over the last week.
+func (s *Repository) ReuseSignal(ctx context.Context, tenantID string) (int64, time.Time, error) {
+	row, err := s.q(ctx).ReuseSignal(ctx, tenantID)
+	if err != nil {
+		return 0, time.Time{}, database.MapErr(err)
+	}
+	return row.N, row.Latest, nil
+}

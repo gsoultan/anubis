@@ -67,3 +67,9 @@ SELECT g.id, g.identity_id, i.username, g.role_id, r.name AS role_name,
                WHERE g2.id::text = sqlc.arg(after)::text))
  ORDER BY g.created_at DESC, g.id DESC
  LIMIT sqlc.arg(page_size);
+
+-- Dashboard: access currently in force.
+-- name: CountLiveGrants :one
+SELECT count(*) FROM grants
+WHERE tenant_id = $1 AND revoked_at IS NULL
+  AND (valid_until IS NULL OR valid_until > now());

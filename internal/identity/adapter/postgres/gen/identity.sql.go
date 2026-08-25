@@ -63,6 +63,57 @@ func (q *Queries) BumpTokenEpoch(ctx context.Context, arg BumpTokenEpochParams) 
 	return token_epoch, err
 }
 
+const countIdentitiesByRealm = `-- name: CountIdentitiesByRealm :many
+SELECT r.code AS realm, r.kind, count(i.id) AS n
+FROM realms r
+LEFT JOIN identities i ON i.realm_id = r.id AND i.tenant_id = r.tenant_id
+WHERE r.tenant_id = $1
+GROUP BY r.code, r.kind
+ORDER BY r.code
+`
+
+type CountIdentitiesByRealmRow struct {
+	Realm string
+	Kind  string
+	N     int64
+}
+
+// Dashboard: who is in this tenant, by population.
+func (q *Queries) CountIdentitiesByRealm(ctx context.Context, tenantID string) ([]CountIdentitiesByRealmRow, error) {
+	rows, err := q.db.Query(ctx, countIdentitiesByRealm, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []CountIdentitiesByRealmRow
+	for rows.Next() {
+		var i CountIdentitiesByRealmRow
+		if err := rows.Scan(&i.Realm, &i.Kind, &i.N); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const countRetentionBacklog = `-- name: CountRetentionBacklog :one
+SELECT count(*) FROM identities
+WHERE tenant_id = $1 AND retention_until IS NOT NULL
+  AND retention_until < now() AND anonymized_at IS NULL
+`
+
+// Dashboard: rows past their retention deadline and not yet anonymised —
+// each one is a compliance clock already ringing.
+func (q *Queries) CountRetentionBacklog(ctx context.Context, tenantID string) (int64, error) {
+	row := q.db.QueryRow(ctx, countRetentionBacklog, tenantID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createIdentity = `-- name: CreateIdentity :one
 INSERT INTO identities (tenant_id, realm_id, username, email, external_ref,
                         assurance_level, category_id, status)

@@ -10,11 +10,13 @@
 import { api as rpc } from '@/lib/anubis'
 import type {
   AuditEntry, AuthorizeRequest, AuthorizeResponse, AxisDefaultEffect,
-  AxisUiSchema, AxisVerdict, DenyReason, Grant, GrantEvaluation, GrantScope,
+  AxisUiSchema, AxisVerdict, DashboardStats, DenyReason, Grant,
+  GrantEvaluation, GrantScope,
   Identity, Membership, MembershipEntry, NewAxisInput, NewGrantInput,
   NewIdentityInput, NewNodeInput, NewRoleInput, Permission, Realm,
   RealmCategory, RealmKind, Role, ScopeAxis, ScopeNode, ScopeNodeType,
-  SignInConfig, StrictDryRun, SyncPlan, SyncSource, Tenant, Ial, Risk, Uuid,
+  SecuritySignal, SignInConfig, StrictDryRun, SyncPlan, SyncSource, Tenant,
+  Ial, Risk, Uuid,
 } from './types'
 
 /** Unix seconds to ISO, with the protobuf zero meaning "never". */
@@ -880,5 +882,30 @@ export async function strictDryRun(axis: string): Promise<StrictDryRun> {
     sampled: resp.sampled,
     would_deny: resp.wouldDeny,
     examples: Array.isArray(ex) ? ex : [],
+  }
+}
+
+export async function dashboard(): Promise<DashboardStats> {
+  const resp = await rpc.tenantAdmin.getDashboard({})
+  const decisions = Number(resp.decisions24h)
+  const denies = Number(resp.denies24h)
+  return {
+    identities_by_realm: resp.identitiesByRealm.map((r) => ({
+      realm: r.realm, kind: r.kind as RealmKind, count: Number(r.count),
+    })),
+    grants_total: Number(resp.grantsTotal),
+    scope_nodes_total: Number(resp.scopeNodesTotal),
+    decisions_24h: decisions,
+    deny_rate_24h: decisions > 0 ? denies / decisions : 0,
+    // The server measures latency per instance (Prometheus histograms), not
+    // per tenant; 0 here means "not shown", never a fake number.
+    p99_authorize_ms: 0,
+    signals: resp.signals.map((s) => ({
+      kind: s.kind as SecuritySignal['kind'],
+      severity: s.severity as SecuritySignal['severity'],
+      count: Number(s.count),
+      detail: s.detail,
+      since: new Date(Number(s.since) * 1000).toISOString(),
+    })),
   }
 }

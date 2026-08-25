@@ -122,3 +122,7 @@ SELECT n.id, n.axis_code, n.node_type, n.parent_id, n.slug, n.name,
   JOIN scope_nodes n ON n.id = c.ancestor_id
  WHERE c.descendant_id = sqlc.arg(node_id)
  ORDER BY c.depth DESC;
+
+-- Dashboard: the structure's live size.
+-- name: CountActiveScopeNodes :one
+SELECT count(*) FROM scope_nodes WHERE tenant_id = $1 AND status = 'active';

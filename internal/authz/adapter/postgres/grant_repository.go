@@ -118,3 +118,12 @@ func (s *Repository) SearchGrants(ctx context.Context, tenantID string, q grant.
 	}
 	return out, nil
 }
+
+// CountLiveGrants backs the console's overview: access currently in force.
+func (s *Repository) CountLiveGrants(ctx context.Context, tenantID string) (int64, error) {
+	n, err := s.q(ctx).CountLiveGrants(ctx, tenantID)
+	if err != nil {
+		return 0, database.MapErr(err)
+	}
+	return n, nil
+}

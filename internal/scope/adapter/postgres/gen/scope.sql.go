@@ -60,6 +60,18 @@ func (q *Queries) ArchiveScopeNode(ctx context.Context, arg ArchiveScopeNodePara
 	return result.RowsAffected(), nil
 }
 
+const countActiveScopeNodes = `-- name: CountActiveScopeNodes :one
+SELECT count(*) FROM scope_nodes WHERE tenant_id = $1 AND status = 'active'
+`
+
+// Dashboard: the structure's live size.
+func (q *Queries) CountActiveScopeNodes(ctx context.Context, tenantID string) (int64, error) {
+	row := q.db.QueryRow(ctx, countActiveScopeNodes, tenantID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createScopeAxis = `-- name: CreateScopeAxis :one
 INSERT INTO scope_axes (code, display_name, default_effect, sort_order,
                         resolution, ui_schema)

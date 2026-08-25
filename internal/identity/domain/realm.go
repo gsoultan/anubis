@@ -39,3 +39,10 @@ func (r *Realm) AllowsFactor(factor string) bool {
 	}
 	return false
 }
+
+// RealmCount is one population's size — the dashboard's by-realm figure.
+type RealmCount struct {
+	Realm string
+	Kind  string
+	Count int64
+}

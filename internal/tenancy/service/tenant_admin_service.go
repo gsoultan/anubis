@@ -7,4 +7,5 @@ import tenancyapp "github.com/gsoultan/anubis/internal/tenancy/app"
 type TenantAdminService interface {
 	tenancyapp.TenantAdminUsecase
 	tenancyapp.PageAdminUsecase
+	tenancyapp.DashboardUsecase
 }

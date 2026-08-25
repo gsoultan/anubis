@@ -10,7 +10,6 @@ import { Page } from '@/components/shell/Page'
 import { useCreate } from '@/stores/create'
 import { useSession } from '@/stores/session'
 import { Stat } from '@/components/ui/Stat'
-import { Sparkline } from '@/components/ui/Sparkline'
 import { api } from '@/lib/api/client'
 import { qk } from '@/lib/query/keys'
 import type { SecuritySignal } from '@/lib/api/types'
@@ -47,12 +46,6 @@ const SIGNAL: Record<SecuritySignal['kind'],
     action: { label: 'Review identities', to: '/identities' },
   },
 }
-
-/* Deterministic pseudo-series so the sparklines are stable across renders
-   instead of shimmering on every paint. */
-const series = (seed: number, n = 24, base = 50, amp = 18) =>
-  Array.from({ length: n }, (_, i) =>
-    base + Math.sin(i * 0.7 + seed) * amp + Math.sin(i * 0.23 + seed * 2) * (amp * 0.5))
 
 /* The guided path. Someone opening an IAM console for the first time has one
    question — "what do I do?" — and the answer is always the same three steps.
@@ -162,16 +155,21 @@ function Overview() {
 
         <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(4, minmax(0,1fr))' }}>
           <Stat label="Identities" value={total.toLocaleString()} to="/identities"
-            icon={<IconUsers size={11} />} series={series(1, 24, 55, 6)} trend={2.4}
+            icon={<IconUsers size={11} />}
             sub={`${data.identities_by_realm.length} populations`} />
           <Stat label="Grants" value={data.grants_total.toLocaleString()} to="/grants"
-            icon={<IconAffiliate size={11} />} series={series(3, 24, 50, 8)} trend={0.8} />
+            icon={<IconAffiliate size={11} />} sub="in force" />
           <Stat label="Scope nodes" value={data.scope_nodes_total.toLocaleString()} to="/scope"
-            icon={<IconSitemap size={11} />} series={series(5, 24, 45, 12)} trend={6.1} />
+            icon={<IconSitemap size={11} />} sub="active" />
           <Stat label="Decisions · 24h" value={data.decisions_24h.toLocaleString()}
-            icon={<IconActivity size={11} />} series={series(7, 24, 60, 22)}
+            icon={<IconActivity size={11} />}
             accent="var(--info)"
-            sub={`p99 ${data.p99_authorize_ms} ms · ${(data.deny_rate_24h * 100).toFixed(1)}% deny`} />
+            sub={[
+              // p99 is measured per instance (Prometheus), not per tenant;
+              // omit it rather than invent one.
+              data.p99_authorize_ms > 0 ? `p99 ${data.p99_authorize_ms} ms` : null,
+              data.decisions_24h > 0 ? `${(data.deny_rate_24h * 100).toFixed(1)}% deny` : null,
+            ].filter(Boolean).join(' · ') || 'no decisions recorded'} />
         </div>
 
         <div className="grid gap-4" style={{ gridTemplateColumns: 'minmax(0,7fr) minmax(0,5fr)' }}>
@@ -263,7 +261,6 @@ function Overview() {
                     {(data.deny_rate_24h * 100).toFixed(1)}%
                   </div>
                 </div>
-                <Sparkline data={series(11, 24, 40, 14)} color="var(--deny)" w={110} h={30} />
               </div>
             </Link>
           </div>

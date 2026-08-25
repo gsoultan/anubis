@@ -49,3 +49,19 @@ SELECT ensure_month_partitions('audit_log', 'occurred_at', 3);
 
 -- name: EnsureRefreshPartitions :exec
 SELECT ensure_month_partitions('refresh_tokens', 'expires_at', 3);
+
+-- Dashboard: decision volume over the last day. Authorize events are
+-- SAMPLED under pressure, so these are floors, not exact counts.
+-- name: CountDecisions24h :one
+SELECT count(*) FILTER (WHERE result = 'allow') AS allows,
+       count(*) FILTER (WHERE result = 'deny')  AS denies
+FROM audit_log
+WHERE tenant_id = $1 AND action = 'authorize'
+  AND occurred_at > now() - interval '24 hours';
+
+-- Dashboard: stolen-token events worth a red banner.
+-- name: ReuseSignal :one
+SELECT count(*) AS n, COALESCE(max(occurred_at), 'epoch'::timestamptz)::timestamptz AS latest
+FROM audit_log
+WHERE tenant_id = $1 AND action = 'token.reuse_detected'
+  AND occurred_at > now() - interval '7 days';

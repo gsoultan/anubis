@@ -8,7 +8,7 @@
    below. Reads AND writes: the Create drawers commit real rows now.
 
    NOT live, deliberately:
-     dashboard()   needs per-realm counts no RPC provides yet; still sample
+     dashboard()   LIVE — GetDashboard: counts, decisions, signals
      syncRuns()    run history is not recorded server-side; returns [] —
                    an empty list is honest where fake history is not
    NO RPC EXISTS, and the seam says so instead of pretending:
@@ -130,7 +130,7 @@ export const api = {
   setNodeTypeParents: (_axis: string, _code: string, _parents: string[]): Promise<never> =>
     Promise.reject(new Error('Node-type parents are set when the type is created.')),
   createAxis: (i: NewAxisInput) => live.createAxis(i),
-  dashboard: () => delay(mock.dashboard()),
+  dashboard: () => live.dashboard(),
   audit: () => live.audit(),
   strictDryRun: (axis: string) => live.strictDryRun(axis),
   syncSources: () => live.syncSources(),

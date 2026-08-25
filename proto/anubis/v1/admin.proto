@@ -659,6 +659,9 @@ service TenantAdminService {
   // every hosted page path, and changing it breaks links already in the world.
   rpc UpdateTenant(UpdateTenantRequest) returns (UpdateTenantResponse);
   rpc GetTenantStats(GetTenantStatsRequest) returns (GetTenantStatsResponse);
+  // GetDashboard is the console overview: measured facts only — counts and
+  // signals, never invented deltas or percentiles.
+  rpc GetDashboard(GetDashboardRequest) returns (GetDashboardResponse);
   // API keys are the TENANT's machine credentials (migration 0030): a
   // gateway asking authorize(), an integration reading the decision API.
   // They authenticate as the tenant's system, never as any person, and are
@@ -1329,6 +1332,34 @@ message GetTenantStatsResponse {
   int32 grants = 2;
   int32 scope_nodes = 3;
   int32 memberships = 4;
+}
+
+message GetDashboardRequest {}
+
+message RealmIdentityCount {
+  string realm = 1;
+  string kind = 2;
+  int64 count = 3;
+}
+
+// One thing on the overview that deserves a human before any number.
+message DashboardSignal {
+  string kind = 1;      // refresh_token_reuse | key_rotation_due | retention_overdue
+  string severity = 2;  // page | alert
+  int64 count = 3;
+  string detail = 4;
+  int64 since = 5;      // unix seconds
+}
+
+message GetDashboardResponse {
+  repeated RealmIdentityCount identities_by_realm = 1;
+  int64 grants_total = 2;
+  int64 scope_nodes_total = 3;
+  // Decision counts come from the audit log, which SAMPLES authorize
+  // events under pressure: floors, not exact figures.
+  int64 decisions_24h = 4;
+  int64 denies_24h = 5;
+  repeated DashboardSignal signals = 6;
 }
 
 message GetScopeNodeRequest {
