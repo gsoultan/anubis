@@ -210,6 +210,10 @@ service ScopeAdminService {
   // GetScopeNode fetches one node. Without it the console would have to pull
   // an entire axis to display a single selected value.
   rpc GetScopeNode(GetScopeNodeRequest) returns (GetScopeNodeResponse);
+  // GetScopeNodes resolves a bounded set of ids in one call — the names
+  // beside one screenful of grants. Capped; paging the axis is what
+  // ListScopeChildren and SearchScopeNodes are for.
+  rpc GetScopeNodes(GetScopeNodesRequest) returns (GetScopeNodesResponse);
   // ScopeAncestors is the chain from the axis root down, which is what makes
   // a scope decision explainable rather than a bare yes or no.
   rpc ScopeAncestors(ScopeAncestorsRequest) returns (ScopeAncestorsResponse);
@@ -856,6 +860,9 @@ message RealmCategory {
   string code = 3;
   string display_name = 4;
   int32 sort_order = 5;
+  // Counted in the database. The console used to tally the rows it had
+  // fetched, which a page cap made wrong on any real directory.
+  int64 identity_count = 6;
 }
 
 message ListRealmCategoriesRequest {
@@ -1364,6 +1371,14 @@ message GetDashboardResponse {
 
 message GetScopeNodeRequest {
   string id = 1;
+}
+
+message GetScopeNodesRequest {
+  repeated string ids = 1;  // at most 500
+}
+
+message GetScopeNodesResponse {
+  repeated ScopeNode nodes = 1;
 }
 
 message GetScopeNodeResponse {

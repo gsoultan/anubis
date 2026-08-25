@@ -11,6 +11,9 @@ type ScopeNodeAdminUsecase interface {
 	CreateScopeNodeType(ctx context.Context, t scopedomain.ScopeNodeTypeRecord) error
 	ListScopeNodes(ctx context.Context, axis, parentID, query string, includeArchived bool) ([]scopedomain.ScopeNodeRecord, error)
 	ScopeNode(ctx context.Context, id string) (*scopedomain.ScopeNodeRecord, error)
+	// ScopeNodes resolves a bounded set of ids at once: the names beside one
+	// screenful of grants, rather than every node in every axis.
+	ScopeNodes(ctx context.Context, ids []string) ([]scopedomain.ScopeNodeRecord, error)
 	ScopeAncestors(ctx context.Context, id string) ([]scopedomain.ScopeAncestor, error)
 	CreateScopeNode(ctx context.Context, axis, nodeType, parentID, slug, name, externalRef string) (*scopedomain.ScopeNodeRecord, error)
 	EnsureAxisRoot(ctx context.Context, axis string) (string, error)

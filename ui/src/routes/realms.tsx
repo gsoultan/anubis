@@ -33,7 +33,7 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 
 /* Categories are rows the tenant extends at runtime — "Public can be anything"
    is the requirement, so the add affordance lives right on the card. */
-function Categories({ r, counts }: { r: Realm; counts: Map<string, number> }) {
+function Categories({ r }: { r: Realm }) {
   const { data: cats } = useQuery({
     queryKey: qk.realmCategories(r.id),
     queryFn: () => api.realmCategories(r.id),
@@ -61,7 +61,7 @@ function Categories({ r, counts }: { r: Realm; counts: Map<string, number> }) {
           <span key={c.id} className="chip">
             {c.display_name}
             <span style={{ marginLeft: 5, color: 'var(--ink-4)' }} className="tnum">
-              {counts.get(c.id) ?? 0}
+              {c.identity_count.toLocaleString()}
             </span>
           </span>
         ))}
@@ -85,7 +85,7 @@ function Categories({ r, counts }: { r: Realm; counts: Map<string, number> }) {
   )
 }
 
-function RealmCard({ r, counts }: { r: Realm; counts: Map<string, number> }) {
+function RealmCard({ r }: { r: Realm }) {
   const k = KIND[r.kind]
   return (
     <div className="panel panel-hover overflow-hidden">
@@ -138,18 +138,13 @@ function RealmCard({ r, counts }: { r: Realm; counts: Map<string, number> }) {
           ) : <span className="t-xs">no statutory limit</span>}
         </Row>
       </div>
-      <Categories r={r} counts={counts} />
+      <Categories r={r} />
     </div>
   )
 }
 
 function Realms() {
   const { data: realms } = useQuery({ queryKey: qk.realms(), queryFn: api.realms })
-  const { data: identities } = useQuery({ queryKey: qk.identities(), queryFn: () => api.identities() })
-  const counts = new Map<string, number>()
-  for (const i of identities ?? []) {
-    if (i.category_id) counts.set(i.category_id, (counts.get(i.category_id) ?? 0) + 1)
-  }
   return (
     <Page
       title="Populations"
@@ -165,7 +160,7 @@ function Realms() {
           </div>
         </div>
         <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))' }}>
-          {realms?.map((r) => <RealmCard key={r.id} r={r} counts={counts} />)}
+          {realms?.map((r) => <RealmCard key={r.id} r={r} />)}
         </div>
       </div>
     </Page>

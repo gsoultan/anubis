@@ -289,6 +289,20 @@ func (h *ScopeAdminHandler) GetScopeNode(ctx context.Context, req *connect.Reque
 	return connect.NewResponse(&anubisv1.GetScopeNodeResponse{Node: nodeProto(*n)}), nil
 }
 
+func (h *ScopeAdminHandler) GetScopeNodes(ctx context.Context, req *connect.Request[anubisv1.GetScopeNodesRequest]) (*connect.Response[anubisv1.GetScopeNodesResponse], error) {
+	out, err := h.f.Do(ctx, "admin.scope.nodes_by_id", func(ctx context.Context) (any, error) {
+		return h.svc.ScopeNodes(ctx, req.Msg.Ids)
+	})
+	if err != nil {
+		return nil, apiconnect.Err(ctx, err)
+	}
+	resp := &anubisv1.GetScopeNodesResponse{}
+	for _, n := range out.([]scopedomain.ScopeNodeRecord) {
+		resp.Nodes = append(resp.Nodes, nodeProto(n))
+	}
+	return connect.NewResponse(resp), nil
+}
+
 func (h *ScopeAdminHandler) ScopeAncestors(ctx context.Context, req *connect.Request[anubisv1.ScopeAncestorsRequest]) (*connect.Response[anubisv1.ScopeAncestorsResponse], error) {
 	out, err := h.f.Do(ctx, "admin.scope.ancestors", func(ctx context.Context) (any, error) {
 		return h.svc.ScopeAncestors(ctx, req.Msg.Id)

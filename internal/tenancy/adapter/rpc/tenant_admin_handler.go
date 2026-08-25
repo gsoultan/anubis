@@ -150,6 +150,7 @@ func (h *TenantAdminHandler) ListRealmCategories(ctx context.Context, req *conne
 		resp.Categories = append(resp.Categories, &anubisv1.RealmCategory{
 			Id: c.ID, RealmId: c.RealmID, Code: c.Code,
 			DisplayName: c.DisplayName, SortOrder: int32(c.SortOrder),
+			IdentityCount: c.IdentityCount,
 		})
 	}
 	return connect.NewResponse(resp), nil

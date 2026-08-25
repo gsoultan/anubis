@@ -3,8 +3,10 @@ import { useQuery } from '@tanstack/react-query'
 import { Button, Select, TextInput } from '@mantine/core'
 import { IconPlus, IconSearch, IconUsersGroup, IconX } from '@tabler/icons-react'
 import { useState } from 'react'
+import { useDebouncedValue } from '@mantine/hooks'
 import { Page } from '@/components/shell/Page'
 import { api } from '@/lib/api/client'
+import * as live from '@/lib/api/live'
 import { qk } from '@/lib/query/keys'
 import { queryClient } from '@/lib/query/client'
 import { useCreate } from '@/stores/create'
@@ -14,11 +16,24 @@ import type { Membership } from '@/lib/api/types'
 export const Route = createFileRoute('/memberships')({ component: Memberships })
 
 function MembershipCard({ m }: { m: Membership }) {
-  const { data: identities } = useQuery({ queryKey: qk.identities(), queryFn: () => api.identities() })
+  /* The picker SEARCHES the server rather than loading the directory. It
+     used to pull up to 2000 identities to populate a dropdown over 57,000
+     people — so the person you wanted was often simply not in the list. */
+  const [search, setSearch] = useState('')
+  const [debounced] = useDebouncedValue(search, 250)
+  const { data: found } = useQuery({
+    queryKey: ['member-search', debounced],
+    queryFn: () => live.identitiesPage(undefined, debounced || undefined, '', 20),
+    placeholderData: (prev) => prev,
+  })
   const { data: realms } = useQuery({ queryKey: qk.realms(), queryFn: api.realms })
+  /* Only the scopes this card actually shows. Pulling every node of every
+     axis (32k here) to label a few chips was the previous approach. */
+  const scopeIds = [...new Set(m.entries.flatMap((e) => e.scopes.map((s) => s.scope_node_id)))].sort()
   const { data: nodes } = useQuery({
-    queryKey: ['all-nodes'],
-    queryFn: async () => (await Promise.all((await api.axes()).map((a) => api.scopeSearch(a.code, '')))).flat(),
+    queryKey: ['scope-names', scopeIds],
+    queryFn: () => api.scopeNodesByIds(scopeIds),
+    enabled: scopeIds.length > 0,
   })
   const [pick, setPick] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -34,7 +49,7 @@ function MembershipCard({ m }: { m: Membership }) {
     setBusy(true)
     try {
       const n = await api.assignMembership(pick, m.id)
-      notifyCreated('Member added', `${identities?.find((i) => i.id === pick)?.username} received ${n} access grant${n > 1 ? 's' : ''}.`)
+      notifyCreated('Member added', `${found?.rows.find((i) => i.id === pick)?.username ?? 'The person'} received ${n} access grant${n > 1 ? 's' : ''}.`)
       await refresh(); setPick(null)
     } catch (e) { notifyRejected(e) }
     setBusy(false)
@@ -49,10 +64,11 @@ function MembershipCard({ m }: { m: Membership }) {
 
   const candidates = (realms ?? []).map((r) => ({
     group: r.display_name,
-    items: (identities ?? [])
-      .filter((i) => i.realm_id === r.id && !m.member_ids.includes(i.id))
-      /* member_ids is empty when the server reported a count instead of a
-         roster; adding somebody twice is a no-op, so nothing is lost. */
+    /* No exclusion of existing members: the server reports a COUNT, not a
+       roster, and AssignMembership is idempotent — so adding somebody twice
+       costs nothing, while hiding them would need a roster nobody sends. */
+    items: (found?.rows ?? [])
+      .filter((i) => i.realm_id === r.id)
       .map((i) => ({ value: i.id, label: i.username })),
   })).filter((g) => g.items.length > 0)
 
@@ -98,22 +114,31 @@ function MembershipCard({ m }: { m: Membership }) {
 
       <div className="t-label mb-1.5">Members</div>
       <div className="mb-2.5 flex flex-wrap gap-1.5">
-        {m.member_ids.length === 0 && <span className="t-xs">Nobody yet.</span>}
-        {m.member_ids.map((id) => (
-          <span key={id} className="chip">
-            {identities?.find((i) => i.id === id)?.username ?? id}
-            <button onClick={() => void unassign(id)} aria-label="Remove member"
-              style={{ marginLeft: 5, display: 'inline-flex', color: 'var(--ink-4)' }}>
-              <IconX size={10} />
-            </button>
-          </span>
-        ))}
+        {/* The API reports a COUNT, not a roster: a membership can hold
+            thousands, and no screen needs the list to say "412 members".
+            This used to render the empty roster as "Nobody yet." — which
+            read as a fact and was one for no membership at all. */}
+        {count === 0
+          ? <span className="t-xs">Nobody yet.</span>
+          : <span className="t-xs">{count.toLocaleString()} {count === 1 ? 'person holds' : 'people hold'} this membership. Find them on Access, filtered by membership.</span>}
       </div>
       <div className="flex items-center gap-1.5">
-        <Select size="xs" searchable placeholder="Add a person…" data={candidates}
-          value={pick} onChange={setPick} style={{ flex: 1 }} />
+        <Select size="xs" searchable placeholder="Search for a person…" data={candidates}
+          value={pick} onChange={setPick} style={{ flex: 1 }}
+          searchValue={search} onSearchChange={setSearch}
+          /* The server already filtered; filtering again would hide matches
+             it deliberately returned. */
+          filter={({ options }) => options}
+          nothingFoundMessage={debounced ? 'Nobody matches' : 'Type to search'} />
         <Button size="xs" variant="light" loading={busy} disabled={!pick} onClick={() => void assign()}>
           Assign
+        </Button>
+        {/* Removing works through the same search. Without a roster from the
+            server there is nobody to click on, and the chips this replaced
+            were never populated. */}
+        <Button size="xs" variant="subtle" color="red" loading={busy} disabled={!pick}
+          leftSection={<IconX size={12} />} onClick={() => pick && void unassign(pick)}>
+          Remove
         </Button>
       </div>
     </div>

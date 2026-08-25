@@ -51,14 +51,15 @@ function Grants() {
     await queryClient.invalidateQueries({ queryKey: ['grants'] })
     await queryClient.invalidateQueries({ queryKey: qk.dashboard() })
   }
-  const { data: identities } = useQuery({ queryKey: qk.identities(), queryFn: () => api.identities() })
   const { data: axes } = useQuery({ queryKey: qk.axes(), queryFn: api.axes })
+  /* Resolve the names for the scopes ON THIS PAGE. This used to pull every
+     node of every axis — 32k here — to label a dozen chips. The query key
+     carries the ids, so paging fetches only what the new page added. */
+  const scopeIds = [...new Set((grants ?? []).flatMap((g) => g.scopes.map((s) => s.scope_node_id)))].sort()
   const { data: nodes } = useQuery({
-    queryKey: ['all-nodes'],
-    queryFn: async () => {
-      const all = await Promise.all((await api.axes()).map((a) => api.scopeSearch(a.code, '')))
-      return all.flat()
-    },
+    queryKey: ['scope-names', scopeIds],
+    queryFn: () => api.scopeNodesByIds(scopeIds),
+    enabled: scopeIds.length > 0,
   })
   const nodeName = (id: string) => nodes?.find((n) => n.id === id)?.name ?? id
 
@@ -149,7 +150,7 @@ function Grants() {
                 <Menu.Label>This revokes access, not the identity</Menu.Label>
                 <Menu.Item color="red" leftSection={<IconTrash size={14} />}
                   onClick={() => void revoke(g.id,
-                    identities?.find((i) => i.id === g.identity_id)?.username ?? 'identity',
+                    g.username || 'identity',
                     g.role_name)}>
                   Revoke grant
                 </Menu.Item>

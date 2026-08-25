@@ -111,6 +111,9 @@ const (
 	// ScopeAdminServiceGetScopeNodeProcedure is the fully-qualified name of the ScopeAdminService's
 	// GetScopeNode RPC.
 	ScopeAdminServiceGetScopeNodeProcedure = "/anubis.v1.ScopeAdminService/GetScopeNode"
+	// ScopeAdminServiceGetScopeNodesProcedure is the fully-qualified name of the ScopeAdminService's
+	// GetScopeNodes RPC.
+	ScopeAdminServiceGetScopeNodesProcedure = "/anubis.v1.ScopeAdminService/GetScopeNodes"
 	// ScopeAdminServiceScopeAncestorsProcedure is the fully-qualified name of the ScopeAdminService's
 	// ScopeAncestors RPC.
 	ScopeAdminServiceScopeAncestorsProcedure = "/anubis.v1.ScopeAdminService/ScopeAncestors"
@@ -768,6 +771,10 @@ type ScopeAdminServiceClient interface {
 	// GetScopeNode fetches one node. Without it the console would have to pull
 	// an entire axis to display a single selected value.
 	GetScopeNode(context.Context, *connect.Request[v1.GetScopeNodeRequest]) (*connect.Response[v1.GetScopeNodeResponse], error)
+	// GetScopeNodes resolves a bounded set of ids in one call — the names
+	// beside one screenful of grants. Capped; paging the axis is what
+	// ListScopeChildren and SearchScopeNodes are for.
+	GetScopeNodes(context.Context, *connect.Request[v1.GetScopeNodesRequest]) (*connect.Response[v1.GetScopeNodesResponse], error)
 	// ScopeAncestors is the chain from the axis root down, which is what makes
 	// a scope decision explainable rather than a bare yes or no.
 	ScopeAncestors(context.Context, *connect.Request[v1.ScopeAncestorsRequest]) (*connect.Response[v1.ScopeAncestorsResponse], error)
@@ -845,6 +852,12 @@ func NewScopeAdminServiceClient(httpClient connect.HTTPClient, baseURL string, o
 			connect.WithSchema(scopeAdminServiceMethods.ByName("GetScopeNode")),
 			connect.WithClientOptions(opts...),
 		),
+		getScopeNodes: connect.NewClient[v1.GetScopeNodesRequest, v1.GetScopeNodesResponse](
+			httpClient,
+			baseURL+ScopeAdminServiceGetScopeNodesProcedure,
+			connect.WithSchema(scopeAdminServiceMethods.ByName("GetScopeNodes")),
+			connect.WithClientOptions(opts...),
+		),
 		scopeAncestors: connect.NewClient[v1.ScopeAncestorsRequest, v1.ScopeAncestorsResponse](
 			httpClient,
 			baseURL+ScopeAdminServiceScopeAncestorsProcedure,
@@ -918,6 +931,7 @@ type scopeAdminServiceClient struct {
 	createScopeNodeType *connect.Client[v1.CreateScopeNodeTypeRequest, v1.CreateScopeNodeTypeResponse]
 	listScopeNodes      *connect.Client[v1.ListScopeNodesRequest, v1.ListScopeNodesResponse]
 	getScopeNode        *connect.Client[v1.GetScopeNodeRequest, v1.GetScopeNodeResponse]
+	getScopeNodes       *connect.Client[v1.GetScopeNodesRequest, v1.GetScopeNodesResponse]
 	scopeAncestors      *connect.Client[v1.ScopeAncestorsRequest, v1.ScopeAncestorsResponse]
 	createScopeNode     *connect.Client[v1.CreateScopeNodeRequest, v1.CreateScopeNodeResponse]
 	ensureAxisRoot      *connect.Client[v1.EnsureAxisRootRequest, v1.EnsureAxisRootResponse]
@@ -968,6 +982,11 @@ func (c *scopeAdminServiceClient) ListScopeNodes(ctx context.Context, req *conne
 // GetScopeNode calls anubis.v1.ScopeAdminService.GetScopeNode.
 func (c *scopeAdminServiceClient) GetScopeNode(ctx context.Context, req *connect.Request[v1.GetScopeNodeRequest]) (*connect.Response[v1.GetScopeNodeResponse], error) {
 	return c.getScopeNode.CallUnary(ctx, req)
+}
+
+// GetScopeNodes calls anubis.v1.ScopeAdminService.GetScopeNodes.
+func (c *scopeAdminServiceClient) GetScopeNodes(ctx context.Context, req *connect.Request[v1.GetScopeNodesRequest]) (*connect.Response[v1.GetScopeNodesResponse], error) {
+	return c.getScopeNodes.CallUnary(ctx, req)
 }
 
 // ScopeAncestors calls anubis.v1.ScopeAdminService.ScopeAncestors.
@@ -1034,6 +1053,10 @@ type ScopeAdminServiceHandler interface {
 	// GetScopeNode fetches one node. Without it the console would have to pull
 	// an entire axis to display a single selected value.
 	GetScopeNode(context.Context, *connect.Request[v1.GetScopeNodeRequest]) (*connect.Response[v1.GetScopeNodeResponse], error)
+	// GetScopeNodes resolves a bounded set of ids in one call — the names
+	// beside one screenful of grants. Capped; paging the axis is what
+	// ListScopeChildren and SearchScopeNodes are for.
+	GetScopeNodes(context.Context, *connect.Request[v1.GetScopeNodesRequest]) (*connect.Response[v1.GetScopeNodesResponse], error)
 	// ScopeAncestors is the chain from the axis root down, which is what makes
 	// a scope decision explainable rather than a bare yes or no.
 	ScopeAncestors(context.Context, *connect.Request[v1.ScopeAncestorsRequest]) (*connect.Response[v1.ScopeAncestorsResponse], error)
@@ -1105,6 +1128,12 @@ func NewScopeAdminServiceHandler(svc ScopeAdminServiceHandler, opts ...connect.H
 		ScopeAdminServiceGetScopeNodeProcedure,
 		svc.GetScopeNode,
 		connect.WithSchema(scopeAdminServiceMethods.ByName("GetScopeNode")),
+		connect.WithHandlerOptions(opts...),
+	)
+	scopeAdminServiceGetScopeNodesHandler := connect.NewUnaryHandler(
+		ScopeAdminServiceGetScopeNodesProcedure,
+		svc.GetScopeNodes,
+		connect.WithSchema(scopeAdminServiceMethods.ByName("GetScopeNodes")),
 		connect.WithHandlerOptions(opts...),
 	)
 	scopeAdminServiceScopeAncestorsHandler := connect.NewUnaryHandler(
@@ -1185,6 +1214,8 @@ func NewScopeAdminServiceHandler(svc ScopeAdminServiceHandler, opts ...connect.H
 			scopeAdminServiceListScopeNodesHandler.ServeHTTP(w, r)
 		case ScopeAdminServiceGetScopeNodeProcedure:
 			scopeAdminServiceGetScopeNodeHandler.ServeHTTP(w, r)
+		case ScopeAdminServiceGetScopeNodesProcedure:
+			scopeAdminServiceGetScopeNodesHandler.ServeHTTP(w, r)
 		case ScopeAdminServiceScopeAncestorsProcedure:
 			scopeAdminServiceScopeAncestorsHandler.ServeHTTP(w, r)
 		case ScopeAdminServiceCreateScopeNodeProcedure:
@@ -1244,6 +1275,10 @@ func (UnimplementedScopeAdminServiceHandler) ListScopeNodes(context.Context, *co
 
 func (UnimplementedScopeAdminServiceHandler) GetScopeNode(context.Context, *connect.Request[v1.GetScopeNodeRequest]) (*connect.Response[v1.GetScopeNodeResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.ScopeAdminService.GetScopeNode is not implemented"))
+}
+
+func (UnimplementedScopeAdminServiceHandler) GetScopeNodes(context.Context, *connect.Request[v1.GetScopeNodesRequest]) (*connect.Response[v1.GetScopeNodesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.ScopeAdminService.GetScopeNodes is not implemented"))
 }
 
 func (UnimplementedScopeAdminServiceHandler) ScopeAncestors(context.Context, *connect.Request[v1.ScopeAncestorsRequest]) (*connect.Response[v1.ScopeAncestorsResponse], error) {

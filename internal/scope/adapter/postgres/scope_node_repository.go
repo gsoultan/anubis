@@ -58,6 +58,25 @@ func (s *Repository) ScopeNode(ctx context.Context, tenantID, id string) (*scope
 	return &rec, nil
 }
 
+// ScopeNodesByIDs resolves a bounded set of nodes in one round trip. Ids
+// beyond this tenant simply do not come back — the tenant filter is in the
+// query, not in the caller's good intentions.
+func (s *Repository) ScopeNodesByIDs(ctx context.Context, tenantID string, ids []string) ([]scopedomain.ScopeNodeRecord, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	rows, err := s.q(ctx).ScopeNodesByIDs(ctx, gen.ScopeNodesByIDsParams{TenantID: tenantID, Ids: ids})
+	if err != nil {
+		return nil, database.MapErr(err)
+	}
+	out := make([]scopedomain.ScopeNodeRecord, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, scopeNodeFromRow(r.ID, r.AxisCode, r.NodeType, database.Deref(r.ParentID),
+			r.Slug, r.Name, database.Deref(r.ExternalRef), r.Status, r.IsAxisRoot))
+	}
+	return out, nil
+}
+
 func (s *Repository) ScopeNodeByRef(ctx context.Context, tenantID, axis, ref string) (*scopedomain.ScopeNodeRecord, error) {
 	r, err := s.q(ctx).GetScopeNodeByRef(ctx, gen.GetScopeNodeByRefParams{
 		TenantID: tenantID, AxisCode: axis, ExternalRef: database.OptStr(ref),

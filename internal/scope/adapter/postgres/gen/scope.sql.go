@@ -611,6 +611,65 @@ func (q *Queries) ScopeAncestors(ctx context.Context, nodeID string) ([]ScopeAnc
 	return items, nil
 }
 
+const scopeNodesByIDs = `-- name: ScopeNodesByIDs :many
+SELECT id, tenant_id, parent_id, is_axis_root, status, axis_code, node_type,
+       slug, name, external_ref
+FROM scope_nodes
+WHERE tenant_id = $1 AND id = ANY($2::uuid[])
+`
+
+type ScopeNodesByIDsParams struct {
+	TenantID string
+	Ids      []string
+}
+
+type ScopeNodesByIDsRow struct {
+	ID          string
+	TenantID    string
+	ParentID    *string
+	IsAxisRoot  bool
+	Status      string
+	AxisCode    string
+	NodeType    string
+	Slug        string
+	Name        string
+	ExternalRef *string
+}
+
+// ScopeNodesByIDs resolves a HANDFUL of nodes by id — the names beside the
+// grants on one screen. The console used to pull every node in every axis
+// (32k here) to render a dozen labels.
+func (q *Queries) ScopeNodesByIDs(ctx context.Context, arg ScopeNodesByIDsParams) ([]ScopeNodesByIDsRow, error) {
+	rows, err := q.db.Query(ctx, scopeNodesByIDs, arg.TenantID, arg.Ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ScopeNodesByIDsRow
+	for rows.Next() {
+		var i ScopeNodesByIDsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.TenantID,
+			&i.ParentID,
+			&i.IsAxisRoot,
+			&i.Status,
+			&i.AxisCode,
+			&i.NodeType,
+			&i.Slug,
+			&i.Name,
+			&i.ExternalRef,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const scopeSyncApply = `-- name: ScopeSyncApply :one
 SELECT scope_sync_apply($1, $2::jsonb,
                         $3)::text AS report

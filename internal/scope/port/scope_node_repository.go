@@ -11,6 +11,9 @@ type ScopeNodeRepository interface {
 	CreateScopeNodeType(ctx context.Context, t scopedomain.ScopeNodeTypeRecord) error
 	ListScopeNodes(ctx context.Context, tenantID, axis, parentID, query string, includeArchived bool) ([]scopedomain.ScopeNodeRecord, error)
 	ScopeNode(ctx context.Context, tenantID, id string) (*scopedomain.ScopeNodeRecord, error)
+	// ScopeNodesByIDs resolves a bounded set in one round trip — the names
+	// beside one screenful of grants, not the whole axis.
+	ScopeNodesByIDs(ctx context.Context, tenantID string, ids []string) ([]scopedomain.ScopeNodeRecord, error)
 	ScopeNodeByRef(ctx context.Context, tenantID, axis, ref string) (*scopedomain.ScopeNodeRecord, error)
 	ScopeAncestors(ctx context.Context, nodeID string) ([]scopedomain.ScopeAncestor, error)
 	EnsureAxisRoot(ctx context.Context, tenantID, axis string) (string, error)

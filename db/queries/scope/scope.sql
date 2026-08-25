@@ -126,3 +126,12 @@ SELECT n.id, n.axis_code, n.node_type, n.parent_id, n.slug, n.name,
 -- Dashboard: the structure's live size.
 -- name: CountActiveScopeNodes :one
 SELECT count(*) FROM scope_nodes WHERE tenant_id = $1 AND status = 'active';
+
+-- ScopeNodesByIDs resolves a HANDFUL of nodes by id — the names beside the
+-- grants on one screen. The console used to pull every node in every axis
+-- (32k here) to render a dozen labels.
+-- name: ScopeNodesByIDs :many
+SELECT id, tenant_id, parent_id, is_axis_root, status, axis_code, node_type,
+       slug, name, external_ref
+FROM scope_nodes
+WHERE tenant_id = sqlc.arg(tenant_id) AND id = ANY(sqlc.arg(ids)::uuid[]);

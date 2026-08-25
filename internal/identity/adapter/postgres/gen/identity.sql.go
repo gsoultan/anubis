@@ -63,6 +63,46 @@ func (q *Queries) BumpTokenEpoch(ctx context.Context, arg BumpTokenEpochParams) 
 	return token_epoch, err
 }
 
+const countIdentitiesByCategory = `-- name: CountIdentitiesByCategory :many
+SELECT category_id, count(*) AS n
+FROM identities
+WHERE tenant_id = $1 AND realm_id = $2 AND category_id IS NOT NULL
+GROUP BY category_id
+`
+
+type CountIdentitiesByCategoryParams struct {
+	TenantID string
+	RealmID  *string
+}
+
+type CountIdentitiesByCategoryRow struct {
+	CategoryID *string
+	N          int64
+}
+
+// Populations screen: how many people sit in each category of a realm.
+// Counted in the database because the console used to count rows it had
+// fetched — capped at 2,000 of 57,000, so every figure was wrong.
+func (q *Queries) CountIdentitiesByCategory(ctx context.Context, arg CountIdentitiesByCategoryParams) ([]CountIdentitiesByCategoryRow, error) {
+	rows, err := q.db.Query(ctx, countIdentitiesByCategory, arg.TenantID, arg.RealmID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []CountIdentitiesByCategoryRow
+	for rows.Next() {
+		var i CountIdentitiesByCategoryRow
+		if err := rows.Scan(&i.CategoryID, &i.N); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const countIdentitiesByRealm = `-- name: CountIdentitiesByRealm :many
 SELECT r.code AS realm, r.kind, count(i.id) AS n
 FROM realms r

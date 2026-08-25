@@ -6,6 +6,7 @@ import { api } from '@/lib/api/client'
 import { qk } from '@/lib/query/keys'
 import { queryClient } from '@/lib/query/client'
 import { useCreate } from '@/stores/create'
+import { IdentityPicker } from '@/components/ui/IdentityPicker'
 import { ScopeTree } from '@/components/scope/ScopeTree'
 import { AxisIcon } from '@/components/scope/AxisIcon'
 import { CreateShell, CancelSubmit, notifyCreated, notifyRejected } from './shell'
@@ -106,7 +107,6 @@ const VALIDITY = [
 
 export function CreateGrant({ opened }: { opened: boolean }) {
   const { close, ctx } = useCreate()
-  const { data: identities } = useQuery({ queryKey: qk.identities(), queryFn: () => api.identities() })
   const { data: realms } = useQuery({ queryKey: qk.realms(), queryFn: api.realms })
   const { data: roles } = useQuery({ queryKey: qk.roles(), queryFn: api.roles })
   const { data: axes } = useQuery({ queryKey: qk.axes(), queryFn: api.axes })
@@ -123,7 +123,12 @@ export function CreateGrant({ opened }: { opened: boolean }) {
     if (opened && ctx.identityId) setIdentityId(ctx.identityId)
   }, [opened, ctx.identityId])
 
-  const subject = identities?.find((i) => i.id === identityId)
+  /* One person, fetched when picked — not the whole directory to find them. */
+  const { data: subject } = useQuery({
+    queryKey: qk.identity(identityId ?? ''),
+    queryFn: () => api.identity(identityId as string),
+    enabled: !!identityId,
+  })
   const subjectKind = realms?.find((r) => r.id === subject?.realm_id)?.kind
 
   const roleOptions = (roles ?? []).map((r) => {
@@ -171,12 +176,6 @@ export function CreateGrant({ opened }: { opened: boolean }) {
     setSubmitting(false)
   }
 
-  const grouped = (realms ?? []).map((r) => ({
-    group: r.display_name,
-    items: (identities ?? []).filter((i) => i.realm_id === r.id)
-      .map((i) => ({ value: i.id, label: `${i.username}${i.email ? ` · ${i.email}` : ''}` })),
-  })).filter((g) => g.items.length > 0)
-
   return (
     <CreateShell
       opened={opened} onClose={close} title="Give access"
@@ -189,8 +188,8 @@ export function CreateGrant({ opened }: { opened: boolean }) {
       }
     >
       <div className="flex flex-col gap-4">
-        <Select label="Who" placeholder="Pick a person" searchable required
-          data={grouped} value={identityId} onChange={setIdentityId} />
+        <IdentityPicker label="Who" placeholder="Search for a person…"
+          value={identityId} onChange={(id) => setIdentityId(id)} />
 
         <div>
           <Select label="Role" placeholder={subject ? 'Pick a role' : 'Pick a person first'}

@@ -558,6 +558,27 @@ func (u *scopeAdminInteractor) ScopeNode(ctx context.Context, id string) (*scope
 	return u.nodes.ScopeNode(ctx, p.TenantID, id)
 }
 
+// maxNodeLookup bounds one batch. A screen shows tens of rows; anything
+// asking for thousands is trying to page through the axis by another name,
+// and ListScopeChildren / SearchScopeNodes are the calls for that.
+const maxNodeLookup = 500
+
+func (u *scopeAdminInteractor) ScopeNodes(ctx context.Context, ids []string) ([]scopedomain.ScopeNodeRecord, error) {
+	p, err := u.guard.Require(ctx, "anubis:identity:read")
+	if err != nil {
+		return nil, err
+	}
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	if len(ids) > maxNodeLookup {
+		return nil, apperr.ErrInvalidArgument.
+			With("ids", "at most 500 per call").
+			With("hint", "resolve the names for one page, not the whole axis")
+	}
+	return u.nodes.ScopeNodesByIDs(ctx, p.TenantID, ids)
+}
+
 // ScopeAncestors is the chain from the axis root down, which is what turns a
 // scope decision into an explanation rather than a bare yes or no.
 func (u *scopeAdminInteractor) ScopeAncestors(ctx context.Context, id string) ([]scopedomain.ScopeAncestor, error) {

@@ -480,6 +480,21 @@ export async function scopeNode(id: Uuid): Promise<ScopeNode | null> {
   return resp.node ? toNode(resp.node) : null
 }
 
+/** Resolve a bounded set of nodes by id — the names beside one screenful of
+    grants. The screens used to build this map by pulling every node in every
+    axis (32k in this installation) to render a dozen labels. */
+export async function scopeNodesByIds(ids: Uuid[]): Promise<ScopeNode[]> {
+  const unique = [...new Set(ids.filter(Boolean))]
+  if (unique.length === 0) return []
+  // The server caps a batch at 500; chunk rather than let a big page fail.
+  const out: ScopeNode[] = []
+  for (let i = 0; i < unique.length; i += 500) {
+    const resp = await rpc.scopeAdmin.getScopeNodes({ ids: unique.slice(i, i + 500) })
+    out.push(...resp.nodes.map(toNode))
+  }
+  return out
+}
+
 /** The chain from the axis root down to a node. This is what lets the picker
     show WHERE a value sits rather than just its name. */
 export async function ancestorPath(id: Uuid): Promise<ScopeNode[]> {
@@ -706,6 +721,7 @@ export async function realmCategories(realmId?: Uuid): Promise<RealmCategory[]> 
   return resp.categories.map((c): RealmCategory => ({
     id: c.id, realm_id: c.realmId, code: c.code,
     display_name: c.displayName, sort_order: c.sortOrder,
+    identity_count: Number(c.identityCount),
   }))
 }
 
@@ -715,12 +731,15 @@ export async function createRealmCategory(i: { realm_id: Uuid; display_name: str
       $typeName: 'anubis.v1.RealmCategory',
       id: '', realmId: i.realm_id, displayName: i.display_name,
       code: i.display_name.toLowerCase().trim().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, ''),
-      sortOrder: 0,
+      sortOrder: 0, identityCount: 0n,
     },
   })
   const c = resp.category
   if (!c) throw new Error('no category returned')
-  return { id: c.id, realm_id: c.realmId, code: c.code, display_name: c.displayName, sort_order: c.sortOrder }
+  return {
+    id: c.id, realm_id: c.realmId, code: c.code, display_name: c.displayName,
+    sort_order: c.sortOrder, identity_count: 0,  // brand new: nobody in it yet
+  }
 }
 
 export async function createGrant(i: NewGrantInput): Promise<void> {

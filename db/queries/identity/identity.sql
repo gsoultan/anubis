@@ -142,3 +142,12 @@ ORDER BY r.code;
 SELECT count(*) FROM identities
 WHERE tenant_id = $1 AND retention_until IS NOT NULL
   AND retention_until < now() AND anonymized_at IS NULL;
+
+-- Populations screen: how many people sit in each category of a realm.
+-- Counted in the database because the console used to count rows it had
+-- fetched — capped at 2,000 of 57,000, so every figure was wrong.
+-- name: CountIdentitiesByCategory :many
+SELECT category_id, count(*) AS n
+FROM identities
+WHERE tenant_id = $1 AND realm_id = $2 AND category_id IS NOT NULL
+GROUP BY category_id;

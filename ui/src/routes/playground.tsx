@@ -9,6 +9,7 @@ import { useEffect, useState } from 'react'
 import { Page } from '@/components/shell/Page'
 import { AxisTargetPicker } from '@/components/scope/AxisTargetPicker'
 import { api } from '@/lib/api/client'
+import { IdentityPicker } from '@/components/ui/IdentityPicker'
 import { qk } from '@/lib/query/keys'
 import { usePlayground } from '@/stores/session'
 import type { AuthorizeResponse, AxisVerdict, GrantEvaluation } from '@/lib/api/types'
@@ -160,33 +161,37 @@ type PresetCtx = {
   setSubject: (v: string | null) => void
   setPermission: (v: string | null) => void
   setTarget: (axis: string, id: string | null) => void
-  identities: { id: string; username: string; assurance_level: number }[] | undefined
   permissions: { key: string; min_assurance: number }[] | undefined
 }
+/* Presets set up the SHAPE of a question — they cannot know who works here.
+
+   They used to look up a person called "alice" and permissions beginning
+   billing:, which existed only in the sample data: on a real installation
+   every preset silently selected nobody. Each one now picks a permission
+   that actually exists in this catalog and leaves the subject to the
+   operator, who is the only one who knows whose access is in question. */
 const PRESETS: { label: string; hint: string; apply: (c: PresetCtx) => void }[] = [
   {
-    label: 'Inherited scope',
-    hint: 'A grant at a department covering a team beneath it',
-    apply: ({ setSubject, setPermission, identities }) => {
-      const a = identities?.find((i) => i.username === 'alice' && i.assurance_level === 3)
-      setSubject(a?.id ?? null); setPermission('billing:invoice:read')
+    label: 'Scoped permission',
+    hint: 'A permission that constrains on an axis — see which gate answers',
+    apply: ({ setPermission, permissions }) => {
+      setPermission(permissions?.[0]?.key ?? null)
     },
   },
   {
     label: 'Unresolved axis',
     hint: 'Leave an axis unset to see the fail-closed rule deny',
-    apply: ({ setSubject, setPermission, setTarget, identities }) => {
-      const a = identities?.find((i) => i.username === 'alice' && i.assurance_level === 3)
-      setSubject(a?.id ?? null); setPermission('billing:invoice:approve')
+    apply: ({ setPermission, setTarget, permissions }) => {
+      setPermission(permissions?.[0]?.key ?? null)
       setTarget('org', null); setTarget('product', null)
     },
   },
   {
     label: 'Assurance floor',
-    hint: 'An IAL1 applicant against an IAL3 permission',
-    apply: ({ setSubject, setPermission, identities }) => {
-      const p = identities?.find((i) => i.assurance_level === 1)
-      setSubject(p?.id ?? null); setPermission('billing:payment:approve')
+    hint: 'A permission demanding a higher assurance level than most',
+    apply: ({ setPermission, permissions }) => {
+      const strict = [...(permissions ?? [])].sort((a, b) => b.min_assurance - a.min_assurance)[0]
+      setPermission(strict?.key ?? null)
     },
   },
 ]
@@ -231,11 +236,15 @@ function Playground() {
      that later has to mean something. */
   const [touched, setTouched] = useState(false)
 
-  const { data: identities } = useQuery({ queryKey: qk.identities(), queryFn: () => api.identities() })
   const { data: realms } = useQuery({ queryKey: qk.realms(), queryFn: api.realms })
   const { data: permissions } = useQuery({ queryKey: qk.permissions(), queryFn: api.permissions })
 
-  const subj = identities?.find((i) => i.id === subject)
+  /* One person, fetched when picked. */
+  const { data: subj } = useQuery({
+    queryKey: qk.identity(subject ?? ''),
+    queryFn: () => api.identity(subject as string),
+    enabled: !!subject,
+  })
   const realm = realms?.find((r) => r.id === subj?.realm_id)
   const perm = permissions?.find((p) => p.key === permission)
   const ready = !!subject && !!permission
@@ -279,12 +288,8 @@ function Playground() {
         <div className="flex flex-col gap-4">
           <div className="panel p-4">
             <div className="t-label mb-2.5">Subject</div>
-            <Select
-              searchable clearable placeholder="Select an identity"
-              data={(identities ?? []).map((i) => ({
-                value: i.id,
-                label: `${i.username} · ${realms?.find((r) => r.id === i.realm_id)?.code ?? ''}`,
-              }))}
+            <IdentityPicker
+              placeholder="Search for a person…"
               value={subject}
               onChange={(v) => { setSubject(v); setResult(null) }}
             />
@@ -374,7 +379,7 @@ function Playground() {
                 {PRESETS.map((p) => (
                   <button
                     key={p.label}
-                    onClick={() => p.apply({ setSubject, setPermission, setTarget, identities, permissions })}
+                    onClick={() => p.apply({ setSubject, setPermission, setTarget, permissions })}
                     className="panel-inset panel-hover flex items-center gap-2.5 px-3 py-2.5 text-left"
                   >
                     <IconChevronRight size={12} style={{ color: 'var(--gold)', flexShrink: 0 }} />

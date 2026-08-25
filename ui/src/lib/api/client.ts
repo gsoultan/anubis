@@ -1,29 +1,21 @@
 /* The single seam between the console and the backend.
 
-   Everything above this file is transport-agnostic. The migration off the
-   sample data happens here, one function at a time, and this comment is the
-   record of where each one stands.
+   Everything above this file is transport-agnostic: screens import this, and
+   only this, so what they talk to can change without touching them.
 
-   LIVE — reaches the Go service (see live.ts): everything except the two
-   below. Reads AND writes: the Create drawers commit real rows now.
+   LIVE — every function here reaches the Go service (see live.ts), reads and
+   writes alike: the Create drawers commit real rows, and the overview counts
+   real ones. There is no sample data left in the console's data path.
 
-   NOT live, deliberately:
-     dashboard()   LIVE — GetDashboard: counts, decisions, signals
+   NOT live, and honest about it:
      syncRuns()    run history is not recorded server-side; returns [] —
-                   an empty list is honest where fake history is not
+                   an empty list beats invented history for a real source
    NO RPC EXISTS, and the seam says so instead of pretending:
      createPermission (manifests own the catalog), deleteRole,
      setNodeTypeParents
 
-   SAMPLE DATA — no server equivalent yet:
-     grants()  the Access screen asks for every grant at once, which the admin
-               API deliberately does not offer: a tenant here holds 150k of
-               them. It needs a per-person view or a paginated RPC first.
-     everything else below.
-
-   A function moves only once its screen still works afterwards, so the
-   console is never half-broken in between. */
-import * as mock from './mock'
+   Keep this ledger accurate. It is the first thing anyone reads to find out
+   what the console actually talks to. */
 import * as live from './live'
 
 /* A tenant's slug is derived once, at creation, and never edited: it appears
@@ -31,30 +23,10 @@ import * as live from './live'
 function slugify(name: string): string {
   return name.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 63)
 }
-import { useSession } from '@/stores/session'
 import type {
   AuthorizeRequest, NewAxisInput, NewGrantInput, NewIdentityInput,
   NewNodeInput, NewPermissionInput, NewRoleInput, Uuid,
 } from './types'
-
-/** Simulated latency so loading states are exercised during development
-    instead of only appearing in production. */
-const delay = <T>(value: T, ms = 120): Promise<T> =>
-  new Promise((resolve) => setTimeout(() => resolve(value), ms))
-
-/* Mutations sleep first, THEN run the mock — so validation errors surface the
-   way a real HTTP 4xx would (after a round-trip, while the button shows its
-   loading state) instead of synchronously on click. */
-const mut = async <T>(fn: () => T, ms = 200): Promise<T> => {
-  await new Promise((r) => setTimeout(r, ms))
-  return fn()
-}
-
-/* Workspace guard: list endpoints answer for the SELECTED tenant. The mock
-   only carries data for impack, so any other tenant truthfully reads empty —
-   which is exactly what a freshly created tenant is. */
-const activeTenant = () => useSession.getState().currentTenantId
-const scoped = <T>(rows: T[]): T[] => (activeTenant() === 'tnt_impack' ? rows : [])
 
 export const api = {
   tenants: () => live.tenants(),
@@ -82,6 +54,7 @@ export const api = {
   scopeSearch: (axisCode: string, q: string) => live.scopeSearch(axisCode, q),
 
   scopeNode: (id: Uuid) => live.scopeNode(id),
+  scopeNodesByIds: (ids: Uuid[]) => live.scopeNodesByIds(ids),
   ancestorPath: (id: Uuid) => live.ancestorPath(id),
 
   identities: (realmId?: string, q?: string) => live.identities(realmId, q),

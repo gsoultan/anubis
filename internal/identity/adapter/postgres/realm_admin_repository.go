@@ -59,6 +59,22 @@ func (s *Repository) UpdateRealm(ctx context.Context, tenantID string, r identit
 	return database.MapErr(err)
 }
 
+// CountIdentitiesByCategory counts people per category in one grouped
+// query — the Populations screen's figures, computed where the rows are.
+func (s *Repository) CountIdentitiesByCategory(ctx context.Context, tenantID, realmID string) (map[string]int64, error) {
+	rows, err := s.q(ctx).CountIdentitiesByCategory(ctx, gen.CountIdentitiesByCategoryParams{
+		TenantID: tenantID, RealmID: &realmID,
+	})
+	if err != nil {
+		return nil, database.MapErr(err)
+	}
+	out := make(map[string]int64, len(rows))
+	for _, r := range rows {
+		out[database.Deref(r.CategoryID)] = r.N
+	}
+	return out, nil
+}
+
 func (s *Repository) ListRealmCategories(ctx context.Context, realmID string) ([]identitydomain.RealmCategoryRecord, error) {
 	rows, err := s.q(ctx).ListRealmCategories(ctx, realmID)
 	if err != nil {

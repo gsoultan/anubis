@@ -200,10 +200,24 @@ func (u *tenantAdminInteractor) realmByID(ctx context.Context, tenantID, id stri
 }
 
 func (u *tenantAdminInteractor) ListRealmCategories(ctx context.Context, realmID string) ([]identitydomain.RealmCategoryRecord, error) {
-	if _, err := u.guard.Require(ctx, "anubis:identity:read"); err != nil {
+	p, err := u.guard.Require(ctx, "anubis:identity:read")
+	if err != nil {
 		return nil, err
 	}
-	return u.realms.ListRealmCategories(ctx, realmID)
+	cats, err := u.realms.ListRealmCategories(ctx, realmID)
+	if err != nil {
+		return nil, err
+	}
+	// One grouped count rather than a per-category query, and certainly not
+	// a directory download for the console to tally.
+	counts, err := u.realms.CountIdentitiesByCategory(ctx, p.TenantID, realmID)
+	if err != nil {
+		return nil, err
+	}
+	for i := range cats {
+		cats[i].IdentityCount = counts[cats[i].ID]
+	}
+	return cats, nil
 }
 
 func (u *tenantAdminInteractor) CreateRealmCategory(ctx context.Context, c identitydomain.RealmCategoryRecord) (*identitydomain.RealmCategoryRecord, error) {

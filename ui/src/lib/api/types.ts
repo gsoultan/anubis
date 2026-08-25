@@ -84,6 +84,8 @@ export interface RealmCategory {
   code: string
   display_name: string
   sort_order: number
+  /** Counted in the database, not by tallying a fetched page. */
+  identity_count: number
 }
 
 export interface Identity {
