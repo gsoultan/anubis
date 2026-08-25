@@ -1,6 +1,11 @@
 -- ============================================================================
 -- 0033 — Machine credentials for platform users.
 --
+-- (There is no 0032: the number was taken by a sync-run-history table that
+-- turned out to exist already, and was withdrawn before it applied anywhere.
+-- Versions are tracked by filename, so the gap costs nothing; renaming a
+-- migration that has already shipped would cost a great deal more.)
+--
 -- Migration 0029 made administration operator-only, which killed the one
 -- automated path that mattered: applying an application's manifest from CI.
 -- API keys had belonged to tenant identities, and tenant identities can no

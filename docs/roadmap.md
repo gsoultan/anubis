@@ -4,12 +4,15 @@
 
 | Layer | State |
 | :--- | :--- |
-| **Database schema** | ✅ Built, benchmarked, validated — 20 migrations |
+| **Database schema** | ✅ Built, benchmarked, validated — 32 migrations |
 | **Authorization engine** | ✅ `authorize()` + `authorize_explain()`, suites passing |
 | **Schema-enforced invariants** | ✅ 9 guards, all verified rejecting illegal writes |
 | **Go application layer** | ✅ repositories→usecases→services→endpoints→transports (ADR-0008/0009) |
 | **Transports (Connect/gRPC/HTTP)** | ✅ Connect RPC (serves gRPC + gRPC-Web too) + stdlib OIDC/gate surface |
 | **Client SDK** | ✅ `pkg/anubis` (zero-dep verifier + middleware) · TS client in `ui/src/lib` |
+| **Admin console** | ✅ Every screen on the real API; embedded in the binary and served same-origin |
+| **Control plane** | ✅ Platform users, operators, installer, machine credentials (ADR-0011) |
+| **CI + observability** | ✅ Enforcement gates, integration/e2e/fuzz/load in CI; Prometheus metrics + alert rules |
 
 Phases 0–3 are implemented and e2e-tested (login/MFA/device flows, refresh
 rotation with theft detection, logout×3 with back-channel, introspect/revoke,
@@ -19,6 +22,12 @@ management still open). Phase 5 ✅ (API keys). Phase 6 ✅ (TOTP + device keys;
 step-up via amr/auth_time). Phase 7 ✅ (gate + snapshot + shared normalisation
 corpus + fuzz). Phase 8 partially (gRPC via Connect on day one; key prepare/
 promote lifecycle; Envoy ext_authz and revocation streaming remain).
+
+Since then, and not in the original phase plan: the platform control plane
+(ADR-0011) with its own sign-in, refresh and machine credentials; the
+installer; bulk import; the sign-in page builder; and the operational layer
+this system had been missing — a real CI pipeline, `/metrics` with alert
+rules, and a load harness that says what one instance actually sustains.
 
 [api.md](api.md) is now **implemented**, not specification. What remains
 unbuilt is listed under [Remaining gaps](#remaining-gaps) at the end of this

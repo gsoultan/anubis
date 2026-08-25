@@ -525,15 +525,25 @@ Found while proving it: Authorize with NO scopes field marshalled nil ->
 jsonb_each_text(null) -> 500. Fixed: nil scopes => {} so a machine caller
 always gets a DECISION, never an internal error.
 
-## CI is NOT what the commits claim (found 2026-08-24)
-.gitlab-ci.yml is ONLY the GitLab Auto-DevOps/SAST template (74f9801, made by
-the GitLab UI). Commit 6016b02's message claims a pipeline with enforcement
-gates + postgres integration + fuzz smoke, but its diff contains no pipeline
-file and no other commit on any branch ever added one. Consequence: scripts/
-check/* (banned-imports, context-boundary, folder-size, gen-drift,
-import-boundary, no-sql-in-go), go build, unit, integration and e2e run ONLY
-when a human runs them. Every "CI-enforced" claim elsewhere in this memory is
-currently aspirational until a real pipeline is committed.
+## CI is real now (2026-08-25) — it was a mirage before
+.gitlab-ci.yml had been ONLY the Auto-DevOps/SAST template; commit 6016b02's
+message claimed a pipeline that its diff never contained, so every
+"CI-enforced" claim was aspirational. Now .github/workflows/ci.yml (origin is
+GitHub) AND .gitlab-ci.yml both run: buf lint, all six scripts/check/*, vet +
+build + unit with -race -shuffle=on for BOTH modules, the backend suite,
+console typecheck+build, and a docker build.
+scripts/ci/backend-suite.sh is the shared heart: fresh scratch DB -> migrate
+-> bootstrap BOTH populations -> real server -> integration + e2e + fuzz
+smoke + load. Gotchas paid for once:
+- ANUBIS_ISSUER must point at the suite's own instance; page URLs and iss are
+  built from it, so otherwise tests probe whatever is on :7448.
+- -count=1 is mandatory: these suites hit a live server, which the test cache
+  cannot see, so a cached "ok" is a lie.
+- DROP DATABASE silently FAILS while any server holds a connection. A suite
+  run against leftover rows then fails in ways unrelated to the code (an hour
+  went into exactly this). Check the DROP printed DROP DATABASE.
+- The 30s fuzz smoke found a REAL gate bug on its first run (see below), so
+  that budget stays.
 
 ## Playground + ALL console writes live (2026-08-24)
 live.authorize() = Authorize (verdict + step-up detail) PLUS Explain in
@@ -559,3 +569,76 @@ syncRuns() returns [] (no run history server-side); mock's syncPlan/
 strictDryRun fantasy shapes DELETED — SyncPlan/StrictDryRun types now mirror
 the server's actual reports (counts + errors; sampled/would_deny/examples).
 STILL SAMPLE DATA: dashboard() alone (needs per-realm counts no RPC gives).
+
+
+## Production-readiness pass (2026-08-25)
+Everything below was built or proven in one sweep; the plan's phases 0-3.
+
+GATE BUG FOUND BY FUZZING, do not reintroduce: /0%23 normalised to /0# — a
+decoded '#' or '?' is data to this normaliser and a DELIMITER to anything
+that re-parses, and normalising twice gave different answers. Both now
+reject as ambiguous. The fuzz invariant was ALSO wrong: "no '..' substring"
+flagged /..0, but a segment merely CONTAINING dots is a legitimate name. The
+property is segment-level: no '.'/'..' SEGMENT survives.
+
+CONSOLE IS EMBEDDED: ui/embed.go go:embeds ui/dist into the binary;
+internal/api/http/console_assets.go serves it at / on the API origin (so
+production needs no CORS). API prefixes (/anubis.v1., /v1/, /p/,
+/.well-known/) never reach the SPA. The shell is written DIRECTLY, not via
+FileServer — http.FileServer 301s /index.html to /, which turns the SPA
+fallback into a redirect loop. dist/index.html is a committed PLACEHOLDER so
+go build works without bun; scripts/build.sh and the Dockerfile overwrite it.
+
+GUARD: global authority means ANY tenant, not NO tenant. A global owner with
+no tenant selected now gets no_tenant_selected (failed_precondition) on
+tenant-scoped calls instead of an internal error from an empty tenant id.
+controldomain.InstallationScoped names the exemptions (platform:tenants,
+platform:assign, tenant:admin, key:admin). The console also resolves the
+default tenant in __root beforeLoad AND holds tenant-scoped requests at one
+choke point in lib/anubis.ts until it is known.
+
+METRICS: hand-rolled Prometheus text format (ADR-0002) at /metrics on the
+DEBUG listener. Families: endpoint requests+duration histogram, audit events
+by action (token.reuse_detected is the pager), job runs, per-tenant snapshot
+loaded-at, pool gauges, build info. docs/alerting.md pairs each rule with the
+runbook section AND names what is deliberately not alerted. main.version now
+exists — the Dockerfile had passed -X main.version since day one with no
+variable to land in.
+
+PLATFORM SESSIONS ROTATE (0031): single-use refresh, family revocation on
+reuse (successor dies too), ABSOLUTE 12h family lifetime — rotation never
+extends it. Audited as token.reuse_detected with plane=platform.
+
+PLATFORM API KEYS (0033, no 0032 — withdrawn): a key acts AS its owner and
+carries exactly their assignments, re-read per call, so it can never exceed
+them and dies when they are disabled. expires_at NOT NULL, capped 90 days.
+This is how CI applies a manifest again after 0029.
+
+CONSOLE IS 100% LIVE: dashboard() was the last mock; ui/src/lib/api/mock.ts
+is DELETED. Also removed the console's own inventions — hard-coded trend
+deltas and sine-wave sparklines beside real counts, a membership with 412
+members rendering "Nobody yet.", and playground presets that looked up a
+fictional "alice".
+UNBOUNDED LOOKUPS ARE GONE: GetScopeNodes(ids) replaces pulling 32k nodes to
+label chips; IdentityPicker searches the server instead of loading 2,000 of
+57,000 people into a dropdown; Populations counts are computed in SQL (they
+were tallied from a capped fetch, so every figure was WRONG).
+
+SYNC HISTORY was never missing — scope_sync_apply has written scope_sync_runs
+since 0017 and nothing read it. ListSyncRuns joins through the source for
+tenant scoping (the runs table has no tenant_id).
+
+LOAD: TestAuthorizeUnderConcurrency. One instance saturates at ~11.8k
+decisions/s; 32->256 concurrent callers leaves throughput FLAT while p50 goes
+2.6ms -> 21ms. Scale out, not up.
+
+DECISIONS WRITTEN DOWN: ADR-0012 (rate limits stay per-instance; the value is
+in the KDF, not the ceiling; trigger conditions listed), ADR-0013 (seal
+identities.attributes ONLY — identifiers are lookup/join keys), ADR-0014 (no
+CAPTCHA on registration; a self-registered account has no grants, so the loss
+is noise), docs/enrolment-rollout.md (the missing piece is a grace period,
+not a check; 52,004 users here would be locked out by a naive flip).
+TWO DOCS WERE WRONG about controls that never existed: security.md claimed
+rate-limit "counters in Redis" and api.md claimed nonce GETDEL via Redis.
+There is no Redis; counters are in-process (which is WHY they are
+per-replica) and nonces use DELETE ... RETURNING.
