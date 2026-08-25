@@ -21,6 +21,17 @@ export ANUBIS_E2E_BASE_URL="http://localhost:${PORT}"
 
 go run ./cmd/anubisd migrate
 
+# The scratch database is now EXACTLY what migrations produce — the strongest
+# schema raormgen can PREPARE the rquery declarations against. A declaration
+# that drifted from migrations, or generated output that drifted from a
+# declaration, fails here naming the statement.
+go run ./cmd/raormgen >/dev/null
+if ! git diff --exit-code --quiet internal/*/adapter/postgres/rgen; then
+  echo "FAIL: raorm generated code drifted — run 'go run ./cmd/raormgen' and commit" >&2
+  git --no-pager diff --stat internal/*/adapter/postgres/rgen >&2
+  exit 1
+fi
+
 # Two accounts, two populations (ADR-0011): the person the person-plane tests
 # sign in as, and the platform owner the admin-plane tests operate as.
 go run ./cmd/anubisd bootstrap \
