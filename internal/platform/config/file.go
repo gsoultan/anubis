@@ -228,6 +228,18 @@ func (c *FileConfig) DatabaseURL() string {
 // environment so production never has key material on disk beside the data
 // it protects. Falling back to a file is what lets a plain install work with
 // no prior setup at all.
+// MasterKeyConfigured reports whether a key SOURCE was named — the
+// environment variable, or a readable key file. It distinguishes "no key was
+// configured" (dev may proceed with its deterministic key) from "a key was
+// configured and is wrong" (nobody may proceed).
+func MasterKeyConfigured() bool {
+	if os.Getenv("ANUBIS_MASTER_KEY") != "" {
+		return true
+	}
+	_, err := os.Stat(KeyPath())
+	return err == nil
+}
+
 func MasterKey() ([]byte, error) {
 	if raw := os.Getenv("ANUBIS_MASTER_KEY"); raw != "" {
 		key, err := base64.RawURLEncoding.DecodeString(raw)

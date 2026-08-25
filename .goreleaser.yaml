@@ -1,0 +1,107 @@
+# Release: Linux binaries and packages. No Kubernetes — this ships a binary
+# a Linux host runs under systemd.
+version: 2
+
+project_name: anubisd
+
+before:
+  hooks:
+    # ORDER MATTERS. The binary embeds ui/dist (ui/embed.go), and the copy
+    # committed to git is a PLACEHOLDER that says "console not built". If the
+    # console is not built first, the release ships that page instead of the
+    # console — silently, because the build succeeds either way.
+    # Builds the console AND fails the release if the placeholder survived.
+    - ./scripts/build-console.sh
+    - go mod download
+
+builds:
+  - id: anubisd
+    main: ./cmd/anubisd
+    binary: anubisd
+    env:
+      # Static binary: the runtime image and the .deb both assume no libc
+      # dependency beyond what a bare host has.
+      - CGO_ENABLED=0
+    goos: [linux]
+    goarch: [amd64, arm64]
+    flags: [-trimpath]
+    ldflags:
+      # main.version exists for exactly this (it was passed for months with
+      # no variable to land in).
+      - -s -w -X main.version={{.Version}}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+archives:
+  - id: anubisd
+    formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - README.md
+      - LICENSE
+      - src: docs/*.md
+        dst: docs
+      - src: packaging/anubisd.service
+        dst: packaging/anubisd.service
+      - src: packaging/anubisd.env.example
+        dst: packaging/anubisd.env.example
+
+nfpms:
+  - id: anubisd
+    package_name: anubisd
+    vendor: Anubis
+    homepage: https://github.com/gsoultan/anubis
+    maintainer: gsoultan <gembit.soultan@gmail.com>
+    description: |
+      Anubis — multi-tenant identity and authorization service.
+      Ships the admin console inside the binary; needs only PostgreSQL.
+    license: MIT
+    formats: [deb, rpm]
+    bindir: /usr/bin
+    contents:
+      - src: packaging/anubisd.service
+        dst: /lib/systemd/system/anubisd.service
+        type: config
+      - src: packaging/anubisd.env.example
+        dst: /etc/anubis/anubisd.env
+        type: config|noreplace
+      - dst: /etc/anubis
+        type: dir
+        file_info:
+          mode: 0750
+      # Where the master key credential lives when systemd is not managing it.
+      - dst: /etc/anubis/secrets
+        type: dir
+        file_info:
+          mode: 0700
+    scripts:
+      postinstall: packaging/postinstall.sh
+      preremove: packaging/preremove.sh
+
+checksum:
+  name_template: "checksums.txt"
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  # The commit messages in this project carry the reasoning; a generated
+  # list of them is the changelog.
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+
+release:
+  draft: true
+  prerelease: auto
+  header: |
+    ## anubisd {{ .Version }}
+
+    Linux amd64/arm64. The admin console is inside the binary — no separate
+    asset to deploy, and it is served same-origin on the API port.
+
+    **Upgrading:** run `anubisd migrate` before starting the new version.
+    Migrations are forward-only and take an advisory lock, so several hosts
+    starting at once cannot race.

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/base64"
 	"os"
@@ -205,5 +206,52 @@ func TestEnsureMasterKeyPrefersTheEnvironment(t *testing.T) {
 	}
 	if string(k1) != string(k2) {
 		t.Error("the key changed between calls")
+	}
+}
+
+// A key file is how a systemd credential reaches the process: mounted 0400
+// into a private tmpfs at a path that changes every boot, which is why the
+// path has to be configurable rather than fixed. Before this worked, prod
+// refused to boot with "ANUBIS_MASTER_KEY is required" even when a perfectly
+// good key file was named.
+func TestMasterKeyFromFileSatisfiesProd(t *testing.T) {
+	dir := t.TempDir()
+	keyPath := filepath.Join(dir, "master.key")
+	// 32 bytes, base64url, as the runbook mints it.
+	if err := os.WriteFile(keyPath, []byte(base64.RawURLEncoding.EncodeToString(
+		bytes.Repeat([]byte{7}, 32))), 0o400); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("ANUBIS_MASTER_KEY", "")
+	t.Setenv("ANUBIS_KEY_FILE", keyPath)
+	t.Setenv("ANUBIS_ENV", "prod")
+	t.Setenv("ANUBIS_DB_URL", "postgres://u:p@localhost:5432/db")
+	t.Setenv("ANUBIS_ISSUER", "https://auth.example.com")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("prod refused a file-based master key: %v", err)
+	}
+	if !bytes.Equal(cfg.MasterKey, bytes.Repeat([]byte{7}, 32)) {
+		t.Fatal("loaded a different key than the file holds")
+	}
+}
+
+// A key source that is NAMED but broken must stop the process. Falling back
+// to the dev key here would seal production data under a key printed in the
+// source of this repository.
+func TestBrokenMasterKeySourceIsFatalEvenInDev(t *testing.T) {
+	dir := t.TempDir()
+	keyPath := filepath.Join(dir, "master.key")
+	if err := os.WriteFile(keyPath, []byte("not-a-32-byte-base64url-key"), 0o400); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("ANUBIS_MASTER_KEY", "")
+	t.Setenv("ANUBIS_KEY_FILE", keyPath)
+	t.Setenv("ANUBIS_ENV", "dev")
+	t.Setenv("ANUBIS_DB_URL", "postgres://u:p@localhost:5432/db")
+
+	if _, err := Load(); err == nil {
+		t.Fatal("a malformed key file was ignored and the dev key used instead")
 	}
 }

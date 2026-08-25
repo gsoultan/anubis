@@ -7,3 +7,4 @@ graphify-out/
 ui/.tanstack/
 /anubisd
 .gstack/
+/dist/

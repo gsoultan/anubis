@@ -15,7 +15,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// keys list|prepare|promote — the pending -> active -> retiring lifecycle.
+// keys init|list|prepare|promote — the pending -> active -> retiring
+// lifecycle, plus init for the first key on a fresh installation.
 // prepare mints a PENDING key (publish it, warm caches); promote flips
 // active -> retiring and pending -> active.
 func runKeys(ctx context.Context, logger *slog.Logger, args []string) error {
@@ -51,6 +52,36 @@ func runKeys(ctx context.Context, logger *slog.Logger, args []string) error {
 				k.NotBefore.Format(time.RFC3339), k.NotAfter.Format(time.RFC3339))
 		}
 		return nil
+	case "init":
+		// A fresh production install has NO signing key: AutoKeys is off
+		// outside dev on purpose, so nothing mints one behind your back.
+		// That left a new installation unable to issue a single token —
+		// /readyz 503, every login failing — with the recovery being two
+		// commands nobody had written down. This is those two commands,
+		// and it REFUSES once a key exists so it can never silently
+		// rotate a live installation.
+		records, lerr := store.SigningKeys(ctx)
+		if lerr != nil {
+			return lerr
+		}
+		for _, k := range records {
+			if k.Purpose == purpose && k.Status == "active" {
+				return fmt.Errorf("an active %s key already exists (%s) — "+
+					"to rotate, use: anubisd keys prepare %s && anubisd keys promote %s",
+					purpose, k.Kid, purpose, purpose)
+			}
+		}
+		if err := prepareKey(ctx, store, cfg.MasterKey, purpose); err != nil {
+			return err
+		}
+		if _, err := store.DemoteActive(ctx, purpose); err != nil {
+			return err
+		}
+		if _, err := store.PromotePending(ctx, purpose); err != nil {
+			return err
+		}
+		logger.Info("signing key created and activated", "purpose", purpose)
+		return nil
 	case "prepare":
 		return prepareKey(ctx, store, cfg.MasterKey, purpose)
 	case "promote":
@@ -67,7 +98,7 @@ func runKeys(ctx context.Context, logger *slog.Logger, args []string) error {
 		logger.Info("key promoted", "purpose", purpose)
 		return nil
 	default:
-		return fmt.Errorf("unknown keys subcommand %q (list|prepare|promote)", sub)
+		return fmt.Errorf("unknown keys subcommand %q (init|list|prepare|promote)", sub)
 	}
 }
 

@@ -23,9 +23,16 @@ Everything an on-call engineer needs at 3am, and nothing that duplicates
 ## Deploying
 
 ```bash
-anubisd migrate     # schema, as anubis_owner — a separate step, on purpose
-anubisd serve       # runtime, as anubis_app
+anubisd migrate          # schema, as anubis_owner — a separate step, on purpose
+anubisd keys init access # FIRST INSTALL ONLY: mint the signing key
+anubisd serve            # runtime, as anubis_app
 ```
+
+**A fresh production install has no signing key.** Automatic key generation
+is off outside dev on purpose — nothing mints signing material behind your
+back — so until `keys init` runs, `/readyz` answers 503 and every login
+fails. `keys init` refuses once an active key exists, so it cannot rotate a
+live installation by accident; rotation is `prepare` then `promote`, below.
 
 Migrations run **forward-only** and take an advisory lock, so several replicas
 starting at once cannot race. `serve` in a non-prod environment applies

@@ -4,7 +4,6 @@
 package config
 
 import (
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"os"
@@ -116,16 +115,28 @@ func Load() (*Config, error) {
 	}
 	c.AutoKeys = c.Env != "prod" || os.Getenv("ANUBIS_AUTOKEYS") == "1"
 
-	if raw := os.Getenv("ANUBIS_MASTER_KEY"); raw != "" {
-		key, err := base64.RawURLEncoding.DecodeString(raw)
-		if err != nil || len(key) != 32 {
-			return nil, fmt.Errorf("config: ANUBIS_MASTER_KEY must be base64url of exactly 32 bytes")
+	// The key may arrive in the environment OR in a file, and the file is the
+	// better answer: an environment variable is readable from /proc by
+	// anything running as the same user and survives in core dumps. Under
+	// systemd the file is a CREDENTIAL (LoadCredential), mounted 0400 into a
+	// private tmpfs that only the unit can see, at a path that changes every
+	// boot — which is why ANUBIS_KEY_FILE has to be honoured here and not
+	// just a fixed location.
+	//
+	// A source that is CONFIGURED but unreadable is a hard failure. Falling
+	// back to the dev key because somebody fat-fingered a path would seal
+	// production data under a key that is printed in this file.
+	switch {
+	case MasterKeyConfigured():
+		key, err := MasterKey()
+		if err != nil {
+			return nil, fmt.Errorf("config: master key: %w", err)
 		}
 		c.MasterKey = key
-	} else {
-		if c.Env == "prod" {
-			return nil, errors.New("config: ANUBIS_MASTER_KEY is required in prod")
-		}
+	case c.Env == "prod":
+		return nil, errors.New("config: no master key in prod — set ANUBIS_MASTER_KEY, " +
+			"or ANUBIS_KEY_FILE pointing at one (systemd: LoadCredential)")
+	default:
 		// Dev-only deterministic key so restarts can unseal what they wrote.
 		// 32 bytes, obviously not secret — never let this reach prod.
 		c.MasterKey = []byte("anubis-dev-master-key-32-bytes!!")

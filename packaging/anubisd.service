@@ -1,0 +1,83 @@
+[Unit]
+Description=Anubis identity and authorization service
+Documentation=https://github.com/gsoultan/anubis
+# Postgres is a hard dependency; on a separate host this ordering is a no-op
+# and the pool's own retry covers the gap.
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+# Type=exec, not notify: anubisd does not speak sd_notify, and a notify unit
+# that never notifies hangs until TimeoutStartSec expires. exec considers the
+# service up once the binary is running; readiness is /readyz, which is what
+# a load balancer should be asking anyway.
+Type=exec
+User=anubis
+Group=anubis
+EnvironmentFile=/etc/anubis/anubisd.env
+
+# The master key is passed as a systemd CREDENTIAL, not an environment
+# variable. Environment is readable from /proc for anything running as the
+# same user and leaks into core dumps; a credential is mounted 0400 into a
+# private tmpfs that only this unit can see. anubisd reads
+# ANUBIS_KEY_FILE, which the line below points at.
+#
+# Put the base64url key (32 bytes) in /etc/anubis/secrets/master.key, 0400
+# root:root — systemd reads it as root before dropping privileges.
+LoadCredential=master.key:/etc/anubis/secrets/master.key
+Environment=ANUBIS_KEY_FILE=%d/master.key
+
+ExecStart=/usr/bin/anubisd serve
+Restart=on-failure
+RestartSec=2s
+
+# Drain in-flight requests before the audit queue closes: an audit event
+# dropped during shutdown is a security record lost. Must exceed
+# ANUBIS_SHUTDOWN_GRACE (default 20s).
+KillSignal=SIGTERM
+TimeoutStopSec=45s
+
+# --- Hardening -------------------------------------------------------------
+# This process holds the keys to every identity in the installation. It needs
+# a network socket, a database connection and nothing else whatsoever.
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RemoveIPC=yes
+# No unix sockets: the database is TCP, and the API is TCP.
+RestrictAddressFamilies=AF_INET AF_INET6
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources @obsolete
+CapabilityBoundingSet=
+AmbientCapabilities=
+# Nothing is written to disk: all state lives in Postgres. This means the
+# FIRST-RUN INSTALLER CANNOT RUN under this unit — it writes config.yaml, and
+# the filesystem is read-only here. That is deliberate for a packaged
+# install: ANUBIS_DB_URL is set in the env file, so config.Configured() is
+# true and anubisd goes straight to serving. To use the /setup wizard
+# instead, leave ANUBIS_DB_URL unset and add:
+#     ReadWritePaths=/etc/anubis
+# plus write access for the service account on that directory.
+ReadWritePaths=
+
+# Binding :7448 needs no privilege. If you must serve :443 directly, prefer a
+# reverse proxy — granting CAP_NET_BIND_SERVICE here undoes the empty
+# capability set above.
+
+[Install]
+WantedBy=multi-user.target
