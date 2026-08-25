@@ -25,10 +25,16 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      - name: install buf + sqlc (pinned)
+      - name: install buf + sqlc + protoc plugins (pinned)
+        # buf.gen.yaml resolves protoc-gen-go and protoc-gen-connect-go from
+        # PATH (`local:`), so the drift check cannot regenerate anything
+        # without them. Versions track go.mod so CI reproduces the committed
+        # bytes rather than rewriting them.
         run: |
           go install github.com/bufbuild/buf/cmd/buf@v${BUF_VERSION}
           go install github.com/sqlc-dev/sqlc/cmd/sqlc@v${SQLC_VERSION}
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.12
+          go install connectrpc.com/connect/cmd/protoc-gen-connect-go@v1.20.0
       - name: buf lint
         run: buf lint
       - name: enforcement gates
@@ -76,6 +82,14 @@ jobs:
         with:
           go-version-file: go.mod
       - run: bash scripts/ci/backend-suite.sh
+        env:
+          # A shared runner is ~10x slower than a development machine (1,100
+          # vs 11,800 decisions/s measured). The latency assertion is kept —
+          # at a ceiling that catches an order-of-magnitude regression rather
+          # than runner noise. The correctness assertions in that test do not
+          # move: zero errors and zero deny-flips, whatever the hardware.
+          ANUBIS_LOAD_WORKERS: "8"
+          ANUBIS_LOAD_BUDGET_MS: "400"
 
   console:
     name: console typecheck + build

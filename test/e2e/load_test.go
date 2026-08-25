@@ -49,9 +49,22 @@ func TestAuthorizeUnderConcurrency(t *testing.T) {
 
 	workers := envInt("ANUBIS_LOAD_WORKERS", 32)
 	seconds := envInt("ANUBIS_LOAD_SECONDS", 3)
-	// p99 rather than a mean: the tail is what a caller actually waits for,
-	// and a mean hides a pool that is one connection short.
-	budget := 50 * time.Millisecond
+
+	/* p99 rather than a mean: the tail is what a caller actually waits for,
+	   and a mean hides a pool that is one connection short.
+
+	   The NUMBER is hardware-dependent and the assertion cannot pretend
+	   otherwise. This machine does ~11,800 decisions/s; a shared CI runner
+	   does ~1,100 — an order of magnitude apart, so one millisecond figure
+	   cannot be meaningful on both. CI therefore raises it (see the
+	   workflow), where it still catches a catastrophic regression while the
+	   real budget is enforced where the numbers mean something and is
+	   recorded in operations.md.
+
+	   What does NOT move with the hardware, and is asserted unconditionally
+	   below: no request errors, and no decision flipping to deny. Those are
+	   correctness, and correctness does not get a slower budget. */
+	budget := time.Duration(envInt("ANUBIS_LOAD_BUDGET_MS", 50)) * time.Millisecond
 
 	az := anubisv1connect.NewAuthzServiceClient(http.DefaultClient, baseURL)
 

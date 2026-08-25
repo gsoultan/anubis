@@ -87,3 +87,7 @@ SELECT t.id, u.id, r.id, u.id, 'should be impossible'
 INSERT INTO credentials (identity_id, tenant_id, kind, secret, lookup_key)
 SELECT i.id, i.tenant_id, 'api_key', 'deadbeef', 'anb_live_negtest'
   FROM identities i LIMIT 1;
+
+\echo '--- 11. plaintext in identities.attributes (must FAIL — ADR-0013, 0034) ---'
+UPDATE identities SET attributes = '{"date_of_birth":"1985-03-02"}'::jsonb
+ WHERE id = (SELECT id FROM identities LIMIT 1);

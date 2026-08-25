@@ -54,8 +54,16 @@ go test -count=1 -tags integration ./test/e2e/
 
 # Fuzz smoke: seconds per target, enough to catch a corpus regression. The
 # path-normalisation fuzzer has found real bypasses before; it stays.
-go test -run '^$' -fuzz '^FuzzNormalizePath$' -fuzztime 30s ./internal/gate/routepath
-go test -run '^$' -fuzz '^FuzzOpen$' -fuzztime 20s ./internal/platform/crypto/localtoken
-(cd pkg/anubis && go test -run '^$' -fuzz '^FuzzVerify$' -fuzztime 20s ./paseto)
+#
+# -parallel is bounded on purpose. Go fuzzes with one worker per CPU by
+# default, and on a 2-core shared runner — or a laptop already running this
+# suite's server and database — oversubscription makes a worker time out and
+# the step fail with no crasher written. That is a flaky pipeline reporting a
+# security finding it did not make. Four workers still execute millions of
+# inputs per target.
+FUZZ_PAR="${ANUBIS_FUZZ_PARALLEL:-4}"
+go test -run '^$' -fuzz '^FuzzNormalizePath$' -fuzztime 30s -parallel "$FUZZ_PAR" ./internal/gate/routepath
+go test -run '^$' -fuzz '^FuzzOpen$' -fuzztime 20s -parallel "$FUZZ_PAR" ./internal/platform/crypto/localtoken
+(cd pkg/anubis && go test -run '^$' -fuzz '^FuzzVerify$' -fuzztime 20s -parallel "$FUZZ_PAR" ./paseto)
 
 echo "backend suite: all green"
