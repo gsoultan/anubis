@@ -138,9 +138,8 @@ Stated plainly, as the earlier list was.
 
 | Gap | Status |
 | :--- | :--- |
-| **Field-level PII encryption** | Key lifecycle, sealing API and shredding are built (`migrations/0022`, `internal/identity/domain/pii`). No column is encrypted yet: the schema keeps free-form PII only in `identities.attributes`, which the API does not currently write |
-| **Enrol-or-deny rollout** | A realm requiring TOTP still admits a password-only login from someone not yet enrolled. An *enrolled* factor is always demanded. Closing the remaining gap locks out existing users the moment policy flips, so it is a rollout decision, not a default |
+| **Field-level PII encryption** | Mechanism built (`migrations/0022`, `internal/identity/domain/pii`); scope now decided in [ADR-0013](adr/0013-pii-encryption-scope.md) — `identities.attributes` gets sealed, identifiers deliberately do not. Remaining work is an API that writes `attributes` at all |
+| **Enrol-or-deny rollout** | A realm requiring TOTP still admits a password-only login from someone not yet enrolled. The missing piece is a grace period, not a check: [enrolment-rollout.md](enrolment-rollout.md) is the playbook |
 | **Envoy `ext_authz`, revocation streaming, JWS codec flag** | Phase 8 tail. Connect already serves gRPC, so these are integrations rather than new mechanisms |
-| **Console still on its mock backend** | The typed client exists (`ui/src/lib/anubis.ts`) and typechecks; the screens have not been rewired to it |
-| **Redis-backed rate limits** | Deliberate. In-memory counters are per-instance; sharing them across replicas needs an ADR first (ADR-0008 posture: no new infrastructure until deployment demands it) |
-| **Bot protection on public registration** | Rate limits bound the damage; they do not stop a determined script |
+| **Redis-backed rate limits** | Decided against for now, with trigger conditions: [ADR-0012](adr/0012-rate-limits-across-replicas.md). Limits are per instance and the docs say so |
+| **Bot protection on public registration** | Decided against, with the escape hatch documented: [ADR-0014](adr/0014-bot-protection-on-registration.md) |

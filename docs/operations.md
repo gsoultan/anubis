@@ -57,6 +57,13 @@ says how to get the real one.
 | `ANUBIS_DEBUG_LISTEN` | *(off)* | pprof/expvar; bind loopback only |
 | `ANUBIS_UI_ORIGIN` | *(off)* | Dev CORS only; production is same-origin |
 
+**Rate limits are per instance.** Counters live in the process
+(`internal/platform/ratelimit`), so N replicas enforce N times the published
+allowance. That is a deliberate trade — see
+[ADR-0012](adr/0012-rate-limits-across-replicas.md) for why, and for the
+conditions that should reopen it. Size accordingly: to hold a real ceiling,
+divide the target by the replica count.
+
 **The master key is the whole system.** Losing it makes every signing key and
 every PII key unreadable; leaking it is equivalent to leaking the signing keys
 themselves. Keep it in a KMS, never in a CI variable — masked variables are not

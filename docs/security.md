@@ -64,10 +64,18 @@ The login endpoint must not reveal whether an account exists.
 ### Credential stuffing and brute force
 
 - Rate limits on **three axes** — per IP, per account, per tenant. Per-account is
-  the one people forget and the one that matters.
+  the one people forget and the one that matters: it keys on the *target*
+  account, which an attacker cannot rotate.
 - Exponential backoff plus lockout with a documented unlock path
-- Counters in Redis, so the auth database never absorbs attack traffic
-- Failed-login rate spikes alert
+- Counters live **in the process**, sharded and bounded with eviction
+  (`internal/platform/ratelimit`), so the auth database never absorbs attack
+  traffic. They are therefore **per instance**: N replicas enforce N times
+  the published allowance, which
+  [ADR-0012](adr/0012-rate-limits-across-replicas.md) accepts on purpose and
+  bounds with trigger conditions. (This document previously said the counters
+  were in Redis. They never were.)
+- Failed-login rate spikes alert — and across replicas that alert, not the
+  counter, is what catches a distributed campaign ([alerting.md](alerting.md))
 
 ### Token theft
 
@@ -259,10 +267,10 @@ Stated plainly rather than left implicit.
 | **Deep role graphs unproven** | Open | `role_recompute_effective` has `CYCLE` detection; not stress-tested. |
 | **No deny rules** | Deliberate | Allow-only union semantics in v1. Adding deny needs strict precedence and an explain endpoint. |
 | **No PASETO ecosystem support** | Deliberate | Dormant JWS codec behind a per-application flag. |
-| **PII crypto-shredding** | **Built** | `migrations/0022` + `internal/identity/domain/pii`: per-identity keys sealed under the master key, erasure and the retention job destroy the key and leave a tombstone (the *fact* of erasure stays auditable). No column is encrypted yet — the schema holds free-form PII only in `identities.attributes`, which the API does not write. |
+| **PII crypto-shredding** | **Built** | `migrations/0022` + `internal/identity/domain/pii`: per-identity keys sealed under the master key, erasure and the retention job destroy the key and leave a tombstone (the *fact* of erasure stays auditable). No column is encrypted yet; [ADR-0013](adr/0013-pii-encryption-scope.md) decides the scope — `identities.attributes` is sealed, identifiers deliberately are not, and the API must first write `attributes` at all. |
 | **Self-registration abuse controls** | Partly built | Email verification and per-IP/per-tenant registration limits ship; bot protection (CAPTCHA/attestation) does not. |
-| **Enrol-or-deny for required factors** | Open, deliberate | A realm requiring TOTP still admits a password-only login from an un-enrolled user; an enrolled factor is always demanded. Closing the gap locks out existing users at policy-flip time, so it is a rollout decision. |
-| **Bot protection on public registration** | Open | Rate limits bound the damage; they do not stop a determined script. |
+| **Enrol-or-deny for required factors** | Open, deliberate | A realm requiring TOTP still admits a password-only login from an un-enrolled user; an enrolled factor is always demanded. The missing piece is a grace period, not a check: [enrolment-rollout.md](enrolment-rollout.md). |
+| **Bot protection on public registration** | Decided against | Rate limits bound the damage; they do not stop a determined script. [ADR-0014](adr/0014-bot-protection-on-registration.md) weighs that against a third-party script on a credential page, and documents the escape hatch. |
 
 **This document now describes running code.** The application layer is built
 and its security properties are tested rather than asserted: uniform login

@@ -83,8 +83,10 @@ Biometric login. **Biometric data never reaches the server.**
 
 The device generates a keypair inside Secure Enclave / Android Keystore, gated on
 biometric unlock. Anubis stores only the public key and does exactly one
-`ed25519.Verify`. Nonces are single-use with **atomic** consumption (Redis
-`GETDEL` or a Lua script) — `GET` then `DEL` leaves a replay window.
+`ed25519.Verify`. Nonces are single-use with **atomic** consumption: `DELETE … RETURNING` on
+`one_time_tokens`, which has GETDEL semantics — a second presentation finds
+no row. `SELECT` then `DELETE` would leave a replay window. (There is no
+Redis in this system; an earlier draft of this page assumed one.)
 
 ### `POST /v1/auth/token/refresh`
 
