@@ -80,13 +80,57 @@ func (h *PlatformAuthHandler) PlatformLogin(ctx context.Context,
 	}
 	s := out.(*controlapp.PlatformSession)
 	return connect.NewResponse(&anubisv1.PlatformLoginResponse{
-		AccessToken: s.AccessToken,
-		ExpiresIn:   int32(s.ExpiresIn),
-		Username:    s.Username,
+		AccessToken:  s.AccessToken,
+		RefreshToken: s.RefreshToken,
+		ExpiresIn:    int32(s.ExpiresIn),
+		Username:     s.Username,
 		// Set when a second factor is required; AccessToken is empty then.
 		MfaToken: s.MFAToken,
 		Owner:    s.Owner,
 	}), nil
+}
+
+// platformRefreshPerIP is looser than login — a legitimate console rotates
+// hourly per operator — but still bounded: the token space is unguessable,
+// and this ceiling just prices out grinding at it.
+const platformRefreshPerIP = 30
+
+func (h *PlatformAuthHandler) PlatformRefresh(ctx context.Context,
+	req *connect.Request[anubisv1.PlatformRefreshRequest],
+) (*connect.Response[anubisv1.PlatformRefreshResponse], error) {
+	out, err := h.f.Do(ctx, "platform.refresh", func(ctx context.Context) (any, error) {
+		if ip := authctx.ClientIP(ctx); ip != "" {
+			if ok, retry := h.limiter.AllowAll(ratelimit.KeyLimit{
+				Key:   "platform-refresh-ip:" + ip,
+				Limit: ratelimit.Limit{PerMinute: platformRefreshPerIP, Burst: platformRefreshPerIP},
+			}); !ok {
+				return nil, apperr.ErrRateLimited.With("retry_after", strconv.Itoa(int(retry.Seconds())+1))
+			}
+		}
+		return h.uc.Refresh(ctx, req.Msg.RefreshToken)
+	})
+	if err != nil {
+		return nil, apiconnect.Err(ctx, err)
+	}
+	s := out.(*controlapp.PlatformSession)
+	return connect.NewResponse(&anubisv1.PlatformRefreshResponse{
+		AccessToken:  s.AccessToken,
+		RefreshToken: s.RefreshToken,
+		ExpiresIn:    int32(s.ExpiresIn),
+		Username:     s.Username,
+		Owner:        s.Owner,
+	}), nil
+}
+
+func (h *PlatformAuthHandler) PlatformLogout(ctx context.Context,
+	req *connect.Request[anubisv1.PlatformLogoutRequest],
+) (*connect.Response[anubisv1.PlatformLogoutResponse], error) {
+	if _, err := h.f.Do(ctx, "platform.logout", func(ctx context.Context) (any, error) {
+		return nil, h.uc.Logout(ctx, req.Msg.RefreshToken)
+	}); err != nil {
+		return nil, apiconnect.Err(ctx, err)
+	}
+	return connect.NewResponse(&anubisv1.PlatformLogoutResponse{}), nil
 }
 
 func (h *PlatformAuthHandler) MyTenants(ctx context.Context,
@@ -123,8 +167,9 @@ func (h *PlatformAuthHandler) PlatformVerifyMfa(ctx context.Context,
 	}
 	s := out.(*controlapp.PlatformSession)
 	return connect.NewResponse(&anubisv1.PlatformVerifyMfaResponse{
-		AccessToken: s.AccessToken, ExpiresIn: int32(s.ExpiresIn),
-		Username: s.Username, Owner: s.Owner,
+		AccessToken: s.AccessToken, RefreshToken: s.RefreshToken,
+		ExpiresIn: int32(s.ExpiresIn),
+		Username:  s.Username, Owner: s.Owner,
 	}), nil
 }
 

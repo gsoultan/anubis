@@ -7,6 +7,7 @@ import (
 
 	auditport "github.com/gsoultan/anubis/internal/audit/port"
 	authport "github.com/gsoultan/anubis/internal/auth/port"
+	controlport "github.com/gsoultan/anubis/internal/control/port"
 	identityapp "github.com/gsoultan/anubis/internal/identity/app"
 	"github.com/gsoultan/anubis/internal/platform/crypto/keyring"
 	"github.com/gsoultan/anubis/internal/platform/jobs"
@@ -15,10 +16,11 @@ import (
 // Advisory lock ids for maintenance. Fixed and distinct so replicas contend
 // per job rather than serialising all maintenance behind one lock.
 const (
-	lockPartitions = 0x616e7562_0001
-	lockSweepOTT   = 0x616e7562_0002
-	lockRetention  = 0x616e7562_0003
-	lockKeyCheck   = 0x616e7562_0004
+	lockPartitions   = 0x616e7562_0001
+	lockSweepOTT     = 0x616e7562_0002
+	lockRetention    = 0x616e7562_0003
+	lockKeyCheck     = 0x616e7562_0004
+	lockSweepRefresh = 0x616e7562_0005
 )
 
 // maintenanceJobs is everything that must keep running for the database to
@@ -28,6 +30,7 @@ func maintenanceJobs(
 	tokens authport.OneTimeSweeper,
 	retention identityapp.RetentionUsecase,
 	keys authport.KeyRepository,
+	refresh controlport.PlatformRefreshStore,
 	logger *slog.Logger,
 ) []jobs.Job {
 	return []jobs.Job{
@@ -48,6 +51,18 @@ func maintenanceJobs(
 				n, err := tokens.SweepExpired(ctx)
 				if err == nil && n > 0 {
 					logger.Info("swept expired one-time tokens", "rows", n)
+				}
+				return err
+			},
+		},
+		{
+			// Operator refresh chains (0031) expire in hours; the rows only
+			// matter to theft detection while their family is alive.
+			Name: "sweep_platform_refresh", Every: 6 * time.Hour, LockID: lockSweepRefresh,
+			Run: func(ctx context.Context) error {
+				n, err := refresh.SweepExpired(ctx)
+				if err == nil && n > 0 {
+					logger.Info("swept expired platform refresh tokens", "rows", n)
 				}
 				return err
 			},

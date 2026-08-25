@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import { redirect } from '@tanstack/react-router'
-import { clearTokens, isAuthenticated, onSessionChange, platformLogin, platformVerifyMfa } from '@/lib/anubis'
+import { isAuthenticated, onSessionChange, platformLogin, platformLogout, platformVerifyMfa } from '@/lib/anubis'
 
 /* Unlike everything else under stores/, this is NOT a zustand store.
    The tokens live in lib/anubis.ts — module state plus sessionStorage —
@@ -74,9 +74,9 @@ export async function completeMfa(mfaToken: string, code: string) {
 }
 
 export async function signOut() {
-  // No server-side session to end yet — a platform token is self-contained
-  // and short-lived, so dropping it locally is the whole of signing out.
-  clearTokens()
+  // Ends the session server-side too: the refresh family dies, so a leaked
+  // token pair is worthless the moment the operator signs out.
+  await platformLogout()
   setWho(null)
 }
 

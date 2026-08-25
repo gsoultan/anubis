@@ -1212,6 +1212,12 @@ service PlatformAuthService {
   // PlatformVerifyMfa completes a challenge. A password alone is not a
   // session for an operator who has enrolled a second factor.
   rpc PlatformVerifyMfa(PlatformVerifyMfaRequest) returns (PlatformVerifyMfaResponse);
+  // PlatformRefresh rotates a session: the presented refresh token is
+  // consumed and a successor returned. Presenting a consumed token revokes
+  // the whole family — theft detection, same as the identity side.
+  rpc PlatformRefresh(PlatformRefreshRequest) returns (PlatformRefreshResponse);
+  // PlatformLogout ends the session the refresh token belongs to.
+  rpc PlatformLogout(PlatformLogoutRequest) returns (PlatformLogoutResponse);
   // BeginTotpEnrolment issues a secret. Nothing is demanded until confirmed.
   rpc BeginTotpEnrolment(BeginTotpEnrolmentRequest) returns (BeginTotpEnrolmentResponse);
   rpc ConfirmTotpEnrolment(ConfirmTotpEnrolmentRequest) returns (ConfirmTotpEnrolmentResponse);
@@ -1233,7 +1239,28 @@ message PlatformLoginResponse {
   bool owner = 4;
   // Set when a second factor is required; access_token is empty then.
   string mfa_token = 5;
+  // Single-use; rotate via PlatformRefresh. The family's lifetime is
+  // absolute from sign-in — rotation never extends it.
+  string refresh_token = 6;
 }
+
+message PlatformRefreshRequest {
+  string refresh_token = 1;
+}
+
+message PlatformRefreshResponse {
+  string access_token = 1;
+  int32 expires_in = 2;
+  string refresh_token = 3;
+  string username = 4;
+  bool owner = 5;
+}
+
+message PlatformLogoutRequest {
+  string refresh_token = 1;
+}
+
+message PlatformLogoutResponse {}
 
 message PlatformVerifyMfaRequest {
   string mfa_token = 1;
@@ -1245,6 +1272,7 @@ message PlatformVerifyMfaResponse {
   int32 expires_in = 2;
   string username = 3;
   bool owner = 4;
+  string refresh_token = 5;
 }
 
 message BeginTotpEnrolmentRequest {}

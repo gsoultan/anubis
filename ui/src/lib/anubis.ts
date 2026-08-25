@@ -87,15 +87,28 @@ export function isAuthenticated(): boolean {
 }
 
 /** Refresh once even under concurrent callers; theft-detection errors clear
- * the session (the server revoked the family — re-login is the only path). */
+ * the session (the server revoked the family — re-login is the only path).
+ * The console's session is a PLATFORM one (operators run this thing), so
+ * rotation goes through PlatformRefresh, on a bare client — a refresh must
+ * never wait on the interceptor that waits on refresh. */
 async function refreshIfNeeded(): Promise<void> {
   if (!tokens || Date.now() < tokens.expiresAt - 30_000) return;
+  if (!tokens.refreshToken) {
+    // A session minted before rotation existed: nothing to renew with.
+    clearTokens();
+    return;
+  }
   if (!refreshing) {
     const rt = tokens.refreshToken;
     refreshing = (async () => {
       try {
-        const resp = await bareAuth.refresh({ refreshToken: rt });
-        if (resp.tokens) setTokens(resp.tokens);
+        const resp = await barePlatformAuth.platformRefresh({ refreshToken: rt });
+        store({
+          accessToken: resp.accessToken,
+          refreshToken: resp.refreshToken,
+          sessionId: "",
+          expiresAt: Date.now() + resp.expiresIn * 1000,
+        });
       } catch (err) {
         clearTokens();
         throw err;
@@ -152,6 +165,7 @@ const authed = createConnectTransport({ baseUrl: "/", interceptors: [authInterce
 /** Unauthenticated client used by the refresh path itself (no interceptor —
  * a refresh must never wait on a refresh). */
 const bareAuth = createClient(AuthService, base);
+const barePlatformAuth = createClient(PlatformAuthService, base);
 
 export const api = {
   auth: createClient(AuthService, authed),
@@ -185,9 +199,9 @@ export async function platformLogin(username: string, password: string) {
   if (resp.mfaToken) return { mfa: true as const, mfaToken: resp.mfaToken, username: resp.username };
   store({
     accessToken: resp.accessToken,
-    // Platform tokens have no refresh yet: the console asks for the password
-    // again rather than holding a long-lived operator credential.
-    refreshToken: "",
+    // Single-use; each rotation returns a successor. The family's lifetime
+    // is absolute from sign-in — after ~a working day, the password again.
+    refreshToken: resp.refreshToken,
     sessionId: "",
     expiresAt: Date.now() + resp.expiresIn * 1000,
   });
@@ -199,11 +213,26 @@ export async function platformVerifyMfa(mfaToken: string, code: string) {
   const resp = await api.platformAuth.platformVerifyMfa({ mfaToken, code });
   store({
     accessToken: resp.accessToken,
-    refreshToken: "",
+    refreshToken: resp.refreshToken,
     sessionId: "",
     expiresAt: Date.now() + resp.expiresIn * 1000,
   });
   return { username: resp.username, owner: resp.owner };
+}
+
+/** End the session server-side: the refresh family dies, so the tokens are
+ * worthless even if they leaked. Local state clears regardless. */
+export async function platformLogout(): Promise<void> {
+  const rt = tokens?.refreshToken;
+  if (rt) {
+    try {
+      await barePlatformAuth.platformLogout({ refreshToken: rt });
+    } catch {
+      // Sign-out must never fail visibly for a server hiccup; the family
+      // still expires on its own clock.
+    }
+  }
+  clearTokens();
 }
 
 export async function beginTotpEnrolment() {

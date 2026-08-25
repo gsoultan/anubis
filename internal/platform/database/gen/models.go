@@ -271,6 +271,17 @@ type PlatformAssignment struct {
 	RevokedAt  pgtype.Timestamptz
 }
 
+type PlatformRefreshToken struct {
+	ID             pgtype.UUID
+	PlatformUserID pgtype.UUID
+	FamilyID       pgtype.UUID
+	TokenHash      []byte
+	CreatedAt      pgtype.Timestamptz
+	ExpiresAt      pgtype.Timestamptz
+	UsedAt         pgtype.Timestamptz
+	RevokedAt      pgtype.Timestamptz
+}
+
 // Who operates this installation (ADR-0011). Deliberately unrelated to identities: a tenant user is not an operator and cannot become one.
 type PlatformUser struct {
 	CreatedAt    pgtype.Timestamptz

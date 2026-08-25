@@ -45,6 +45,12 @@ type PlatformAuthUsecase interface {
 	Login(ctx context.Context, username, password string) (*PlatformSession, error)
 	// VerifyMFA completes a challenge.
 	VerifyMFA(ctx context.Context, mfaToken, code string) (*PlatformSession, error)
+	// Refresh rotates a session: the presented token is consumed and a
+	// successor minted. Presenting a consumed token is theft — the whole
+	// family dies and the event pages.
+	Refresh(ctx context.Context, refreshToken string) (*PlatformSession, error)
+	// Logout ends the session the refresh token belongs to. Idempotent.
+	Logout(ctx context.Context, refreshToken string) error
 	// BeginTOTPEnrolment issues a secret for the signed-in operator. Nothing
 	// is demanded of them until ConfirmTOTPEnrolment verifies a code.
 	BeginTOTPEnrolment(ctx context.Context) (secretB32, uri string, err error)
@@ -63,13 +69,16 @@ type TenantChoice struct {
 	All bool
 }
 
-// PlatformSession is what an operator sign-in yields: either a token, or a
-// challenge when a second factor is enrolled.
+// PlatformSession is what an operator sign-in yields: either a token pair,
+// or a challenge when a second factor is enrolled.
 type PlatformSession struct {
 	AccessToken string
-	ExpiresIn   int
-	Username    string
-	Owner       bool
+	// RefreshToken is single-use; each rotation returns a successor. The
+	// family's lifetime is absolute from sign-in — rotation never extends it.
+	RefreshToken string
+	ExpiresIn    int
+	Username     string
+	Owner        bool
 	// MFAToken is set when a second factor is required. AccessToken is empty
 	// then: a password alone is not a session for these accounts.
 	MFAToken string
@@ -78,6 +87,11 @@ type PlatformSession struct {
 // mfaChallengeTTL is short. It exists to carry one verification, not to be a
 // session in its own right.
 const mfaChallengeTTL = 3 * time.Minute
+
+// platformRefreshFamilyTTL bounds a sign-in absolutely. Rotation carries a
+// session across access-token lifetimes but never extends it: after a
+// working day, the password (and any enrolled factor) again.
+const platformRefreshFamilyTTL = 12 * time.Hour
 
 // mfaState is what a challenge carries. Sealed, never readable by the browser.
 type mfaState struct {
@@ -88,6 +102,7 @@ type platformAuthInteractor struct {
 	users   controlport.PlatformUserStore
 	read    controlport.AssignmentReader
 	tenants controlport.TenantLookup
+	refresh controlport.PlatformRefreshStore
 	ring    *keyring.Manager
 	// master seals TOTP secrets at rest, bound to each operator's row id.
 	master []byte
@@ -100,6 +115,7 @@ func NewPlatformAuthInteractor(
 	users controlport.PlatformUserStore,
 	read controlport.AssignmentReader,
 	tenants controlport.TenantLookup,
+	refresh controlport.PlatformRefreshStore,
 	ring *keyring.Manager,
 	clk clock.Clock,
 	audit auditport.Auditor,
@@ -107,7 +123,7 @@ func NewPlatformAuthInteractor(
 	master []byte,
 ) PlatformAuthUsecase {
 	return &platformAuthInteractor{users: users, read: read, tenants: tenants,
-		ring: ring, clock: clk, audit: audit, issuer: issuer, master: master}
+		refresh: refresh, ring: ring, clock: clk, audit: audit, issuer: issuer, master: master}
 }
 
 func (u *platformAuthInteractor) Login(ctx context.Context, username, password string) (*PlatformSession, error) {
@@ -163,7 +179,7 @@ func (u *platformAuthInteractor) Login(ctx context.Context, username, password s
 		return &PlatformSession{Username: who.Username, MFAToken: challenge}, nil
 	}
 
-	token, err := u.mint(who.ID, roles, who.TokenEpoch, now)
+	sess, err := u.beginSession(ctx, who, roles, now)
 	if err != nil {
 		return nil, err
 	}
@@ -172,11 +188,31 @@ func (u *platformAuthInteractor) Login(ctx context.Context, username, password s
 		ActorID: who.ID, ActorKind: "platform_user", TargetID: who.ID,
 		Action: "platform.login", Result: "allow", IP: authctx.ClientIP(ctx),
 	})
+	return sess, nil
+}
+
+// beginSession mints the access token and opens a refresh family. The
+// family's expiry is absolute from THIS moment: rotation carries the
+// session across access-token lifetimes but never extends it.
+func (u *platformAuthInteractor) beginSession(ctx context.Context, who *controldomain.PlatformUser, roles []string, now time.Time) (*PlatformSession, error) {
+	token, err := u.mint(who.ID, roles, who.TokenEpoch, now)
+	if err != nil {
+		return nil, err
+	}
+	rt, err := secret.New(32)
+	if err != nil {
+		return nil, apperr.ErrInternal.Wrap(err)
+	}
+	if _, err := u.refresh.CreateRefreshFamily(ctx, who.ID, secret.Hash(rt),
+		now.Add(platformRefreshFamilyTTL)); err != nil {
+		return nil, err
+	}
 	return &PlatformSession{
-		AccessToken: token,
-		ExpiresIn:   int(platformTokenTTL.Seconds()),
-		Username:    who.Username,
-		Owner:       who.Owner(now),
+		AccessToken:  token,
+		RefreshToken: rt,
+		ExpiresIn:    int(platformTokenTTL.Seconds()),
+		Username:     who.Username,
+		Owner:        who.Owner(now),
 	}, nil
 }
 
@@ -343,7 +379,7 @@ func (u *platformAuthInteractor) VerifyMFA(ctx context.Context, mfaToken, code s
 	if !live {
 		return nil, apperr.ErrPermissionDenied.With("operator", "no live assignment")
 	}
-	token, err := u.mint(who.ID, roles, who.TokenEpoch, now)
+	sess, err := u.beginSession(ctx, who, roles, now)
 	if err != nil {
 		return nil, err
 	}
@@ -353,10 +389,109 @@ func (u *platformAuthInteractor) VerifyMFA(ctx context.Context, mfaToken, code s
 		Action: "platform.login", Result: "allow", IP: authctx.ClientIP(ctx),
 		Detail: []byte(`{"amr":"totp"}`),
 	})
+	return sess, nil
+}
+
+// Refresh rotates an operator session, with the same theft semantics the
+// identity side earned the hard way: a refresh token is single-use, and a
+// CONSUMED one presented again means somebody holds a stolen copy — either
+// the attacker replayed it after the real client rotated, or the real
+// client is replaying what the attacker already spent. Both read the same:
+// kill the whole family and page.
+func (u *platformAuthInteractor) Refresh(ctx context.Context, refreshToken string) (*PlatformSession, error) {
+	if refreshToken == "" {
+		return nil, apperr.ErrRefreshInvalid
+	}
+	rec, err := u.refresh.RefreshByHash(ctx, secret.Hash(refreshToken))
+	if err != nil {
+		return nil, err
+	}
+	now := u.clock.Now()
+	if rec == nil || now.After(rec.ExpiresAt) {
+		return nil, apperr.ErrRefreshInvalid
+	}
+	if rec.Spent() {
+		return nil, u.refreshReuse(ctx, rec)
+	}
+	ok, err := u.refresh.ConsumeRefresh(ctx, rec.ID)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		// Somebody consumed it between our read and our write: that IS the
+		// replay race, observed live rather than after the fact.
+		return nil, u.refreshReuse(ctx, rec)
+	}
+
+	who, _, err := u.users.PlatformUserByID(ctx, rec.PlatformUserID)
+	if err != nil {
+		return nil, err
+	}
+	if who == nil || !who.Active() {
+		return nil, apperr.ErrIdentityDisabled
+	}
+	roles, live, err := u.liveRoles(ctx, who.ID, now)
+	if err != nil {
+		return nil, err
+	}
+	if !live {
+		return nil, apperr.ErrPermissionDenied.With("operator", "no live assignment")
+	}
+
+	token, err := u.mint(who.ID, roles, who.TokenEpoch, now)
+	if err != nil {
+		return nil, err
+	}
+	next, err := secret.New(32)
+	if err != nil {
+		return nil, apperr.ErrInternal.Wrap(err)
+	}
+	// The successor inherits the FAMILY's expiry unchanged — absolute, not
+	// sliding. Extending on every rotation would make one stolen refresh
+	// token a permanent session.
+	if err := u.refresh.AppendRefresh(ctx, who.ID, rec.FamilyID, secret.Hash(next), rec.ExpiresAt); err != nil {
+		return nil, err
+	}
 	return &PlatformSession{
-		AccessToken: token, ExpiresIn: int(platformTokenTTL.Seconds()),
-		Username: who.Username, Owner: who.Owner(now),
+		AccessToken:  token,
+		RefreshToken: next,
+		ExpiresIn:    int(platformTokenTTL.Seconds()),
+		Username:     who.Username,
+		Owner:        who.Owner(now),
 	}, nil
+}
+
+// refreshReuse kills the family and pages. The revocation happens in its
+// own statement, never inside a transaction that the refusal would roll
+// back — the identity side shipped that bug once; not twice.
+func (u *platformAuthInteractor) refreshReuse(ctx context.Context, rec *controldomain.PlatformRefresh) error {
+	_ = u.refresh.RevokeRefreshFamily(ctx, rec.FamilyID)
+	u.audit.Emit(ctx, auditdomain.AuditEvent{
+		ActorID: rec.PlatformUserID, ActorKind: "platform_user",
+		TargetID: rec.FamilyID, Action: "token.reuse_detected",
+		Result: "deny", IP: authctx.ClientIP(ctx),
+		Detail: []byte(`{"plane":"platform"}`),
+	})
+	return apperr.ErrRefreshReuse
+}
+
+// Logout ends the session a refresh token belongs to. Idempotent, and it
+// never says whether the token was real — a sign-out probe is not an oracle.
+func (u *platformAuthInteractor) Logout(ctx context.Context, refreshToken string) error {
+	if refreshToken == "" {
+		return nil
+	}
+	rec, err := u.refresh.RefreshByHash(ctx, secret.Hash(refreshToken))
+	if err != nil || rec == nil {
+		return nil
+	}
+	_ = u.refresh.RevokeRefreshFamily(ctx, rec.FamilyID)
+	u.audit.Emit(ctx, auditdomain.AuditEvent{
+		ActorID: rec.PlatformUserID, ActorKind: "platform_user",
+		TargetID: rec.FamilyID, Action: "platform.logout", Result: "allow",
+		IP: authctx.ClientIP(ctx),
+	})
+	return nil
 }
 
 // liveRoles is the operator's roles from assignments still in force.

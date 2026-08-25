@@ -312,6 +312,12 @@ const (
 	// PlatformAuthServicePlatformVerifyMfaProcedure is the fully-qualified name of the
 	// PlatformAuthService's PlatformVerifyMfa RPC.
 	PlatformAuthServicePlatformVerifyMfaProcedure = "/anubis.v1.PlatformAuthService/PlatformVerifyMfa"
+	// PlatformAuthServicePlatformRefreshProcedure is the fully-qualified name of the
+	// PlatformAuthService's PlatformRefresh RPC.
+	PlatformAuthServicePlatformRefreshProcedure = "/anubis.v1.PlatformAuthService/PlatformRefresh"
+	// PlatformAuthServicePlatformLogoutProcedure is the fully-qualified name of the
+	// PlatformAuthService's PlatformLogout RPC.
+	PlatformAuthServicePlatformLogoutProcedure = "/anubis.v1.PlatformAuthService/PlatformLogout"
 	// PlatformAuthServiceBeginTotpEnrolmentProcedure is the fully-qualified name of the
 	// PlatformAuthService's BeginTotpEnrolment RPC.
 	PlatformAuthServiceBeginTotpEnrolmentProcedure = "/anubis.v1.PlatformAuthService/BeginTotpEnrolment"
@@ -2967,6 +2973,12 @@ type PlatformAuthServiceClient interface {
 	// PlatformVerifyMfa completes a challenge. A password alone is not a
 	// session for an operator who has enrolled a second factor.
 	PlatformVerifyMfa(context.Context, *connect.Request[v1.PlatformVerifyMfaRequest]) (*connect.Response[v1.PlatformVerifyMfaResponse], error)
+	// PlatformRefresh rotates a session: the presented refresh token is
+	// consumed and a successor returned. Presenting a consumed token revokes
+	// the whole family — theft detection, same as the identity side.
+	PlatformRefresh(context.Context, *connect.Request[v1.PlatformRefreshRequest]) (*connect.Response[v1.PlatformRefreshResponse], error)
+	// PlatformLogout ends the session the refresh token belongs to.
+	PlatformLogout(context.Context, *connect.Request[v1.PlatformLogoutRequest]) (*connect.Response[v1.PlatformLogoutResponse], error)
 	// BeginTotpEnrolment issues a secret. Nothing is demanded until confirmed.
 	BeginTotpEnrolment(context.Context, *connect.Request[v1.BeginTotpEnrolmentRequest]) (*connect.Response[v1.BeginTotpEnrolmentResponse], error)
 	ConfirmTotpEnrolment(context.Context, *connect.Request[v1.ConfirmTotpEnrolmentRequest]) (*connect.Response[v1.ConfirmTotpEnrolmentResponse], error)
@@ -2997,6 +3009,18 @@ func NewPlatformAuthServiceClient(httpClient connect.HTTPClient, baseURL string,
 			connect.WithSchema(platformAuthServiceMethods.ByName("PlatformVerifyMfa")),
 			connect.WithClientOptions(opts...),
 		),
+		platformRefresh: connect.NewClient[v1.PlatformRefreshRequest, v1.PlatformRefreshResponse](
+			httpClient,
+			baseURL+PlatformAuthServicePlatformRefreshProcedure,
+			connect.WithSchema(platformAuthServiceMethods.ByName("PlatformRefresh")),
+			connect.WithClientOptions(opts...),
+		),
+		platformLogout: connect.NewClient[v1.PlatformLogoutRequest, v1.PlatformLogoutResponse](
+			httpClient,
+			baseURL+PlatformAuthServicePlatformLogoutProcedure,
+			connect.WithSchema(platformAuthServiceMethods.ByName("PlatformLogout")),
+			connect.WithClientOptions(opts...),
+		),
 		beginTotpEnrolment: connect.NewClient[v1.BeginTotpEnrolmentRequest, v1.BeginTotpEnrolmentResponse](
 			httpClient,
 			baseURL+PlatformAuthServiceBeginTotpEnrolmentProcedure,
@@ -3022,6 +3046,8 @@ func NewPlatformAuthServiceClient(httpClient connect.HTTPClient, baseURL string,
 type platformAuthServiceClient struct {
 	platformLogin        *connect.Client[v1.PlatformLoginRequest, v1.PlatformLoginResponse]
 	platformVerifyMfa    *connect.Client[v1.PlatformVerifyMfaRequest, v1.PlatformVerifyMfaResponse]
+	platformRefresh      *connect.Client[v1.PlatformRefreshRequest, v1.PlatformRefreshResponse]
+	platformLogout       *connect.Client[v1.PlatformLogoutRequest, v1.PlatformLogoutResponse]
 	beginTotpEnrolment   *connect.Client[v1.BeginTotpEnrolmentRequest, v1.BeginTotpEnrolmentResponse]
 	confirmTotpEnrolment *connect.Client[v1.ConfirmTotpEnrolmentRequest, v1.ConfirmTotpEnrolmentResponse]
 	myTenants            *connect.Client[v1.MyTenantsRequest, v1.MyTenantsResponse]
@@ -3035,6 +3061,16 @@ func (c *platformAuthServiceClient) PlatformLogin(ctx context.Context, req *conn
 // PlatformVerifyMfa calls anubis.v1.PlatformAuthService.PlatformVerifyMfa.
 func (c *platformAuthServiceClient) PlatformVerifyMfa(ctx context.Context, req *connect.Request[v1.PlatformVerifyMfaRequest]) (*connect.Response[v1.PlatformVerifyMfaResponse], error) {
 	return c.platformVerifyMfa.CallUnary(ctx, req)
+}
+
+// PlatformRefresh calls anubis.v1.PlatformAuthService.PlatformRefresh.
+func (c *platformAuthServiceClient) PlatformRefresh(ctx context.Context, req *connect.Request[v1.PlatformRefreshRequest]) (*connect.Response[v1.PlatformRefreshResponse], error) {
+	return c.platformRefresh.CallUnary(ctx, req)
+}
+
+// PlatformLogout calls anubis.v1.PlatformAuthService.PlatformLogout.
+func (c *platformAuthServiceClient) PlatformLogout(ctx context.Context, req *connect.Request[v1.PlatformLogoutRequest]) (*connect.Response[v1.PlatformLogoutResponse], error) {
+	return c.platformLogout.CallUnary(ctx, req)
 }
 
 // BeginTotpEnrolment calls anubis.v1.PlatformAuthService.BeginTotpEnrolment.
@@ -3058,6 +3094,12 @@ type PlatformAuthServiceHandler interface {
 	// PlatformVerifyMfa completes a challenge. A password alone is not a
 	// session for an operator who has enrolled a second factor.
 	PlatformVerifyMfa(context.Context, *connect.Request[v1.PlatformVerifyMfaRequest]) (*connect.Response[v1.PlatformVerifyMfaResponse], error)
+	// PlatformRefresh rotates a session: the presented refresh token is
+	// consumed and a successor returned. Presenting a consumed token revokes
+	// the whole family — theft detection, same as the identity side.
+	PlatformRefresh(context.Context, *connect.Request[v1.PlatformRefreshRequest]) (*connect.Response[v1.PlatformRefreshResponse], error)
+	// PlatformLogout ends the session the refresh token belongs to.
+	PlatformLogout(context.Context, *connect.Request[v1.PlatformLogoutRequest]) (*connect.Response[v1.PlatformLogoutResponse], error)
 	// BeginTotpEnrolment issues a secret. Nothing is demanded until confirmed.
 	BeginTotpEnrolment(context.Context, *connect.Request[v1.BeginTotpEnrolmentRequest]) (*connect.Response[v1.BeginTotpEnrolmentResponse], error)
 	ConfirmTotpEnrolment(context.Context, *connect.Request[v1.ConfirmTotpEnrolmentRequest]) (*connect.Response[v1.ConfirmTotpEnrolmentResponse], error)
@@ -3084,6 +3126,18 @@ func NewPlatformAuthServiceHandler(svc PlatformAuthServiceHandler, opts ...conne
 		connect.WithSchema(platformAuthServiceMethods.ByName("PlatformVerifyMfa")),
 		connect.WithHandlerOptions(opts...),
 	)
+	platformAuthServicePlatformRefreshHandler := connect.NewUnaryHandler(
+		PlatformAuthServicePlatformRefreshProcedure,
+		svc.PlatformRefresh,
+		connect.WithSchema(platformAuthServiceMethods.ByName("PlatformRefresh")),
+		connect.WithHandlerOptions(opts...),
+	)
+	platformAuthServicePlatformLogoutHandler := connect.NewUnaryHandler(
+		PlatformAuthServicePlatformLogoutProcedure,
+		svc.PlatformLogout,
+		connect.WithSchema(platformAuthServiceMethods.ByName("PlatformLogout")),
+		connect.WithHandlerOptions(opts...),
+	)
 	platformAuthServiceBeginTotpEnrolmentHandler := connect.NewUnaryHandler(
 		PlatformAuthServiceBeginTotpEnrolmentProcedure,
 		svc.BeginTotpEnrolment,
@@ -3108,6 +3162,10 @@ func NewPlatformAuthServiceHandler(svc PlatformAuthServiceHandler, opts ...conne
 			platformAuthServicePlatformLoginHandler.ServeHTTP(w, r)
 		case PlatformAuthServicePlatformVerifyMfaProcedure:
 			platformAuthServicePlatformVerifyMfaHandler.ServeHTTP(w, r)
+		case PlatformAuthServicePlatformRefreshProcedure:
+			platformAuthServicePlatformRefreshHandler.ServeHTTP(w, r)
+		case PlatformAuthServicePlatformLogoutProcedure:
+			platformAuthServicePlatformLogoutHandler.ServeHTTP(w, r)
 		case PlatformAuthServiceBeginTotpEnrolmentProcedure:
 			platformAuthServiceBeginTotpEnrolmentHandler.ServeHTTP(w, r)
 		case PlatformAuthServiceConfirmTotpEnrolmentProcedure:
@@ -3129,6 +3187,14 @@ func (UnimplementedPlatformAuthServiceHandler) PlatformLogin(context.Context, *c
 
 func (UnimplementedPlatformAuthServiceHandler) PlatformVerifyMfa(context.Context, *connect.Request[v1.PlatformVerifyMfaRequest]) (*connect.Response[v1.PlatformVerifyMfaResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.PlatformAuthService.PlatformVerifyMfa is not implemented"))
+}
+
+func (UnimplementedPlatformAuthServiceHandler) PlatformRefresh(context.Context, *connect.Request[v1.PlatformRefreshRequest]) (*connect.Response[v1.PlatformRefreshResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.PlatformAuthService.PlatformRefresh is not implemented"))
+}
+
+func (UnimplementedPlatformAuthServiceHandler) PlatformLogout(context.Context, *connect.Request[v1.PlatformLogoutRequest]) (*connect.Response[v1.PlatformLogoutResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.PlatformAuthService.PlatformLogout is not implemented"))
 }
 
 func (UnimplementedPlatformAuthServiceHandler) BeginTotpEnrolment(context.Context, *connect.Request[v1.BeginTotpEnrolmentRequest]) (*connect.Response[v1.BeginTotpEnrolmentResponse], error) {

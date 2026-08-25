@@ -121,7 +121,7 @@ func (a *application) close() { a.auditor.Close() }
 func (a *application) runMaintenance(ctx context.Context, db *database.DB, logger *slog.Logger) {
 	retention := identityapp.NewRetentionInteractor(a.identity, a.identity, db, a.auditor)
 	sched := jobs.NewScheduler(db, logger,
-		maintenanceJobs(a.audit, a.auth, retention, a.auth, logger)...)
+		maintenanceJobs(a.audit, a.auth, retention, a.auth, a.control, logger)...)
 	go sched.Run(ctx)
 }
 
@@ -208,7 +208,7 @@ func (a *application) registerRPC(rpc *http.ServeMux, opts connect.HandlerOption
 	// The operators' own door. Separate from AuthService, which resolves a
 	// tenant identity — a platform user is deliberately not one.
 	platformAuth := controlapp.NewPlatformAuthInteractor(a.control, a.control, a.tenancy,
-		a.ring, a.clock, a.auditor, a.issuerURL, a.masterKey)
+		a.control, a.ring, a.clock, a.auditor, a.issuerURL, a.masterKey)
 	rpc.Handle(anubisv1connect.NewPlatformAuthServiceHandler(
 		controlrpc.NewPlatformAuthHandler(platformAuth, f, limiter), opts))
 
