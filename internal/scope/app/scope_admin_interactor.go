@@ -394,6 +394,21 @@ func (u *scopeAdminInteractor) UpdateSyncSource(ctx context.Context, src scopedo
 // OWN connection (migrations/0017; config carries the url/dsn). Either way
 // the rows go through the database-side reconciler (scope_sync_apply) with
 // its per-row error capture and dry-run support.
+// maxSyncRuns bounds one read. History is for glancing at, and a feed that
+// runs hourly still fits a year of interest inside this.
+const maxSyncRuns = 100
+
+func (u *scopeAdminInteractor) ListSyncRuns(ctx context.Context, sourceID string, limit int32) ([]scopedomain.SyncRun, error) {
+	p, err := u.guard.Require(ctx, "anubis:sync:admin")
+	if err != nil {
+		return nil, err
+	}
+	if limit <= 0 || limit > maxSyncRuns {
+		limit = 25
+	}
+	return u.sync.ListSyncRuns(ctx, p.TenantID, sourceID, limit)
+}
+
 func (u *scopeAdminInteractor) RunSync(ctx context.Context, sourceID string, rows []SyncRowInput, dry bool) (string, error) {
 	p, err := u.guard.Require(ctx, "anubis:sync:admin")
 	if err != nil {

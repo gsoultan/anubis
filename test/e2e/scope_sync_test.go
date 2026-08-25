@@ -257,3 +257,47 @@ func TestScopeSyncRejectsBadConfig(t *testing.T) {
 		}
 	}
 }
+
+// History is what the reconciler already recorded. The table has existed
+// since migration 0017 and nothing ever read it, so "when did this last
+// sync and what did it change" had no answer at 3am.
+func TestScopeSyncRecordsHistory(t *testing.T) {
+	requireServer(t)
+	token := platformLogin(t)
+	const axis = "e2e_hist_axis"
+	ensureAxis(t, token, axis, "e2e_hist_root", "e2e_hist_node")
+
+	feed := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`[{"ref":"H-1","name":"History One"}]`))
+	}))
+	defer feed.Close()
+	src := createSource(t, token, axis, "http",
+		fmt.Sprintf(`{"url":%q,"default_node_type":"e2e_hist_node"}`, feed.URL))
+
+	before := len(listRuns(t, token, src))
+	runSync(t, token, src, true)  // a dry run is history too
+	runSync(t, token, src, false)
+
+	runs := listRuns(t, token, src)
+	if len(runs) < before+2 {
+		t.Fatalf("history did not record both runs: had %d, now %d", before, len(runs))
+	}
+	// Newest first, and the dry run must be distinguishable from the real
+	// one — they leave identical counts behind.
+	if runs[0].Dry == runs[1].Dry {
+		t.Fatalf("dry and applied runs are indistinguishable: %+v", runs[:2])
+	}
+	if runs[0].StartedAt == 0 || runs[0].ReportJson == "" {
+		t.Fatalf("run recorded without a time or a report: %+v", runs[0])
+	}
+}
+
+func listRuns(t *testing.T, token, sourceID string) []*anubisv1.SyncRun {
+	t.Helper()
+	resp, err := scopeClient().ListSyncRuns(context.Background(),
+		operatorBearer(connect.NewRequest(&anubisv1.ListSyncRunsRequest{SourceId: sourceID}), token))
+	if err != nil {
+		t.Fatalf("list sync runs: %v", err)
+	}
+	return resp.Msg.Runs
+}

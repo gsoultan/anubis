@@ -243,8 +243,18 @@ function SyncCard({ axisCode }: { axisCode: string }) {
       {(runs?.length ?? 0) > 0 && (
         <div className="mt-3 flex flex-col gap-1" style={{ borderTop: '1px solid var(--line-soft)', paddingTop: 10 }}>
           {runs!.map((r) => (
-            <div key={r.id} className="t-xs tnum">
-              {r.at.slice(5, 16).replace('T', ' ')} · +{r.added} ~{r.renamed} −{r.archived} · {r.unchanged} unchanged
+            <div key={r.id} className="t-xs tnum flex items-center gap-1.5">
+              <span>{r.at.slice(5, 16).replace('T', ' ')}</span>
+              {/* A dry run and a real one leave the same counts behind, so
+                  the panel has to say which it was. */}
+              {r.dry && <span className="chip">dry</span>}
+              {r.status === 'failed' && (
+                <span className="chip" style={{ color: 'var(--deny)', borderColor: 'var(--deny)' }}>
+                  {r.errors} unplaced
+                </span>
+              )}
+              {r.status === 'running' && <span className="chip">running</span>}
+              <span>+{r.added} ~{r.renamed} →{r.moved} −{r.archived} · {r.unchanged} unchanged</span>
             </div>
           ))}
         </div>

@@ -63,3 +63,24 @@ func (s *Repository) ScopeSyncApply(ctx context.Context, sourceID string, rows [
 	})
 	return report, database.MapErr(err)
 }
+
+// ListSyncRuns reads the history scope_sync_apply has been writing since
+// migration 0017. Tenant scoping is in the query's join, not in the
+// caller's care: the runs table carries no tenant_id of its own.
+func (s *Repository) ListSyncRuns(ctx context.Context, tenantID, sourceID string, limit int32) ([]scopedomain.SyncRun, error) {
+	rows, err := s.q(ctx).ListSyncRuns(ctx, gen.ListSyncRunsParams{
+		TenantID: tenantID, SourceID: sourceID, Lim: limit,
+	})
+	if err != nil {
+		return nil, database.MapErr(err)
+	}
+	out := make([]scopedomain.SyncRun, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, scopedomain.SyncRun{
+			ID: r.ID, SourceID: r.SourceID, AxisCode: r.AxisCode,
+			StartedAt: r.StartedAt, FinishedAt: r.FinishedAt,
+			Dry: r.Dry, Status: r.Status, Report: r.Report,
+		})
+	}
+	return out, nil
+}

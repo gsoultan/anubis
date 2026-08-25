@@ -476,6 +476,66 @@ func (q *Queries) ListScopeNodes(ctx context.Context, arg ListScopeNodesParams) 
 	return items, nil
 }
 
+const listSyncRuns = `-- name: ListSyncRuns :many
+SELECT r.id, r.source_id, s.axis_code, r.started_at, r.finished_at, r.dry,
+       r.status, r.report
+FROM scope_sync_runs r
+JOIN scope_sync_sources s ON s.id = r.source_id
+WHERE s.tenant_id = $1 AND r.source_id = $2
+ORDER BY r.started_at DESC
+LIMIT $3
+`
+
+type ListSyncRunsParams struct {
+	TenantID string
+	SourceID string
+	Lim      int32
+}
+
+type ListSyncRunsRow struct {
+	ID         string
+	SourceID   string
+	AxisCode   string
+	StartedAt  time.Time
+	FinishedAt *time.Time
+	Dry        bool
+	Status     string
+	Report     []byte
+}
+
+// ListSyncRuns is the history scope_sync_apply has been recording since
+// 0017 and nothing ever read. Joined through the source so a run can only
+// be read by the tenant that owns the feed — the runs table itself carries
+// no tenant_id.
+func (q *Queries) ListSyncRuns(ctx context.Context, arg ListSyncRunsParams) ([]ListSyncRunsRow, error) {
+	rows, err := q.db.Query(ctx, listSyncRuns, arg.TenantID, arg.SourceID, arg.Lim)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListSyncRunsRow
+	for rows.Next() {
+		var i ListSyncRunsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.SourceID,
+			&i.AxisCode,
+			&i.StartedAt,
+			&i.FinishedAt,
+			&i.Dry,
+			&i.Status,
+			&i.Report,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSyncSources = `-- name: ListSyncSources :many
 SELECT id, tenant_id, axis_code, kind, status, config, last_run_at
 FROM scope_sync_sources

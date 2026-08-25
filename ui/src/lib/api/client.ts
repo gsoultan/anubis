@@ -7,9 +7,6 @@
    writes alike: the Create drawers commit real rows, and the overview counts
    real ones. There is no sample data left in the console's data path.
 
-   NOT live, and honest about it:
-     syncRuns()    run history is not recorded server-side; returns [] —
-                   an empty list beats invented history for a real source
    NO RPC EXISTS, and the seam says so instead of pretending:
      createPermission (manifests own the catalog), deleteRole,
      setNodeTypeParents
@@ -107,9 +104,7 @@ export const api = {
   audit: () => live.audit(),
   strictDryRun: (axis: string) => live.strictDryRun(axis),
   syncSources: () => live.syncSources(),
-  /* Run history is not recorded server-side yet; an empty list is honest
-     where fake history for a real source is not. */
-  syncRuns: (_sourceId: Uuid) => Promise.resolve([] as import('./types').SyncRun[]),
+  syncRuns: (sourceId: Uuid) => live.syncRuns(sourceId),
   syncPlan: (sourceId: Uuid) => live.runSync(sourceId, true),
   syncApply: (sourceId: Uuid) => live.runSync(sourceId, false),
   createSyncSource: (i: { axis_code: string; kind: import('./types').SyncKind

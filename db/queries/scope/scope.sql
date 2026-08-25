@@ -135,3 +135,16 @@ SELECT id, tenant_id, parent_id, is_axis_root, status, axis_code, node_type,
        slug, name, external_ref
 FROM scope_nodes
 WHERE tenant_id = sqlc.arg(tenant_id) AND id = ANY(sqlc.arg(ids)::uuid[]);
+
+-- ListSyncRuns is the history scope_sync_apply has been recording since
+-- 0017 and nothing ever read. Joined through the source so a run can only
+-- be read by the tenant that owns the feed — the runs table itself carries
+-- no tenant_id.
+-- name: ListSyncRuns :many
+SELECT r.id, r.source_id, s.axis_code, r.started_at, r.finished_at, r.dry,
+       r.status, r.report
+FROM scope_sync_runs r
+JOIN scope_sync_sources s ON s.id = r.source_id
+WHERE s.tenant_id = sqlc.arg(tenant_id) AND r.source_id = sqlc.arg(source_id)
+ORDER BY r.started_at DESC
+LIMIT sqlc.arg(lim);

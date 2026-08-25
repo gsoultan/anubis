@@ -12,4 +12,6 @@ type ScopeSyncRepository interface {
 	CreateSyncSource(ctx context.Context, tenantID string, s scopedomain.SyncSourceRecord) (string, error)
 	UpdateSyncSource(ctx context.Context, tenantID string, s scopedomain.SyncSourceRecord) error
 	ScopeSyncApply(ctx context.Context, sourceID string, rows []byte, dry bool) (string, error)
+	// ListSyncRuns is the recorded history of one feed, newest first.
+	ListSyncRuns(ctx context.Context, tenantID, sourceID string, limit int32) ([]scopedomain.SyncRun, error)
 }

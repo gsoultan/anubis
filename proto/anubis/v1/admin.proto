@@ -230,6 +230,10 @@ service ScopeAdminService {
   // the source's history. Config is REPLACED, never merged.
   rpc UpdateSyncSource(UpdateSyncSourceRequest) returns (UpdateSyncSourceResponse);
   rpc RunSync(RunSyncRequest) returns (RunSyncResponse);
+  // ListSyncRuns is what a feed has actually done. The reconciler has
+  // recorded every run since migration 0017; nothing read it until now, so
+  // "when did this last sync, and what did it change" had no answer.
+  rpc ListSyncRuns(ListSyncRunsRequest) returns (ListSyncRunsResponse);
 }
 
 message ScopeAxis {
@@ -414,6 +418,29 @@ message RunSyncRequest {
 
 message RunSyncResponse {
   string report_json = 1;
+}
+
+message ListSyncRunsRequest {
+  string source_id = 1;
+  int32 limit = 2;  // default 25, max 100
+}
+
+message SyncRun {
+  string id = 1;
+  string source_id = 2;
+  string axis_code = 3;
+  int64 started_at = 4;
+  // 0 while a run is in flight, or if the process died mid-run — a row
+  // stuck like that is itself the diagnosis.
+  int64 finished_at = 5;
+  bool dry = 6;
+  string status = 7;  // running | ok | failed | dry_run
+  // The reconciler's own report, passed through rather than re-modelled.
+  string report_json = 8;
+}
+
+message ListSyncRunsResponse {
+  repeated SyncRun runs = 1;
 }
 
 // ============================================================================

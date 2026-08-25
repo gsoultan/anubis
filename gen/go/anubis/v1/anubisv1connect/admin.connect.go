@@ -144,6 +144,9 @@ const (
 	// ScopeAdminServiceRunSyncProcedure is the fully-qualified name of the ScopeAdminService's RunSync
 	// RPC.
 	ScopeAdminServiceRunSyncProcedure = "/anubis.v1.ScopeAdminService/RunSync"
+	// ScopeAdminServiceListSyncRunsProcedure is the fully-qualified name of the ScopeAdminService's
+	// ListSyncRuns RPC.
+	ScopeAdminServiceListSyncRunsProcedure = "/anubis.v1.ScopeAdminService/ListSyncRuns"
 	// AuthzAdminServiceListRolesProcedure is the fully-qualified name of the AuthzAdminService's
 	// ListRoles RPC.
 	AuthzAdminServiceListRolesProcedure = "/anubis.v1.AuthzAdminService/ListRoles"
@@ -791,6 +794,10 @@ type ScopeAdminServiceClient interface {
 	// the source's history. Config is REPLACED, never merged.
 	UpdateSyncSource(context.Context, *connect.Request[v1.UpdateSyncSourceRequest]) (*connect.Response[v1.UpdateSyncSourceResponse], error)
 	RunSync(context.Context, *connect.Request[v1.RunSyncRequest]) (*connect.Response[v1.RunSyncResponse], error)
+	// ListSyncRuns is what a feed has actually done. The reconciler has
+	// recorded every run since migration 0017; nothing read it until now, so
+	// "when did this last sync, and what did it change" had no answer.
+	ListSyncRuns(context.Context, *connect.Request[v1.ListSyncRunsRequest]) (*connect.Response[v1.ListSyncRunsResponse], error)
 }
 
 // NewScopeAdminServiceClient constructs a client for the anubis.v1.ScopeAdminService service. By
@@ -918,6 +925,12 @@ func NewScopeAdminServiceClient(httpClient connect.HTTPClient, baseURL string, o
 			connect.WithSchema(scopeAdminServiceMethods.ByName("RunSync")),
 			connect.WithClientOptions(opts...),
 		),
+		listSyncRuns: connect.NewClient[v1.ListSyncRunsRequest, v1.ListSyncRunsResponse](
+			httpClient,
+			baseURL+ScopeAdminServiceListSyncRunsProcedure,
+			connect.WithSchema(scopeAdminServiceMethods.ByName("ListSyncRuns")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -942,6 +955,7 @@ type scopeAdminServiceClient struct {
 	createSyncSource    *connect.Client[v1.CreateSyncSourceRequest, v1.CreateSyncSourceResponse]
 	updateSyncSource    *connect.Client[v1.UpdateSyncSourceRequest, v1.UpdateSyncSourceResponse]
 	runSync             *connect.Client[v1.RunSyncRequest, v1.RunSyncResponse]
+	listSyncRuns        *connect.Client[v1.ListSyncRunsRequest, v1.ListSyncRunsResponse]
 }
 
 // ListScopeAxes calls anubis.v1.ScopeAdminService.ListScopeAxes.
@@ -1039,6 +1053,11 @@ func (c *scopeAdminServiceClient) RunSync(ctx context.Context, req *connect.Requ
 	return c.runSync.CallUnary(ctx, req)
 }
 
+// ListSyncRuns calls anubis.v1.ScopeAdminService.ListSyncRuns.
+func (c *scopeAdminServiceClient) ListSyncRuns(ctx context.Context, req *connect.Request[v1.ListSyncRunsRequest]) (*connect.Response[v1.ListSyncRunsResponse], error) {
+	return c.listSyncRuns.CallUnary(ctx, req)
+}
+
 // ScopeAdminServiceHandler is an implementation of the anubis.v1.ScopeAdminService service.
 type ScopeAdminServiceHandler interface {
 	ListScopeAxes(context.Context, *connect.Request[v1.ListScopeAxesRequest]) (*connect.Response[v1.ListScopeAxesResponse], error)
@@ -1073,6 +1092,10 @@ type ScopeAdminServiceHandler interface {
 	// the source's history. Config is REPLACED, never merged.
 	UpdateSyncSource(context.Context, *connect.Request[v1.UpdateSyncSourceRequest]) (*connect.Response[v1.UpdateSyncSourceResponse], error)
 	RunSync(context.Context, *connect.Request[v1.RunSyncRequest]) (*connect.Response[v1.RunSyncResponse], error)
+	// ListSyncRuns is what a feed has actually done. The reconciler has
+	// recorded every run since migration 0017; nothing read it until now, so
+	// "when did this last sync, and what did it change" had no answer.
+	ListSyncRuns(context.Context, *connect.Request[v1.ListSyncRunsRequest]) (*connect.Response[v1.ListSyncRunsResponse], error)
 }
 
 // NewScopeAdminServiceHandler builds an HTTP handler from the service implementation. It returns
@@ -1196,6 +1219,12 @@ func NewScopeAdminServiceHandler(svc ScopeAdminServiceHandler, opts ...connect.H
 		connect.WithSchema(scopeAdminServiceMethods.ByName("RunSync")),
 		connect.WithHandlerOptions(opts...),
 	)
+	scopeAdminServiceListSyncRunsHandler := connect.NewUnaryHandler(
+		ScopeAdminServiceListSyncRunsProcedure,
+		svc.ListSyncRuns,
+		connect.WithSchema(scopeAdminServiceMethods.ByName("ListSyncRuns")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/anubis.v1.ScopeAdminService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case ScopeAdminServiceListScopeAxesProcedure:
@@ -1236,6 +1265,8 @@ func NewScopeAdminServiceHandler(svc ScopeAdminServiceHandler, opts ...connect.H
 			scopeAdminServiceUpdateSyncSourceHandler.ServeHTTP(w, r)
 		case ScopeAdminServiceRunSyncProcedure:
 			scopeAdminServiceRunSyncHandler.ServeHTTP(w, r)
+		case ScopeAdminServiceListSyncRunsProcedure:
+			scopeAdminServiceListSyncRunsHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -1319,6 +1350,10 @@ func (UnimplementedScopeAdminServiceHandler) UpdateSyncSource(context.Context, *
 
 func (UnimplementedScopeAdminServiceHandler) RunSync(context.Context, *connect.Request[v1.RunSyncRequest]) (*connect.Response[v1.RunSyncResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.ScopeAdminService.RunSync is not implemented"))
+}
+
+func (UnimplementedScopeAdminServiceHandler) ListSyncRuns(context.Context, *connect.Request[v1.ListSyncRunsRequest]) (*connect.Response[v1.ListSyncRunsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.ScopeAdminService.ListSyncRuns is not implemented"))
 }
 
 // AuthzAdminServiceClient is a client for the anubis.v1.AuthzAdminService service.

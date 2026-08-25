@@ -275,6 +275,28 @@ func (h *ScopeAdminHandler) RunSync(ctx context.Context, req *connect.Request[an
 	return connect.NewResponse(&anubisv1.RunSyncResponse{ReportJson: out.(string)}), nil
 }
 
+func (h *ScopeAdminHandler) ListSyncRuns(ctx context.Context, req *connect.Request[anubisv1.ListSyncRunsRequest]) (*connect.Response[anubisv1.ListSyncRunsResponse], error) {
+	out, err := h.f.Do(ctx, "admin.sync.runs", func(ctx context.Context) (any, error) {
+		return h.svc.ListSyncRuns(ctx, req.Msg.SourceId, req.Msg.Limit)
+	})
+	if err != nil {
+		return nil, apiconnect.Err(ctx, err)
+	}
+	resp := &anubisv1.ListSyncRunsResponse{}
+	for _, r := range out.([]scopedomain.SyncRun) {
+		run := &anubisv1.SyncRun{
+			Id: r.ID, SourceId: r.SourceID, AxisCode: r.AxisCode,
+			StartedAt: r.StartedAt.Unix(), Dry: r.Dry, Status: r.Status,
+			ReportJson: string(r.Report),
+		}
+		if r.FinishedAt != nil {
+			run.FinishedAt = r.FinishedAt.Unix()
+		}
+		resp.Runs = append(resp.Runs, run)
+	}
+	return connect.NewResponse(resp), nil
+}
+
 func (h *ScopeAdminHandler) GetScopeNode(ctx context.Context, req *connect.Request[anubisv1.GetScopeNodeRequest]) (*connect.Response[anubisv1.GetScopeNodeResponse], error) {
 	out, err := h.f.Do(ctx, "admin.scope.node", func(ctx context.Context) (any, error) {
 		return h.svc.ScopeNode(ctx, req.Msg.Id)

@@ -3623,6 +3623,205 @@ func (x *RunSyncResponse) GetReportJson() string {
 	return ""
 }
 
+type ListSyncRunsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SourceId      string                 `protobuf:"bytes,1,opt,name=source_id,json=sourceId,proto3" json:"source_id,omitempty"`
+	Limit         int32                  `protobuf:"varint,2,opt,name=limit,proto3" json:"limit,omitempty"` // default 25, max 100
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListSyncRunsRequest) Reset() {
+	*x = ListSyncRunsRequest{}
+	mi := &file_anubis_v1_admin_proto_msgTypes[68]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListSyncRunsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListSyncRunsRequest) ProtoMessage() {}
+
+func (x *ListSyncRunsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_anubis_v1_admin_proto_msgTypes[68]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListSyncRunsRequest.ProtoReflect.Descriptor instead.
+func (*ListSyncRunsRequest) Descriptor() ([]byte, []int) {
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{68}
+}
+
+func (x *ListSyncRunsRequest) GetSourceId() string {
+	if x != nil {
+		return x.SourceId
+	}
+	return ""
+}
+
+func (x *ListSyncRunsRequest) GetLimit() int32 {
+	if x != nil {
+		return x.Limit
+	}
+	return 0
+}
+
+type SyncRun struct {
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	Id        string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	SourceId  string                 `protobuf:"bytes,2,opt,name=source_id,json=sourceId,proto3" json:"source_id,omitempty"`
+	AxisCode  string                 `protobuf:"bytes,3,opt,name=axis_code,json=axisCode,proto3" json:"axis_code,omitempty"`
+	StartedAt int64                  `protobuf:"varint,4,opt,name=started_at,json=startedAt,proto3" json:"started_at,omitempty"`
+	// 0 while a run is in flight, or if the process died mid-run — a row
+	// stuck like that is itself the diagnosis.
+	FinishedAt int64  `protobuf:"varint,5,opt,name=finished_at,json=finishedAt,proto3" json:"finished_at,omitempty"`
+	Dry        bool   `protobuf:"varint,6,opt,name=dry,proto3" json:"dry,omitempty"`
+	Status     string `protobuf:"bytes,7,opt,name=status,proto3" json:"status,omitempty"` // running | ok | failed | dry_run
+	// The reconciler's own report, passed through rather than re-modelled.
+	ReportJson    string `protobuf:"bytes,8,opt,name=report_json,json=reportJson,proto3" json:"report_json,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SyncRun) Reset() {
+	*x = SyncRun{}
+	mi := &file_anubis_v1_admin_proto_msgTypes[69]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SyncRun) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SyncRun) ProtoMessage() {}
+
+func (x *SyncRun) ProtoReflect() protoreflect.Message {
+	mi := &file_anubis_v1_admin_proto_msgTypes[69]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SyncRun.ProtoReflect.Descriptor instead.
+func (*SyncRun) Descriptor() ([]byte, []int) {
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{69}
+}
+
+func (x *SyncRun) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *SyncRun) GetSourceId() string {
+	if x != nil {
+		return x.SourceId
+	}
+	return ""
+}
+
+func (x *SyncRun) GetAxisCode() string {
+	if x != nil {
+		return x.AxisCode
+	}
+	return ""
+}
+
+func (x *SyncRun) GetStartedAt() int64 {
+	if x != nil {
+		return x.StartedAt
+	}
+	return 0
+}
+
+func (x *SyncRun) GetFinishedAt() int64 {
+	if x != nil {
+		return x.FinishedAt
+	}
+	return 0
+}
+
+func (x *SyncRun) GetDry() bool {
+	if x != nil {
+		return x.Dry
+	}
+	return false
+}
+
+func (x *SyncRun) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *SyncRun) GetReportJson() string {
+	if x != nil {
+		return x.ReportJson
+	}
+	return ""
+}
+
+type ListSyncRunsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Runs          []*SyncRun             `protobuf:"bytes,1,rep,name=runs,proto3" json:"runs,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListSyncRunsResponse) Reset() {
+	*x = ListSyncRunsResponse{}
+	mi := &file_anubis_v1_admin_proto_msgTypes[70]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListSyncRunsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListSyncRunsResponse) ProtoMessage() {}
+
+func (x *ListSyncRunsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_anubis_v1_admin_proto_msgTypes[70]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListSyncRunsResponse.ProtoReflect.Descriptor instead.
+func (*ListSyncRunsResponse) Descriptor() ([]byte, []int) {
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{70}
+}
+
+func (x *ListSyncRunsResponse) GetRuns() []*SyncRun {
+	if x != nil {
+		return x.Runs
+	}
+	return nil
+}
+
 type Role struct {
 	state             protoimpl.MessageState `protogen:"open.v1"`
 	Id                string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -3640,7 +3839,7 @@ type Role struct {
 
 func (x *Role) Reset() {
 	*x = Role{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[68]
+	mi := &file_anubis_v1_admin_proto_msgTypes[71]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3652,7 +3851,7 @@ func (x *Role) String() string {
 func (*Role) ProtoMessage() {}
 
 func (x *Role) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[68]
+	mi := &file_anubis_v1_admin_proto_msgTypes[71]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3665,7 +3864,7 @@ func (x *Role) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Role.ProtoReflect.Descriptor instead.
 func (*Role) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{68}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{71}
 }
 
 func (x *Role) GetId() string {
@@ -3740,7 +3939,7 @@ type ListRolesRequest struct {
 
 func (x *ListRolesRequest) Reset() {
 	*x = ListRolesRequest{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[69]
+	mi := &file_anubis_v1_admin_proto_msgTypes[72]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3752,7 +3951,7 @@ func (x *ListRolesRequest) String() string {
 func (*ListRolesRequest) ProtoMessage() {}
 
 func (x *ListRolesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[69]
+	mi := &file_anubis_v1_admin_proto_msgTypes[72]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3765,7 +3964,7 @@ func (x *ListRolesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRolesRequest.ProtoReflect.Descriptor instead.
 func (*ListRolesRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{69}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{72}
 }
 
 func (x *ListRolesRequest) GetQuery() string {
@@ -3784,7 +3983,7 @@ type ListRolesResponse struct {
 
 func (x *ListRolesResponse) Reset() {
 	*x = ListRolesResponse{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[70]
+	mi := &file_anubis_v1_admin_proto_msgTypes[73]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3796,7 +3995,7 @@ func (x *ListRolesResponse) String() string {
 func (*ListRolesResponse) ProtoMessage() {}
 
 func (x *ListRolesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[70]
+	mi := &file_anubis_v1_admin_proto_msgTypes[73]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3809,7 +4008,7 @@ func (x *ListRolesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRolesResponse.ProtoReflect.Descriptor instead.
 func (*ListRolesResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{70}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{73}
 }
 
 func (x *ListRolesResponse) GetRoles() []*Role {
@@ -3828,7 +4027,7 @@ type CreateRoleRequest struct {
 
 func (x *CreateRoleRequest) Reset() {
 	*x = CreateRoleRequest{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[71]
+	mi := &file_anubis_v1_admin_proto_msgTypes[74]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3840,7 +4039,7 @@ func (x *CreateRoleRequest) String() string {
 func (*CreateRoleRequest) ProtoMessage() {}
 
 func (x *CreateRoleRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[71]
+	mi := &file_anubis_v1_admin_proto_msgTypes[74]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3853,7 +4052,7 @@ func (x *CreateRoleRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateRoleRequest.ProtoReflect.Descriptor instead.
 func (*CreateRoleRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{71}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{74}
 }
 
 func (x *CreateRoleRequest) GetRole() *Role {
@@ -3872,7 +4071,7 @@ type CreateRoleResponse struct {
 
 func (x *CreateRoleResponse) Reset() {
 	*x = CreateRoleResponse{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[72]
+	mi := &file_anubis_v1_admin_proto_msgTypes[75]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3884,7 +4083,7 @@ func (x *CreateRoleResponse) String() string {
 func (*CreateRoleResponse) ProtoMessage() {}
 
 func (x *CreateRoleResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[72]
+	mi := &file_anubis_v1_admin_proto_msgTypes[75]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3897,7 +4096,7 @@ func (x *CreateRoleResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateRoleResponse.ProtoReflect.Descriptor instead.
 func (*CreateRoleResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{72}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{75}
 }
 
 func (x *CreateRoleResponse) GetRole() *Role {
@@ -3916,7 +4115,7 @@ type UpdateRoleRequest struct {
 
 func (x *UpdateRoleRequest) Reset() {
 	*x = UpdateRoleRequest{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[73]
+	mi := &file_anubis_v1_admin_proto_msgTypes[76]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3928,7 +4127,7 @@ func (x *UpdateRoleRequest) String() string {
 func (*UpdateRoleRequest) ProtoMessage() {}
 
 func (x *UpdateRoleRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[73]
+	mi := &file_anubis_v1_admin_proto_msgTypes[76]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3941,7 +4140,7 @@ func (x *UpdateRoleRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateRoleRequest.ProtoReflect.Descriptor instead.
 func (*UpdateRoleRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{73}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{76}
 }
 
 func (x *UpdateRoleRequest) GetRole() *Role {
@@ -3960,7 +4159,7 @@ type UpdateRoleResponse struct {
 
 func (x *UpdateRoleResponse) Reset() {
 	*x = UpdateRoleResponse{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[74]
+	mi := &file_anubis_v1_admin_proto_msgTypes[77]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3972,7 +4171,7 @@ func (x *UpdateRoleResponse) String() string {
 func (*UpdateRoleResponse) ProtoMessage() {}
 
 func (x *UpdateRoleResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[74]
+	mi := &file_anubis_v1_admin_proto_msgTypes[77]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3985,7 +4184,7 @@ func (x *UpdateRoleResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateRoleResponse.ProtoReflect.Descriptor instead.
 func (*UpdateRoleResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{74}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{77}
 }
 
 func (x *UpdateRoleResponse) GetRole() *Role {
@@ -4004,7 +4203,7 @@ type GetRoleEffectiveRequest struct {
 
 func (x *GetRoleEffectiveRequest) Reset() {
 	*x = GetRoleEffectiveRequest{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[75]
+	mi := &file_anubis_v1_admin_proto_msgTypes[78]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4016,7 +4215,7 @@ func (x *GetRoleEffectiveRequest) String() string {
 func (*GetRoleEffectiveRequest) ProtoMessage() {}
 
 func (x *GetRoleEffectiveRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[75]
+	mi := &file_anubis_v1_admin_proto_msgTypes[78]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4029,7 +4228,7 @@ func (x *GetRoleEffectiveRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetRoleEffectiveRequest.ProtoReflect.Descriptor instead.
 func (*GetRoleEffectiveRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{75}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{78}
 }
 
 func (x *GetRoleEffectiveRequest) GetRoleId() string {
@@ -4049,7 +4248,7 @@ type EffectivePermission struct {
 
 func (x *EffectivePermission) Reset() {
 	*x = EffectivePermission{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[76]
+	mi := &file_anubis_v1_admin_proto_msgTypes[79]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4061,7 +4260,7 @@ func (x *EffectivePermission) String() string {
 func (*EffectivePermission) ProtoMessage() {}
 
 func (x *EffectivePermission) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[76]
+	mi := &file_anubis_v1_admin_proto_msgTypes[79]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4074,7 +4273,7 @@ func (x *EffectivePermission) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EffectivePermission.ProtoReflect.Descriptor instead.
 func (*EffectivePermission) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{76}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{79}
 }
 
 func (x *EffectivePermission) GetPermissionKey() string {
@@ -4100,7 +4299,7 @@ type GetRoleEffectiveResponse struct {
 
 func (x *GetRoleEffectiveResponse) Reset() {
 	*x = GetRoleEffectiveResponse{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[77]
+	mi := &file_anubis_v1_admin_proto_msgTypes[80]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4112,7 +4311,7 @@ func (x *GetRoleEffectiveResponse) String() string {
 func (*GetRoleEffectiveResponse) ProtoMessage() {}
 
 func (x *GetRoleEffectiveResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[77]
+	mi := &file_anubis_v1_admin_proto_msgTypes[80]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4125,7 +4324,7 @@ func (x *GetRoleEffectiveResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetRoleEffectiveResponse.ProtoReflect.Descriptor instead.
 func (*GetRoleEffectiveResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{77}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{80}
 }
 
 func (x *GetRoleEffectiveResponse) GetPermissions() []*EffectivePermission {
@@ -4154,7 +4353,7 @@ type Permission struct {
 
 func (x *Permission) Reset() {
 	*x = Permission{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[78]
+	mi := &file_anubis_v1_admin_proto_msgTypes[81]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4166,7 +4365,7 @@ func (x *Permission) String() string {
 func (*Permission) ProtoMessage() {}
 
 func (x *Permission) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[78]
+	mi := &file_anubis_v1_admin_proto_msgTypes[81]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4179,7 +4378,7 @@ func (x *Permission) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Permission.ProtoReflect.Descriptor instead.
 func (*Permission) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{78}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{81}
 }
 
 func (x *Permission) GetId() string {
@@ -4269,7 +4468,7 @@ type ListPermissionsRequest struct {
 
 func (x *ListPermissionsRequest) Reset() {
 	*x = ListPermissionsRequest{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[79]
+	mi := &file_anubis_v1_admin_proto_msgTypes[82]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4281,7 +4480,7 @@ func (x *ListPermissionsRequest) String() string {
 func (*ListPermissionsRequest) ProtoMessage() {}
 
 func (x *ListPermissionsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[79]
+	mi := &file_anubis_v1_admin_proto_msgTypes[82]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4294,7 +4493,7 @@ func (x *ListPermissionsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPermissionsRequest.ProtoReflect.Descriptor instead.
 func (*ListPermissionsRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{79}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{82}
 }
 
 func (x *ListPermissionsRequest) GetApplicationSlug() string {
@@ -4320,7 +4519,7 @@ type ListPermissionsResponse struct {
 
 func (x *ListPermissionsResponse) Reset() {
 	*x = ListPermissionsResponse{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[80]
+	mi := &file_anubis_v1_admin_proto_msgTypes[83]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4332,7 +4531,7 @@ func (x *ListPermissionsResponse) String() string {
 func (*ListPermissionsResponse) ProtoMessage() {}
 
 func (x *ListPermissionsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[80]
+	mi := &file_anubis_v1_admin_proto_msgTypes[83]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4345,7 +4544,7 @@ func (x *ListPermissionsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPermissionsResponse.ProtoReflect.Descriptor instead.
 func (*ListPermissionsResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{80}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{83}
 }
 
 func (x *ListPermissionsResponse) GetPermissions() []*Permission {
@@ -4367,7 +4566,7 @@ type GrantScope struct {
 
 func (x *GrantScope) Reset() {
 	*x = GrantScope{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[81]
+	mi := &file_anubis_v1_admin_proto_msgTypes[84]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4379,7 +4578,7 @@ func (x *GrantScope) String() string {
 func (*GrantScope) ProtoMessage() {}
 
 func (x *GrantScope) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[81]
+	mi := &file_anubis_v1_admin_proto_msgTypes[84]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4392,7 +4591,7 @@ func (x *GrantScope) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GrantScope.ProtoReflect.Descriptor instead.
 func (*GrantScope) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{81}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{84}
 }
 
 func (x *GrantScope) GetAxis() string {
@@ -4443,7 +4642,7 @@ type Grant struct {
 
 func (x *Grant) Reset() {
 	*x = Grant{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[82]
+	mi := &file_anubis_v1_admin_proto_msgTypes[85]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4455,7 +4654,7 @@ func (x *Grant) String() string {
 func (*Grant) ProtoMessage() {}
 
 func (x *Grant) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[82]
+	mi := &file_anubis_v1_admin_proto_msgTypes[85]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4468,7 +4667,7 @@ func (x *Grant) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Grant.ProtoReflect.Descriptor instead.
 func (*Grant) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{82}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{85}
 }
 
 func (x *Grant) GetId() string {
@@ -4565,7 +4764,7 @@ type ListGrantsRequest struct {
 
 func (x *ListGrantsRequest) Reset() {
 	*x = ListGrantsRequest{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[83]
+	mi := &file_anubis_v1_admin_proto_msgTypes[86]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4577,7 +4776,7 @@ func (x *ListGrantsRequest) String() string {
 func (*ListGrantsRequest) ProtoMessage() {}
 
 func (x *ListGrantsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[83]
+	mi := &file_anubis_v1_admin_proto_msgTypes[86]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4590,7 +4789,7 @@ func (x *ListGrantsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListGrantsRequest.ProtoReflect.Descriptor instead.
 func (*ListGrantsRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{83}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{86}
 }
 
 func (x *ListGrantsRequest) GetIdentityId() string {
@@ -4616,7 +4815,7 @@ type ListGrantsResponse struct {
 
 func (x *ListGrantsResponse) Reset() {
 	*x = ListGrantsResponse{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[84]
+	mi := &file_anubis_v1_admin_proto_msgTypes[87]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4628,7 +4827,7 @@ func (x *ListGrantsResponse) String() string {
 func (*ListGrantsResponse) ProtoMessage() {}
 
 func (x *ListGrantsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[84]
+	mi := &file_anubis_v1_admin_proto_msgTypes[87]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4641,7 +4840,7 @@ func (x *ListGrantsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListGrantsResponse.ProtoReflect.Descriptor instead.
 func (*ListGrantsResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{84}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{87}
 }
 
 func (x *ListGrantsResponse) GetGrants() []*Grant {
@@ -4665,7 +4864,7 @@ type CreateGrantRequest struct {
 
 func (x *CreateGrantRequest) Reset() {
 	*x = CreateGrantRequest{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[85]
+	mi := &file_anubis_v1_admin_proto_msgTypes[88]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4677,7 +4876,7 @@ func (x *CreateGrantRequest) String() string {
 func (*CreateGrantRequest) ProtoMessage() {}
 
 func (x *CreateGrantRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[85]
+	mi := &file_anubis_v1_admin_proto_msgTypes[88]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4690,7 +4889,7 @@ func (x *CreateGrantRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateGrantRequest.ProtoReflect.Descriptor instead.
 func (*CreateGrantRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{85}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{88}
 }
 
 func (x *CreateGrantRequest) GetIdentityId() string {
@@ -4744,7 +4943,7 @@ type CreateGrantResponse struct {
 
 func (x *CreateGrantResponse) Reset() {
 	*x = CreateGrantResponse{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[86]
+	mi := &file_anubis_v1_admin_proto_msgTypes[89]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4756,7 +4955,7 @@ func (x *CreateGrantResponse) String() string {
 func (*CreateGrantResponse) ProtoMessage() {}
 
 func (x *CreateGrantResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[86]
+	mi := &file_anubis_v1_admin_proto_msgTypes[89]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4769,7 +4968,7 @@ func (x *CreateGrantResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateGrantResponse.ProtoReflect.Descriptor instead.
 func (*CreateGrantResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{86}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{89}
 }
 
 func (x *CreateGrantResponse) GetGrant() *Grant {
@@ -4789,7 +4988,7 @@ type RevokeGrantRequest struct {
 
 func (x *RevokeGrantRequest) Reset() {
 	*x = RevokeGrantRequest{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[87]
+	mi := &file_anubis_v1_admin_proto_msgTypes[90]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4801,7 +5000,7 @@ func (x *RevokeGrantRequest) String() string {
 func (*RevokeGrantRequest) ProtoMessage() {}
 
 func (x *RevokeGrantRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[87]
+	mi := &file_anubis_v1_admin_proto_msgTypes[90]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4814,7 +5013,7 @@ func (x *RevokeGrantRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RevokeGrantRequest.ProtoReflect.Descriptor instead.
 func (*RevokeGrantRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{87}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{90}
 }
 
 func (x *RevokeGrantRequest) GetGrantId() string {
@@ -4839,7 +5038,7 @@ type RevokeGrantResponse struct {
 
 func (x *RevokeGrantResponse) Reset() {
 	*x = RevokeGrantResponse{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[88]
+	mi := &file_anubis_v1_admin_proto_msgTypes[91]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4851,7 +5050,7 @@ func (x *RevokeGrantResponse) String() string {
 func (*RevokeGrantResponse) ProtoMessage() {}
 
 func (x *RevokeGrantResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[88]
+	mi := &file_anubis_v1_admin_proto_msgTypes[91]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4864,7 +5063,7 @@ func (x *RevokeGrantResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RevokeGrantResponse.ProtoReflect.Descriptor instead.
 func (*RevokeGrantResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{88}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{91}
 }
 
 type MembershipEntry struct {
@@ -4879,7 +5078,7 @@ type MembershipEntry struct {
 
 func (x *MembershipEntry) Reset() {
 	*x = MembershipEntry{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[89]
+	mi := &file_anubis_v1_admin_proto_msgTypes[92]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4891,7 +5090,7 @@ func (x *MembershipEntry) String() string {
 func (*MembershipEntry) ProtoMessage() {}
 
 func (x *MembershipEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[89]
+	mi := &file_anubis_v1_admin_proto_msgTypes[92]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4904,7 +5103,7 @@ func (x *MembershipEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MembershipEntry.ProtoReflect.Descriptor instead.
 func (*MembershipEntry) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{89}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{92}
 }
 
 func (x *MembershipEntry) GetId() string {
@@ -4948,7 +5147,7 @@ type Membership struct {
 
 func (x *Membership) Reset() {
 	*x = Membership{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[90]
+	mi := &file_anubis_v1_admin_proto_msgTypes[93]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4960,7 +5159,7 @@ func (x *Membership) String() string {
 func (*Membership) ProtoMessage() {}
 
 func (x *Membership) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[90]
+	mi := &file_anubis_v1_admin_proto_msgTypes[93]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4973,7 +5172,7 @@ func (x *Membership) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Membership.ProtoReflect.Descriptor instead.
 func (*Membership) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{90}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{93}
 }
 
 func (x *Membership) GetId() string {
@@ -5019,7 +5218,7 @@ type ListMembershipsRequest struct {
 
 func (x *ListMembershipsRequest) Reset() {
 	*x = ListMembershipsRequest{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[91]
+	mi := &file_anubis_v1_admin_proto_msgTypes[94]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5031,7 +5230,7 @@ func (x *ListMembershipsRequest) String() string {
 func (*ListMembershipsRequest) ProtoMessage() {}
 
 func (x *ListMembershipsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[91]
+	mi := &file_anubis_v1_admin_proto_msgTypes[94]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5044,7 +5243,7 @@ func (x *ListMembershipsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListMembershipsRequest.ProtoReflect.Descriptor instead.
 func (*ListMembershipsRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{91}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{94}
 }
 
 type ListMembershipsResponse struct {
@@ -5056,7 +5255,7 @@ type ListMembershipsResponse struct {
 
 func (x *ListMembershipsResponse) Reset() {
 	*x = ListMembershipsResponse{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[92]
+	mi := &file_anubis_v1_admin_proto_msgTypes[95]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5068,7 +5267,7 @@ func (x *ListMembershipsResponse) String() string {
 func (*ListMembershipsResponse) ProtoMessage() {}
 
 func (x *ListMembershipsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[92]
+	mi := &file_anubis_v1_admin_proto_msgTypes[95]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5081,7 +5280,7 @@ func (x *ListMembershipsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListMembershipsResponse.ProtoReflect.Descriptor instead.
 func (*ListMembershipsResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{92}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{95}
 }
 
 func (x *ListMembershipsResponse) GetMemberships() []*Membership {
@@ -5101,7 +5300,7 @@ type CreateMembershipRequest struct {
 
 func (x *CreateMembershipRequest) Reset() {
 	*x = CreateMembershipRequest{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[93]
+	mi := &file_anubis_v1_admin_proto_msgTypes[96]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5113,7 +5312,7 @@ func (x *CreateMembershipRequest) String() string {
 func (*CreateMembershipRequest) ProtoMessage() {}
 
 func (x *CreateMembershipRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[93]
+	mi := &file_anubis_v1_admin_proto_msgTypes[96]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5126,7 +5325,7 @@ func (x *CreateMembershipRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateMembershipRequest.ProtoReflect.Descriptor instead.
 func (*CreateMembershipRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{93}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{96}
 }
 
 func (x *CreateMembershipRequest) GetName() string {
@@ -5152,7 +5351,7 @@ type CreateMembershipResponse struct {
 
 func (x *CreateMembershipResponse) Reset() {
 	*x = CreateMembershipResponse{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[94]
+	mi := &file_anubis_v1_admin_proto_msgTypes[97]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5164,7 +5363,7 @@ func (x *CreateMembershipResponse) String() string {
 func (*CreateMembershipResponse) ProtoMessage() {}
 
 func (x *CreateMembershipResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[94]
+	mi := &file_anubis_v1_admin_proto_msgTypes[97]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5177,7 +5376,7 @@ func (x *CreateMembershipResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateMembershipResponse.ProtoReflect.Descriptor instead.
 func (*CreateMembershipResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{94}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{97}
 }
 
 func (x *CreateMembershipResponse) GetMembership() *Membership {
@@ -5197,7 +5396,7 @@ type SetMembershipEntriesRequest struct {
 
 func (x *SetMembershipEntriesRequest) Reset() {
 	*x = SetMembershipEntriesRequest{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[95]
+	mi := &file_anubis_v1_admin_proto_msgTypes[98]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5209,7 +5408,7 @@ func (x *SetMembershipEntriesRequest) String() string {
 func (*SetMembershipEntriesRequest) ProtoMessage() {}
 
 func (x *SetMembershipEntriesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[95]
+	mi := &file_anubis_v1_admin_proto_msgTypes[98]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5222,7 +5421,7 @@ func (x *SetMembershipEntriesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetMembershipEntriesRequest.ProtoReflect.Descriptor instead.
 func (*SetMembershipEntriesRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{95}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{98}
 }
 
 func (x *SetMembershipEntriesRequest) GetMembershipId() string {
@@ -5249,7 +5448,7 @@ type SetMembershipEntriesResponse struct {
 
 func (x *SetMembershipEntriesResponse) Reset() {
 	*x = SetMembershipEntriesResponse{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[96]
+	mi := &file_anubis_v1_admin_proto_msgTypes[99]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5261,7 +5460,7 @@ func (x *SetMembershipEntriesResponse) String() string {
 func (*SetMembershipEntriesResponse) ProtoMessage() {}
 
 func (x *SetMembershipEntriesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[96]
+	mi := &file_anubis_v1_admin_proto_msgTypes[99]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5274,7 +5473,7 @@ func (x *SetMembershipEntriesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetMembershipEntriesResponse.ProtoReflect.Descriptor instead.
 func (*SetMembershipEntriesResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{96}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{99}
 }
 
 func (x *SetMembershipEntriesResponse) GetMembership() *Membership {
@@ -5301,7 +5500,7 @@ type AssignMembershipRequest struct {
 
 func (x *AssignMembershipRequest) Reset() {
 	*x = AssignMembershipRequest{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[97]
+	mi := &file_anubis_v1_admin_proto_msgTypes[100]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5313,7 +5512,7 @@ func (x *AssignMembershipRequest) String() string {
 func (*AssignMembershipRequest) ProtoMessage() {}
 
 func (x *AssignMembershipRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[97]
+	mi := &file_anubis_v1_admin_proto_msgTypes[100]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5326,7 +5525,7 @@ func (x *AssignMembershipRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AssignMembershipRequest.ProtoReflect.Descriptor instead.
 func (*AssignMembershipRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{97}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{100}
 }
 
 func (x *AssignMembershipRequest) GetMembershipId() string {
@@ -5352,7 +5551,7 @@ type AssignMembershipResponse struct {
 
 func (x *AssignMembershipResponse) Reset() {
 	*x = AssignMembershipResponse{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[98]
+	mi := &file_anubis_v1_admin_proto_msgTypes[101]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5364,7 +5563,7 @@ func (x *AssignMembershipResponse) String() string {
 func (*AssignMembershipResponse) ProtoMessage() {}
 
 func (x *AssignMembershipResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[98]
+	mi := &file_anubis_v1_admin_proto_msgTypes[101]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5377,7 +5576,7 @@ func (x *AssignMembershipResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AssignMembershipResponse.ProtoReflect.Descriptor instead.
 func (*AssignMembershipResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{98}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{101}
 }
 
 func (x *AssignMembershipResponse) GetGrantsCreated() int32 {
@@ -5397,7 +5596,7 @@ type UnassignMembershipRequest struct {
 
 func (x *UnassignMembershipRequest) Reset() {
 	*x = UnassignMembershipRequest{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[99]
+	mi := &file_anubis_v1_admin_proto_msgTypes[102]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5409,7 +5608,7 @@ func (x *UnassignMembershipRequest) String() string {
 func (*UnassignMembershipRequest) ProtoMessage() {}
 
 func (x *UnassignMembershipRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[99]
+	mi := &file_anubis_v1_admin_proto_msgTypes[102]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5422,7 +5621,7 @@ func (x *UnassignMembershipRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UnassignMembershipRequest.ProtoReflect.Descriptor instead.
 func (*UnassignMembershipRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{99}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{102}
 }
 
 func (x *UnassignMembershipRequest) GetMembershipId() string {
@@ -5448,7 +5647,7 @@ type UnassignMembershipResponse struct {
 
 func (x *UnassignMembershipResponse) Reset() {
 	*x = UnassignMembershipResponse{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[100]
+	mi := &file_anubis_v1_admin_proto_msgTypes[103]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5460,7 +5659,7 @@ func (x *UnassignMembershipResponse) String() string {
 func (*UnassignMembershipResponse) ProtoMessage() {}
 
 func (x *UnassignMembershipResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[100]
+	mi := &file_anubis_v1_admin_proto_msgTypes[103]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5473,7 +5672,7 @@ func (x *UnassignMembershipResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UnassignMembershipResponse.ProtoReflect.Descriptor instead.
 func (*UnassignMembershipResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{100}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{103}
 }
 
 func (x *UnassignMembershipResponse) GetGrantsRevoked() int32 {
@@ -5492,7 +5691,7 @@ type ResyncMembershipRequest struct {
 
 func (x *ResyncMembershipRequest) Reset() {
 	*x = ResyncMembershipRequest{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[101]
+	mi := &file_anubis_v1_admin_proto_msgTypes[104]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5504,7 +5703,7 @@ func (x *ResyncMembershipRequest) String() string {
 func (*ResyncMembershipRequest) ProtoMessage() {}
 
 func (x *ResyncMembershipRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[101]
+	mi := &file_anubis_v1_admin_proto_msgTypes[104]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5517,7 +5716,7 @@ func (x *ResyncMembershipRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResyncMembershipRequest.ProtoReflect.Descriptor instead.
 func (*ResyncMembershipRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{101}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{104}
 }
 
 func (x *ResyncMembershipRequest) GetMembershipId() string {
@@ -5536,7 +5735,7 @@ type ResyncMembershipResponse struct {
 
 func (x *ResyncMembershipResponse) Reset() {
 	*x = ResyncMembershipResponse{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[102]
+	mi := &file_anubis_v1_admin_proto_msgTypes[105]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5548,7 +5747,7 @@ func (x *ResyncMembershipResponse) String() string {
 func (*ResyncMembershipResponse) ProtoMessage() {}
 
 func (x *ResyncMembershipResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[102]
+	mi := &file_anubis_v1_admin_proto_msgTypes[105]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5561,7 +5760,7 @@ func (x *ResyncMembershipResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResyncMembershipResponse.ProtoReflect.Descriptor instead.
 func (*ResyncMembershipResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{102}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{105}
 }
 
 func (x *ResyncMembershipResponse) GetGrantsChanged() int32 {
@@ -5589,7 +5788,7 @@ type ApplyManifestRequest struct {
 
 func (x *ApplyManifestRequest) Reset() {
 	*x = ApplyManifestRequest{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[103]
+	mi := &file_anubis_v1_admin_proto_msgTypes[106]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5601,7 +5800,7 @@ func (x *ApplyManifestRequest) String() string {
 func (*ApplyManifestRequest) ProtoMessage() {}
 
 func (x *ApplyManifestRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[103]
+	mi := &file_anubis_v1_admin_proto_msgTypes[106]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5614,7 +5813,7 @@ func (x *ApplyManifestRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ApplyManifestRequest.ProtoReflect.Descriptor instead.
 func (*ApplyManifestRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{103}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{106}
 }
 
 func (x *ApplyManifestRequest) GetApplicationSlug() string {
@@ -5651,7 +5850,7 @@ type ApplyManifestResponse struct {
 
 func (x *ApplyManifestResponse) Reset() {
 	*x = ApplyManifestResponse{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[104]
+	mi := &file_anubis_v1_admin_proto_msgTypes[107]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5663,7 +5862,7 @@ func (x *ApplyManifestResponse) String() string {
 func (*ApplyManifestResponse) ProtoMessage() {}
 
 func (x *ApplyManifestResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[104]
+	mi := &file_anubis_v1_admin_proto_msgTypes[107]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5676,7 +5875,7 @@ func (x *ApplyManifestResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ApplyManifestResponse.ProtoReflect.Descriptor instead.
 func (*ApplyManifestResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{104}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{107}
 }
 
 func (x *ApplyManifestResponse) GetReportJson() string {
@@ -5718,7 +5917,7 @@ type AuthPage struct {
 
 func (x *AuthPage) Reset() {
 	*x = AuthPage{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[105]
+	mi := &file_anubis_v1_admin_proto_msgTypes[108]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5730,7 +5929,7 @@ func (x *AuthPage) String() string {
 func (*AuthPage) ProtoMessage() {}
 
 func (x *AuthPage) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[105]
+	mi := &file_anubis_v1_admin_proto_msgTypes[108]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5743,7 +5942,7 @@ func (x *AuthPage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AuthPage.ProtoReflect.Descriptor instead.
 func (*AuthPage) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{105}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{108}
 }
 
 func (x *AuthPage) GetId() string {
@@ -5839,7 +6038,7 @@ type ListAuthPagesRequest struct {
 
 func (x *ListAuthPagesRequest) Reset() {
 	*x = ListAuthPagesRequest{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[106]
+	mi := &file_anubis_v1_admin_proto_msgTypes[109]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5851,7 +6050,7 @@ func (x *ListAuthPagesRequest) String() string {
 func (*ListAuthPagesRequest) ProtoMessage() {}
 
 func (x *ListAuthPagesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[106]
+	mi := &file_anubis_v1_admin_proto_msgTypes[109]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5864,7 +6063,7 @@ func (x *ListAuthPagesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListAuthPagesRequest.ProtoReflect.Descriptor instead.
 func (*ListAuthPagesRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{106}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{109}
 }
 
 func (x *ListAuthPagesRequest) GetKind() string {
@@ -5883,7 +6082,7 @@ type ListAuthPagesResponse struct {
 
 func (x *ListAuthPagesResponse) Reset() {
 	*x = ListAuthPagesResponse{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[107]
+	mi := &file_anubis_v1_admin_proto_msgTypes[110]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5895,7 +6094,7 @@ func (x *ListAuthPagesResponse) String() string {
 func (*ListAuthPagesResponse) ProtoMessage() {}
 
 func (x *ListAuthPagesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[107]
+	mi := &file_anubis_v1_admin_proto_msgTypes[110]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5908,7 +6107,7 @@ func (x *ListAuthPagesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListAuthPagesResponse.ProtoReflect.Descriptor instead.
 func (*ListAuthPagesResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{107}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{110}
 }
 
 func (x *ListAuthPagesResponse) GetPages() []*AuthPage {
@@ -5927,7 +6126,7 @@ type GetAuthPageRequest struct {
 
 func (x *GetAuthPageRequest) Reset() {
 	*x = GetAuthPageRequest{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[108]
+	mi := &file_anubis_v1_admin_proto_msgTypes[111]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5939,7 +6138,7 @@ func (x *GetAuthPageRequest) String() string {
 func (*GetAuthPageRequest) ProtoMessage() {}
 
 func (x *GetAuthPageRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[108]
+	mi := &file_anubis_v1_admin_proto_msgTypes[111]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5952,7 +6151,7 @@ func (x *GetAuthPageRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetAuthPageRequest.ProtoReflect.Descriptor instead.
 func (*GetAuthPageRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{108}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{111}
 }
 
 func (x *GetAuthPageRequest) GetId() string {
@@ -5971,7 +6170,7 @@ type GetAuthPageResponse struct {
 
 func (x *GetAuthPageResponse) Reset() {
 	*x = GetAuthPageResponse{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[109]
+	mi := &file_anubis_v1_admin_proto_msgTypes[112]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5983,7 +6182,7 @@ func (x *GetAuthPageResponse) String() string {
 func (*GetAuthPageResponse) ProtoMessage() {}
 
 func (x *GetAuthPageResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[109]
+	mi := &file_anubis_v1_admin_proto_msgTypes[112]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5996,7 +6195,7 @@ func (x *GetAuthPageResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetAuthPageResponse.ProtoReflect.Descriptor instead.
 func (*GetAuthPageResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{109}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{112}
 }
 
 func (x *GetAuthPageResponse) GetPage() *AuthPage {
@@ -6015,7 +6214,7 @@ type CreateAuthPageRequest struct {
 
 func (x *CreateAuthPageRequest) Reset() {
 	*x = CreateAuthPageRequest{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[110]
+	mi := &file_anubis_v1_admin_proto_msgTypes[113]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6027,7 +6226,7 @@ func (x *CreateAuthPageRequest) String() string {
 func (*CreateAuthPageRequest) ProtoMessage() {}
 
 func (x *CreateAuthPageRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[110]
+	mi := &file_anubis_v1_admin_proto_msgTypes[113]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6040,7 +6239,7 @@ func (x *CreateAuthPageRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateAuthPageRequest.ProtoReflect.Descriptor instead.
 func (*CreateAuthPageRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{110}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{113}
 }
 
 func (x *CreateAuthPageRequest) GetPage() *AuthPage {
@@ -6059,7 +6258,7 @@ type CreateAuthPageResponse struct {
 
 func (x *CreateAuthPageResponse) Reset() {
 	*x = CreateAuthPageResponse{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[111]
+	mi := &file_anubis_v1_admin_proto_msgTypes[114]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6071,7 +6270,7 @@ func (x *CreateAuthPageResponse) String() string {
 func (*CreateAuthPageResponse) ProtoMessage() {}
 
 func (x *CreateAuthPageResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[111]
+	mi := &file_anubis_v1_admin_proto_msgTypes[114]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6084,7 +6283,7 @@ func (x *CreateAuthPageResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateAuthPageResponse.ProtoReflect.Descriptor instead.
 func (*CreateAuthPageResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{111}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{114}
 }
 
 func (x *CreateAuthPageResponse) GetPage() *AuthPage {
@@ -6104,7 +6303,7 @@ type UpdateAuthPageRequest struct {
 
 func (x *UpdateAuthPageRequest) Reset() {
 	*x = UpdateAuthPageRequest{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[112]
+	mi := &file_anubis_v1_admin_proto_msgTypes[115]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6116,7 +6315,7 @@ func (x *UpdateAuthPageRequest) String() string {
 func (*UpdateAuthPageRequest) ProtoMessage() {}
 
 func (x *UpdateAuthPageRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[112]
+	mi := &file_anubis_v1_admin_proto_msgTypes[115]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6129,7 +6328,7 @@ func (x *UpdateAuthPageRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateAuthPageRequest.ProtoReflect.Descriptor instead.
 func (*UpdateAuthPageRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{112}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{115}
 }
 
 func (x *UpdateAuthPageRequest) GetPage() *AuthPage {
@@ -6148,7 +6347,7 @@ type UpdateAuthPageResponse struct {
 
 func (x *UpdateAuthPageResponse) Reset() {
 	*x = UpdateAuthPageResponse{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[113]
+	mi := &file_anubis_v1_admin_proto_msgTypes[116]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6160,7 +6359,7 @@ func (x *UpdateAuthPageResponse) String() string {
 func (*UpdateAuthPageResponse) ProtoMessage() {}
 
 func (x *UpdateAuthPageResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[113]
+	mi := &file_anubis_v1_admin_proto_msgTypes[116]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6173,7 +6372,7 @@ func (x *UpdateAuthPageResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateAuthPageResponse.ProtoReflect.Descriptor instead.
 func (*UpdateAuthPageResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{113}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{116}
 }
 
 func (x *UpdateAuthPageResponse) GetPage() *AuthPage {
@@ -6192,7 +6391,7 @@ type DeleteAuthPageRequest struct {
 
 func (x *DeleteAuthPageRequest) Reset() {
 	*x = DeleteAuthPageRequest{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[114]
+	mi := &file_anubis_v1_admin_proto_msgTypes[117]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6204,7 +6403,7 @@ func (x *DeleteAuthPageRequest) String() string {
 func (*DeleteAuthPageRequest) ProtoMessage() {}
 
 func (x *DeleteAuthPageRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[114]
+	mi := &file_anubis_v1_admin_proto_msgTypes[117]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6217,7 +6416,7 @@ func (x *DeleteAuthPageRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteAuthPageRequest.ProtoReflect.Descriptor instead.
 func (*DeleteAuthPageRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{114}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{117}
 }
 
 func (x *DeleteAuthPageRequest) GetId() string {
@@ -6235,7 +6434,7 @@ type DeleteAuthPageResponse struct {
 
 func (x *DeleteAuthPageResponse) Reset() {
 	*x = DeleteAuthPageResponse{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[115]
+	mi := &file_anubis_v1_admin_proto_msgTypes[118]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6247,7 +6446,7 @@ func (x *DeleteAuthPageResponse) String() string {
 func (*DeleteAuthPageResponse) ProtoMessage() {}
 
 func (x *DeleteAuthPageResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[115]
+	mi := &file_anubis_v1_admin_proto_msgTypes[118]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6260,7 +6459,7 @@ func (x *DeleteAuthPageResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteAuthPageResponse.ProtoReflect.Descriptor instead.
 func (*DeleteAuthPageResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{115}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{118}
 }
 
 type SetDefaultAuthPageRequest struct {
@@ -6272,7 +6471,7 @@ type SetDefaultAuthPageRequest struct {
 
 func (x *SetDefaultAuthPageRequest) Reset() {
 	*x = SetDefaultAuthPageRequest{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[116]
+	mi := &file_anubis_v1_admin_proto_msgTypes[119]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6284,7 +6483,7 @@ func (x *SetDefaultAuthPageRequest) String() string {
 func (*SetDefaultAuthPageRequest) ProtoMessage() {}
 
 func (x *SetDefaultAuthPageRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[116]
+	mi := &file_anubis_v1_admin_proto_msgTypes[119]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6297,7 +6496,7 @@ func (x *SetDefaultAuthPageRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetDefaultAuthPageRequest.ProtoReflect.Descriptor instead.
 func (*SetDefaultAuthPageRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{116}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{119}
 }
 
 func (x *SetDefaultAuthPageRequest) GetId() string {
@@ -6315,7 +6514,7 @@ type SetDefaultAuthPageResponse struct {
 
 func (x *SetDefaultAuthPageResponse) Reset() {
 	*x = SetDefaultAuthPageResponse{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[117]
+	mi := &file_anubis_v1_admin_proto_msgTypes[120]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6327,7 +6526,7 @@ func (x *SetDefaultAuthPageResponse) String() string {
 func (*SetDefaultAuthPageResponse) ProtoMessage() {}
 
 func (x *SetDefaultAuthPageResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[117]
+	mi := &file_anubis_v1_admin_proto_msgTypes[120]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6340,7 +6539,7 @@ func (x *SetDefaultAuthPageResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetDefaultAuthPageResponse.ProtoReflect.Descriptor instead.
 func (*SetDefaultAuthPageResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{117}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{120}
 }
 
 type PreviewAuthPageRequest struct {
@@ -6353,7 +6552,7 @@ type PreviewAuthPageRequest struct {
 
 func (x *PreviewAuthPageRequest) Reset() {
 	*x = PreviewAuthPageRequest{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[118]
+	mi := &file_anubis_v1_admin_proto_msgTypes[121]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6365,7 +6564,7 @@ func (x *PreviewAuthPageRequest) String() string {
 func (*PreviewAuthPageRequest) ProtoMessage() {}
 
 func (x *PreviewAuthPageRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[118]
+	mi := &file_anubis_v1_admin_proto_msgTypes[121]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6378,7 +6577,7 @@ func (x *PreviewAuthPageRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PreviewAuthPageRequest.ProtoReflect.Descriptor instead.
 func (*PreviewAuthPageRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{118}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{121}
 }
 
 func (x *PreviewAuthPageRequest) GetKind() string {
@@ -6406,7 +6605,7 @@ type PreviewAuthPageResponse struct {
 
 func (x *PreviewAuthPageResponse) Reset() {
 	*x = PreviewAuthPageResponse{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[119]
+	mi := &file_anubis_v1_admin_proto_msgTypes[122]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6418,7 +6617,7 @@ func (x *PreviewAuthPageResponse) String() string {
 func (*PreviewAuthPageResponse) ProtoMessage() {}
 
 func (x *PreviewAuthPageResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[119]
+	mi := &file_anubis_v1_admin_proto_msgTypes[122]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6431,7 +6630,7 @@ func (x *PreviewAuthPageResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PreviewAuthPageResponse.ProtoReflect.Descriptor instead.
 func (*PreviewAuthPageResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{119}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{122}
 }
 
 func (x *PreviewAuthPageResponse) GetValid() bool {
@@ -6461,7 +6660,7 @@ type Tenant struct {
 
 func (x *Tenant) Reset() {
 	*x = Tenant{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[120]
+	mi := &file_anubis_v1_admin_proto_msgTypes[123]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6473,7 +6672,7 @@ func (x *Tenant) String() string {
 func (*Tenant) ProtoMessage() {}
 
 func (x *Tenant) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[120]
+	mi := &file_anubis_v1_admin_proto_msgTypes[123]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6486,7 +6685,7 @@ func (x *Tenant) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Tenant.ProtoReflect.Descriptor instead.
 func (*Tenant) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{120}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{123}
 }
 
 func (x *Tenant) GetId() string {
@@ -6532,7 +6731,7 @@ type ListTenantsRequest struct {
 
 func (x *ListTenantsRequest) Reset() {
 	*x = ListTenantsRequest{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[121]
+	mi := &file_anubis_v1_admin_proto_msgTypes[124]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6544,7 +6743,7 @@ func (x *ListTenantsRequest) String() string {
 func (*ListTenantsRequest) ProtoMessage() {}
 
 func (x *ListTenantsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[121]
+	mi := &file_anubis_v1_admin_proto_msgTypes[124]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6557,7 +6756,7 @@ func (x *ListTenantsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListTenantsRequest.ProtoReflect.Descriptor instead.
 func (*ListTenantsRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{121}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{124}
 }
 
 type ListTenantsResponse struct {
@@ -6569,7 +6768,7 @@ type ListTenantsResponse struct {
 
 func (x *ListTenantsResponse) Reset() {
 	*x = ListTenantsResponse{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[122]
+	mi := &file_anubis_v1_admin_proto_msgTypes[125]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6581,7 +6780,7 @@ func (x *ListTenantsResponse) String() string {
 func (*ListTenantsResponse) ProtoMessage() {}
 
 func (x *ListTenantsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[122]
+	mi := &file_anubis_v1_admin_proto_msgTypes[125]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6594,7 +6793,7 @@ func (x *ListTenantsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListTenantsResponse.ProtoReflect.Descriptor instead.
 func (*ListTenantsResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{122}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{125}
 }
 
 func (x *ListTenantsResponse) GetTenants() []*Tenant {
@@ -6614,7 +6813,7 @@ type CreateTenantRequest struct {
 
 func (x *CreateTenantRequest) Reset() {
 	*x = CreateTenantRequest{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[123]
+	mi := &file_anubis_v1_admin_proto_msgTypes[126]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6626,7 +6825,7 @@ func (x *CreateTenantRequest) String() string {
 func (*CreateTenantRequest) ProtoMessage() {}
 
 func (x *CreateTenantRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[123]
+	mi := &file_anubis_v1_admin_proto_msgTypes[126]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6639,7 +6838,7 @@ func (x *CreateTenantRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateTenantRequest.ProtoReflect.Descriptor instead.
 func (*CreateTenantRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{123}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{126}
 }
 
 func (x *CreateTenantRequest) GetSlug() string {
@@ -6665,7 +6864,7 @@ type CreateTenantResponse struct {
 
 func (x *CreateTenantResponse) Reset() {
 	*x = CreateTenantResponse{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[124]
+	mi := &file_anubis_v1_admin_proto_msgTypes[127]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6677,7 +6876,7 @@ func (x *CreateTenantResponse) String() string {
 func (*CreateTenantResponse) ProtoMessage() {}
 
 func (x *CreateTenantResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[124]
+	mi := &file_anubis_v1_admin_proto_msgTypes[127]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6690,7 +6889,7 @@ func (x *CreateTenantResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateTenantResponse.ProtoReflect.Descriptor instead.
 func (*CreateTenantResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{124}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{127}
 }
 
 func (x *CreateTenantResponse) GetTenant() *Tenant {
@@ -6723,7 +6922,7 @@ type Realm struct {
 
 func (x *Realm) Reset() {
 	*x = Realm{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[125]
+	mi := &file_anubis_v1_admin_proto_msgTypes[128]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6735,7 +6934,7 @@ func (x *Realm) String() string {
 func (*Realm) ProtoMessage() {}
 
 func (x *Realm) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[125]
+	mi := &file_anubis_v1_admin_proto_msgTypes[128]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6748,7 +6947,7 @@ func (x *Realm) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Realm.ProtoReflect.Descriptor instead.
 func (*Realm) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{125}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{128}
 }
 
 func (x *Realm) GetId() string {
@@ -6864,7 +7063,7 @@ type ListRealmsRequest struct {
 
 func (x *ListRealmsRequest) Reset() {
 	*x = ListRealmsRequest{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[126]
+	mi := &file_anubis_v1_admin_proto_msgTypes[129]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6876,7 +7075,7 @@ func (x *ListRealmsRequest) String() string {
 func (*ListRealmsRequest) ProtoMessage() {}
 
 func (x *ListRealmsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[126]
+	mi := &file_anubis_v1_admin_proto_msgTypes[129]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6889,7 +7088,7 @@ func (x *ListRealmsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRealmsRequest.ProtoReflect.Descriptor instead.
 func (*ListRealmsRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{126}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{129}
 }
 
 type ListRealmsResponse struct {
@@ -6901,7 +7100,7 @@ type ListRealmsResponse struct {
 
 func (x *ListRealmsResponse) Reset() {
 	*x = ListRealmsResponse{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[127]
+	mi := &file_anubis_v1_admin_proto_msgTypes[130]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6913,7 +7112,7 @@ func (x *ListRealmsResponse) String() string {
 func (*ListRealmsResponse) ProtoMessage() {}
 
 func (x *ListRealmsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[127]
+	mi := &file_anubis_v1_admin_proto_msgTypes[130]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6926,7 +7125,7 @@ func (x *ListRealmsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRealmsResponse.ProtoReflect.Descriptor instead.
 func (*ListRealmsResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{127}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{130}
 }
 
 func (x *ListRealmsResponse) GetRealms() []*Realm {
@@ -6945,7 +7144,7 @@ type CreateRealmRequest struct {
 
 func (x *CreateRealmRequest) Reset() {
 	*x = CreateRealmRequest{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[128]
+	mi := &file_anubis_v1_admin_proto_msgTypes[131]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6957,7 +7156,7 @@ func (x *CreateRealmRequest) String() string {
 func (*CreateRealmRequest) ProtoMessage() {}
 
 func (x *CreateRealmRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[128]
+	mi := &file_anubis_v1_admin_proto_msgTypes[131]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6970,7 +7169,7 @@ func (x *CreateRealmRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateRealmRequest.ProtoReflect.Descriptor instead.
 func (*CreateRealmRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{128}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{131}
 }
 
 func (x *CreateRealmRequest) GetRealm() *Realm {
@@ -6989,7 +7188,7 @@ type CreateRealmResponse struct {
 
 func (x *CreateRealmResponse) Reset() {
 	*x = CreateRealmResponse{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[129]
+	mi := &file_anubis_v1_admin_proto_msgTypes[132]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7001,7 +7200,7 @@ func (x *CreateRealmResponse) String() string {
 func (*CreateRealmResponse) ProtoMessage() {}
 
 func (x *CreateRealmResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[129]
+	mi := &file_anubis_v1_admin_proto_msgTypes[132]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7014,7 +7213,7 @@ func (x *CreateRealmResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateRealmResponse.ProtoReflect.Descriptor instead.
 func (*CreateRealmResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{129}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{132}
 }
 
 func (x *CreateRealmResponse) GetRealm() *Realm {
@@ -7033,7 +7232,7 @@ type UpdateRealmRequest struct {
 
 func (x *UpdateRealmRequest) Reset() {
 	*x = UpdateRealmRequest{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[130]
+	mi := &file_anubis_v1_admin_proto_msgTypes[133]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7045,7 +7244,7 @@ func (x *UpdateRealmRequest) String() string {
 func (*UpdateRealmRequest) ProtoMessage() {}
 
 func (x *UpdateRealmRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[130]
+	mi := &file_anubis_v1_admin_proto_msgTypes[133]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7058,7 +7257,7 @@ func (x *UpdateRealmRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateRealmRequest.ProtoReflect.Descriptor instead.
 func (*UpdateRealmRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{130}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{133}
 }
 
 func (x *UpdateRealmRequest) GetRealm() *Realm {
@@ -7077,7 +7276,7 @@ type UpdateRealmResponse struct {
 
 func (x *UpdateRealmResponse) Reset() {
 	*x = UpdateRealmResponse{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[131]
+	mi := &file_anubis_v1_admin_proto_msgTypes[134]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7089,7 +7288,7 @@ func (x *UpdateRealmResponse) String() string {
 func (*UpdateRealmResponse) ProtoMessage() {}
 
 func (x *UpdateRealmResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[131]
+	mi := &file_anubis_v1_admin_proto_msgTypes[134]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7102,7 +7301,7 @@ func (x *UpdateRealmResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateRealmResponse.ProtoReflect.Descriptor instead.
 func (*UpdateRealmResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{131}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{134}
 }
 
 func (x *UpdateRealmResponse) GetRealm() *Realm {
@@ -7128,7 +7327,7 @@ type RealmCategory struct {
 
 func (x *RealmCategory) Reset() {
 	*x = RealmCategory{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[132]
+	mi := &file_anubis_v1_admin_proto_msgTypes[135]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7140,7 +7339,7 @@ func (x *RealmCategory) String() string {
 func (*RealmCategory) ProtoMessage() {}
 
 func (x *RealmCategory) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[132]
+	mi := &file_anubis_v1_admin_proto_msgTypes[135]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7153,7 +7352,7 @@ func (x *RealmCategory) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RealmCategory.ProtoReflect.Descriptor instead.
 func (*RealmCategory) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{132}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{135}
 }
 
 func (x *RealmCategory) GetId() string {
@@ -7207,7 +7406,7 @@ type ListRealmCategoriesRequest struct {
 
 func (x *ListRealmCategoriesRequest) Reset() {
 	*x = ListRealmCategoriesRequest{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[133]
+	mi := &file_anubis_v1_admin_proto_msgTypes[136]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7219,7 +7418,7 @@ func (x *ListRealmCategoriesRequest) String() string {
 func (*ListRealmCategoriesRequest) ProtoMessage() {}
 
 func (x *ListRealmCategoriesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[133]
+	mi := &file_anubis_v1_admin_proto_msgTypes[136]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7232,7 +7431,7 @@ func (x *ListRealmCategoriesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRealmCategoriesRequest.ProtoReflect.Descriptor instead.
 func (*ListRealmCategoriesRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{133}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{136}
 }
 
 func (x *ListRealmCategoriesRequest) GetRealmId() string {
@@ -7251,7 +7450,7 @@ type ListRealmCategoriesResponse struct {
 
 func (x *ListRealmCategoriesResponse) Reset() {
 	*x = ListRealmCategoriesResponse{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[134]
+	mi := &file_anubis_v1_admin_proto_msgTypes[137]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7263,7 +7462,7 @@ func (x *ListRealmCategoriesResponse) String() string {
 func (*ListRealmCategoriesResponse) ProtoMessage() {}
 
 func (x *ListRealmCategoriesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[134]
+	mi := &file_anubis_v1_admin_proto_msgTypes[137]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7276,7 +7475,7 @@ func (x *ListRealmCategoriesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRealmCategoriesResponse.ProtoReflect.Descriptor instead.
 func (*ListRealmCategoriesResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{134}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{137}
 }
 
 func (x *ListRealmCategoriesResponse) GetCategories() []*RealmCategory {
@@ -7295,7 +7494,7 @@ type CreateRealmCategoryRequest struct {
 
 func (x *CreateRealmCategoryRequest) Reset() {
 	*x = CreateRealmCategoryRequest{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[135]
+	mi := &file_anubis_v1_admin_proto_msgTypes[138]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7307,7 +7506,7 @@ func (x *CreateRealmCategoryRequest) String() string {
 func (*CreateRealmCategoryRequest) ProtoMessage() {}
 
 func (x *CreateRealmCategoryRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[135]
+	mi := &file_anubis_v1_admin_proto_msgTypes[138]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7320,7 +7519,7 @@ func (x *CreateRealmCategoryRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateRealmCategoryRequest.ProtoReflect.Descriptor instead.
 func (*CreateRealmCategoryRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{135}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{138}
 }
 
 func (x *CreateRealmCategoryRequest) GetCategory() *RealmCategory {
@@ -7339,7 +7538,7 @@ type CreateRealmCategoryResponse struct {
 
 func (x *CreateRealmCategoryResponse) Reset() {
 	*x = CreateRealmCategoryResponse{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[136]
+	mi := &file_anubis_v1_admin_proto_msgTypes[139]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7351,7 +7550,7 @@ func (x *CreateRealmCategoryResponse) String() string {
 func (*CreateRealmCategoryResponse) ProtoMessage() {}
 
 func (x *CreateRealmCategoryResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[136]
+	mi := &file_anubis_v1_admin_proto_msgTypes[139]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7364,7 +7563,7 @@ func (x *CreateRealmCategoryResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateRealmCategoryResponse.ProtoReflect.Descriptor instead.
 func (*CreateRealmCategoryResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{136}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{139}
 }
 
 func (x *CreateRealmCategoryResponse) GetCategory() *RealmCategory {
@@ -7397,7 +7596,7 @@ type Application struct {
 
 func (x *Application) Reset() {
 	*x = Application{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[137]
+	mi := &file_anubis_v1_admin_proto_msgTypes[140]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7409,7 +7608,7 @@ func (x *Application) String() string {
 func (*Application) ProtoMessage() {}
 
 func (x *Application) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[137]
+	mi := &file_anubis_v1_admin_proto_msgTypes[140]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7422,7 +7621,7 @@ func (x *Application) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Application.ProtoReflect.Descriptor instead.
 func (*Application) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{137}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{140}
 }
 
 func (x *Application) GetId() string {
@@ -7520,7 +7719,7 @@ type ListApplicationsRequest struct {
 
 func (x *ListApplicationsRequest) Reset() {
 	*x = ListApplicationsRequest{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[138]
+	mi := &file_anubis_v1_admin_proto_msgTypes[141]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7532,7 +7731,7 @@ func (x *ListApplicationsRequest) String() string {
 func (*ListApplicationsRequest) ProtoMessage() {}
 
 func (x *ListApplicationsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[138]
+	mi := &file_anubis_v1_admin_proto_msgTypes[141]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7545,7 +7744,7 @@ func (x *ListApplicationsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListApplicationsRequest.ProtoReflect.Descriptor instead.
 func (*ListApplicationsRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{138}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{141}
 }
 
 func (x *ListApplicationsRequest) GetQuery() string {
@@ -7582,7 +7781,7 @@ type ListApplicationsResponse struct {
 
 func (x *ListApplicationsResponse) Reset() {
 	*x = ListApplicationsResponse{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[139]
+	mi := &file_anubis_v1_admin_proto_msgTypes[142]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7594,7 +7793,7 @@ func (x *ListApplicationsResponse) String() string {
 func (*ListApplicationsResponse) ProtoMessage() {}
 
 func (x *ListApplicationsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[139]
+	mi := &file_anubis_v1_admin_proto_msgTypes[142]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7607,7 +7806,7 @@ func (x *ListApplicationsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListApplicationsResponse.ProtoReflect.Descriptor instead.
 func (*ListApplicationsResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{139}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{142}
 }
 
 func (x *ListApplicationsResponse) GetApplications() []*Application {
@@ -7640,7 +7839,7 @@ type CreateApplicationRequest struct {
 
 func (x *CreateApplicationRequest) Reset() {
 	*x = CreateApplicationRequest{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[140]
+	mi := &file_anubis_v1_admin_proto_msgTypes[143]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7652,7 +7851,7 @@ func (x *CreateApplicationRequest) String() string {
 func (*CreateApplicationRequest) ProtoMessage() {}
 
 func (x *CreateApplicationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[140]
+	mi := &file_anubis_v1_admin_proto_msgTypes[143]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7665,7 +7864,7 @@ func (x *CreateApplicationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateApplicationRequest.ProtoReflect.Descriptor instead.
 func (*CreateApplicationRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{140}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{143}
 }
 
 func (x *CreateApplicationRequest) GetApplication() *Application {
@@ -7686,7 +7885,7 @@ type CreateApplicationResponse struct {
 
 func (x *CreateApplicationResponse) Reset() {
 	*x = CreateApplicationResponse{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[141]
+	mi := &file_anubis_v1_admin_proto_msgTypes[144]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7698,7 +7897,7 @@ func (x *CreateApplicationResponse) String() string {
 func (*CreateApplicationResponse) ProtoMessage() {}
 
 func (x *CreateApplicationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[141]
+	mi := &file_anubis_v1_admin_proto_msgTypes[144]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7711,7 +7910,7 @@ func (x *CreateApplicationResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateApplicationResponse.ProtoReflect.Descriptor instead.
 func (*CreateApplicationResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{141}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{144}
 }
 
 func (x *CreateApplicationResponse) GetApplication() *Application {
@@ -7737,7 +7936,7 @@ type UpdateApplicationRequest struct {
 
 func (x *UpdateApplicationRequest) Reset() {
 	*x = UpdateApplicationRequest{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[142]
+	mi := &file_anubis_v1_admin_proto_msgTypes[145]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7749,7 +7948,7 @@ func (x *UpdateApplicationRequest) String() string {
 func (*UpdateApplicationRequest) ProtoMessage() {}
 
 func (x *UpdateApplicationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[142]
+	mi := &file_anubis_v1_admin_proto_msgTypes[145]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7762,7 +7961,7 @@ func (x *UpdateApplicationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateApplicationRequest.ProtoReflect.Descriptor instead.
 func (*UpdateApplicationRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{142}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{145}
 }
 
 func (x *UpdateApplicationRequest) GetApplication() *Application {
@@ -7781,7 +7980,7 @@ type UpdateApplicationResponse struct {
 
 func (x *UpdateApplicationResponse) Reset() {
 	*x = UpdateApplicationResponse{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[143]
+	mi := &file_anubis_v1_admin_proto_msgTypes[146]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7793,7 +7992,7 @@ func (x *UpdateApplicationResponse) String() string {
 func (*UpdateApplicationResponse) ProtoMessage() {}
 
 func (x *UpdateApplicationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[143]
+	mi := &file_anubis_v1_admin_proto_msgTypes[146]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7806,7 +8005,7 @@ func (x *UpdateApplicationResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateApplicationResponse.ProtoReflect.Descriptor instead.
 func (*UpdateApplicationResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{143}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{146}
 }
 
 func (x *UpdateApplicationResponse) GetApplication() *Application {
@@ -7825,7 +8024,7 @@ type RotateClientSecretRequest struct {
 
 func (x *RotateClientSecretRequest) Reset() {
 	*x = RotateClientSecretRequest{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[144]
+	mi := &file_anubis_v1_admin_proto_msgTypes[147]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7837,7 +8036,7 @@ func (x *RotateClientSecretRequest) String() string {
 func (*RotateClientSecretRequest) ProtoMessage() {}
 
 func (x *RotateClientSecretRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[144]
+	mi := &file_anubis_v1_admin_proto_msgTypes[147]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7850,7 +8049,7 @@ func (x *RotateClientSecretRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RotateClientSecretRequest.ProtoReflect.Descriptor instead.
 func (*RotateClientSecretRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{144}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{147}
 }
 
 func (x *RotateClientSecretRequest) GetApplicationId() string {
@@ -7869,7 +8068,7 @@ type RotateClientSecretResponse struct {
 
 func (x *RotateClientSecretResponse) Reset() {
 	*x = RotateClientSecretResponse{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[145]
+	mi := &file_anubis_v1_admin_proto_msgTypes[148]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7881,7 +8080,7 @@ func (x *RotateClientSecretResponse) String() string {
 func (*RotateClientSecretResponse) ProtoMessage() {}
 
 func (x *RotateClientSecretResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[145]
+	mi := &file_anubis_v1_admin_proto_msgTypes[148]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7894,7 +8093,7 @@ func (x *RotateClientSecretResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RotateClientSecretResponse.ProtoReflect.Descriptor instead.
 func (*RotateClientSecretResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{145}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{148}
 }
 
 func (x *RotateClientSecretResponse) GetClientSecret() string {
@@ -7921,7 +8120,7 @@ type RoutePolicy struct {
 
 func (x *RoutePolicy) Reset() {
 	*x = RoutePolicy{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[146]
+	mi := &file_anubis_v1_admin_proto_msgTypes[149]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7933,7 +8132,7 @@ func (x *RoutePolicy) String() string {
 func (*RoutePolicy) ProtoMessage() {}
 
 func (x *RoutePolicy) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[146]
+	mi := &file_anubis_v1_admin_proto_msgTypes[149]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7946,7 +8145,7 @@ func (x *RoutePolicy) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RoutePolicy.ProtoReflect.Descriptor instead.
 func (*RoutePolicy) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{146}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{149}
 }
 
 func (x *RoutePolicy) GetId() string {
@@ -8021,7 +8220,7 @@ type ListRoutePoliciesRequest struct {
 
 func (x *ListRoutePoliciesRequest) Reset() {
 	*x = ListRoutePoliciesRequest{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[147]
+	mi := &file_anubis_v1_admin_proto_msgTypes[150]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8033,7 +8232,7 @@ func (x *ListRoutePoliciesRequest) String() string {
 func (*ListRoutePoliciesRequest) ProtoMessage() {}
 
 func (x *ListRoutePoliciesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[147]
+	mi := &file_anubis_v1_admin_proto_msgTypes[150]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8046,7 +8245,7 @@ func (x *ListRoutePoliciesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRoutePoliciesRequest.ProtoReflect.Descriptor instead.
 func (*ListRoutePoliciesRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{147}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{150}
 }
 
 func (x *ListRoutePoliciesRequest) GetApplicationSlug() string {
@@ -8065,7 +8264,7 @@ type ListRoutePoliciesResponse struct {
 
 func (x *ListRoutePoliciesResponse) Reset() {
 	*x = ListRoutePoliciesResponse{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[148]
+	mi := &file_anubis_v1_admin_proto_msgTypes[151]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8077,7 +8276,7 @@ func (x *ListRoutePoliciesResponse) String() string {
 func (*ListRoutePoliciesResponse) ProtoMessage() {}
 
 func (x *ListRoutePoliciesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[148]
+	mi := &file_anubis_v1_admin_proto_msgTypes[151]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8090,7 +8289,7 @@ func (x *ListRoutePoliciesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRoutePoliciesResponse.ProtoReflect.Descriptor instead.
 func (*ListRoutePoliciesResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{148}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{151}
 }
 
 func (x *ListRoutePoliciesResponse) GetPolicies() []*RoutePolicy {
@@ -8120,7 +8319,7 @@ type AuditEntry struct {
 
 func (x *AuditEntry) Reset() {
 	*x = AuditEntry{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[149]
+	mi := &file_anubis_v1_admin_proto_msgTypes[152]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8132,7 +8331,7 @@ func (x *AuditEntry) String() string {
 func (*AuditEntry) ProtoMessage() {}
 
 func (x *AuditEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[149]
+	mi := &file_anubis_v1_admin_proto_msgTypes[152]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8145,7 +8344,7 @@ func (x *AuditEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AuditEntry.ProtoReflect.Descriptor instead.
 func (*AuditEntry) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{149}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{152}
 }
 
 func (x *AuditEntry) GetOccurredAt() int64 {
@@ -8246,7 +8445,7 @@ type QueryAuditRequest struct {
 
 func (x *QueryAuditRequest) Reset() {
 	*x = QueryAuditRequest{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[150]
+	mi := &file_anubis_v1_admin_proto_msgTypes[153]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8258,7 +8457,7 @@ func (x *QueryAuditRequest) String() string {
 func (*QueryAuditRequest) ProtoMessage() {}
 
 func (x *QueryAuditRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[150]
+	mi := &file_anubis_v1_admin_proto_msgTypes[153]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8271,7 +8470,7 @@ func (x *QueryAuditRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use QueryAuditRequest.ProtoReflect.Descriptor instead.
 func (*QueryAuditRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{150}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{153}
 }
 
 func (x *QueryAuditRequest) GetActorId() string {
@@ -8326,7 +8525,7 @@ type QueryAuditResponse struct {
 
 func (x *QueryAuditResponse) Reset() {
 	*x = QueryAuditResponse{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[151]
+	mi := &file_anubis_v1_admin_proto_msgTypes[154]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8338,7 +8537,7 @@ func (x *QueryAuditResponse) String() string {
 func (*QueryAuditResponse) ProtoMessage() {}
 
 func (x *QueryAuditResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[151]
+	mi := &file_anubis_v1_admin_proto_msgTypes[154]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8351,7 +8550,7 @@ func (x *QueryAuditResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use QueryAuditResponse.ProtoReflect.Descriptor instead.
 func (*QueryAuditResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{151}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{154}
 }
 
 func (x *QueryAuditResponse) GetEntries() []*AuditEntry {
@@ -8378,7 +8577,7 @@ type VerifyAuditChainRequest struct {
 
 func (x *VerifyAuditChainRequest) Reset() {
 	*x = VerifyAuditChainRequest{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[152]
+	mi := &file_anubis_v1_admin_proto_msgTypes[155]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8390,7 +8589,7 @@ func (x *VerifyAuditChainRequest) String() string {
 func (*VerifyAuditChainRequest) ProtoMessage() {}
 
 func (x *VerifyAuditChainRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[152]
+	mi := &file_anubis_v1_admin_proto_msgTypes[155]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8403,7 +8602,7 @@ func (x *VerifyAuditChainRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VerifyAuditChainRequest.ProtoReflect.Descriptor instead.
 func (*VerifyAuditChainRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{152}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{155}
 }
 
 func (x *VerifyAuditChainRequest) GetFrom() int64 {
@@ -8431,7 +8630,7 @@ type VerifyAuditChainResponse struct {
 
 func (x *VerifyAuditChainResponse) Reset() {
 	*x = VerifyAuditChainResponse{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[153]
+	mi := &file_anubis_v1_admin_proto_msgTypes[156]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8443,7 +8642,7 @@ func (x *VerifyAuditChainResponse) String() string {
 func (*VerifyAuditChainResponse) ProtoMessage() {}
 
 func (x *VerifyAuditChainResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[153]
+	mi := &file_anubis_v1_admin_proto_msgTypes[156]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8456,7 +8655,7 @@ func (x *VerifyAuditChainResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VerifyAuditChainResponse.ProtoReflect.Descriptor instead.
 func (*VerifyAuditChainResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{153}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{156}
 }
 
 func (x *VerifyAuditChainResponse) GetOk() bool {
@@ -8494,7 +8693,7 @@ type SigningKey struct {
 
 func (x *SigningKey) Reset() {
 	*x = SigningKey{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[154]
+	mi := &file_anubis_v1_admin_proto_msgTypes[157]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8506,7 +8705,7 @@ func (x *SigningKey) String() string {
 func (*SigningKey) ProtoMessage() {}
 
 func (x *SigningKey) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[154]
+	mi := &file_anubis_v1_admin_proto_msgTypes[157]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8519,7 +8718,7 @@ func (x *SigningKey) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SigningKey.ProtoReflect.Descriptor instead.
 func (*SigningKey) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{154}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{157}
 }
 
 func (x *SigningKey) GetKid() string {
@@ -8572,7 +8771,7 @@ type ListSigningKeysRequest struct {
 
 func (x *ListSigningKeysRequest) Reset() {
 	*x = ListSigningKeysRequest{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[155]
+	mi := &file_anubis_v1_admin_proto_msgTypes[158]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8584,7 +8783,7 @@ func (x *ListSigningKeysRequest) String() string {
 func (*ListSigningKeysRequest) ProtoMessage() {}
 
 func (x *ListSigningKeysRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[155]
+	mi := &file_anubis_v1_admin_proto_msgTypes[158]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8597,7 +8796,7 @@ func (x *ListSigningKeysRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSigningKeysRequest.ProtoReflect.Descriptor instead.
 func (*ListSigningKeysRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{155}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{158}
 }
 
 type ListSigningKeysResponse struct {
@@ -8609,7 +8808,7 @@ type ListSigningKeysResponse struct {
 
 func (x *ListSigningKeysResponse) Reset() {
 	*x = ListSigningKeysResponse{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[156]
+	mi := &file_anubis_v1_admin_proto_msgTypes[159]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8621,7 +8820,7 @@ func (x *ListSigningKeysResponse) String() string {
 func (*ListSigningKeysResponse) ProtoMessage() {}
 
 func (x *ListSigningKeysResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[156]
+	mi := &file_anubis_v1_admin_proto_msgTypes[159]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8634,7 +8833,7 @@ func (x *ListSigningKeysResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSigningKeysResponse.ProtoReflect.Descriptor instead.
 func (*ListSigningKeysResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{156}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{159}
 }
 
 func (x *ListSigningKeysResponse) GetKeys() []*SigningKey {
@@ -8653,7 +8852,7 @@ type RotateSigningKeyRequest struct {
 
 func (x *RotateSigningKeyRequest) Reset() {
 	*x = RotateSigningKeyRequest{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[157]
+	mi := &file_anubis_v1_admin_proto_msgTypes[160]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8665,7 +8864,7 @@ func (x *RotateSigningKeyRequest) String() string {
 func (*RotateSigningKeyRequest) ProtoMessage() {}
 
 func (x *RotateSigningKeyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[157]
+	mi := &file_anubis_v1_admin_proto_msgTypes[160]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8678,7 +8877,7 @@ func (x *RotateSigningKeyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RotateSigningKeyRequest.ProtoReflect.Descriptor instead.
 func (*RotateSigningKeyRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{157}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{160}
 }
 
 func (x *RotateSigningKeyRequest) GetPurpose() string {
@@ -8697,7 +8896,7 @@ type RotateSigningKeyResponse struct {
 
 func (x *RotateSigningKeyResponse) Reset() {
 	*x = RotateSigningKeyResponse{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[158]
+	mi := &file_anubis_v1_admin_proto_msgTypes[161]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8709,7 +8908,7 @@ func (x *RotateSigningKeyResponse) String() string {
 func (*RotateSigningKeyResponse) ProtoMessage() {}
 
 func (x *RotateSigningKeyResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[158]
+	mi := &file_anubis_v1_admin_proto_msgTypes[161]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8722,7 +8921,7 @@ func (x *RotateSigningKeyResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RotateSigningKeyResponse.ProtoReflect.Descriptor instead.
 func (*RotateSigningKeyResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{158}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{161}
 }
 
 func (x *RotateSigningKeyResponse) GetNewKey() *SigningKey {
@@ -8740,7 +8939,7 @@ type GetCatalogVersionRequest struct {
 
 func (x *GetCatalogVersionRequest) Reset() {
 	*x = GetCatalogVersionRequest{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[159]
+	mi := &file_anubis_v1_admin_proto_msgTypes[162]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8752,7 +8951,7 @@ func (x *GetCatalogVersionRequest) String() string {
 func (*GetCatalogVersionRequest) ProtoMessage() {}
 
 func (x *GetCatalogVersionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[159]
+	mi := &file_anubis_v1_admin_proto_msgTypes[162]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8765,7 +8964,7 @@ func (x *GetCatalogVersionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetCatalogVersionRequest.ProtoReflect.Descriptor instead.
 func (*GetCatalogVersionRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{159}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{162}
 }
 
 type GetCatalogVersionResponse struct {
@@ -8778,7 +8977,7 @@ type GetCatalogVersionResponse struct {
 
 func (x *GetCatalogVersionResponse) Reset() {
 	*x = GetCatalogVersionResponse{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[160]
+	mi := &file_anubis_v1_admin_proto_msgTypes[163]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8790,7 +8989,7 @@ func (x *GetCatalogVersionResponse) String() string {
 func (*GetCatalogVersionResponse) ProtoMessage() {}
 
 func (x *GetCatalogVersionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[160]
+	mi := &file_anubis_v1_admin_proto_msgTypes[163]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8803,7 +9002,7 @@ func (x *GetCatalogVersionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetCatalogVersionResponse.ProtoReflect.Descriptor instead.
 func (*GetCatalogVersionResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{160}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{163}
 }
 
 func (x *GetCatalogVersionResponse) GetVersion() int64 {
@@ -8828,7 +9027,7 @@ type GetSigninPageRequest struct {
 
 func (x *GetSigninPageRequest) Reset() {
 	*x = GetSigninPageRequest{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[161]
+	mi := &file_anubis_v1_admin_proto_msgTypes[164]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8840,7 +9039,7 @@ func (x *GetSigninPageRequest) String() string {
 func (*GetSigninPageRequest) ProtoMessage() {}
 
 func (x *GetSigninPageRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[161]
+	mi := &file_anubis_v1_admin_proto_msgTypes[164]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8853,7 +9052,7 @@ func (x *GetSigninPageRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSigninPageRequest.ProtoReflect.Descriptor instead.
 func (*GetSigninPageRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{161}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{164}
 }
 
 type GetSigninPageResponse struct {
@@ -8866,7 +9065,7 @@ type GetSigninPageResponse struct {
 
 func (x *GetSigninPageResponse) Reset() {
 	*x = GetSigninPageResponse{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[162]
+	mi := &file_anubis_v1_admin_proto_msgTypes[165]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8878,7 +9077,7 @@ func (x *GetSigninPageResponse) String() string {
 func (*GetSigninPageResponse) ProtoMessage() {}
 
 func (x *GetSigninPageResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[162]
+	mi := &file_anubis_v1_admin_proto_msgTypes[165]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8891,7 +9090,7 @@ func (x *GetSigninPageResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSigninPageResponse.ProtoReflect.Descriptor instead.
 func (*GetSigninPageResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{162}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{165}
 }
 
 func (x *GetSigninPageResponse) GetConfigJson() string {
@@ -8917,7 +9116,7 @@ type PutSigninPageRequest struct {
 
 func (x *PutSigninPageRequest) Reset() {
 	*x = PutSigninPageRequest{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[163]
+	mi := &file_anubis_v1_admin_proto_msgTypes[166]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8929,7 +9128,7 @@ func (x *PutSigninPageRequest) String() string {
 func (*PutSigninPageRequest) ProtoMessage() {}
 
 func (x *PutSigninPageRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[163]
+	mi := &file_anubis_v1_admin_proto_msgTypes[166]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8942,7 +9141,7 @@ func (x *PutSigninPageRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PutSigninPageRequest.ProtoReflect.Descriptor instead.
 func (*PutSigninPageRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{163}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{166}
 }
 
 func (x *PutSigninPageRequest) GetConfigJson() string {
@@ -8960,7 +9159,7 @@ type PutSigninPageResponse struct {
 
 func (x *PutSigninPageResponse) Reset() {
 	*x = PutSigninPageResponse{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[164]
+	mi := &file_anubis_v1_admin_proto_msgTypes[167]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -8972,7 +9171,7 @@ func (x *PutSigninPageResponse) String() string {
 func (*PutSigninPageResponse) ProtoMessage() {}
 
 func (x *PutSigninPageResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[164]
+	mi := &file_anubis_v1_admin_proto_msgTypes[167]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -8985,7 +9184,7 @@ func (x *PutSigninPageResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PutSigninPageResponse.ProtoReflect.Descriptor instead.
 func (*PutSigninPageResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{164}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{167}
 }
 
 type DownloadImportTemplateRequest struct {
@@ -8996,7 +9195,7 @@ type DownloadImportTemplateRequest struct {
 
 func (x *DownloadImportTemplateRequest) Reset() {
 	*x = DownloadImportTemplateRequest{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[165]
+	mi := &file_anubis_v1_admin_proto_msgTypes[168]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9008,7 +9207,7 @@ func (x *DownloadImportTemplateRequest) String() string {
 func (*DownloadImportTemplateRequest) ProtoMessage() {}
 
 func (x *DownloadImportTemplateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[165]
+	mi := &file_anubis_v1_admin_proto_msgTypes[168]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9021,7 +9220,7 @@ func (x *DownloadImportTemplateRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DownloadImportTemplateRequest.ProtoReflect.Descriptor instead.
 func (*DownloadImportTemplateRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{165}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{168}
 }
 
 type DownloadImportTemplateResponse struct {
@@ -9035,7 +9234,7 @@ type DownloadImportTemplateResponse struct {
 
 func (x *DownloadImportTemplateResponse) Reset() {
 	*x = DownloadImportTemplateResponse{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[166]
+	mi := &file_anubis_v1_admin_proto_msgTypes[169]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9047,7 +9246,7 @@ func (x *DownloadImportTemplateResponse) String() string {
 func (*DownloadImportTemplateResponse) ProtoMessage() {}
 
 func (x *DownloadImportTemplateResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[166]
+	mi := &file_anubis_v1_admin_proto_msgTypes[169]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9060,7 +9259,7 @@ func (x *DownloadImportTemplateResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DownloadImportTemplateResponse.ProtoReflect.Descriptor instead.
 func (*DownloadImportTemplateResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{166}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{169}
 }
 
 func (x *DownloadImportTemplateResponse) GetWorkbook() []byte {
@@ -9095,7 +9294,7 @@ type ImportWorkbookRequest struct {
 
 func (x *ImportWorkbookRequest) Reset() {
 	*x = ImportWorkbookRequest{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[167]
+	mi := &file_anubis_v1_admin_proto_msgTypes[170]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9107,7 +9306,7 @@ func (x *ImportWorkbookRequest) String() string {
 func (*ImportWorkbookRequest) ProtoMessage() {}
 
 func (x *ImportWorkbookRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[167]
+	mi := &file_anubis_v1_admin_proto_msgTypes[170]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9120,7 +9319,7 @@ func (x *ImportWorkbookRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ImportWorkbookRequest.ProtoReflect.Descriptor instead.
 func (*ImportWorkbookRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{167}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{170}
 }
 
 func (x *ImportWorkbookRequest) GetWorkbook() []byte {
@@ -9152,7 +9351,7 @@ type ImportIssue struct {
 
 func (x *ImportIssue) Reset() {
 	*x = ImportIssue{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[168]
+	mi := &file_anubis_v1_admin_proto_msgTypes[171]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9164,7 +9363,7 @@ func (x *ImportIssue) String() string {
 func (*ImportIssue) ProtoMessage() {}
 
 func (x *ImportIssue) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[168]
+	mi := &file_anubis_v1_admin_proto_msgTypes[171]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9177,7 +9376,7 @@ func (x *ImportIssue) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ImportIssue.ProtoReflect.Descriptor instead.
 func (*ImportIssue) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{168}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{171}
 }
 
 func (x *ImportIssue) GetSheet() string {
@@ -9234,7 +9433,7 @@ type ImportWorkbookResponse struct {
 
 func (x *ImportWorkbookResponse) Reset() {
 	*x = ImportWorkbookResponse{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[169]
+	mi := &file_anubis_v1_admin_proto_msgTypes[172]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9246,7 +9445,7 @@ func (x *ImportWorkbookResponse) String() string {
 func (*ImportWorkbookResponse) ProtoMessage() {}
 
 func (x *ImportWorkbookResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[169]
+	mi := &file_anubis_v1_admin_proto_msgTypes[172]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9259,7 +9458,7 @@ func (x *ImportWorkbookResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ImportWorkbookResponse.ProtoReflect.Descriptor instead.
 func (*ImportWorkbookResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{169}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{172}
 }
 
 func (x *ImportWorkbookResponse) GetDry() bool {
@@ -9348,7 +9547,7 @@ type OperatorAssignment struct {
 
 func (x *OperatorAssignment) Reset() {
 	*x = OperatorAssignment{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[170]
+	mi := &file_anubis_v1_admin_proto_msgTypes[173]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9360,7 +9559,7 @@ func (x *OperatorAssignment) String() string {
 func (*OperatorAssignment) ProtoMessage() {}
 
 func (x *OperatorAssignment) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[170]
+	mi := &file_anubis_v1_admin_proto_msgTypes[173]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9373,7 +9572,7 @@ func (x *OperatorAssignment) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OperatorAssignment.ProtoReflect.Descriptor instead.
 func (*OperatorAssignment) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{170}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{173}
 }
 
 func (x *OperatorAssignment) GetId() string {
@@ -9439,7 +9638,7 @@ type Operator struct {
 
 func (x *Operator) Reset() {
 	*x = Operator{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[171]
+	mi := &file_anubis_v1_admin_proto_msgTypes[174]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9451,7 +9650,7 @@ func (x *Operator) String() string {
 func (*Operator) ProtoMessage() {}
 
 func (x *Operator) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[171]
+	mi := &file_anubis_v1_admin_proto_msgTypes[174]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9464,7 +9663,7 @@ func (x *Operator) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Operator.ProtoReflect.Descriptor instead.
 func (*Operator) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{171}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{174}
 }
 
 func (x *Operator) GetIdentityId() string {
@@ -9541,7 +9740,7 @@ type ListOperatorsRequest struct {
 
 func (x *ListOperatorsRequest) Reset() {
 	*x = ListOperatorsRequest{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[172]
+	mi := &file_anubis_v1_admin_proto_msgTypes[175]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9553,7 +9752,7 @@ func (x *ListOperatorsRequest) String() string {
 func (*ListOperatorsRequest) ProtoMessage() {}
 
 func (x *ListOperatorsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[172]
+	mi := &file_anubis_v1_admin_proto_msgTypes[175]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9566,7 +9765,7 @@ func (x *ListOperatorsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListOperatorsRequest.ProtoReflect.Descriptor instead.
 func (*ListOperatorsRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{172}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{175}
 }
 
 func (x *ListOperatorsRequest) GetQuery() string {
@@ -9604,7 +9803,7 @@ type ListOperatorsResponse struct {
 
 func (x *ListOperatorsResponse) Reset() {
 	*x = ListOperatorsResponse{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[173]
+	mi := &file_anubis_v1_admin_proto_msgTypes[176]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9616,7 +9815,7 @@ func (x *ListOperatorsResponse) String() string {
 func (*ListOperatorsResponse) ProtoMessage() {}
 
 func (x *ListOperatorsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[173]
+	mi := &file_anubis_v1_admin_proto_msgTypes[176]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9629,7 +9828,7 @@ func (x *ListOperatorsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListOperatorsResponse.ProtoReflect.Descriptor instead.
 func (*ListOperatorsResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{173}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{176}
 }
 
 func (x *ListOperatorsResponse) GetOperators() []*Operator {
@@ -9669,7 +9868,7 @@ type AssignOperatorRequest struct {
 
 func (x *AssignOperatorRequest) Reset() {
 	*x = AssignOperatorRequest{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[174]
+	mi := &file_anubis_v1_admin_proto_msgTypes[177]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9681,7 +9880,7 @@ func (x *AssignOperatorRequest) String() string {
 func (*AssignOperatorRequest) ProtoMessage() {}
 
 func (x *AssignOperatorRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[174]
+	mi := &file_anubis_v1_admin_proto_msgTypes[177]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9694,7 +9893,7 @@ func (x *AssignOperatorRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AssignOperatorRequest.ProtoReflect.Descriptor instead.
 func (*AssignOperatorRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{174}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{177}
 }
 
 func (x *AssignOperatorRequest) GetOperatorId() string {
@@ -9748,7 +9947,7 @@ type AssignOperatorResponse struct {
 
 func (x *AssignOperatorResponse) Reset() {
 	*x = AssignOperatorResponse{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[175]
+	mi := &file_anubis_v1_admin_proto_msgTypes[178]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9760,7 +9959,7 @@ func (x *AssignOperatorResponse) String() string {
 func (*AssignOperatorResponse) ProtoMessage() {}
 
 func (x *AssignOperatorResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[175]
+	mi := &file_anubis_v1_admin_proto_msgTypes[178]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9773,7 +9972,7 @@ func (x *AssignOperatorResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AssignOperatorResponse.ProtoReflect.Descriptor instead.
 func (*AssignOperatorResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{175}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{178}
 }
 
 func (x *AssignOperatorResponse) GetAssignmentId() string {
@@ -9792,7 +9991,7 @@ type RevokeAssignmentRequest struct {
 
 func (x *RevokeAssignmentRequest) Reset() {
 	*x = RevokeAssignmentRequest{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[176]
+	mi := &file_anubis_v1_admin_proto_msgTypes[179]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9804,7 +10003,7 @@ func (x *RevokeAssignmentRequest) String() string {
 func (*RevokeAssignmentRequest) ProtoMessage() {}
 
 func (x *RevokeAssignmentRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[176]
+	mi := &file_anubis_v1_admin_proto_msgTypes[179]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9817,7 +10016,7 @@ func (x *RevokeAssignmentRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RevokeAssignmentRequest.ProtoReflect.Descriptor instead.
 func (*RevokeAssignmentRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{176}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{179}
 }
 
 func (x *RevokeAssignmentRequest) GetAssignmentId() string {
@@ -9835,7 +10034,7 @@ type RevokeAssignmentResponse struct {
 
 func (x *RevokeAssignmentResponse) Reset() {
 	*x = RevokeAssignmentResponse{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[177]
+	mi := &file_anubis_v1_admin_proto_msgTypes[180]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9847,7 +10046,7 @@ func (x *RevokeAssignmentResponse) String() string {
 func (*RevokeAssignmentResponse) ProtoMessage() {}
 
 func (x *RevokeAssignmentResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[177]
+	mi := &file_anubis_v1_admin_proto_msgTypes[180]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9860,7 +10059,7 @@ func (x *RevokeAssignmentResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RevokeAssignmentResponse.ProtoReflect.Descriptor instead.
 func (*RevokeAssignmentResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{177}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{180}
 }
 
 // CreateOperatorRequest adds a person who administers the PLATFORM. They are
@@ -9883,7 +10082,7 @@ type CreateOperatorRequest struct {
 
 func (x *CreateOperatorRequest) Reset() {
 	*x = CreateOperatorRequest{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[178]
+	mi := &file_anubis_v1_admin_proto_msgTypes[181]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9895,7 +10094,7 @@ func (x *CreateOperatorRequest) String() string {
 func (*CreateOperatorRequest) ProtoMessage() {}
 
 func (x *CreateOperatorRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[178]
+	mi := &file_anubis_v1_admin_proto_msgTypes[181]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9908,7 +10107,7 @@ func (x *CreateOperatorRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateOperatorRequest.ProtoReflect.Descriptor instead.
 func (*CreateOperatorRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{178}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{181}
 }
 
 func (x *CreateOperatorRequest) GetUsername() string {
@@ -9963,7 +10162,7 @@ type CreateOperatorResponse struct {
 
 func (x *CreateOperatorResponse) Reset() {
 	*x = CreateOperatorResponse{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[179]
+	mi := &file_anubis_v1_admin_proto_msgTypes[182]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9975,7 +10174,7 @@ func (x *CreateOperatorResponse) String() string {
 func (*CreateOperatorResponse) ProtoMessage() {}
 
 func (x *CreateOperatorResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[179]
+	mi := &file_anubis_v1_admin_proto_msgTypes[182]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9988,7 +10187,7 @@ func (x *CreateOperatorResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateOperatorResponse.ProtoReflect.Descriptor instead.
 func (*CreateOperatorResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{179}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{182}
 }
 
 func (x *CreateOperatorResponse) GetOperatorId() string {
@@ -10017,7 +10216,7 @@ type PlatformLoginRequest struct {
 
 func (x *PlatformLoginRequest) Reset() {
 	*x = PlatformLoginRequest{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[180]
+	mi := &file_anubis_v1_admin_proto_msgTypes[183]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10029,7 +10228,7 @@ func (x *PlatformLoginRequest) String() string {
 func (*PlatformLoginRequest) ProtoMessage() {}
 
 func (x *PlatformLoginRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[180]
+	mi := &file_anubis_v1_admin_proto_msgTypes[183]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10042,7 +10241,7 @@ func (x *PlatformLoginRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlatformLoginRequest.ProtoReflect.Descriptor instead.
 func (*PlatformLoginRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{180}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{183}
 }
 
 func (x *PlatformLoginRequest) GetUsername() string {
@@ -10076,7 +10275,7 @@ type PlatformLoginResponse struct {
 
 func (x *PlatformLoginResponse) Reset() {
 	*x = PlatformLoginResponse{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[181]
+	mi := &file_anubis_v1_admin_proto_msgTypes[184]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10088,7 +10287,7 @@ func (x *PlatformLoginResponse) String() string {
 func (*PlatformLoginResponse) ProtoMessage() {}
 
 func (x *PlatformLoginResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[181]
+	mi := &file_anubis_v1_admin_proto_msgTypes[184]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10101,7 +10300,7 @@ func (x *PlatformLoginResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlatformLoginResponse.ProtoReflect.Descriptor instead.
 func (*PlatformLoginResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{181}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{184}
 }
 
 func (x *PlatformLoginResponse) GetAccessToken() string {
@@ -10155,7 +10354,7 @@ type PlatformRefreshRequest struct {
 
 func (x *PlatformRefreshRequest) Reset() {
 	*x = PlatformRefreshRequest{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[182]
+	mi := &file_anubis_v1_admin_proto_msgTypes[185]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10167,7 +10366,7 @@ func (x *PlatformRefreshRequest) String() string {
 func (*PlatformRefreshRequest) ProtoMessage() {}
 
 func (x *PlatformRefreshRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[182]
+	mi := &file_anubis_v1_admin_proto_msgTypes[185]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10180,7 +10379,7 @@ func (x *PlatformRefreshRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlatformRefreshRequest.ProtoReflect.Descriptor instead.
 func (*PlatformRefreshRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{182}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{185}
 }
 
 func (x *PlatformRefreshRequest) GetRefreshToken() string {
@@ -10203,7 +10402,7 @@ type PlatformRefreshResponse struct {
 
 func (x *PlatformRefreshResponse) Reset() {
 	*x = PlatformRefreshResponse{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[183]
+	mi := &file_anubis_v1_admin_proto_msgTypes[186]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10215,7 +10414,7 @@ func (x *PlatformRefreshResponse) String() string {
 func (*PlatformRefreshResponse) ProtoMessage() {}
 
 func (x *PlatformRefreshResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[183]
+	mi := &file_anubis_v1_admin_proto_msgTypes[186]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10228,7 +10427,7 @@ func (x *PlatformRefreshResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlatformRefreshResponse.ProtoReflect.Descriptor instead.
 func (*PlatformRefreshResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{183}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{186}
 }
 
 func (x *PlatformRefreshResponse) GetAccessToken() string {
@@ -10275,7 +10474,7 @@ type PlatformLogoutRequest struct {
 
 func (x *PlatformLogoutRequest) Reset() {
 	*x = PlatformLogoutRequest{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[184]
+	mi := &file_anubis_v1_admin_proto_msgTypes[187]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10287,7 +10486,7 @@ func (x *PlatformLogoutRequest) String() string {
 func (*PlatformLogoutRequest) ProtoMessage() {}
 
 func (x *PlatformLogoutRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[184]
+	mi := &file_anubis_v1_admin_proto_msgTypes[187]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10300,7 +10499,7 @@ func (x *PlatformLogoutRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlatformLogoutRequest.ProtoReflect.Descriptor instead.
 func (*PlatformLogoutRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{184}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{187}
 }
 
 func (x *PlatformLogoutRequest) GetRefreshToken() string {
@@ -10318,7 +10517,7 @@ type PlatformLogoutResponse struct {
 
 func (x *PlatformLogoutResponse) Reset() {
 	*x = PlatformLogoutResponse{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[185]
+	mi := &file_anubis_v1_admin_proto_msgTypes[188]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10330,7 +10529,7 @@ func (x *PlatformLogoutResponse) String() string {
 func (*PlatformLogoutResponse) ProtoMessage() {}
 
 func (x *PlatformLogoutResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[185]
+	mi := &file_anubis_v1_admin_proto_msgTypes[188]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10343,7 +10542,7 @@ func (x *PlatformLogoutResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlatformLogoutResponse.ProtoReflect.Descriptor instead.
 func (*PlatformLogoutResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{185}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{188}
 }
 
 type PlatformVerifyMfaRequest struct {
@@ -10356,7 +10555,7 @@ type PlatformVerifyMfaRequest struct {
 
 func (x *PlatformVerifyMfaRequest) Reset() {
 	*x = PlatformVerifyMfaRequest{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[186]
+	mi := &file_anubis_v1_admin_proto_msgTypes[189]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10368,7 +10567,7 @@ func (x *PlatformVerifyMfaRequest) String() string {
 func (*PlatformVerifyMfaRequest) ProtoMessage() {}
 
 func (x *PlatformVerifyMfaRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[186]
+	mi := &file_anubis_v1_admin_proto_msgTypes[189]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10381,7 +10580,7 @@ func (x *PlatformVerifyMfaRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlatformVerifyMfaRequest.ProtoReflect.Descriptor instead.
 func (*PlatformVerifyMfaRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{186}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{189}
 }
 
 func (x *PlatformVerifyMfaRequest) GetMfaToken() string {
@@ -10411,7 +10610,7 @@ type PlatformVerifyMfaResponse struct {
 
 func (x *PlatformVerifyMfaResponse) Reset() {
 	*x = PlatformVerifyMfaResponse{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[187]
+	mi := &file_anubis_v1_admin_proto_msgTypes[190]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10423,7 +10622,7 @@ func (x *PlatformVerifyMfaResponse) String() string {
 func (*PlatformVerifyMfaResponse) ProtoMessage() {}
 
 func (x *PlatformVerifyMfaResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[187]
+	mi := &file_anubis_v1_admin_proto_msgTypes[190]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10436,7 +10635,7 @@ func (x *PlatformVerifyMfaResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlatformVerifyMfaResponse.ProtoReflect.Descriptor instead.
 func (*PlatformVerifyMfaResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{187}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{190}
 }
 
 func (x *PlatformVerifyMfaResponse) GetAccessToken() string {
@@ -10482,7 +10681,7 @@ type BeginTotpEnrolmentRequest struct {
 
 func (x *BeginTotpEnrolmentRequest) Reset() {
 	*x = BeginTotpEnrolmentRequest{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[188]
+	mi := &file_anubis_v1_admin_proto_msgTypes[191]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10494,7 +10693,7 @@ func (x *BeginTotpEnrolmentRequest) String() string {
 func (*BeginTotpEnrolmentRequest) ProtoMessage() {}
 
 func (x *BeginTotpEnrolmentRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[188]
+	mi := &file_anubis_v1_admin_proto_msgTypes[191]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10507,7 +10706,7 @@ func (x *BeginTotpEnrolmentRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BeginTotpEnrolmentRequest.ProtoReflect.Descriptor instead.
 func (*BeginTotpEnrolmentRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{188}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{191}
 }
 
 type BeginTotpEnrolmentResponse struct {
@@ -10522,7 +10721,7 @@ type BeginTotpEnrolmentResponse struct {
 
 func (x *BeginTotpEnrolmentResponse) Reset() {
 	*x = BeginTotpEnrolmentResponse{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[189]
+	mi := &file_anubis_v1_admin_proto_msgTypes[192]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10534,7 +10733,7 @@ func (x *BeginTotpEnrolmentResponse) String() string {
 func (*BeginTotpEnrolmentResponse) ProtoMessage() {}
 
 func (x *BeginTotpEnrolmentResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[189]
+	mi := &file_anubis_v1_admin_proto_msgTypes[192]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10547,7 +10746,7 @@ func (x *BeginTotpEnrolmentResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BeginTotpEnrolmentResponse.ProtoReflect.Descriptor instead.
 func (*BeginTotpEnrolmentResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{189}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{192}
 }
 
 func (x *BeginTotpEnrolmentResponse) GetSecret() string {
@@ -10573,7 +10772,7 @@ type ConfirmTotpEnrolmentRequest struct {
 
 func (x *ConfirmTotpEnrolmentRequest) Reset() {
 	*x = ConfirmTotpEnrolmentRequest{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[190]
+	mi := &file_anubis_v1_admin_proto_msgTypes[193]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10585,7 +10784,7 @@ func (x *ConfirmTotpEnrolmentRequest) String() string {
 func (*ConfirmTotpEnrolmentRequest) ProtoMessage() {}
 
 func (x *ConfirmTotpEnrolmentRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[190]
+	mi := &file_anubis_v1_admin_proto_msgTypes[193]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10598,7 +10797,7 @@ func (x *ConfirmTotpEnrolmentRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConfirmTotpEnrolmentRequest.ProtoReflect.Descriptor instead.
 func (*ConfirmTotpEnrolmentRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{190}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{193}
 }
 
 func (x *ConfirmTotpEnrolmentRequest) GetCode() string {
@@ -10616,7 +10815,7 @@ type ConfirmTotpEnrolmentResponse struct {
 
 func (x *ConfirmTotpEnrolmentResponse) Reset() {
 	*x = ConfirmTotpEnrolmentResponse{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[191]
+	mi := &file_anubis_v1_admin_proto_msgTypes[194]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10628,7 +10827,7 @@ func (x *ConfirmTotpEnrolmentResponse) String() string {
 func (*ConfirmTotpEnrolmentResponse) ProtoMessage() {}
 
 func (x *ConfirmTotpEnrolmentResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[191]
+	mi := &file_anubis_v1_admin_proto_msgTypes[194]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10641,7 +10840,7 @@ func (x *ConfirmTotpEnrolmentResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConfirmTotpEnrolmentResponse.ProtoReflect.Descriptor instead.
 func (*ConfirmTotpEnrolmentResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{191}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{194}
 }
 
 // MyTenantsRequest asks which tenants this operator may administer. The
@@ -10654,7 +10853,7 @@ type MyTenantsRequest struct {
 
 func (x *MyTenantsRequest) Reset() {
 	*x = MyTenantsRequest{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[192]
+	mi := &file_anubis_v1_admin_proto_msgTypes[195]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10666,7 +10865,7 @@ func (x *MyTenantsRequest) String() string {
 func (*MyTenantsRequest) ProtoMessage() {}
 
 func (x *MyTenantsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[192]
+	mi := &file_anubis_v1_admin_proto_msgTypes[195]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10679,7 +10878,7 @@ func (x *MyTenantsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MyTenantsRequest.ProtoReflect.Descriptor instead.
 func (*MyTenantsRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{192}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{195}
 }
 
 type MyTenant struct {
@@ -10695,7 +10894,7 @@ type MyTenant struct {
 
 func (x *MyTenant) Reset() {
 	*x = MyTenant{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[193]
+	mi := &file_anubis_v1_admin_proto_msgTypes[196]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10707,7 +10906,7 @@ func (x *MyTenant) String() string {
 func (*MyTenant) ProtoMessage() {}
 
 func (x *MyTenant) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[193]
+	mi := &file_anubis_v1_admin_proto_msgTypes[196]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10720,7 +10919,7 @@ func (x *MyTenant) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MyTenant.ProtoReflect.Descriptor instead.
 func (*MyTenant) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{193}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{196}
 }
 
 func (x *MyTenant) GetSlug() string {
@@ -10760,7 +10959,7 @@ type MyTenantsResponse struct {
 
 func (x *MyTenantsResponse) Reset() {
 	*x = MyTenantsResponse{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[194]
+	mi := &file_anubis_v1_admin_proto_msgTypes[197]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10772,7 +10971,7 @@ func (x *MyTenantsResponse) String() string {
 func (*MyTenantsResponse) ProtoMessage() {}
 
 func (x *MyTenantsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[194]
+	mi := &file_anubis_v1_admin_proto_msgTypes[197]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10785,7 +10984,7 @@ func (x *MyTenantsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MyTenantsResponse.ProtoReflect.Descriptor instead.
 func (*MyTenantsResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{194}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{197}
 }
 
 func (x *MyTenantsResponse) GetTenants() []*MyTenant {
@@ -10805,7 +11004,7 @@ type UpdateTenantRequest struct {
 
 func (x *UpdateTenantRequest) Reset() {
 	*x = UpdateTenantRequest{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[195]
+	mi := &file_anubis_v1_admin_proto_msgTypes[198]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10817,7 +11016,7 @@ func (x *UpdateTenantRequest) String() string {
 func (*UpdateTenantRequest) ProtoMessage() {}
 
 func (x *UpdateTenantRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[195]
+	mi := &file_anubis_v1_admin_proto_msgTypes[198]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10830,7 +11029,7 @@ func (x *UpdateTenantRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateTenantRequest.ProtoReflect.Descriptor instead.
 func (*UpdateTenantRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{195}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{198}
 }
 
 func (x *UpdateTenantRequest) GetId() string {
@@ -10855,7 +11054,7 @@ type UpdateTenantResponse struct {
 
 func (x *UpdateTenantResponse) Reset() {
 	*x = UpdateTenantResponse{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[196]
+	mi := &file_anubis_v1_admin_proto_msgTypes[199]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10867,7 +11066,7 @@ func (x *UpdateTenantResponse) String() string {
 func (*UpdateTenantResponse) ProtoMessage() {}
 
 func (x *UpdateTenantResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[196]
+	mi := &file_anubis_v1_admin_proto_msgTypes[199]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10880,7 +11079,7 @@ func (x *UpdateTenantResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateTenantResponse.ProtoReflect.Descriptor instead.
 func (*UpdateTenantResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{196}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{199}
 }
 
 type SetTenantStatusRequest struct {
@@ -10893,7 +11092,7 @@ type SetTenantStatusRequest struct {
 
 func (x *SetTenantStatusRequest) Reset() {
 	*x = SetTenantStatusRequest{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[197]
+	mi := &file_anubis_v1_admin_proto_msgTypes[200]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10905,7 +11104,7 @@ func (x *SetTenantStatusRequest) String() string {
 func (*SetTenantStatusRequest) ProtoMessage() {}
 
 func (x *SetTenantStatusRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[197]
+	mi := &file_anubis_v1_admin_proto_msgTypes[200]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10918,7 +11117,7 @@ func (x *SetTenantStatusRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetTenantStatusRequest.ProtoReflect.Descriptor instead.
 func (*SetTenantStatusRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{197}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{200}
 }
 
 func (x *SetTenantStatusRequest) GetId() string {
@@ -10943,7 +11142,7 @@ type SetTenantStatusResponse struct {
 
 func (x *SetTenantStatusResponse) Reset() {
 	*x = SetTenantStatusResponse{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[198]
+	mi := &file_anubis_v1_admin_proto_msgTypes[201]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10955,7 +11154,7 @@ func (x *SetTenantStatusResponse) String() string {
 func (*SetTenantStatusResponse) ProtoMessage() {}
 
 func (x *SetTenantStatusResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[198]
+	mi := &file_anubis_v1_admin_proto_msgTypes[201]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10968,7 +11167,7 @@ func (x *SetTenantStatusResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetTenantStatusResponse.ProtoReflect.Descriptor instead.
 func (*SetTenantStatusResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{198}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{201}
 }
 
 type GetTenantStatsRequest struct {
@@ -10980,7 +11179,7 @@ type GetTenantStatsRequest struct {
 
 func (x *GetTenantStatsRequest) Reset() {
 	*x = GetTenantStatsRequest{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[199]
+	mi := &file_anubis_v1_admin_proto_msgTypes[202]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10992,7 +11191,7 @@ func (x *GetTenantStatsRequest) String() string {
 func (*GetTenantStatsRequest) ProtoMessage() {}
 
 func (x *GetTenantStatsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[199]
+	mi := &file_anubis_v1_admin_proto_msgTypes[202]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11005,7 +11204,7 @@ func (x *GetTenantStatsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetTenantStatsRequest.ProtoReflect.Descriptor instead.
 func (*GetTenantStatsRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{199}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{202}
 }
 
 func (x *GetTenantStatsRequest) GetId() string {
@@ -11027,7 +11226,7 @@ type GetTenantStatsResponse struct {
 
 func (x *GetTenantStatsResponse) Reset() {
 	*x = GetTenantStatsResponse{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[200]
+	mi := &file_anubis_v1_admin_proto_msgTypes[203]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11039,7 +11238,7 @@ func (x *GetTenantStatsResponse) String() string {
 func (*GetTenantStatsResponse) ProtoMessage() {}
 
 func (x *GetTenantStatsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[200]
+	mi := &file_anubis_v1_admin_proto_msgTypes[203]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11052,7 +11251,7 @@ func (x *GetTenantStatsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetTenantStatsResponse.ProtoReflect.Descriptor instead.
 func (*GetTenantStatsResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{200}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{203}
 }
 
 func (x *GetTenantStatsResponse) GetIdentities() int32 {
@@ -11091,7 +11290,7 @@ type GetDashboardRequest struct {
 
 func (x *GetDashboardRequest) Reset() {
 	*x = GetDashboardRequest{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[201]
+	mi := &file_anubis_v1_admin_proto_msgTypes[204]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11103,7 +11302,7 @@ func (x *GetDashboardRequest) String() string {
 func (*GetDashboardRequest) ProtoMessage() {}
 
 func (x *GetDashboardRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[201]
+	mi := &file_anubis_v1_admin_proto_msgTypes[204]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11116,7 +11315,7 @@ func (x *GetDashboardRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetDashboardRequest.ProtoReflect.Descriptor instead.
 func (*GetDashboardRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{201}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{204}
 }
 
 type RealmIdentityCount struct {
@@ -11130,7 +11329,7 @@ type RealmIdentityCount struct {
 
 func (x *RealmIdentityCount) Reset() {
 	*x = RealmIdentityCount{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[202]
+	mi := &file_anubis_v1_admin_proto_msgTypes[205]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11142,7 +11341,7 @@ func (x *RealmIdentityCount) String() string {
 func (*RealmIdentityCount) ProtoMessage() {}
 
 func (x *RealmIdentityCount) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[202]
+	mi := &file_anubis_v1_admin_proto_msgTypes[205]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11155,7 +11354,7 @@ func (x *RealmIdentityCount) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RealmIdentityCount.ProtoReflect.Descriptor instead.
 func (*RealmIdentityCount) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{202}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{205}
 }
 
 func (x *RealmIdentityCount) GetRealm() string {
@@ -11193,7 +11392,7 @@ type DashboardSignal struct {
 
 func (x *DashboardSignal) Reset() {
 	*x = DashboardSignal{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[203]
+	mi := &file_anubis_v1_admin_proto_msgTypes[206]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11205,7 +11404,7 @@ func (x *DashboardSignal) String() string {
 func (*DashboardSignal) ProtoMessage() {}
 
 func (x *DashboardSignal) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[203]
+	mi := &file_anubis_v1_admin_proto_msgTypes[206]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11218,7 +11417,7 @@ func (x *DashboardSignal) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DashboardSignal.ProtoReflect.Descriptor instead.
 func (*DashboardSignal) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{203}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{206}
 }
 
 func (x *DashboardSignal) GetKind() string {
@@ -11272,7 +11471,7 @@ type GetDashboardResponse struct {
 
 func (x *GetDashboardResponse) Reset() {
 	*x = GetDashboardResponse{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[204]
+	mi := &file_anubis_v1_admin_proto_msgTypes[207]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11284,7 +11483,7 @@ func (x *GetDashboardResponse) String() string {
 func (*GetDashboardResponse) ProtoMessage() {}
 
 func (x *GetDashboardResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[204]
+	mi := &file_anubis_v1_admin_proto_msgTypes[207]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11297,7 +11496,7 @@ func (x *GetDashboardResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetDashboardResponse.ProtoReflect.Descriptor instead.
 func (*GetDashboardResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{204}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{207}
 }
 
 func (x *GetDashboardResponse) GetIdentitiesByRealm() []*RealmIdentityCount {
@@ -11351,7 +11550,7 @@ type GetScopeNodeRequest struct {
 
 func (x *GetScopeNodeRequest) Reset() {
 	*x = GetScopeNodeRequest{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[205]
+	mi := &file_anubis_v1_admin_proto_msgTypes[208]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11363,7 +11562,7 @@ func (x *GetScopeNodeRequest) String() string {
 func (*GetScopeNodeRequest) ProtoMessage() {}
 
 func (x *GetScopeNodeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[205]
+	mi := &file_anubis_v1_admin_proto_msgTypes[208]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11376,7 +11575,7 @@ func (x *GetScopeNodeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetScopeNodeRequest.ProtoReflect.Descriptor instead.
 func (*GetScopeNodeRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{205}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{208}
 }
 
 func (x *GetScopeNodeRequest) GetId() string {
@@ -11395,7 +11594,7 @@ type GetScopeNodesRequest struct {
 
 func (x *GetScopeNodesRequest) Reset() {
 	*x = GetScopeNodesRequest{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[206]
+	mi := &file_anubis_v1_admin_proto_msgTypes[209]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11407,7 +11606,7 @@ func (x *GetScopeNodesRequest) String() string {
 func (*GetScopeNodesRequest) ProtoMessage() {}
 
 func (x *GetScopeNodesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[206]
+	mi := &file_anubis_v1_admin_proto_msgTypes[209]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11420,7 +11619,7 @@ func (x *GetScopeNodesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetScopeNodesRequest.ProtoReflect.Descriptor instead.
 func (*GetScopeNodesRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{206}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{209}
 }
 
 func (x *GetScopeNodesRequest) GetIds() []string {
@@ -11439,7 +11638,7 @@ type GetScopeNodesResponse struct {
 
 func (x *GetScopeNodesResponse) Reset() {
 	*x = GetScopeNodesResponse{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[207]
+	mi := &file_anubis_v1_admin_proto_msgTypes[210]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11451,7 +11650,7 @@ func (x *GetScopeNodesResponse) String() string {
 func (*GetScopeNodesResponse) ProtoMessage() {}
 
 func (x *GetScopeNodesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[207]
+	mi := &file_anubis_v1_admin_proto_msgTypes[210]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11464,7 +11663,7 @@ func (x *GetScopeNodesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetScopeNodesResponse.ProtoReflect.Descriptor instead.
 func (*GetScopeNodesResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{207}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{210}
 }
 
 func (x *GetScopeNodesResponse) GetNodes() []*ScopeNode {
@@ -11483,7 +11682,7 @@ type GetScopeNodeResponse struct {
 
 func (x *GetScopeNodeResponse) Reset() {
 	*x = GetScopeNodeResponse{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[208]
+	mi := &file_anubis_v1_admin_proto_msgTypes[211]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11495,7 +11694,7 @@ func (x *GetScopeNodeResponse) String() string {
 func (*GetScopeNodeResponse) ProtoMessage() {}
 
 func (x *GetScopeNodeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[208]
+	mi := &file_anubis_v1_admin_proto_msgTypes[211]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11508,7 +11707,7 @@ func (x *GetScopeNodeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetScopeNodeResponse.ProtoReflect.Descriptor instead.
 func (*GetScopeNodeResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{208}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{211}
 }
 
 func (x *GetScopeNodeResponse) GetNode() *ScopeNode {
@@ -11527,7 +11726,7 @@ type ScopeAncestorsRequest struct {
 
 func (x *ScopeAncestorsRequest) Reset() {
 	*x = ScopeAncestorsRequest{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[209]
+	mi := &file_anubis_v1_admin_proto_msgTypes[212]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11539,7 +11738,7 @@ func (x *ScopeAncestorsRequest) String() string {
 func (*ScopeAncestorsRequest) ProtoMessage() {}
 
 func (x *ScopeAncestorsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[209]
+	mi := &file_anubis_v1_admin_proto_msgTypes[212]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11552,7 +11751,7 @@ func (x *ScopeAncestorsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ScopeAncestorsRequest.ProtoReflect.Descriptor instead.
 func (*ScopeAncestorsRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{209}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{212}
 }
 
 func (x *ScopeAncestorsRequest) GetId() string {
@@ -11572,7 +11771,7 @@ type ScopeAncestor struct {
 
 func (x *ScopeAncestor) Reset() {
 	*x = ScopeAncestor{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[210]
+	mi := &file_anubis_v1_admin_proto_msgTypes[213]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11584,7 +11783,7 @@ func (x *ScopeAncestor) String() string {
 func (*ScopeAncestor) ProtoMessage() {}
 
 func (x *ScopeAncestor) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[210]
+	mi := &file_anubis_v1_admin_proto_msgTypes[213]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11597,7 +11796,7 @@ func (x *ScopeAncestor) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ScopeAncestor.ProtoReflect.Descriptor instead.
 func (*ScopeAncestor) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{210}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{213}
 }
 
 func (x *ScopeAncestor) GetNode() *ScopeNode {
@@ -11623,7 +11822,7 @@ type ScopeAncestorsResponse struct {
 
 func (x *ScopeAncestorsResponse) Reset() {
 	*x = ScopeAncestorsResponse{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[211]
+	mi := &file_anubis_v1_admin_proto_msgTypes[214]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11635,7 +11834,7 @@ func (x *ScopeAncestorsResponse) String() string {
 func (*ScopeAncestorsResponse) ProtoMessage() {}
 
 func (x *ScopeAncestorsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[211]
+	mi := &file_anubis_v1_admin_proto_msgTypes[214]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11648,7 +11847,7 @@ func (x *ScopeAncestorsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ScopeAncestorsResponse.ProtoReflect.Descriptor instead.
 func (*ScopeAncestorsResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{211}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{214}
 }
 
 func (x *ScopeAncestorsResponse) GetAncestors() []*ScopeAncestor {
@@ -11673,7 +11872,7 @@ type SearchGrantsRequest struct {
 
 func (x *SearchGrantsRequest) Reset() {
 	*x = SearchGrantsRequest{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[212]
+	mi := &file_anubis_v1_admin_proto_msgTypes[215]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11685,7 +11884,7 @@ func (x *SearchGrantsRequest) String() string {
 func (*SearchGrantsRequest) ProtoMessage() {}
 
 func (x *SearchGrantsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[212]
+	mi := &file_anubis_v1_admin_proto_msgTypes[215]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11698,7 +11897,7 @@ func (x *SearchGrantsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SearchGrantsRequest.ProtoReflect.Descriptor instead.
 func (*SearchGrantsRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{212}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{215}
 }
 
 func (x *SearchGrantsRequest) GetQuery() string {
@@ -11763,7 +11962,7 @@ type SearchGrantsResponse struct {
 
 func (x *SearchGrantsResponse) Reset() {
 	*x = SearchGrantsResponse{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[213]
+	mi := &file_anubis_v1_admin_proto_msgTypes[216]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11775,7 +11974,7 @@ func (x *SearchGrantsResponse) String() string {
 func (*SearchGrantsResponse) ProtoMessage() {}
 
 func (x *SearchGrantsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[213]
+	mi := &file_anubis_v1_admin_proto_msgTypes[216]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11788,7 +11987,7 @@ func (x *SearchGrantsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SearchGrantsResponse.ProtoReflect.Descriptor instead.
 func (*SearchGrantsResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{213}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{216}
 }
 
 func (x *SearchGrantsResponse) GetGrants() []*Grant {
@@ -11822,7 +12021,7 @@ type SetOperatorStatusRequest struct {
 
 func (x *SetOperatorStatusRequest) Reset() {
 	*x = SetOperatorStatusRequest{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[214]
+	mi := &file_anubis_v1_admin_proto_msgTypes[217]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11834,7 +12033,7 @@ func (x *SetOperatorStatusRequest) String() string {
 func (*SetOperatorStatusRequest) ProtoMessage() {}
 
 func (x *SetOperatorStatusRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[214]
+	mi := &file_anubis_v1_admin_proto_msgTypes[217]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11847,7 +12046,7 @@ func (x *SetOperatorStatusRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetOperatorStatusRequest.ProtoReflect.Descriptor instead.
 func (*SetOperatorStatusRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{214}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{217}
 }
 
 func (x *SetOperatorStatusRequest) GetOperatorId() string {
@@ -11872,7 +12071,7 @@ type SetOperatorStatusResponse struct {
 
 func (x *SetOperatorStatusResponse) Reset() {
 	*x = SetOperatorStatusResponse{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[215]
+	mi := &file_anubis_v1_admin_proto_msgTypes[218]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11884,7 +12083,7 @@ func (x *SetOperatorStatusResponse) String() string {
 func (*SetOperatorStatusResponse) ProtoMessage() {}
 
 func (x *SetOperatorStatusResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[215]
+	mi := &file_anubis_v1_admin_proto_msgTypes[218]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11897,7 +12096,7 @@ func (x *SetOperatorStatusResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetOperatorStatusResponse.ProtoReflect.Descriptor instead.
 func (*SetOperatorStatusResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{215}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{218}
 }
 
 type ApiKey struct {
@@ -11918,7 +12117,7 @@ type ApiKey struct {
 
 func (x *ApiKey) Reset() {
 	*x = ApiKey{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[216]
+	mi := &file_anubis_v1_admin_proto_msgTypes[219]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -11930,7 +12129,7 @@ func (x *ApiKey) String() string {
 func (*ApiKey) ProtoMessage() {}
 
 func (x *ApiKey) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[216]
+	mi := &file_anubis_v1_admin_proto_msgTypes[219]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -11943,7 +12142,7 @@ func (x *ApiKey) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ApiKey.ProtoReflect.Descriptor instead.
 func (*ApiKey) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{216}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{219}
 }
 
 func (x *ApiKey) GetId() string {
@@ -12010,7 +12209,7 @@ type ListApiKeysRequest struct {
 
 func (x *ListApiKeysRequest) Reset() {
 	*x = ListApiKeysRequest{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[217]
+	mi := &file_anubis_v1_admin_proto_msgTypes[220]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12022,7 +12221,7 @@ func (x *ListApiKeysRequest) String() string {
 func (*ListApiKeysRequest) ProtoMessage() {}
 
 func (x *ListApiKeysRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[217]
+	mi := &file_anubis_v1_admin_proto_msgTypes[220]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12035,7 +12234,7 @@ func (x *ListApiKeysRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListApiKeysRequest.ProtoReflect.Descriptor instead.
 func (*ListApiKeysRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{217}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{220}
 }
 
 type ListApiKeysResponse struct {
@@ -12047,7 +12246,7 @@ type ListApiKeysResponse struct {
 
 func (x *ListApiKeysResponse) Reset() {
 	*x = ListApiKeysResponse{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[218]
+	mi := &file_anubis_v1_admin_proto_msgTypes[221]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12059,7 +12258,7 @@ func (x *ListApiKeysResponse) String() string {
 func (*ListApiKeysResponse) ProtoMessage() {}
 
 func (x *ListApiKeysResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[218]
+	mi := &file_anubis_v1_admin_proto_msgTypes[221]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12072,7 +12271,7 @@ func (x *ListApiKeysResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListApiKeysResponse.ProtoReflect.Descriptor instead.
 func (*ListApiKeysResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{218}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{221}
 }
 
 func (x *ListApiKeysResponse) GetKeys() []*ApiKey {
@@ -12092,7 +12291,7 @@ type CreateApiKeyRequest struct {
 
 func (x *CreateApiKeyRequest) Reset() {
 	*x = CreateApiKeyRequest{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[219]
+	mi := &file_anubis_v1_admin_proto_msgTypes[222]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12104,7 +12303,7 @@ func (x *CreateApiKeyRequest) String() string {
 func (*CreateApiKeyRequest) ProtoMessage() {}
 
 func (x *CreateApiKeyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[219]
+	mi := &file_anubis_v1_admin_proto_msgTypes[222]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12117,7 +12316,7 @@ func (x *CreateApiKeyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateApiKeyRequest.ProtoReflect.Descriptor instead.
 func (*CreateApiKeyRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{219}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{222}
 }
 
 func (x *CreateApiKeyRequest) GetLabel() string {
@@ -12146,7 +12345,7 @@ type CreateApiKeyResponse struct {
 
 func (x *CreateApiKeyResponse) Reset() {
 	*x = CreateApiKeyResponse{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[220]
+	mi := &file_anubis_v1_admin_proto_msgTypes[223]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12158,7 +12357,7 @@ func (x *CreateApiKeyResponse) String() string {
 func (*CreateApiKeyResponse) ProtoMessage() {}
 
 func (x *CreateApiKeyResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[220]
+	mi := &file_anubis_v1_admin_proto_msgTypes[223]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12171,7 +12370,7 @@ func (x *CreateApiKeyResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateApiKeyResponse.ProtoReflect.Descriptor instead.
 func (*CreateApiKeyResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{220}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{223}
 }
 
 func (x *CreateApiKeyResponse) GetApiKey() string {
@@ -12204,7 +12403,7 @@ type RevokeApiKeyRequest struct {
 
 func (x *RevokeApiKeyRequest) Reset() {
 	*x = RevokeApiKeyRequest{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[221]
+	mi := &file_anubis_v1_admin_proto_msgTypes[224]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12216,7 +12415,7 @@ func (x *RevokeApiKeyRequest) String() string {
 func (*RevokeApiKeyRequest) ProtoMessage() {}
 
 func (x *RevokeApiKeyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[221]
+	mi := &file_anubis_v1_admin_proto_msgTypes[224]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12229,7 +12428,7 @@ func (x *RevokeApiKeyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RevokeApiKeyRequest.ProtoReflect.Descriptor instead.
 func (*RevokeApiKeyRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{221}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{224}
 }
 
 func (x *RevokeApiKeyRequest) GetId() string {
@@ -12247,7 +12446,7 @@ type RevokeApiKeyResponse struct {
 
 func (x *RevokeApiKeyResponse) Reset() {
 	*x = RevokeApiKeyResponse{}
-	mi := &file_anubis_v1_admin_proto_msgTypes[222]
+	mi := &file_anubis_v1_admin_proto_msgTypes[225]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -12259,7 +12458,7 @@ func (x *RevokeApiKeyResponse) String() string {
 func (*RevokeApiKeyResponse) ProtoMessage() {}
 
 func (x *RevokeApiKeyResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_admin_proto_msgTypes[222]
+	mi := &file_anubis_v1_admin_proto_msgTypes[225]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -12272,7 +12471,7 @@ func (x *RevokeApiKeyResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RevokeApiKeyResponse.ProtoReflect.Descriptor instead.
 func (*RevokeApiKeyResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{222}
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{225}
 }
 
 var File_anubis_v1_admin_proto protoreflect.FileDescriptor
@@ -12521,7 +12720,24 @@ const file_anubis_v1_admin_proto_rawDesc = "" +
 	"\x03dry\x18\x03 \x01(\bR\x03dry\"2\n" +
 	"\x0fRunSyncResponse\x12\x1f\n" +
 	"\vreport_json\x18\x01 \x01(\tR\n" +
-	"reportJson\"\xa4\x02\n" +
+	"reportJson\"H\n" +
+	"\x13ListSyncRunsRequest\x12\x1b\n" +
+	"\tsource_id\x18\x01 \x01(\tR\bsourceId\x12\x14\n" +
+	"\x05limit\x18\x02 \x01(\x05R\x05limit\"\xde\x01\n" +
+	"\aSyncRun\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1b\n" +
+	"\tsource_id\x18\x02 \x01(\tR\bsourceId\x12\x1b\n" +
+	"\taxis_code\x18\x03 \x01(\tR\baxisCode\x12\x1d\n" +
+	"\n" +
+	"started_at\x18\x04 \x01(\x03R\tstartedAt\x12\x1f\n" +
+	"\vfinished_at\x18\x05 \x01(\x03R\n" +
+	"finishedAt\x12\x10\n" +
+	"\x03dry\x18\x06 \x01(\bR\x03dry\x12\x16\n" +
+	"\x06status\x18\a \x01(\tR\x06status\x12\x1f\n" +
+	"\vreport_json\x18\b \x01(\tR\n" +
+	"reportJson\">\n" +
+	"\x14ListSyncRunsResponse\x12&\n" +
+	"\x04runs\x18\x01 \x03(\v2\x12.anubis.v1.SyncRunR\x04runs\"\xa4\x02\n" +
 	"\x04Role\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12 \n" +
@@ -13148,7 +13364,7 @@ const file_anubis_v1_admin_proto_rawDesc = "" +
 	"\x10RevokeCredential\x12\".anubis.v1.RevokeCredentialRequest\x1a#.anubis.v1.RevokeCredentialResponse\x12O\n" +
 	"\fListConsents\x12\x1e.anubis.v1.ListConsentsRequest\x1a\x1f.anubis.v1.ListConsentsResponse\x12R\n" +
 	"\rRecordConsent\x12\x1f.anubis.v1.RecordConsentRequest\x1a .anubis.v1.RecordConsentResponse\x12X\n" +
-	"\x0fWithdrawConsent\x12!.anubis.v1.WithdrawConsentRequest\x1a\".anubis.v1.WithdrawConsentResponse2\x9d\r\n" +
+	"\x0fWithdrawConsent\x12!.anubis.v1.WithdrawConsentRequest\x1a\".anubis.v1.WithdrawConsentResponse2\xee\r\n" +
 	"\x11ScopeAdminService\x12R\n" +
 	"\rListScopeAxes\x12\x1f.anubis.v1.ListScopeAxesRequest\x1a .anubis.v1.ListScopeAxesResponse\x12X\n" +
 	"\x0fCreateScopeAxis\x12!.anubis.v1.CreateScopeAxisRequest\x1a\".anubis.v1.CreateScopeAxisResponse\x12X\n" +
@@ -13168,7 +13384,8 @@ const file_anubis_v1_admin_proto_rawDesc = "" +
 	"\x0fListSyncSources\x12!.anubis.v1.ListSyncSourcesRequest\x1a\".anubis.v1.ListSyncSourcesResponse\x12[\n" +
 	"\x10CreateSyncSource\x12\".anubis.v1.CreateSyncSourceRequest\x1a#.anubis.v1.CreateSyncSourceResponse\x12[\n" +
 	"\x10UpdateSyncSource\x12\".anubis.v1.UpdateSyncSourceRequest\x1a#.anubis.v1.UpdateSyncSourceResponse\x12@\n" +
-	"\aRunSync\x12\x19.anubis.v1.RunSyncRequest\x1a\x1a.anubis.v1.RunSyncResponse2\xf1\n" +
+	"\aRunSync\x12\x19.anubis.v1.RunSyncRequest\x1a\x1a.anubis.v1.RunSyncResponse\x12O\n" +
+	"\fListSyncRuns\x12\x1e.anubis.v1.ListSyncRunsRequest\x1a\x1f.anubis.v1.ListSyncRunsResponse2\xf1\n" +
 	"\n" +
 	"\x11AuthzAdminService\x12F\n" +
 	"\tListRoles\x12\x1b.anubis.v1.ListRolesRequest\x1a\x1c.anubis.v1.ListRolesResponse\x12I\n" +
@@ -13256,7 +13473,7 @@ func file_anubis_v1_admin_proto_rawDescGZIP() []byte {
 	return file_anubis_v1_admin_proto_rawDescData
 }
 
-var file_anubis_v1_admin_proto_msgTypes = make([]protoimpl.MessageInfo, 223)
+var file_anubis_v1_admin_proto_msgTypes = make([]protoimpl.MessageInfo, 226)
 var file_anubis_v1_admin_proto_goTypes = []any{
 	(*Identity)(nil),                       // 0: anubis.v1.Identity
 	(*ListIdentitiesRequest)(nil),          // 1: anubis.v1.ListIdentitiesRequest
@@ -13326,161 +13543,164 @@ var file_anubis_v1_admin_proto_goTypes = []any{
 	(*UpdateSyncSourceResponse)(nil),       // 65: anubis.v1.UpdateSyncSourceResponse
 	(*RunSyncRequest)(nil),                 // 66: anubis.v1.RunSyncRequest
 	(*RunSyncResponse)(nil),                // 67: anubis.v1.RunSyncResponse
-	(*Role)(nil),                           // 68: anubis.v1.Role
-	(*ListRolesRequest)(nil),               // 69: anubis.v1.ListRolesRequest
-	(*ListRolesResponse)(nil),              // 70: anubis.v1.ListRolesResponse
-	(*CreateRoleRequest)(nil),              // 71: anubis.v1.CreateRoleRequest
-	(*CreateRoleResponse)(nil),             // 72: anubis.v1.CreateRoleResponse
-	(*UpdateRoleRequest)(nil),              // 73: anubis.v1.UpdateRoleRequest
-	(*UpdateRoleResponse)(nil),             // 74: anubis.v1.UpdateRoleResponse
-	(*GetRoleEffectiveRequest)(nil),        // 75: anubis.v1.GetRoleEffectiveRequest
-	(*EffectivePermission)(nil),            // 76: anubis.v1.EffectivePermission
-	(*GetRoleEffectiveResponse)(nil),       // 77: anubis.v1.GetRoleEffectiveResponse
-	(*Permission)(nil),                     // 78: anubis.v1.Permission
-	(*ListPermissionsRequest)(nil),         // 79: anubis.v1.ListPermissionsRequest
-	(*ListPermissionsResponse)(nil),        // 80: anubis.v1.ListPermissionsResponse
-	(*GrantScope)(nil),                     // 81: anubis.v1.GrantScope
-	(*Grant)(nil),                          // 82: anubis.v1.Grant
-	(*ListGrantsRequest)(nil),              // 83: anubis.v1.ListGrantsRequest
-	(*ListGrantsResponse)(nil),             // 84: anubis.v1.ListGrantsResponse
-	(*CreateGrantRequest)(nil),             // 85: anubis.v1.CreateGrantRequest
-	(*CreateGrantResponse)(nil),            // 86: anubis.v1.CreateGrantResponse
-	(*RevokeGrantRequest)(nil),             // 87: anubis.v1.RevokeGrantRequest
-	(*RevokeGrantResponse)(nil),            // 88: anubis.v1.RevokeGrantResponse
-	(*MembershipEntry)(nil),                // 89: anubis.v1.MembershipEntry
-	(*Membership)(nil),                     // 90: anubis.v1.Membership
-	(*ListMembershipsRequest)(nil),         // 91: anubis.v1.ListMembershipsRequest
-	(*ListMembershipsResponse)(nil),        // 92: anubis.v1.ListMembershipsResponse
-	(*CreateMembershipRequest)(nil),        // 93: anubis.v1.CreateMembershipRequest
-	(*CreateMembershipResponse)(nil),       // 94: anubis.v1.CreateMembershipResponse
-	(*SetMembershipEntriesRequest)(nil),    // 95: anubis.v1.SetMembershipEntriesRequest
-	(*SetMembershipEntriesResponse)(nil),   // 96: anubis.v1.SetMembershipEntriesResponse
-	(*AssignMembershipRequest)(nil),        // 97: anubis.v1.AssignMembershipRequest
-	(*AssignMembershipResponse)(nil),       // 98: anubis.v1.AssignMembershipResponse
-	(*UnassignMembershipRequest)(nil),      // 99: anubis.v1.UnassignMembershipRequest
-	(*UnassignMembershipResponse)(nil),     // 100: anubis.v1.UnassignMembershipResponse
-	(*ResyncMembershipRequest)(nil),        // 101: anubis.v1.ResyncMembershipRequest
-	(*ResyncMembershipResponse)(nil),       // 102: anubis.v1.ResyncMembershipResponse
-	(*ApplyManifestRequest)(nil),           // 103: anubis.v1.ApplyManifestRequest
-	(*ApplyManifestResponse)(nil),          // 104: anubis.v1.ApplyManifestResponse
-	(*AuthPage)(nil),                       // 105: anubis.v1.AuthPage
-	(*ListAuthPagesRequest)(nil),           // 106: anubis.v1.ListAuthPagesRequest
-	(*ListAuthPagesResponse)(nil),          // 107: anubis.v1.ListAuthPagesResponse
-	(*GetAuthPageRequest)(nil),             // 108: anubis.v1.GetAuthPageRequest
-	(*GetAuthPageResponse)(nil),            // 109: anubis.v1.GetAuthPageResponse
-	(*CreateAuthPageRequest)(nil),          // 110: anubis.v1.CreateAuthPageRequest
-	(*CreateAuthPageResponse)(nil),         // 111: anubis.v1.CreateAuthPageResponse
-	(*UpdateAuthPageRequest)(nil),          // 112: anubis.v1.UpdateAuthPageRequest
-	(*UpdateAuthPageResponse)(nil),         // 113: anubis.v1.UpdateAuthPageResponse
-	(*DeleteAuthPageRequest)(nil),          // 114: anubis.v1.DeleteAuthPageRequest
-	(*DeleteAuthPageResponse)(nil),         // 115: anubis.v1.DeleteAuthPageResponse
-	(*SetDefaultAuthPageRequest)(nil),      // 116: anubis.v1.SetDefaultAuthPageRequest
-	(*SetDefaultAuthPageResponse)(nil),     // 117: anubis.v1.SetDefaultAuthPageResponse
-	(*PreviewAuthPageRequest)(nil),         // 118: anubis.v1.PreviewAuthPageRequest
-	(*PreviewAuthPageResponse)(nil),        // 119: anubis.v1.PreviewAuthPageResponse
-	(*Tenant)(nil),                         // 120: anubis.v1.Tenant
-	(*ListTenantsRequest)(nil),             // 121: anubis.v1.ListTenantsRequest
-	(*ListTenantsResponse)(nil),            // 122: anubis.v1.ListTenantsResponse
-	(*CreateTenantRequest)(nil),            // 123: anubis.v1.CreateTenantRequest
-	(*CreateTenantResponse)(nil),           // 124: anubis.v1.CreateTenantResponse
-	(*Realm)(nil),                          // 125: anubis.v1.Realm
-	(*ListRealmsRequest)(nil),              // 126: anubis.v1.ListRealmsRequest
-	(*ListRealmsResponse)(nil),             // 127: anubis.v1.ListRealmsResponse
-	(*CreateRealmRequest)(nil),             // 128: anubis.v1.CreateRealmRequest
-	(*CreateRealmResponse)(nil),            // 129: anubis.v1.CreateRealmResponse
-	(*UpdateRealmRequest)(nil),             // 130: anubis.v1.UpdateRealmRequest
-	(*UpdateRealmResponse)(nil),            // 131: anubis.v1.UpdateRealmResponse
-	(*RealmCategory)(nil),                  // 132: anubis.v1.RealmCategory
-	(*ListRealmCategoriesRequest)(nil),     // 133: anubis.v1.ListRealmCategoriesRequest
-	(*ListRealmCategoriesResponse)(nil),    // 134: anubis.v1.ListRealmCategoriesResponse
-	(*CreateRealmCategoryRequest)(nil),     // 135: anubis.v1.CreateRealmCategoryRequest
-	(*CreateRealmCategoryResponse)(nil),    // 136: anubis.v1.CreateRealmCategoryResponse
-	(*Application)(nil),                    // 137: anubis.v1.Application
-	(*ListApplicationsRequest)(nil),        // 138: anubis.v1.ListApplicationsRequest
-	(*ListApplicationsResponse)(nil),       // 139: anubis.v1.ListApplicationsResponse
-	(*CreateApplicationRequest)(nil),       // 140: anubis.v1.CreateApplicationRequest
-	(*CreateApplicationResponse)(nil),      // 141: anubis.v1.CreateApplicationResponse
-	(*UpdateApplicationRequest)(nil),       // 142: anubis.v1.UpdateApplicationRequest
-	(*UpdateApplicationResponse)(nil),      // 143: anubis.v1.UpdateApplicationResponse
-	(*RotateClientSecretRequest)(nil),      // 144: anubis.v1.RotateClientSecretRequest
-	(*RotateClientSecretResponse)(nil),     // 145: anubis.v1.RotateClientSecretResponse
-	(*RoutePolicy)(nil),                    // 146: anubis.v1.RoutePolicy
-	(*ListRoutePoliciesRequest)(nil),       // 147: anubis.v1.ListRoutePoliciesRequest
-	(*ListRoutePoliciesResponse)(nil),      // 148: anubis.v1.ListRoutePoliciesResponse
-	(*AuditEntry)(nil),                     // 149: anubis.v1.AuditEntry
-	(*QueryAuditRequest)(nil),              // 150: anubis.v1.QueryAuditRequest
-	(*QueryAuditResponse)(nil),             // 151: anubis.v1.QueryAuditResponse
-	(*VerifyAuditChainRequest)(nil),        // 152: anubis.v1.VerifyAuditChainRequest
-	(*VerifyAuditChainResponse)(nil),       // 153: anubis.v1.VerifyAuditChainResponse
-	(*SigningKey)(nil),                     // 154: anubis.v1.SigningKey
-	(*ListSigningKeysRequest)(nil),         // 155: anubis.v1.ListSigningKeysRequest
-	(*ListSigningKeysResponse)(nil),        // 156: anubis.v1.ListSigningKeysResponse
-	(*RotateSigningKeyRequest)(nil),        // 157: anubis.v1.RotateSigningKeyRequest
-	(*RotateSigningKeyResponse)(nil),       // 158: anubis.v1.RotateSigningKeyResponse
-	(*GetCatalogVersionRequest)(nil),       // 159: anubis.v1.GetCatalogVersionRequest
-	(*GetCatalogVersionResponse)(nil),      // 160: anubis.v1.GetCatalogVersionResponse
-	(*GetSigninPageRequest)(nil),           // 161: anubis.v1.GetSigninPageRequest
-	(*GetSigninPageResponse)(nil),          // 162: anubis.v1.GetSigninPageResponse
-	(*PutSigninPageRequest)(nil),           // 163: anubis.v1.PutSigninPageRequest
-	(*PutSigninPageResponse)(nil),          // 164: anubis.v1.PutSigninPageResponse
-	(*DownloadImportTemplateRequest)(nil),  // 165: anubis.v1.DownloadImportTemplateRequest
-	(*DownloadImportTemplateResponse)(nil), // 166: anubis.v1.DownloadImportTemplateResponse
-	(*ImportWorkbookRequest)(nil),          // 167: anubis.v1.ImportWorkbookRequest
-	(*ImportIssue)(nil),                    // 168: anubis.v1.ImportIssue
-	(*ImportWorkbookResponse)(nil),         // 169: anubis.v1.ImportWorkbookResponse
-	(*OperatorAssignment)(nil),             // 170: anubis.v1.OperatorAssignment
-	(*Operator)(nil),                       // 171: anubis.v1.Operator
-	(*ListOperatorsRequest)(nil),           // 172: anubis.v1.ListOperatorsRequest
-	(*ListOperatorsResponse)(nil),          // 173: anubis.v1.ListOperatorsResponse
-	(*AssignOperatorRequest)(nil),          // 174: anubis.v1.AssignOperatorRequest
-	(*AssignOperatorResponse)(nil),         // 175: anubis.v1.AssignOperatorResponse
-	(*RevokeAssignmentRequest)(nil),        // 176: anubis.v1.RevokeAssignmentRequest
-	(*RevokeAssignmentResponse)(nil),       // 177: anubis.v1.RevokeAssignmentResponse
-	(*CreateOperatorRequest)(nil),          // 178: anubis.v1.CreateOperatorRequest
-	(*CreateOperatorResponse)(nil),         // 179: anubis.v1.CreateOperatorResponse
-	(*PlatformLoginRequest)(nil),           // 180: anubis.v1.PlatformLoginRequest
-	(*PlatformLoginResponse)(nil),          // 181: anubis.v1.PlatformLoginResponse
-	(*PlatformRefreshRequest)(nil),         // 182: anubis.v1.PlatformRefreshRequest
-	(*PlatformRefreshResponse)(nil),        // 183: anubis.v1.PlatformRefreshResponse
-	(*PlatformLogoutRequest)(nil),          // 184: anubis.v1.PlatformLogoutRequest
-	(*PlatformLogoutResponse)(nil),         // 185: anubis.v1.PlatformLogoutResponse
-	(*PlatformVerifyMfaRequest)(nil),       // 186: anubis.v1.PlatformVerifyMfaRequest
-	(*PlatformVerifyMfaResponse)(nil),      // 187: anubis.v1.PlatformVerifyMfaResponse
-	(*BeginTotpEnrolmentRequest)(nil),      // 188: anubis.v1.BeginTotpEnrolmentRequest
-	(*BeginTotpEnrolmentResponse)(nil),     // 189: anubis.v1.BeginTotpEnrolmentResponse
-	(*ConfirmTotpEnrolmentRequest)(nil),    // 190: anubis.v1.ConfirmTotpEnrolmentRequest
-	(*ConfirmTotpEnrolmentResponse)(nil),   // 191: anubis.v1.ConfirmTotpEnrolmentResponse
-	(*MyTenantsRequest)(nil),               // 192: anubis.v1.MyTenantsRequest
-	(*MyTenant)(nil),                       // 193: anubis.v1.MyTenant
-	(*MyTenantsResponse)(nil),              // 194: anubis.v1.MyTenantsResponse
-	(*UpdateTenantRequest)(nil),            // 195: anubis.v1.UpdateTenantRequest
-	(*UpdateTenantResponse)(nil),           // 196: anubis.v1.UpdateTenantResponse
-	(*SetTenantStatusRequest)(nil),         // 197: anubis.v1.SetTenantStatusRequest
-	(*SetTenantStatusResponse)(nil),        // 198: anubis.v1.SetTenantStatusResponse
-	(*GetTenantStatsRequest)(nil),          // 199: anubis.v1.GetTenantStatsRequest
-	(*GetTenantStatsResponse)(nil),         // 200: anubis.v1.GetTenantStatsResponse
-	(*GetDashboardRequest)(nil),            // 201: anubis.v1.GetDashboardRequest
-	(*RealmIdentityCount)(nil),             // 202: anubis.v1.RealmIdentityCount
-	(*DashboardSignal)(nil),                // 203: anubis.v1.DashboardSignal
-	(*GetDashboardResponse)(nil),           // 204: anubis.v1.GetDashboardResponse
-	(*GetScopeNodeRequest)(nil),            // 205: anubis.v1.GetScopeNodeRequest
-	(*GetScopeNodesRequest)(nil),           // 206: anubis.v1.GetScopeNodesRequest
-	(*GetScopeNodesResponse)(nil),          // 207: anubis.v1.GetScopeNodesResponse
-	(*GetScopeNodeResponse)(nil),           // 208: anubis.v1.GetScopeNodeResponse
-	(*ScopeAncestorsRequest)(nil),          // 209: anubis.v1.ScopeAncestorsRequest
-	(*ScopeAncestor)(nil),                  // 210: anubis.v1.ScopeAncestor
-	(*ScopeAncestorsResponse)(nil),         // 211: anubis.v1.ScopeAncestorsResponse
-	(*SearchGrantsRequest)(nil),            // 212: anubis.v1.SearchGrantsRequest
-	(*SearchGrantsResponse)(nil),           // 213: anubis.v1.SearchGrantsResponse
-	(*SetOperatorStatusRequest)(nil),       // 214: anubis.v1.SetOperatorStatusRequest
-	(*SetOperatorStatusResponse)(nil),      // 215: anubis.v1.SetOperatorStatusResponse
-	(*ApiKey)(nil),                         // 216: anubis.v1.ApiKey
-	(*ListApiKeysRequest)(nil),             // 217: anubis.v1.ListApiKeysRequest
-	(*ListApiKeysResponse)(nil),            // 218: anubis.v1.ListApiKeysResponse
-	(*CreateApiKeyRequest)(nil),            // 219: anubis.v1.CreateApiKeyRequest
-	(*CreateApiKeyResponse)(nil),           // 220: anubis.v1.CreateApiKeyResponse
-	(*RevokeApiKeyRequest)(nil),            // 221: anubis.v1.RevokeApiKeyRequest
-	(*RevokeApiKeyResponse)(nil),           // 222: anubis.v1.RevokeApiKeyResponse
+	(*ListSyncRunsRequest)(nil),            // 68: anubis.v1.ListSyncRunsRequest
+	(*SyncRun)(nil),                        // 69: anubis.v1.SyncRun
+	(*ListSyncRunsResponse)(nil),           // 70: anubis.v1.ListSyncRunsResponse
+	(*Role)(nil),                           // 71: anubis.v1.Role
+	(*ListRolesRequest)(nil),               // 72: anubis.v1.ListRolesRequest
+	(*ListRolesResponse)(nil),              // 73: anubis.v1.ListRolesResponse
+	(*CreateRoleRequest)(nil),              // 74: anubis.v1.CreateRoleRequest
+	(*CreateRoleResponse)(nil),             // 75: anubis.v1.CreateRoleResponse
+	(*UpdateRoleRequest)(nil),              // 76: anubis.v1.UpdateRoleRequest
+	(*UpdateRoleResponse)(nil),             // 77: anubis.v1.UpdateRoleResponse
+	(*GetRoleEffectiveRequest)(nil),        // 78: anubis.v1.GetRoleEffectiveRequest
+	(*EffectivePermission)(nil),            // 79: anubis.v1.EffectivePermission
+	(*GetRoleEffectiveResponse)(nil),       // 80: anubis.v1.GetRoleEffectiveResponse
+	(*Permission)(nil),                     // 81: anubis.v1.Permission
+	(*ListPermissionsRequest)(nil),         // 82: anubis.v1.ListPermissionsRequest
+	(*ListPermissionsResponse)(nil),        // 83: anubis.v1.ListPermissionsResponse
+	(*GrantScope)(nil),                     // 84: anubis.v1.GrantScope
+	(*Grant)(nil),                          // 85: anubis.v1.Grant
+	(*ListGrantsRequest)(nil),              // 86: anubis.v1.ListGrantsRequest
+	(*ListGrantsResponse)(nil),             // 87: anubis.v1.ListGrantsResponse
+	(*CreateGrantRequest)(nil),             // 88: anubis.v1.CreateGrantRequest
+	(*CreateGrantResponse)(nil),            // 89: anubis.v1.CreateGrantResponse
+	(*RevokeGrantRequest)(nil),             // 90: anubis.v1.RevokeGrantRequest
+	(*RevokeGrantResponse)(nil),            // 91: anubis.v1.RevokeGrantResponse
+	(*MembershipEntry)(nil),                // 92: anubis.v1.MembershipEntry
+	(*Membership)(nil),                     // 93: anubis.v1.Membership
+	(*ListMembershipsRequest)(nil),         // 94: anubis.v1.ListMembershipsRequest
+	(*ListMembershipsResponse)(nil),        // 95: anubis.v1.ListMembershipsResponse
+	(*CreateMembershipRequest)(nil),        // 96: anubis.v1.CreateMembershipRequest
+	(*CreateMembershipResponse)(nil),       // 97: anubis.v1.CreateMembershipResponse
+	(*SetMembershipEntriesRequest)(nil),    // 98: anubis.v1.SetMembershipEntriesRequest
+	(*SetMembershipEntriesResponse)(nil),   // 99: anubis.v1.SetMembershipEntriesResponse
+	(*AssignMembershipRequest)(nil),        // 100: anubis.v1.AssignMembershipRequest
+	(*AssignMembershipResponse)(nil),       // 101: anubis.v1.AssignMembershipResponse
+	(*UnassignMembershipRequest)(nil),      // 102: anubis.v1.UnassignMembershipRequest
+	(*UnassignMembershipResponse)(nil),     // 103: anubis.v1.UnassignMembershipResponse
+	(*ResyncMembershipRequest)(nil),        // 104: anubis.v1.ResyncMembershipRequest
+	(*ResyncMembershipResponse)(nil),       // 105: anubis.v1.ResyncMembershipResponse
+	(*ApplyManifestRequest)(nil),           // 106: anubis.v1.ApplyManifestRequest
+	(*ApplyManifestResponse)(nil),          // 107: anubis.v1.ApplyManifestResponse
+	(*AuthPage)(nil),                       // 108: anubis.v1.AuthPage
+	(*ListAuthPagesRequest)(nil),           // 109: anubis.v1.ListAuthPagesRequest
+	(*ListAuthPagesResponse)(nil),          // 110: anubis.v1.ListAuthPagesResponse
+	(*GetAuthPageRequest)(nil),             // 111: anubis.v1.GetAuthPageRequest
+	(*GetAuthPageResponse)(nil),            // 112: anubis.v1.GetAuthPageResponse
+	(*CreateAuthPageRequest)(nil),          // 113: anubis.v1.CreateAuthPageRequest
+	(*CreateAuthPageResponse)(nil),         // 114: anubis.v1.CreateAuthPageResponse
+	(*UpdateAuthPageRequest)(nil),          // 115: anubis.v1.UpdateAuthPageRequest
+	(*UpdateAuthPageResponse)(nil),         // 116: anubis.v1.UpdateAuthPageResponse
+	(*DeleteAuthPageRequest)(nil),          // 117: anubis.v1.DeleteAuthPageRequest
+	(*DeleteAuthPageResponse)(nil),         // 118: anubis.v1.DeleteAuthPageResponse
+	(*SetDefaultAuthPageRequest)(nil),      // 119: anubis.v1.SetDefaultAuthPageRequest
+	(*SetDefaultAuthPageResponse)(nil),     // 120: anubis.v1.SetDefaultAuthPageResponse
+	(*PreviewAuthPageRequest)(nil),         // 121: anubis.v1.PreviewAuthPageRequest
+	(*PreviewAuthPageResponse)(nil),        // 122: anubis.v1.PreviewAuthPageResponse
+	(*Tenant)(nil),                         // 123: anubis.v1.Tenant
+	(*ListTenantsRequest)(nil),             // 124: anubis.v1.ListTenantsRequest
+	(*ListTenantsResponse)(nil),            // 125: anubis.v1.ListTenantsResponse
+	(*CreateTenantRequest)(nil),            // 126: anubis.v1.CreateTenantRequest
+	(*CreateTenantResponse)(nil),           // 127: anubis.v1.CreateTenantResponse
+	(*Realm)(nil),                          // 128: anubis.v1.Realm
+	(*ListRealmsRequest)(nil),              // 129: anubis.v1.ListRealmsRequest
+	(*ListRealmsResponse)(nil),             // 130: anubis.v1.ListRealmsResponse
+	(*CreateRealmRequest)(nil),             // 131: anubis.v1.CreateRealmRequest
+	(*CreateRealmResponse)(nil),            // 132: anubis.v1.CreateRealmResponse
+	(*UpdateRealmRequest)(nil),             // 133: anubis.v1.UpdateRealmRequest
+	(*UpdateRealmResponse)(nil),            // 134: anubis.v1.UpdateRealmResponse
+	(*RealmCategory)(nil),                  // 135: anubis.v1.RealmCategory
+	(*ListRealmCategoriesRequest)(nil),     // 136: anubis.v1.ListRealmCategoriesRequest
+	(*ListRealmCategoriesResponse)(nil),    // 137: anubis.v1.ListRealmCategoriesResponse
+	(*CreateRealmCategoryRequest)(nil),     // 138: anubis.v1.CreateRealmCategoryRequest
+	(*CreateRealmCategoryResponse)(nil),    // 139: anubis.v1.CreateRealmCategoryResponse
+	(*Application)(nil),                    // 140: anubis.v1.Application
+	(*ListApplicationsRequest)(nil),        // 141: anubis.v1.ListApplicationsRequest
+	(*ListApplicationsResponse)(nil),       // 142: anubis.v1.ListApplicationsResponse
+	(*CreateApplicationRequest)(nil),       // 143: anubis.v1.CreateApplicationRequest
+	(*CreateApplicationResponse)(nil),      // 144: anubis.v1.CreateApplicationResponse
+	(*UpdateApplicationRequest)(nil),       // 145: anubis.v1.UpdateApplicationRequest
+	(*UpdateApplicationResponse)(nil),      // 146: anubis.v1.UpdateApplicationResponse
+	(*RotateClientSecretRequest)(nil),      // 147: anubis.v1.RotateClientSecretRequest
+	(*RotateClientSecretResponse)(nil),     // 148: anubis.v1.RotateClientSecretResponse
+	(*RoutePolicy)(nil),                    // 149: anubis.v1.RoutePolicy
+	(*ListRoutePoliciesRequest)(nil),       // 150: anubis.v1.ListRoutePoliciesRequest
+	(*ListRoutePoliciesResponse)(nil),      // 151: anubis.v1.ListRoutePoliciesResponse
+	(*AuditEntry)(nil),                     // 152: anubis.v1.AuditEntry
+	(*QueryAuditRequest)(nil),              // 153: anubis.v1.QueryAuditRequest
+	(*QueryAuditResponse)(nil),             // 154: anubis.v1.QueryAuditResponse
+	(*VerifyAuditChainRequest)(nil),        // 155: anubis.v1.VerifyAuditChainRequest
+	(*VerifyAuditChainResponse)(nil),       // 156: anubis.v1.VerifyAuditChainResponse
+	(*SigningKey)(nil),                     // 157: anubis.v1.SigningKey
+	(*ListSigningKeysRequest)(nil),         // 158: anubis.v1.ListSigningKeysRequest
+	(*ListSigningKeysResponse)(nil),        // 159: anubis.v1.ListSigningKeysResponse
+	(*RotateSigningKeyRequest)(nil),        // 160: anubis.v1.RotateSigningKeyRequest
+	(*RotateSigningKeyResponse)(nil),       // 161: anubis.v1.RotateSigningKeyResponse
+	(*GetCatalogVersionRequest)(nil),       // 162: anubis.v1.GetCatalogVersionRequest
+	(*GetCatalogVersionResponse)(nil),      // 163: anubis.v1.GetCatalogVersionResponse
+	(*GetSigninPageRequest)(nil),           // 164: anubis.v1.GetSigninPageRequest
+	(*GetSigninPageResponse)(nil),          // 165: anubis.v1.GetSigninPageResponse
+	(*PutSigninPageRequest)(nil),           // 166: anubis.v1.PutSigninPageRequest
+	(*PutSigninPageResponse)(nil),          // 167: anubis.v1.PutSigninPageResponse
+	(*DownloadImportTemplateRequest)(nil),  // 168: anubis.v1.DownloadImportTemplateRequest
+	(*DownloadImportTemplateResponse)(nil), // 169: anubis.v1.DownloadImportTemplateResponse
+	(*ImportWorkbookRequest)(nil),          // 170: anubis.v1.ImportWorkbookRequest
+	(*ImportIssue)(nil),                    // 171: anubis.v1.ImportIssue
+	(*ImportWorkbookResponse)(nil),         // 172: anubis.v1.ImportWorkbookResponse
+	(*OperatorAssignment)(nil),             // 173: anubis.v1.OperatorAssignment
+	(*Operator)(nil),                       // 174: anubis.v1.Operator
+	(*ListOperatorsRequest)(nil),           // 175: anubis.v1.ListOperatorsRequest
+	(*ListOperatorsResponse)(nil),          // 176: anubis.v1.ListOperatorsResponse
+	(*AssignOperatorRequest)(nil),          // 177: anubis.v1.AssignOperatorRequest
+	(*AssignOperatorResponse)(nil),         // 178: anubis.v1.AssignOperatorResponse
+	(*RevokeAssignmentRequest)(nil),        // 179: anubis.v1.RevokeAssignmentRequest
+	(*RevokeAssignmentResponse)(nil),       // 180: anubis.v1.RevokeAssignmentResponse
+	(*CreateOperatorRequest)(nil),          // 181: anubis.v1.CreateOperatorRequest
+	(*CreateOperatorResponse)(nil),         // 182: anubis.v1.CreateOperatorResponse
+	(*PlatformLoginRequest)(nil),           // 183: anubis.v1.PlatformLoginRequest
+	(*PlatformLoginResponse)(nil),          // 184: anubis.v1.PlatformLoginResponse
+	(*PlatformRefreshRequest)(nil),         // 185: anubis.v1.PlatformRefreshRequest
+	(*PlatformRefreshResponse)(nil),        // 186: anubis.v1.PlatformRefreshResponse
+	(*PlatformLogoutRequest)(nil),          // 187: anubis.v1.PlatformLogoutRequest
+	(*PlatformLogoutResponse)(nil),         // 188: anubis.v1.PlatformLogoutResponse
+	(*PlatformVerifyMfaRequest)(nil),       // 189: anubis.v1.PlatformVerifyMfaRequest
+	(*PlatformVerifyMfaResponse)(nil),      // 190: anubis.v1.PlatformVerifyMfaResponse
+	(*BeginTotpEnrolmentRequest)(nil),      // 191: anubis.v1.BeginTotpEnrolmentRequest
+	(*BeginTotpEnrolmentResponse)(nil),     // 192: anubis.v1.BeginTotpEnrolmentResponse
+	(*ConfirmTotpEnrolmentRequest)(nil),    // 193: anubis.v1.ConfirmTotpEnrolmentRequest
+	(*ConfirmTotpEnrolmentResponse)(nil),   // 194: anubis.v1.ConfirmTotpEnrolmentResponse
+	(*MyTenantsRequest)(nil),               // 195: anubis.v1.MyTenantsRequest
+	(*MyTenant)(nil),                       // 196: anubis.v1.MyTenant
+	(*MyTenantsResponse)(nil),              // 197: anubis.v1.MyTenantsResponse
+	(*UpdateTenantRequest)(nil),            // 198: anubis.v1.UpdateTenantRequest
+	(*UpdateTenantResponse)(nil),           // 199: anubis.v1.UpdateTenantResponse
+	(*SetTenantStatusRequest)(nil),         // 200: anubis.v1.SetTenantStatusRequest
+	(*SetTenantStatusResponse)(nil),        // 201: anubis.v1.SetTenantStatusResponse
+	(*GetTenantStatsRequest)(nil),          // 202: anubis.v1.GetTenantStatsRequest
+	(*GetTenantStatsResponse)(nil),         // 203: anubis.v1.GetTenantStatsResponse
+	(*GetDashboardRequest)(nil),            // 204: anubis.v1.GetDashboardRequest
+	(*RealmIdentityCount)(nil),             // 205: anubis.v1.RealmIdentityCount
+	(*DashboardSignal)(nil),                // 206: anubis.v1.DashboardSignal
+	(*GetDashboardResponse)(nil),           // 207: anubis.v1.GetDashboardResponse
+	(*GetScopeNodeRequest)(nil),            // 208: anubis.v1.GetScopeNodeRequest
+	(*GetScopeNodesRequest)(nil),           // 209: anubis.v1.GetScopeNodesRequest
+	(*GetScopeNodesResponse)(nil),          // 210: anubis.v1.GetScopeNodesResponse
+	(*GetScopeNodeResponse)(nil),           // 211: anubis.v1.GetScopeNodeResponse
+	(*ScopeAncestorsRequest)(nil),          // 212: anubis.v1.ScopeAncestorsRequest
+	(*ScopeAncestor)(nil),                  // 213: anubis.v1.ScopeAncestor
+	(*ScopeAncestorsResponse)(nil),         // 214: anubis.v1.ScopeAncestorsResponse
+	(*SearchGrantsRequest)(nil),            // 215: anubis.v1.SearchGrantsRequest
+	(*SearchGrantsResponse)(nil),           // 216: anubis.v1.SearchGrantsResponse
+	(*SetOperatorStatusRequest)(nil),       // 217: anubis.v1.SetOperatorStatusRequest
+	(*SetOperatorStatusResponse)(nil),      // 218: anubis.v1.SetOperatorStatusResponse
+	(*ApiKey)(nil),                         // 219: anubis.v1.ApiKey
+	(*ListApiKeysRequest)(nil),             // 220: anubis.v1.ListApiKeysRequest
+	(*ListApiKeysResponse)(nil),            // 221: anubis.v1.ListApiKeysResponse
+	(*CreateApiKeyRequest)(nil),            // 222: anubis.v1.CreateApiKeyRequest
+	(*CreateApiKeyResponse)(nil),           // 223: anubis.v1.CreateApiKeyResponse
+	(*RevokeApiKeyRequest)(nil),            // 224: anubis.v1.RevokeApiKeyRequest
+	(*RevokeApiKeyResponse)(nil),           // 225: anubis.v1.RevokeApiKeyResponse
 }
 var file_anubis_v1_admin_proto_depIdxs = []int32{
 	0,   // 0: anubis.v1.ListIdentitiesResponse.identities:type_name -> anubis.v1.Identity
@@ -13507,257 +13727,260 @@ var file_anubis_v1_admin_proto_depIdxs = []int32{
 	59,  // 21: anubis.v1.UpdateSyncSourceRequest.source:type_name -> anubis.v1.SyncSource
 	59,  // 22: anubis.v1.UpdateSyncSourceResponse.source:type_name -> anubis.v1.SyncSource
 	56,  // 23: anubis.v1.RunSyncRequest.rows:type_name -> anubis.v1.SyncRow
-	68,  // 24: anubis.v1.ListRolesResponse.roles:type_name -> anubis.v1.Role
-	68,  // 25: anubis.v1.CreateRoleRequest.role:type_name -> anubis.v1.Role
-	68,  // 26: anubis.v1.CreateRoleResponse.role:type_name -> anubis.v1.Role
-	68,  // 27: anubis.v1.UpdateRoleRequest.role:type_name -> anubis.v1.Role
-	68,  // 28: anubis.v1.UpdateRoleResponse.role:type_name -> anubis.v1.Role
-	76,  // 29: anubis.v1.GetRoleEffectiveResponse.permissions:type_name -> anubis.v1.EffectivePermission
-	78,  // 30: anubis.v1.ListPermissionsResponse.permissions:type_name -> anubis.v1.Permission
-	81,  // 31: anubis.v1.Grant.scopes:type_name -> anubis.v1.GrantScope
-	82,  // 32: anubis.v1.ListGrantsResponse.grants:type_name -> anubis.v1.Grant
-	81,  // 33: anubis.v1.CreateGrantRequest.scopes:type_name -> anubis.v1.GrantScope
-	82,  // 34: anubis.v1.CreateGrantResponse.grant:type_name -> anubis.v1.Grant
-	81,  // 35: anubis.v1.MembershipEntry.scopes:type_name -> anubis.v1.GrantScope
-	89,  // 36: anubis.v1.Membership.entries:type_name -> anubis.v1.MembershipEntry
-	90,  // 37: anubis.v1.ListMembershipsResponse.memberships:type_name -> anubis.v1.Membership
-	90,  // 38: anubis.v1.CreateMembershipResponse.membership:type_name -> anubis.v1.Membership
-	89,  // 39: anubis.v1.SetMembershipEntriesRequest.entries:type_name -> anubis.v1.MembershipEntry
-	90,  // 40: anubis.v1.SetMembershipEntriesResponse.membership:type_name -> anubis.v1.Membership
-	105, // 41: anubis.v1.ListAuthPagesResponse.pages:type_name -> anubis.v1.AuthPage
-	105, // 42: anubis.v1.GetAuthPageResponse.page:type_name -> anubis.v1.AuthPage
-	105, // 43: anubis.v1.CreateAuthPageRequest.page:type_name -> anubis.v1.AuthPage
-	105, // 44: anubis.v1.CreateAuthPageResponse.page:type_name -> anubis.v1.AuthPage
-	105, // 45: anubis.v1.UpdateAuthPageRequest.page:type_name -> anubis.v1.AuthPage
-	105, // 46: anubis.v1.UpdateAuthPageResponse.page:type_name -> anubis.v1.AuthPage
-	120, // 47: anubis.v1.ListTenantsResponse.tenants:type_name -> anubis.v1.Tenant
-	120, // 48: anubis.v1.CreateTenantResponse.tenant:type_name -> anubis.v1.Tenant
-	125, // 49: anubis.v1.ListRealmsResponse.realms:type_name -> anubis.v1.Realm
-	125, // 50: anubis.v1.CreateRealmRequest.realm:type_name -> anubis.v1.Realm
-	125, // 51: anubis.v1.CreateRealmResponse.realm:type_name -> anubis.v1.Realm
-	125, // 52: anubis.v1.UpdateRealmRequest.realm:type_name -> anubis.v1.Realm
-	125, // 53: anubis.v1.UpdateRealmResponse.realm:type_name -> anubis.v1.Realm
-	132, // 54: anubis.v1.ListRealmCategoriesResponse.categories:type_name -> anubis.v1.RealmCategory
-	132, // 55: anubis.v1.CreateRealmCategoryRequest.category:type_name -> anubis.v1.RealmCategory
-	132, // 56: anubis.v1.CreateRealmCategoryResponse.category:type_name -> anubis.v1.RealmCategory
-	137, // 57: anubis.v1.ListApplicationsResponse.applications:type_name -> anubis.v1.Application
-	137, // 58: anubis.v1.CreateApplicationRequest.application:type_name -> anubis.v1.Application
-	137, // 59: anubis.v1.CreateApplicationResponse.application:type_name -> anubis.v1.Application
-	137, // 60: anubis.v1.UpdateApplicationRequest.application:type_name -> anubis.v1.Application
-	137, // 61: anubis.v1.UpdateApplicationResponse.application:type_name -> anubis.v1.Application
-	146, // 62: anubis.v1.ListRoutePoliciesResponse.policies:type_name -> anubis.v1.RoutePolicy
-	149, // 63: anubis.v1.QueryAuditResponse.entries:type_name -> anubis.v1.AuditEntry
-	154, // 64: anubis.v1.ListSigningKeysResponse.keys:type_name -> anubis.v1.SigningKey
-	154, // 65: anubis.v1.RotateSigningKeyResponse.new_key:type_name -> anubis.v1.SigningKey
-	168, // 66: anubis.v1.ImportWorkbookResponse.issues:type_name -> anubis.v1.ImportIssue
-	170, // 67: anubis.v1.Operator.assignments:type_name -> anubis.v1.OperatorAssignment
-	171, // 68: anubis.v1.ListOperatorsResponse.operators:type_name -> anubis.v1.Operator
-	193, // 69: anubis.v1.MyTenantsResponse.tenants:type_name -> anubis.v1.MyTenant
-	202, // 70: anubis.v1.GetDashboardResponse.identities_by_realm:type_name -> anubis.v1.RealmIdentityCount
-	203, // 71: anubis.v1.GetDashboardResponse.signals:type_name -> anubis.v1.DashboardSignal
-	45,  // 72: anubis.v1.GetScopeNodesResponse.nodes:type_name -> anubis.v1.ScopeNode
-	45,  // 73: anubis.v1.GetScopeNodeResponse.node:type_name -> anubis.v1.ScopeNode
-	45,  // 74: anubis.v1.ScopeAncestor.node:type_name -> anubis.v1.ScopeNode
-	210, // 75: anubis.v1.ScopeAncestorsResponse.ancestors:type_name -> anubis.v1.ScopeAncestor
-	82,  // 76: anubis.v1.SearchGrantsResponse.grants:type_name -> anubis.v1.Grant
-	216, // 77: anubis.v1.ListApiKeysResponse.keys:type_name -> anubis.v1.ApiKey
-	1,   // 78: anubis.v1.IdentityAdminService.ListIdentities:input_type -> anubis.v1.ListIdentitiesRequest
-	3,   // 79: anubis.v1.IdentityAdminService.GetIdentity:input_type -> anubis.v1.GetIdentityRequest
-	6,   // 80: anubis.v1.IdentityAdminService.CreateIdentity:input_type -> anubis.v1.CreateIdentityRequest
-	8,   // 81: anubis.v1.IdentityAdminService.DisableIdentity:input_type -> anubis.v1.DisableIdentityRequest
-	10,  // 82: anubis.v1.IdentityAdminService.EnableIdentity:input_type -> anubis.v1.EnableIdentityRequest
-	12,  // 83: anubis.v1.IdentityAdminService.BumpTokenEpoch:input_type -> anubis.v1.BumpTokenEpochRequest
-	14,  // 84: anubis.v1.IdentityAdminService.SetPassword:input_type -> anubis.v1.SetPasswordRequest
-	16,  // 85: anubis.v1.IdentityAdminService.LinkIdentities:input_type -> anubis.v1.LinkIdentitiesRequest
-	18,  // 86: anubis.v1.IdentityAdminService.RequestErasure:input_type -> anubis.v1.RequestErasureRequest
-	20,  // 87: anubis.v1.IdentityAdminService.ListCredentials:input_type -> anubis.v1.ListCredentialsRequest
-	22,  // 88: anubis.v1.IdentityAdminService.RevokeCredential:input_type -> anubis.v1.RevokeCredentialRequest
-	25,  // 89: anubis.v1.IdentityAdminService.ListConsents:input_type -> anubis.v1.ListConsentsRequest
-	27,  // 90: anubis.v1.IdentityAdminService.RecordConsent:input_type -> anubis.v1.RecordConsentRequest
-	29,  // 91: anubis.v1.IdentityAdminService.WithdrawConsent:input_type -> anubis.v1.WithdrawConsentRequest
-	32,  // 92: anubis.v1.ScopeAdminService.ListScopeAxes:input_type -> anubis.v1.ListScopeAxesRequest
-	34,  // 93: anubis.v1.ScopeAdminService.CreateScopeAxis:input_type -> anubis.v1.CreateScopeAxisRequest
-	36,  // 94: anubis.v1.ScopeAdminService.UpdateScopeAxis:input_type -> anubis.v1.UpdateScopeAxisRequest
-	38,  // 95: anubis.v1.ScopeAdminService.StrictDryRun:input_type -> anubis.v1.StrictDryRunRequest
-	41,  // 96: anubis.v1.ScopeAdminService.ListScopeNodeTypes:input_type -> anubis.v1.ListScopeNodeTypesRequest
-	43,  // 97: anubis.v1.ScopeAdminService.CreateScopeNodeType:input_type -> anubis.v1.CreateScopeNodeTypeRequest
-	46,  // 98: anubis.v1.ScopeAdminService.ListScopeNodes:input_type -> anubis.v1.ListScopeNodesRequest
-	205, // 99: anubis.v1.ScopeAdminService.GetScopeNode:input_type -> anubis.v1.GetScopeNodeRequest
-	206, // 100: anubis.v1.ScopeAdminService.GetScopeNodes:input_type -> anubis.v1.GetScopeNodesRequest
-	209, // 101: anubis.v1.ScopeAdminService.ScopeAncestors:input_type -> anubis.v1.ScopeAncestorsRequest
-	48,  // 102: anubis.v1.ScopeAdminService.CreateScopeNode:input_type -> anubis.v1.CreateScopeNodeRequest
-	50,  // 103: anubis.v1.ScopeAdminService.EnsureAxisRoot:input_type -> anubis.v1.EnsureAxisRootRequest
-	52,  // 104: anubis.v1.ScopeAdminService.MoveScopeNode:input_type -> anubis.v1.MoveScopeNodeRequest
-	54,  // 105: anubis.v1.ScopeAdminService.ArchiveScopeNode:input_type -> anubis.v1.ArchiveScopeNodeRequest
-	57,  // 106: anubis.v1.ScopeAdminService.UpsertScopeNodes:input_type -> anubis.v1.UpsertScopeNodesRequest
-	60,  // 107: anubis.v1.ScopeAdminService.ListSyncSources:input_type -> anubis.v1.ListSyncSourcesRequest
-	62,  // 108: anubis.v1.ScopeAdminService.CreateSyncSource:input_type -> anubis.v1.CreateSyncSourceRequest
-	64,  // 109: anubis.v1.ScopeAdminService.UpdateSyncSource:input_type -> anubis.v1.UpdateSyncSourceRequest
-	66,  // 110: anubis.v1.ScopeAdminService.RunSync:input_type -> anubis.v1.RunSyncRequest
-	69,  // 111: anubis.v1.AuthzAdminService.ListRoles:input_type -> anubis.v1.ListRolesRequest
-	71,  // 112: anubis.v1.AuthzAdminService.CreateRole:input_type -> anubis.v1.CreateRoleRequest
-	73,  // 113: anubis.v1.AuthzAdminService.UpdateRole:input_type -> anubis.v1.UpdateRoleRequest
-	75,  // 114: anubis.v1.AuthzAdminService.GetRoleEffective:input_type -> anubis.v1.GetRoleEffectiveRequest
-	79,  // 115: anubis.v1.AuthzAdminService.ListPermissions:input_type -> anubis.v1.ListPermissionsRequest
-	83,  // 116: anubis.v1.AuthzAdminService.ListGrants:input_type -> anubis.v1.ListGrantsRequest
-	212, // 117: anubis.v1.AuthzAdminService.SearchGrants:input_type -> anubis.v1.SearchGrantsRequest
-	85,  // 118: anubis.v1.AuthzAdminService.CreateGrant:input_type -> anubis.v1.CreateGrantRequest
-	87,  // 119: anubis.v1.AuthzAdminService.RevokeGrant:input_type -> anubis.v1.RevokeGrantRequest
-	91,  // 120: anubis.v1.AuthzAdminService.ListMemberships:input_type -> anubis.v1.ListMembershipsRequest
-	93,  // 121: anubis.v1.AuthzAdminService.CreateMembership:input_type -> anubis.v1.CreateMembershipRequest
-	95,  // 122: anubis.v1.AuthzAdminService.SetMembershipEntries:input_type -> anubis.v1.SetMembershipEntriesRequest
-	97,  // 123: anubis.v1.AuthzAdminService.AssignMembership:input_type -> anubis.v1.AssignMembershipRequest
-	99,  // 124: anubis.v1.AuthzAdminService.UnassignMembership:input_type -> anubis.v1.UnassignMembershipRequest
-	101, // 125: anubis.v1.AuthzAdminService.ResyncMembership:input_type -> anubis.v1.ResyncMembershipRequest
-	103, // 126: anubis.v1.AuthzAdminService.ApplyManifest:input_type -> anubis.v1.ApplyManifestRequest
-	121, // 127: anubis.v1.TenantAdminService.ListTenants:input_type -> anubis.v1.ListTenantsRequest
-	123, // 128: anubis.v1.TenantAdminService.CreateTenant:input_type -> anubis.v1.CreateTenantRequest
-	195, // 129: anubis.v1.TenantAdminService.UpdateTenant:input_type -> anubis.v1.UpdateTenantRequest
-	199, // 130: anubis.v1.TenantAdminService.GetTenantStats:input_type -> anubis.v1.GetTenantStatsRequest
-	201, // 131: anubis.v1.TenantAdminService.GetDashboard:input_type -> anubis.v1.GetDashboardRequest
-	217, // 132: anubis.v1.TenantAdminService.ListApiKeys:input_type -> anubis.v1.ListApiKeysRequest
-	219, // 133: anubis.v1.TenantAdminService.CreateApiKey:input_type -> anubis.v1.CreateApiKeyRequest
-	221, // 134: anubis.v1.TenantAdminService.RevokeApiKey:input_type -> anubis.v1.RevokeApiKeyRequest
-	197, // 135: anubis.v1.TenantAdminService.SetTenantStatus:input_type -> anubis.v1.SetTenantStatusRequest
-	126, // 136: anubis.v1.TenantAdminService.ListRealms:input_type -> anubis.v1.ListRealmsRequest
-	128, // 137: anubis.v1.TenantAdminService.CreateRealm:input_type -> anubis.v1.CreateRealmRequest
-	130, // 138: anubis.v1.TenantAdminService.UpdateRealm:input_type -> anubis.v1.UpdateRealmRequest
-	133, // 139: anubis.v1.TenantAdminService.ListRealmCategories:input_type -> anubis.v1.ListRealmCategoriesRequest
-	135, // 140: anubis.v1.TenantAdminService.CreateRealmCategory:input_type -> anubis.v1.CreateRealmCategoryRequest
-	138, // 141: anubis.v1.TenantAdminService.ListApplications:input_type -> anubis.v1.ListApplicationsRequest
-	140, // 142: anubis.v1.TenantAdminService.CreateApplication:input_type -> anubis.v1.CreateApplicationRequest
-	142, // 143: anubis.v1.TenantAdminService.UpdateApplication:input_type -> anubis.v1.UpdateApplicationRequest
-	144, // 144: anubis.v1.TenantAdminService.RotateClientSecret:input_type -> anubis.v1.RotateClientSecretRequest
-	147, // 145: anubis.v1.TenantAdminService.ListRoutePolicies:input_type -> anubis.v1.ListRoutePoliciesRequest
-	150, // 146: anubis.v1.TenantAdminService.QueryAudit:input_type -> anubis.v1.QueryAuditRequest
-	152, // 147: anubis.v1.TenantAdminService.VerifyAuditChain:input_type -> anubis.v1.VerifyAuditChainRequest
-	155, // 148: anubis.v1.TenantAdminService.ListSigningKeys:input_type -> anubis.v1.ListSigningKeysRequest
-	157, // 149: anubis.v1.TenantAdminService.RotateSigningKey:input_type -> anubis.v1.RotateSigningKeyRequest
-	159, // 150: anubis.v1.TenantAdminService.GetCatalogVersion:input_type -> anubis.v1.GetCatalogVersionRequest
-	161, // 151: anubis.v1.TenantAdminService.GetSigninPage:input_type -> anubis.v1.GetSigninPageRequest
-	163, // 152: anubis.v1.TenantAdminService.PutSigninPage:input_type -> anubis.v1.PutSigninPageRequest
-	106, // 153: anubis.v1.TenantAdminService.ListAuthPages:input_type -> anubis.v1.ListAuthPagesRequest
-	108, // 154: anubis.v1.TenantAdminService.GetAuthPage:input_type -> anubis.v1.GetAuthPageRequest
-	110, // 155: anubis.v1.TenantAdminService.CreateAuthPage:input_type -> anubis.v1.CreateAuthPageRequest
-	112, // 156: anubis.v1.TenantAdminService.UpdateAuthPage:input_type -> anubis.v1.UpdateAuthPageRequest
-	114, // 157: anubis.v1.TenantAdminService.DeleteAuthPage:input_type -> anubis.v1.DeleteAuthPageRequest
-	116, // 158: anubis.v1.TenantAdminService.SetDefaultAuthPage:input_type -> anubis.v1.SetDefaultAuthPageRequest
-	118, // 159: anubis.v1.TenantAdminService.PreviewAuthPage:input_type -> anubis.v1.PreviewAuthPageRequest
-	165, // 160: anubis.v1.ProvisioningService.DownloadImportTemplate:input_type -> anubis.v1.DownloadImportTemplateRequest
-	167, // 161: anubis.v1.ProvisioningService.ImportWorkbook:input_type -> anubis.v1.ImportWorkbookRequest
-	172, // 162: anubis.v1.PlatformAdminService.ListOperators:input_type -> anubis.v1.ListOperatorsRequest
-	178, // 163: anubis.v1.PlatformAdminService.CreateOperator:input_type -> anubis.v1.CreateOperatorRequest
-	174, // 164: anubis.v1.PlatformAdminService.AssignOperator:input_type -> anubis.v1.AssignOperatorRequest
-	176, // 165: anubis.v1.PlatformAdminService.RevokeAssignment:input_type -> anubis.v1.RevokeAssignmentRequest
-	214, // 166: anubis.v1.PlatformAdminService.SetOperatorStatus:input_type -> anubis.v1.SetOperatorStatusRequest
-	180, // 167: anubis.v1.PlatformAuthService.PlatformLogin:input_type -> anubis.v1.PlatformLoginRequest
-	186, // 168: anubis.v1.PlatformAuthService.PlatformVerifyMfa:input_type -> anubis.v1.PlatformVerifyMfaRequest
-	182, // 169: anubis.v1.PlatformAuthService.PlatformRefresh:input_type -> anubis.v1.PlatformRefreshRequest
-	184, // 170: anubis.v1.PlatformAuthService.PlatformLogout:input_type -> anubis.v1.PlatformLogoutRequest
-	188, // 171: anubis.v1.PlatformAuthService.BeginTotpEnrolment:input_type -> anubis.v1.BeginTotpEnrolmentRequest
-	190, // 172: anubis.v1.PlatformAuthService.ConfirmTotpEnrolment:input_type -> anubis.v1.ConfirmTotpEnrolmentRequest
-	192, // 173: anubis.v1.PlatformAuthService.MyTenants:input_type -> anubis.v1.MyTenantsRequest
-	2,   // 174: anubis.v1.IdentityAdminService.ListIdentities:output_type -> anubis.v1.ListIdentitiesResponse
-	5,   // 175: anubis.v1.IdentityAdminService.GetIdentity:output_type -> anubis.v1.GetIdentityResponse
-	7,   // 176: anubis.v1.IdentityAdminService.CreateIdentity:output_type -> anubis.v1.CreateIdentityResponse
-	9,   // 177: anubis.v1.IdentityAdminService.DisableIdentity:output_type -> anubis.v1.DisableIdentityResponse
-	11,  // 178: anubis.v1.IdentityAdminService.EnableIdentity:output_type -> anubis.v1.EnableIdentityResponse
-	13,  // 179: anubis.v1.IdentityAdminService.BumpTokenEpoch:output_type -> anubis.v1.BumpTokenEpochResponse
-	15,  // 180: anubis.v1.IdentityAdminService.SetPassword:output_type -> anubis.v1.SetPasswordResponse
-	17,  // 181: anubis.v1.IdentityAdminService.LinkIdentities:output_type -> anubis.v1.LinkIdentitiesResponse
-	19,  // 182: anubis.v1.IdentityAdminService.RequestErasure:output_type -> anubis.v1.RequestErasureResponse
-	21,  // 183: anubis.v1.IdentityAdminService.ListCredentials:output_type -> anubis.v1.ListCredentialsResponse
-	23,  // 184: anubis.v1.IdentityAdminService.RevokeCredential:output_type -> anubis.v1.RevokeCredentialResponse
-	26,  // 185: anubis.v1.IdentityAdminService.ListConsents:output_type -> anubis.v1.ListConsentsResponse
-	28,  // 186: anubis.v1.IdentityAdminService.RecordConsent:output_type -> anubis.v1.RecordConsentResponse
-	30,  // 187: anubis.v1.IdentityAdminService.WithdrawConsent:output_type -> anubis.v1.WithdrawConsentResponse
-	33,  // 188: anubis.v1.ScopeAdminService.ListScopeAxes:output_type -> anubis.v1.ListScopeAxesResponse
-	35,  // 189: anubis.v1.ScopeAdminService.CreateScopeAxis:output_type -> anubis.v1.CreateScopeAxisResponse
-	37,  // 190: anubis.v1.ScopeAdminService.UpdateScopeAxis:output_type -> anubis.v1.UpdateScopeAxisResponse
-	39,  // 191: anubis.v1.ScopeAdminService.StrictDryRun:output_type -> anubis.v1.StrictDryRunResponse
-	42,  // 192: anubis.v1.ScopeAdminService.ListScopeNodeTypes:output_type -> anubis.v1.ListScopeNodeTypesResponse
-	44,  // 193: anubis.v1.ScopeAdminService.CreateScopeNodeType:output_type -> anubis.v1.CreateScopeNodeTypeResponse
-	47,  // 194: anubis.v1.ScopeAdminService.ListScopeNodes:output_type -> anubis.v1.ListScopeNodesResponse
-	208, // 195: anubis.v1.ScopeAdminService.GetScopeNode:output_type -> anubis.v1.GetScopeNodeResponse
-	207, // 196: anubis.v1.ScopeAdminService.GetScopeNodes:output_type -> anubis.v1.GetScopeNodesResponse
-	211, // 197: anubis.v1.ScopeAdminService.ScopeAncestors:output_type -> anubis.v1.ScopeAncestorsResponse
-	49,  // 198: anubis.v1.ScopeAdminService.CreateScopeNode:output_type -> anubis.v1.CreateScopeNodeResponse
-	51,  // 199: anubis.v1.ScopeAdminService.EnsureAxisRoot:output_type -> anubis.v1.EnsureAxisRootResponse
-	53,  // 200: anubis.v1.ScopeAdminService.MoveScopeNode:output_type -> anubis.v1.MoveScopeNodeResponse
-	55,  // 201: anubis.v1.ScopeAdminService.ArchiveScopeNode:output_type -> anubis.v1.ArchiveScopeNodeResponse
-	58,  // 202: anubis.v1.ScopeAdminService.UpsertScopeNodes:output_type -> anubis.v1.UpsertScopeNodesResponse
-	61,  // 203: anubis.v1.ScopeAdminService.ListSyncSources:output_type -> anubis.v1.ListSyncSourcesResponse
-	63,  // 204: anubis.v1.ScopeAdminService.CreateSyncSource:output_type -> anubis.v1.CreateSyncSourceResponse
-	65,  // 205: anubis.v1.ScopeAdminService.UpdateSyncSource:output_type -> anubis.v1.UpdateSyncSourceResponse
-	67,  // 206: anubis.v1.ScopeAdminService.RunSync:output_type -> anubis.v1.RunSyncResponse
-	70,  // 207: anubis.v1.AuthzAdminService.ListRoles:output_type -> anubis.v1.ListRolesResponse
-	72,  // 208: anubis.v1.AuthzAdminService.CreateRole:output_type -> anubis.v1.CreateRoleResponse
-	74,  // 209: anubis.v1.AuthzAdminService.UpdateRole:output_type -> anubis.v1.UpdateRoleResponse
-	77,  // 210: anubis.v1.AuthzAdminService.GetRoleEffective:output_type -> anubis.v1.GetRoleEffectiveResponse
-	80,  // 211: anubis.v1.AuthzAdminService.ListPermissions:output_type -> anubis.v1.ListPermissionsResponse
-	84,  // 212: anubis.v1.AuthzAdminService.ListGrants:output_type -> anubis.v1.ListGrantsResponse
-	213, // 213: anubis.v1.AuthzAdminService.SearchGrants:output_type -> anubis.v1.SearchGrantsResponse
-	86,  // 214: anubis.v1.AuthzAdminService.CreateGrant:output_type -> anubis.v1.CreateGrantResponse
-	88,  // 215: anubis.v1.AuthzAdminService.RevokeGrant:output_type -> anubis.v1.RevokeGrantResponse
-	92,  // 216: anubis.v1.AuthzAdminService.ListMemberships:output_type -> anubis.v1.ListMembershipsResponse
-	94,  // 217: anubis.v1.AuthzAdminService.CreateMembership:output_type -> anubis.v1.CreateMembershipResponse
-	96,  // 218: anubis.v1.AuthzAdminService.SetMembershipEntries:output_type -> anubis.v1.SetMembershipEntriesResponse
-	98,  // 219: anubis.v1.AuthzAdminService.AssignMembership:output_type -> anubis.v1.AssignMembershipResponse
-	100, // 220: anubis.v1.AuthzAdminService.UnassignMembership:output_type -> anubis.v1.UnassignMembershipResponse
-	102, // 221: anubis.v1.AuthzAdminService.ResyncMembership:output_type -> anubis.v1.ResyncMembershipResponse
-	104, // 222: anubis.v1.AuthzAdminService.ApplyManifest:output_type -> anubis.v1.ApplyManifestResponse
-	122, // 223: anubis.v1.TenantAdminService.ListTenants:output_type -> anubis.v1.ListTenantsResponse
-	124, // 224: anubis.v1.TenantAdminService.CreateTenant:output_type -> anubis.v1.CreateTenantResponse
-	196, // 225: anubis.v1.TenantAdminService.UpdateTenant:output_type -> anubis.v1.UpdateTenantResponse
-	200, // 226: anubis.v1.TenantAdminService.GetTenantStats:output_type -> anubis.v1.GetTenantStatsResponse
-	204, // 227: anubis.v1.TenantAdminService.GetDashboard:output_type -> anubis.v1.GetDashboardResponse
-	218, // 228: anubis.v1.TenantAdminService.ListApiKeys:output_type -> anubis.v1.ListApiKeysResponse
-	220, // 229: anubis.v1.TenantAdminService.CreateApiKey:output_type -> anubis.v1.CreateApiKeyResponse
-	222, // 230: anubis.v1.TenantAdminService.RevokeApiKey:output_type -> anubis.v1.RevokeApiKeyResponse
-	198, // 231: anubis.v1.TenantAdminService.SetTenantStatus:output_type -> anubis.v1.SetTenantStatusResponse
-	127, // 232: anubis.v1.TenantAdminService.ListRealms:output_type -> anubis.v1.ListRealmsResponse
-	129, // 233: anubis.v1.TenantAdminService.CreateRealm:output_type -> anubis.v1.CreateRealmResponse
-	131, // 234: anubis.v1.TenantAdminService.UpdateRealm:output_type -> anubis.v1.UpdateRealmResponse
-	134, // 235: anubis.v1.TenantAdminService.ListRealmCategories:output_type -> anubis.v1.ListRealmCategoriesResponse
-	136, // 236: anubis.v1.TenantAdminService.CreateRealmCategory:output_type -> anubis.v1.CreateRealmCategoryResponse
-	139, // 237: anubis.v1.TenantAdminService.ListApplications:output_type -> anubis.v1.ListApplicationsResponse
-	141, // 238: anubis.v1.TenantAdminService.CreateApplication:output_type -> anubis.v1.CreateApplicationResponse
-	143, // 239: anubis.v1.TenantAdminService.UpdateApplication:output_type -> anubis.v1.UpdateApplicationResponse
-	145, // 240: anubis.v1.TenantAdminService.RotateClientSecret:output_type -> anubis.v1.RotateClientSecretResponse
-	148, // 241: anubis.v1.TenantAdminService.ListRoutePolicies:output_type -> anubis.v1.ListRoutePoliciesResponse
-	151, // 242: anubis.v1.TenantAdminService.QueryAudit:output_type -> anubis.v1.QueryAuditResponse
-	153, // 243: anubis.v1.TenantAdminService.VerifyAuditChain:output_type -> anubis.v1.VerifyAuditChainResponse
-	156, // 244: anubis.v1.TenantAdminService.ListSigningKeys:output_type -> anubis.v1.ListSigningKeysResponse
-	158, // 245: anubis.v1.TenantAdminService.RotateSigningKey:output_type -> anubis.v1.RotateSigningKeyResponse
-	160, // 246: anubis.v1.TenantAdminService.GetCatalogVersion:output_type -> anubis.v1.GetCatalogVersionResponse
-	162, // 247: anubis.v1.TenantAdminService.GetSigninPage:output_type -> anubis.v1.GetSigninPageResponse
-	164, // 248: anubis.v1.TenantAdminService.PutSigninPage:output_type -> anubis.v1.PutSigninPageResponse
-	107, // 249: anubis.v1.TenantAdminService.ListAuthPages:output_type -> anubis.v1.ListAuthPagesResponse
-	109, // 250: anubis.v1.TenantAdminService.GetAuthPage:output_type -> anubis.v1.GetAuthPageResponse
-	111, // 251: anubis.v1.TenantAdminService.CreateAuthPage:output_type -> anubis.v1.CreateAuthPageResponse
-	113, // 252: anubis.v1.TenantAdminService.UpdateAuthPage:output_type -> anubis.v1.UpdateAuthPageResponse
-	115, // 253: anubis.v1.TenantAdminService.DeleteAuthPage:output_type -> anubis.v1.DeleteAuthPageResponse
-	117, // 254: anubis.v1.TenantAdminService.SetDefaultAuthPage:output_type -> anubis.v1.SetDefaultAuthPageResponse
-	119, // 255: anubis.v1.TenantAdminService.PreviewAuthPage:output_type -> anubis.v1.PreviewAuthPageResponse
-	166, // 256: anubis.v1.ProvisioningService.DownloadImportTemplate:output_type -> anubis.v1.DownloadImportTemplateResponse
-	169, // 257: anubis.v1.ProvisioningService.ImportWorkbook:output_type -> anubis.v1.ImportWorkbookResponse
-	173, // 258: anubis.v1.PlatformAdminService.ListOperators:output_type -> anubis.v1.ListOperatorsResponse
-	179, // 259: anubis.v1.PlatformAdminService.CreateOperator:output_type -> anubis.v1.CreateOperatorResponse
-	175, // 260: anubis.v1.PlatformAdminService.AssignOperator:output_type -> anubis.v1.AssignOperatorResponse
-	177, // 261: anubis.v1.PlatformAdminService.RevokeAssignment:output_type -> anubis.v1.RevokeAssignmentResponse
-	215, // 262: anubis.v1.PlatformAdminService.SetOperatorStatus:output_type -> anubis.v1.SetOperatorStatusResponse
-	181, // 263: anubis.v1.PlatformAuthService.PlatformLogin:output_type -> anubis.v1.PlatformLoginResponse
-	187, // 264: anubis.v1.PlatformAuthService.PlatformVerifyMfa:output_type -> anubis.v1.PlatformVerifyMfaResponse
-	183, // 265: anubis.v1.PlatformAuthService.PlatformRefresh:output_type -> anubis.v1.PlatformRefreshResponse
-	185, // 266: anubis.v1.PlatformAuthService.PlatformLogout:output_type -> anubis.v1.PlatformLogoutResponse
-	189, // 267: anubis.v1.PlatformAuthService.BeginTotpEnrolment:output_type -> anubis.v1.BeginTotpEnrolmentResponse
-	191, // 268: anubis.v1.PlatformAuthService.ConfirmTotpEnrolment:output_type -> anubis.v1.ConfirmTotpEnrolmentResponse
-	194, // 269: anubis.v1.PlatformAuthService.MyTenants:output_type -> anubis.v1.MyTenantsResponse
-	174, // [174:270] is the sub-list for method output_type
-	78,  // [78:174] is the sub-list for method input_type
-	78,  // [78:78] is the sub-list for extension type_name
-	78,  // [78:78] is the sub-list for extension extendee
-	0,   // [0:78] is the sub-list for field type_name
+	69,  // 24: anubis.v1.ListSyncRunsResponse.runs:type_name -> anubis.v1.SyncRun
+	71,  // 25: anubis.v1.ListRolesResponse.roles:type_name -> anubis.v1.Role
+	71,  // 26: anubis.v1.CreateRoleRequest.role:type_name -> anubis.v1.Role
+	71,  // 27: anubis.v1.CreateRoleResponse.role:type_name -> anubis.v1.Role
+	71,  // 28: anubis.v1.UpdateRoleRequest.role:type_name -> anubis.v1.Role
+	71,  // 29: anubis.v1.UpdateRoleResponse.role:type_name -> anubis.v1.Role
+	79,  // 30: anubis.v1.GetRoleEffectiveResponse.permissions:type_name -> anubis.v1.EffectivePermission
+	81,  // 31: anubis.v1.ListPermissionsResponse.permissions:type_name -> anubis.v1.Permission
+	84,  // 32: anubis.v1.Grant.scopes:type_name -> anubis.v1.GrantScope
+	85,  // 33: anubis.v1.ListGrantsResponse.grants:type_name -> anubis.v1.Grant
+	84,  // 34: anubis.v1.CreateGrantRequest.scopes:type_name -> anubis.v1.GrantScope
+	85,  // 35: anubis.v1.CreateGrantResponse.grant:type_name -> anubis.v1.Grant
+	84,  // 36: anubis.v1.MembershipEntry.scopes:type_name -> anubis.v1.GrantScope
+	92,  // 37: anubis.v1.Membership.entries:type_name -> anubis.v1.MembershipEntry
+	93,  // 38: anubis.v1.ListMembershipsResponse.memberships:type_name -> anubis.v1.Membership
+	93,  // 39: anubis.v1.CreateMembershipResponse.membership:type_name -> anubis.v1.Membership
+	92,  // 40: anubis.v1.SetMembershipEntriesRequest.entries:type_name -> anubis.v1.MembershipEntry
+	93,  // 41: anubis.v1.SetMembershipEntriesResponse.membership:type_name -> anubis.v1.Membership
+	108, // 42: anubis.v1.ListAuthPagesResponse.pages:type_name -> anubis.v1.AuthPage
+	108, // 43: anubis.v1.GetAuthPageResponse.page:type_name -> anubis.v1.AuthPage
+	108, // 44: anubis.v1.CreateAuthPageRequest.page:type_name -> anubis.v1.AuthPage
+	108, // 45: anubis.v1.CreateAuthPageResponse.page:type_name -> anubis.v1.AuthPage
+	108, // 46: anubis.v1.UpdateAuthPageRequest.page:type_name -> anubis.v1.AuthPage
+	108, // 47: anubis.v1.UpdateAuthPageResponse.page:type_name -> anubis.v1.AuthPage
+	123, // 48: anubis.v1.ListTenantsResponse.tenants:type_name -> anubis.v1.Tenant
+	123, // 49: anubis.v1.CreateTenantResponse.tenant:type_name -> anubis.v1.Tenant
+	128, // 50: anubis.v1.ListRealmsResponse.realms:type_name -> anubis.v1.Realm
+	128, // 51: anubis.v1.CreateRealmRequest.realm:type_name -> anubis.v1.Realm
+	128, // 52: anubis.v1.CreateRealmResponse.realm:type_name -> anubis.v1.Realm
+	128, // 53: anubis.v1.UpdateRealmRequest.realm:type_name -> anubis.v1.Realm
+	128, // 54: anubis.v1.UpdateRealmResponse.realm:type_name -> anubis.v1.Realm
+	135, // 55: anubis.v1.ListRealmCategoriesResponse.categories:type_name -> anubis.v1.RealmCategory
+	135, // 56: anubis.v1.CreateRealmCategoryRequest.category:type_name -> anubis.v1.RealmCategory
+	135, // 57: anubis.v1.CreateRealmCategoryResponse.category:type_name -> anubis.v1.RealmCategory
+	140, // 58: anubis.v1.ListApplicationsResponse.applications:type_name -> anubis.v1.Application
+	140, // 59: anubis.v1.CreateApplicationRequest.application:type_name -> anubis.v1.Application
+	140, // 60: anubis.v1.CreateApplicationResponse.application:type_name -> anubis.v1.Application
+	140, // 61: anubis.v1.UpdateApplicationRequest.application:type_name -> anubis.v1.Application
+	140, // 62: anubis.v1.UpdateApplicationResponse.application:type_name -> anubis.v1.Application
+	149, // 63: anubis.v1.ListRoutePoliciesResponse.policies:type_name -> anubis.v1.RoutePolicy
+	152, // 64: anubis.v1.QueryAuditResponse.entries:type_name -> anubis.v1.AuditEntry
+	157, // 65: anubis.v1.ListSigningKeysResponse.keys:type_name -> anubis.v1.SigningKey
+	157, // 66: anubis.v1.RotateSigningKeyResponse.new_key:type_name -> anubis.v1.SigningKey
+	171, // 67: anubis.v1.ImportWorkbookResponse.issues:type_name -> anubis.v1.ImportIssue
+	173, // 68: anubis.v1.Operator.assignments:type_name -> anubis.v1.OperatorAssignment
+	174, // 69: anubis.v1.ListOperatorsResponse.operators:type_name -> anubis.v1.Operator
+	196, // 70: anubis.v1.MyTenantsResponse.tenants:type_name -> anubis.v1.MyTenant
+	205, // 71: anubis.v1.GetDashboardResponse.identities_by_realm:type_name -> anubis.v1.RealmIdentityCount
+	206, // 72: anubis.v1.GetDashboardResponse.signals:type_name -> anubis.v1.DashboardSignal
+	45,  // 73: anubis.v1.GetScopeNodesResponse.nodes:type_name -> anubis.v1.ScopeNode
+	45,  // 74: anubis.v1.GetScopeNodeResponse.node:type_name -> anubis.v1.ScopeNode
+	45,  // 75: anubis.v1.ScopeAncestor.node:type_name -> anubis.v1.ScopeNode
+	213, // 76: anubis.v1.ScopeAncestorsResponse.ancestors:type_name -> anubis.v1.ScopeAncestor
+	85,  // 77: anubis.v1.SearchGrantsResponse.grants:type_name -> anubis.v1.Grant
+	219, // 78: anubis.v1.ListApiKeysResponse.keys:type_name -> anubis.v1.ApiKey
+	1,   // 79: anubis.v1.IdentityAdminService.ListIdentities:input_type -> anubis.v1.ListIdentitiesRequest
+	3,   // 80: anubis.v1.IdentityAdminService.GetIdentity:input_type -> anubis.v1.GetIdentityRequest
+	6,   // 81: anubis.v1.IdentityAdminService.CreateIdentity:input_type -> anubis.v1.CreateIdentityRequest
+	8,   // 82: anubis.v1.IdentityAdminService.DisableIdentity:input_type -> anubis.v1.DisableIdentityRequest
+	10,  // 83: anubis.v1.IdentityAdminService.EnableIdentity:input_type -> anubis.v1.EnableIdentityRequest
+	12,  // 84: anubis.v1.IdentityAdminService.BumpTokenEpoch:input_type -> anubis.v1.BumpTokenEpochRequest
+	14,  // 85: anubis.v1.IdentityAdminService.SetPassword:input_type -> anubis.v1.SetPasswordRequest
+	16,  // 86: anubis.v1.IdentityAdminService.LinkIdentities:input_type -> anubis.v1.LinkIdentitiesRequest
+	18,  // 87: anubis.v1.IdentityAdminService.RequestErasure:input_type -> anubis.v1.RequestErasureRequest
+	20,  // 88: anubis.v1.IdentityAdminService.ListCredentials:input_type -> anubis.v1.ListCredentialsRequest
+	22,  // 89: anubis.v1.IdentityAdminService.RevokeCredential:input_type -> anubis.v1.RevokeCredentialRequest
+	25,  // 90: anubis.v1.IdentityAdminService.ListConsents:input_type -> anubis.v1.ListConsentsRequest
+	27,  // 91: anubis.v1.IdentityAdminService.RecordConsent:input_type -> anubis.v1.RecordConsentRequest
+	29,  // 92: anubis.v1.IdentityAdminService.WithdrawConsent:input_type -> anubis.v1.WithdrawConsentRequest
+	32,  // 93: anubis.v1.ScopeAdminService.ListScopeAxes:input_type -> anubis.v1.ListScopeAxesRequest
+	34,  // 94: anubis.v1.ScopeAdminService.CreateScopeAxis:input_type -> anubis.v1.CreateScopeAxisRequest
+	36,  // 95: anubis.v1.ScopeAdminService.UpdateScopeAxis:input_type -> anubis.v1.UpdateScopeAxisRequest
+	38,  // 96: anubis.v1.ScopeAdminService.StrictDryRun:input_type -> anubis.v1.StrictDryRunRequest
+	41,  // 97: anubis.v1.ScopeAdminService.ListScopeNodeTypes:input_type -> anubis.v1.ListScopeNodeTypesRequest
+	43,  // 98: anubis.v1.ScopeAdminService.CreateScopeNodeType:input_type -> anubis.v1.CreateScopeNodeTypeRequest
+	46,  // 99: anubis.v1.ScopeAdminService.ListScopeNodes:input_type -> anubis.v1.ListScopeNodesRequest
+	208, // 100: anubis.v1.ScopeAdminService.GetScopeNode:input_type -> anubis.v1.GetScopeNodeRequest
+	209, // 101: anubis.v1.ScopeAdminService.GetScopeNodes:input_type -> anubis.v1.GetScopeNodesRequest
+	212, // 102: anubis.v1.ScopeAdminService.ScopeAncestors:input_type -> anubis.v1.ScopeAncestorsRequest
+	48,  // 103: anubis.v1.ScopeAdminService.CreateScopeNode:input_type -> anubis.v1.CreateScopeNodeRequest
+	50,  // 104: anubis.v1.ScopeAdminService.EnsureAxisRoot:input_type -> anubis.v1.EnsureAxisRootRequest
+	52,  // 105: anubis.v1.ScopeAdminService.MoveScopeNode:input_type -> anubis.v1.MoveScopeNodeRequest
+	54,  // 106: anubis.v1.ScopeAdminService.ArchiveScopeNode:input_type -> anubis.v1.ArchiveScopeNodeRequest
+	57,  // 107: anubis.v1.ScopeAdminService.UpsertScopeNodes:input_type -> anubis.v1.UpsertScopeNodesRequest
+	60,  // 108: anubis.v1.ScopeAdminService.ListSyncSources:input_type -> anubis.v1.ListSyncSourcesRequest
+	62,  // 109: anubis.v1.ScopeAdminService.CreateSyncSource:input_type -> anubis.v1.CreateSyncSourceRequest
+	64,  // 110: anubis.v1.ScopeAdminService.UpdateSyncSource:input_type -> anubis.v1.UpdateSyncSourceRequest
+	66,  // 111: anubis.v1.ScopeAdminService.RunSync:input_type -> anubis.v1.RunSyncRequest
+	68,  // 112: anubis.v1.ScopeAdminService.ListSyncRuns:input_type -> anubis.v1.ListSyncRunsRequest
+	72,  // 113: anubis.v1.AuthzAdminService.ListRoles:input_type -> anubis.v1.ListRolesRequest
+	74,  // 114: anubis.v1.AuthzAdminService.CreateRole:input_type -> anubis.v1.CreateRoleRequest
+	76,  // 115: anubis.v1.AuthzAdminService.UpdateRole:input_type -> anubis.v1.UpdateRoleRequest
+	78,  // 116: anubis.v1.AuthzAdminService.GetRoleEffective:input_type -> anubis.v1.GetRoleEffectiveRequest
+	82,  // 117: anubis.v1.AuthzAdminService.ListPermissions:input_type -> anubis.v1.ListPermissionsRequest
+	86,  // 118: anubis.v1.AuthzAdminService.ListGrants:input_type -> anubis.v1.ListGrantsRequest
+	215, // 119: anubis.v1.AuthzAdminService.SearchGrants:input_type -> anubis.v1.SearchGrantsRequest
+	88,  // 120: anubis.v1.AuthzAdminService.CreateGrant:input_type -> anubis.v1.CreateGrantRequest
+	90,  // 121: anubis.v1.AuthzAdminService.RevokeGrant:input_type -> anubis.v1.RevokeGrantRequest
+	94,  // 122: anubis.v1.AuthzAdminService.ListMemberships:input_type -> anubis.v1.ListMembershipsRequest
+	96,  // 123: anubis.v1.AuthzAdminService.CreateMembership:input_type -> anubis.v1.CreateMembershipRequest
+	98,  // 124: anubis.v1.AuthzAdminService.SetMembershipEntries:input_type -> anubis.v1.SetMembershipEntriesRequest
+	100, // 125: anubis.v1.AuthzAdminService.AssignMembership:input_type -> anubis.v1.AssignMembershipRequest
+	102, // 126: anubis.v1.AuthzAdminService.UnassignMembership:input_type -> anubis.v1.UnassignMembershipRequest
+	104, // 127: anubis.v1.AuthzAdminService.ResyncMembership:input_type -> anubis.v1.ResyncMembershipRequest
+	106, // 128: anubis.v1.AuthzAdminService.ApplyManifest:input_type -> anubis.v1.ApplyManifestRequest
+	124, // 129: anubis.v1.TenantAdminService.ListTenants:input_type -> anubis.v1.ListTenantsRequest
+	126, // 130: anubis.v1.TenantAdminService.CreateTenant:input_type -> anubis.v1.CreateTenantRequest
+	198, // 131: anubis.v1.TenantAdminService.UpdateTenant:input_type -> anubis.v1.UpdateTenantRequest
+	202, // 132: anubis.v1.TenantAdminService.GetTenantStats:input_type -> anubis.v1.GetTenantStatsRequest
+	204, // 133: anubis.v1.TenantAdminService.GetDashboard:input_type -> anubis.v1.GetDashboardRequest
+	220, // 134: anubis.v1.TenantAdminService.ListApiKeys:input_type -> anubis.v1.ListApiKeysRequest
+	222, // 135: anubis.v1.TenantAdminService.CreateApiKey:input_type -> anubis.v1.CreateApiKeyRequest
+	224, // 136: anubis.v1.TenantAdminService.RevokeApiKey:input_type -> anubis.v1.RevokeApiKeyRequest
+	200, // 137: anubis.v1.TenantAdminService.SetTenantStatus:input_type -> anubis.v1.SetTenantStatusRequest
+	129, // 138: anubis.v1.TenantAdminService.ListRealms:input_type -> anubis.v1.ListRealmsRequest
+	131, // 139: anubis.v1.TenantAdminService.CreateRealm:input_type -> anubis.v1.CreateRealmRequest
+	133, // 140: anubis.v1.TenantAdminService.UpdateRealm:input_type -> anubis.v1.UpdateRealmRequest
+	136, // 141: anubis.v1.TenantAdminService.ListRealmCategories:input_type -> anubis.v1.ListRealmCategoriesRequest
+	138, // 142: anubis.v1.TenantAdminService.CreateRealmCategory:input_type -> anubis.v1.CreateRealmCategoryRequest
+	141, // 143: anubis.v1.TenantAdminService.ListApplications:input_type -> anubis.v1.ListApplicationsRequest
+	143, // 144: anubis.v1.TenantAdminService.CreateApplication:input_type -> anubis.v1.CreateApplicationRequest
+	145, // 145: anubis.v1.TenantAdminService.UpdateApplication:input_type -> anubis.v1.UpdateApplicationRequest
+	147, // 146: anubis.v1.TenantAdminService.RotateClientSecret:input_type -> anubis.v1.RotateClientSecretRequest
+	150, // 147: anubis.v1.TenantAdminService.ListRoutePolicies:input_type -> anubis.v1.ListRoutePoliciesRequest
+	153, // 148: anubis.v1.TenantAdminService.QueryAudit:input_type -> anubis.v1.QueryAuditRequest
+	155, // 149: anubis.v1.TenantAdminService.VerifyAuditChain:input_type -> anubis.v1.VerifyAuditChainRequest
+	158, // 150: anubis.v1.TenantAdminService.ListSigningKeys:input_type -> anubis.v1.ListSigningKeysRequest
+	160, // 151: anubis.v1.TenantAdminService.RotateSigningKey:input_type -> anubis.v1.RotateSigningKeyRequest
+	162, // 152: anubis.v1.TenantAdminService.GetCatalogVersion:input_type -> anubis.v1.GetCatalogVersionRequest
+	164, // 153: anubis.v1.TenantAdminService.GetSigninPage:input_type -> anubis.v1.GetSigninPageRequest
+	166, // 154: anubis.v1.TenantAdminService.PutSigninPage:input_type -> anubis.v1.PutSigninPageRequest
+	109, // 155: anubis.v1.TenantAdminService.ListAuthPages:input_type -> anubis.v1.ListAuthPagesRequest
+	111, // 156: anubis.v1.TenantAdminService.GetAuthPage:input_type -> anubis.v1.GetAuthPageRequest
+	113, // 157: anubis.v1.TenantAdminService.CreateAuthPage:input_type -> anubis.v1.CreateAuthPageRequest
+	115, // 158: anubis.v1.TenantAdminService.UpdateAuthPage:input_type -> anubis.v1.UpdateAuthPageRequest
+	117, // 159: anubis.v1.TenantAdminService.DeleteAuthPage:input_type -> anubis.v1.DeleteAuthPageRequest
+	119, // 160: anubis.v1.TenantAdminService.SetDefaultAuthPage:input_type -> anubis.v1.SetDefaultAuthPageRequest
+	121, // 161: anubis.v1.TenantAdminService.PreviewAuthPage:input_type -> anubis.v1.PreviewAuthPageRequest
+	168, // 162: anubis.v1.ProvisioningService.DownloadImportTemplate:input_type -> anubis.v1.DownloadImportTemplateRequest
+	170, // 163: anubis.v1.ProvisioningService.ImportWorkbook:input_type -> anubis.v1.ImportWorkbookRequest
+	175, // 164: anubis.v1.PlatformAdminService.ListOperators:input_type -> anubis.v1.ListOperatorsRequest
+	181, // 165: anubis.v1.PlatformAdminService.CreateOperator:input_type -> anubis.v1.CreateOperatorRequest
+	177, // 166: anubis.v1.PlatformAdminService.AssignOperator:input_type -> anubis.v1.AssignOperatorRequest
+	179, // 167: anubis.v1.PlatformAdminService.RevokeAssignment:input_type -> anubis.v1.RevokeAssignmentRequest
+	217, // 168: anubis.v1.PlatformAdminService.SetOperatorStatus:input_type -> anubis.v1.SetOperatorStatusRequest
+	183, // 169: anubis.v1.PlatformAuthService.PlatformLogin:input_type -> anubis.v1.PlatformLoginRequest
+	189, // 170: anubis.v1.PlatformAuthService.PlatformVerifyMfa:input_type -> anubis.v1.PlatformVerifyMfaRequest
+	185, // 171: anubis.v1.PlatformAuthService.PlatformRefresh:input_type -> anubis.v1.PlatformRefreshRequest
+	187, // 172: anubis.v1.PlatformAuthService.PlatformLogout:input_type -> anubis.v1.PlatformLogoutRequest
+	191, // 173: anubis.v1.PlatformAuthService.BeginTotpEnrolment:input_type -> anubis.v1.BeginTotpEnrolmentRequest
+	193, // 174: anubis.v1.PlatformAuthService.ConfirmTotpEnrolment:input_type -> anubis.v1.ConfirmTotpEnrolmentRequest
+	195, // 175: anubis.v1.PlatformAuthService.MyTenants:input_type -> anubis.v1.MyTenantsRequest
+	2,   // 176: anubis.v1.IdentityAdminService.ListIdentities:output_type -> anubis.v1.ListIdentitiesResponse
+	5,   // 177: anubis.v1.IdentityAdminService.GetIdentity:output_type -> anubis.v1.GetIdentityResponse
+	7,   // 178: anubis.v1.IdentityAdminService.CreateIdentity:output_type -> anubis.v1.CreateIdentityResponse
+	9,   // 179: anubis.v1.IdentityAdminService.DisableIdentity:output_type -> anubis.v1.DisableIdentityResponse
+	11,  // 180: anubis.v1.IdentityAdminService.EnableIdentity:output_type -> anubis.v1.EnableIdentityResponse
+	13,  // 181: anubis.v1.IdentityAdminService.BumpTokenEpoch:output_type -> anubis.v1.BumpTokenEpochResponse
+	15,  // 182: anubis.v1.IdentityAdminService.SetPassword:output_type -> anubis.v1.SetPasswordResponse
+	17,  // 183: anubis.v1.IdentityAdminService.LinkIdentities:output_type -> anubis.v1.LinkIdentitiesResponse
+	19,  // 184: anubis.v1.IdentityAdminService.RequestErasure:output_type -> anubis.v1.RequestErasureResponse
+	21,  // 185: anubis.v1.IdentityAdminService.ListCredentials:output_type -> anubis.v1.ListCredentialsResponse
+	23,  // 186: anubis.v1.IdentityAdminService.RevokeCredential:output_type -> anubis.v1.RevokeCredentialResponse
+	26,  // 187: anubis.v1.IdentityAdminService.ListConsents:output_type -> anubis.v1.ListConsentsResponse
+	28,  // 188: anubis.v1.IdentityAdminService.RecordConsent:output_type -> anubis.v1.RecordConsentResponse
+	30,  // 189: anubis.v1.IdentityAdminService.WithdrawConsent:output_type -> anubis.v1.WithdrawConsentResponse
+	33,  // 190: anubis.v1.ScopeAdminService.ListScopeAxes:output_type -> anubis.v1.ListScopeAxesResponse
+	35,  // 191: anubis.v1.ScopeAdminService.CreateScopeAxis:output_type -> anubis.v1.CreateScopeAxisResponse
+	37,  // 192: anubis.v1.ScopeAdminService.UpdateScopeAxis:output_type -> anubis.v1.UpdateScopeAxisResponse
+	39,  // 193: anubis.v1.ScopeAdminService.StrictDryRun:output_type -> anubis.v1.StrictDryRunResponse
+	42,  // 194: anubis.v1.ScopeAdminService.ListScopeNodeTypes:output_type -> anubis.v1.ListScopeNodeTypesResponse
+	44,  // 195: anubis.v1.ScopeAdminService.CreateScopeNodeType:output_type -> anubis.v1.CreateScopeNodeTypeResponse
+	47,  // 196: anubis.v1.ScopeAdminService.ListScopeNodes:output_type -> anubis.v1.ListScopeNodesResponse
+	211, // 197: anubis.v1.ScopeAdminService.GetScopeNode:output_type -> anubis.v1.GetScopeNodeResponse
+	210, // 198: anubis.v1.ScopeAdminService.GetScopeNodes:output_type -> anubis.v1.GetScopeNodesResponse
+	214, // 199: anubis.v1.ScopeAdminService.ScopeAncestors:output_type -> anubis.v1.ScopeAncestorsResponse
+	49,  // 200: anubis.v1.ScopeAdminService.CreateScopeNode:output_type -> anubis.v1.CreateScopeNodeResponse
+	51,  // 201: anubis.v1.ScopeAdminService.EnsureAxisRoot:output_type -> anubis.v1.EnsureAxisRootResponse
+	53,  // 202: anubis.v1.ScopeAdminService.MoveScopeNode:output_type -> anubis.v1.MoveScopeNodeResponse
+	55,  // 203: anubis.v1.ScopeAdminService.ArchiveScopeNode:output_type -> anubis.v1.ArchiveScopeNodeResponse
+	58,  // 204: anubis.v1.ScopeAdminService.UpsertScopeNodes:output_type -> anubis.v1.UpsertScopeNodesResponse
+	61,  // 205: anubis.v1.ScopeAdminService.ListSyncSources:output_type -> anubis.v1.ListSyncSourcesResponse
+	63,  // 206: anubis.v1.ScopeAdminService.CreateSyncSource:output_type -> anubis.v1.CreateSyncSourceResponse
+	65,  // 207: anubis.v1.ScopeAdminService.UpdateSyncSource:output_type -> anubis.v1.UpdateSyncSourceResponse
+	67,  // 208: anubis.v1.ScopeAdminService.RunSync:output_type -> anubis.v1.RunSyncResponse
+	70,  // 209: anubis.v1.ScopeAdminService.ListSyncRuns:output_type -> anubis.v1.ListSyncRunsResponse
+	73,  // 210: anubis.v1.AuthzAdminService.ListRoles:output_type -> anubis.v1.ListRolesResponse
+	75,  // 211: anubis.v1.AuthzAdminService.CreateRole:output_type -> anubis.v1.CreateRoleResponse
+	77,  // 212: anubis.v1.AuthzAdminService.UpdateRole:output_type -> anubis.v1.UpdateRoleResponse
+	80,  // 213: anubis.v1.AuthzAdminService.GetRoleEffective:output_type -> anubis.v1.GetRoleEffectiveResponse
+	83,  // 214: anubis.v1.AuthzAdminService.ListPermissions:output_type -> anubis.v1.ListPermissionsResponse
+	87,  // 215: anubis.v1.AuthzAdminService.ListGrants:output_type -> anubis.v1.ListGrantsResponse
+	216, // 216: anubis.v1.AuthzAdminService.SearchGrants:output_type -> anubis.v1.SearchGrantsResponse
+	89,  // 217: anubis.v1.AuthzAdminService.CreateGrant:output_type -> anubis.v1.CreateGrantResponse
+	91,  // 218: anubis.v1.AuthzAdminService.RevokeGrant:output_type -> anubis.v1.RevokeGrantResponse
+	95,  // 219: anubis.v1.AuthzAdminService.ListMemberships:output_type -> anubis.v1.ListMembershipsResponse
+	97,  // 220: anubis.v1.AuthzAdminService.CreateMembership:output_type -> anubis.v1.CreateMembershipResponse
+	99,  // 221: anubis.v1.AuthzAdminService.SetMembershipEntries:output_type -> anubis.v1.SetMembershipEntriesResponse
+	101, // 222: anubis.v1.AuthzAdminService.AssignMembership:output_type -> anubis.v1.AssignMembershipResponse
+	103, // 223: anubis.v1.AuthzAdminService.UnassignMembership:output_type -> anubis.v1.UnassignMembershipResponse
+	105, // 224: anubis.v1.AuthzAdminService.ResyncMembership:output_type -> anubis.v1.ResyncMembershipResponse
+	107, // 225: anubis.v1.AuthzAdminService.ApplyManifest:output_type -> anubis.v1.ApplyManifestResponse
+	125, // 226: anubis.v1.TenantAdminService.ListTenants:output_type -> anubis.v1.ListTenantsResponse
+	127, // 227: anubis.v1.TenantAdminService.CreateTenant:output_type -> anubis.v1.CreateTenantResponse
+	199, // 228: anubis.v1.TenantAdminService.UpdateTenant:output_type -> anubis.v1.UpdateTenantResponse
+	203, // 229: anubis.v1.TenantAdminService.GetTenantStats:output_type -> anubis.v1.GetTenantStatsResponse
+	207, // 230: anubis.v1.TenantAdminService.GetDashboard:output_type -> anubis.v1.GetDashboardResponse
+	221, // 231: anubis.v1.TenantAdminService.ListApiKeys:output_type -> anubis.v1.ListApiKeysResponse
+	223, // 232: anubis.v1.TenantAdminService.CreateApiKey:output_type -> anubis.v1.CreateApiKeyResponse
+	225, // 233: anubis.v1.TenantAdminService.RevokeApiKey:output_type -> anubis.v1.RevokeApiKeyResponse
+	201, // 234: anubis.v1.TenantAdminService.SetTenantStatus:output_type -> anubis.v1.SetTenantStatusResponse
+	130, // 235: anubis.v1.TenantAdminService.ListRealms:output_type -> anubis.v1.ListRealmsResponse
+	132, // 236: anubis.v1.TenantAdminService.CreateRealm:output_type -> anubis.v1.CreateRealmResponse
+	134, // 237: anubis.v1.TenantAdminService.UpdateRealm:output_type -> anubis.v1.UpdateRealmResponse
+	137, // 238: anubis.v1.TenantAdminService.ListRealmCategories:output_type -> anubis.v1.ListRealmCategoriesResponse
+	139, // 239: anubis.v1.TenantAdminService.CreateRealmCategory:output_type -> anubis.v1.CreateRealmCategoryResponse
+	142, // 240: anubis.v1.TenantAdminService.ListApplications:output_type -> anubis.v1.ListApplicationsResponse
+	144, // 241: anubis.v1.TenantAdminService.CreateApplication:output_type -> anubis.v1.CreateApplicationResponse
+	146, // 242: anubis.v1.TenantAdminService.UpdateApplication:output_type -> anubis.v1.UpdateApplicationResponse
+	148, // 243: anubis.v1.TenantAdminService.RotateClientSecret:output_type -> anubis.v1.RotateClientSecretResponse
+	151, // 244: anubis.v1.TenantAdminService.ListRoutePolicies:output_type -> anubis.v1.ListRoutePoliciesResponse
+	154, // 245: anubis.v1.TenantAdminService.QueryAudit:output_type -> anubis.v1.QueryAuditResponse
+	156, // 246: anubis.v1.TenantAdminService.VerifyAuditChain:output_type -> anubis.v1.VerifyAuditChainResponse
+	159, // 247: anubis.v1.TenantAdminService.ListSigningKeys:output_type -> anubis.v1.ListSigningKeysResponse
+	161, // 248: anubis.v1.TenantAdminService.RotateSigningKey:output_type -> anubis.v1.RotateSigningKeyResponse
+	163, // 249: anubis.v1.TenantAdminService.GetCatalogVersion:output_type -> anubis.v1.GetCatalogVersionResponse
+	165, // 250: anubis.v1.TenantAdminService.GetSigninPage:output_type -> anubis.v1.GetSigninPageResponse
+	167, // 251: anubis.v1.TenantAdminService.PutSigninPage:output_type -> anubis.v1.PutSigninPageResponse
+	110, // 252: anubis.v1.TenantAdminService.ListAuthPages:output_type -> anubis.v1.ListAuthPagesResponse
+	112, // 253: anubis.v1.TenantAdminService.GetAuthPage:output_type -> anubis.v1.GetAuthPageResponse
+	114, // 254: anubis.v1.TenantAdminService.CreateAuthPage:output_type -> anubis.v1.CreateAuthPageResponse
+	116, // 255: anubis.v1.TenantAdminService.UpdateAuthPage:output_type -> anubis.v1.UpdateAuthPageResponse
+	118, // 256: anubis.v1.TenantAdminService.DeleteAuthPage:output_type -> anubis.v1.DeleteAuthPageResponse
+	120, // 257: anubis.v1.TenantAdminService.SetDefaultAuthPage:output_type -> anubis.v1.SetDefaultAuthPageResponse
+	122, // 258: anubis.v1.TenantAdminService.PreviewAuthPage:output_type -> anubis.v1.PreviewAuthPageResponse
+	169, // 259: anubis.v1.ProvisioningService.DownloadImportTemplate:output_type -> anubis.v1.DownloadImportTemplateResponse
+	172, // 260: anubis.v1.ProvisioningService.ImportWorkbook:output_type -> anubis.v1.ImportWorkbookResponse
+	176, // 261: anubis.v1.PlatformAdminService.ListOperators:output_type -> anubis.v1.ListOperatorsResponse
+	182, // 262: anubis.v1.PlatformAdminService.CreateOperator:output_type -> anubis.v1.CreateOperatorResponse
+	178, // 263: anubis.v1.PlatformAdminService.AssignOperator:output_type -> anubis.v1.AssignOperatorResponse
+	180, // 264: anubis.v1.PlatformAdminService.RevokeAssignment:output_type -> anubis.v1.RevokeAssignmentResponse
+	218, // 265: anubis.v1.PlatformAdminService.SetOperatorStatus:output_type -> anubis.v1.SetOperatorStatusResponse
+	184, // 266: anubis.v1.PlatformAuthService.PlatformLogin:output_type -> anubis.v1.PlatformLoginResponse
+	190, // 267: anubis.v1.PlatformAuthService.PlatformVerifyMfa:output_type -> anubis.v1.PlatformVerifyMfaResponse
+	186, // 268: anubis.v1.PlatformAuthService.PlatformRefresh:output_type -> anubis.v1.PlatformRefreshResponse
+	188, // 269: anubis.v1.PlatformAuthService.PlatformLogout:output_type -> anubis.v1.PlatformLogoutResponse
+	192, // 270: anubis.v1.PlatformAuthService.BeginTotpEnrolment:output_type -> anubis.v1.BeginTotpEnrolmentResponse
+	194, // 271: anubis.v1.PlatformAuthService.ConfirmTotpEnrolment:output_type -> anubis.v1.ConfirmTotpEnrolmentResponse
+	197, // 272: anubis.v1.PlatformAuthService.MyTenants:output_type -> anubis.v1.MyTenantsResponse
+	176, // [176:273] is the sub-list for method output_type
+	79,  // [79:176] is the sub-list for method input_type
+	79,  // [79:79] is the sub-list for extension type_name
+	79,  // [79:79] is the sub-list for extension extendee
+	0,   // [0:79] is the sub-list for field type_name
 }
 
 func init() { file_anubis_v1_admin_proto_init() }
@@ -13771,7 +13994,7 @@ func file_anubis_v1_admin_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_anubis_v1_admin_proto_rawDesc), len(file_anubis_v1_admin_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   223,
+			NumMessages:   226,
 			NumExtensions: 0,
 			NumServices:   7,
 		},

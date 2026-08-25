@@ -15,7 +15,7 @@ import type {
   Identity, Membership, MembershipEntry, NewAxisInput, NewGrantInput,
   NewIdentityInput, NewNodeInput, NewRoleInput, Permission, Realm,
   RealmCategory, RealmKind, Role, ScopeAxis, ScopeNode, ScopeNodeType,
-  SecuritySignal, SignInConfig, StrictDryRun, SyncPlan, SyncSource, Tenant,
+  SecuritySignal, SignInConfig, StrictDryRun, SyncPlan, SyncRun, SyncSource, Tenant,
   Ial, Risk, Uuid,
 } from './types'
 
@@ -927,4 +927,25 @@ export async function dashboard(): Promise<DashboardStats> {
       since: new Date(Number(s.since) * 1000).toISOString(),
     })),
   }
+}
+
+/* What a feed has actually done. scope_sync_apply has recorded every run
+   since migration 0017 — this is the first thing to read it, so the panel
+   showed nothing at all until now. */
+export async function syncRuns(sourceId: Uuid, limit = 25): Promise<SyncRun[]> {
+  const resp = await rpc.scopeAdmin.listSyncRuns({ sourceId, limit })
+  return resp.runs.map((r): SyncRun => {
+    const rep = safeJSON(r.reportJson) as Partial<Record<string, number | unknown[]>>
+    const n = (k: string) => Number(rep?.[k] ?? 0)
+    return {
+      id: r.id,
+      source_id: r.sourceId,
+      at: atRequired(r.startedAt),
+      dry: r.dry,
+      status: r.status,
+      added: n('added'), renamed: n('renamed'), moved: n('moved'),
+      archived: n('archived'), unchanged: n('unchanged'),
+      errors: Array.isArray(rep?.errors) ? rep.errors.length : 0,
+    }
+  })
 }

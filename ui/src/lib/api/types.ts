@@ -342,10 +342,16 @@ export interface SyncRun {
   source_id: Uuid
   at: string
   dry: boolean
+  /** running | ok | failed | dry_run — a row stuck at running is a run
+      whose process died, which is worth seeing rather than hiding. */
+  status: string
   added: number
   renamed: number
+  moved: number
   archived: number
   unchanged: number
+  /** Rows the reconciler could not place. */
+  errors: number
 }
 
 export interface StrictDryRun {
