@@ -29,9 +29,10 @@ func NewServer(logger *slog.Logger, uiOrigin string, connectMux http.Handler,
 	mux.HandleFunc("GET /healthz", health.Healthz)
 	mux.HandleFunc("GET /readyz", health.Readyz)
 
-	// Everything else falls through to connect (its handlers 404 unknown
-	// paths themselves).
-	mux.Handle("/", corsMiddleware(uiOrigin, connectMux))
+	// Everything else: API-shaped paths fall through to connect (its
+	// handlers 404 unknown paths themselves); the rest is the embedded
+	// console, served from this same origin so production needs no CORS.
+	mux.Handle("/", corsMiddleware(uiOrigin, consoleHandler(connectMux)))
 
 	return &Server{mux: mux, logger: logger}
 }

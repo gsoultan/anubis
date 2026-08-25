@@ -42,8 +42,10 @@ for i in $(seq 1 60); do
   sleep 1
 done
 
-go test -tags integration ./test/integration/
-go test -tags integration ./test/e2e/
+# -count=1: these suites hit a live server and database — external state the
+# test cache cannot see, so a cached "ok" would be a lie.
+go test -count=1 -tags integration ./test/integration/
+go test -count=1 -tags integration ./test/e2e/
 
 # Fuzz smoke: seconds per target, enough to catch a corpus regression. The
 # path-normalisation fuzzer has found real bypasses before; it stays.
