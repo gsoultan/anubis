@@ -29,6 +29,10 @@ type Config struct {
 	// MasterKey seals private keys at rest (ANUBIS_MASTER_KEY, base64url 32B).
 	// Required in prod; dev derives an INSECURE constant and says so loudly.
 	MasterKey []byte
+
+	// TrustedProxies is a comma-separated list of CIDRs (or bare addresses)
+	// whose X-Forwarded-For header is believed. Empty trusts nothing.
+	TrustedProxies string
 	// AutoKeys provisions signing keys at startup when none exist (dev).
 	AutoKeys bool
 	// UIOrigin enables CORS for the console origin in dev
@@ -88,6 +92,9 @@ func Load() (*Config, error) {
 	if c.MaxConns < 2 {
 		c.MaxConns = 2
 	}
+	// Empty means trust nothing, which is right for a directly exposed
+	// server and wrong the moment TLS is terminated in front of it.
+	c.TrustedProxies = os.Getenv("ANUBIS_TRUSTED_PROXIES")
 	// The installer writes config.yaml; the environment still wins, so a
 	// container that sets ANUBIS_DB_URL keeps behaving exactly as before and
 	// nothing here changes for deployments that never run the installer.

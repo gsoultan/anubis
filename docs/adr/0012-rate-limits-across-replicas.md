@@ -59,6 +59,16 @@ is down — fail open and lose the limit, or fail closed and lose sign-in?),
 and an operational dependency in a system whose entire deployment story is
 currently "a binary and a database".
 
+## Measured, not assumed
+
+Two instances, one database, 2026-08-25: instance A refused the sixth
+sign-in attempt for an account; instance B accepted that same account on the
+next request. The multiplier is real and is exactly what this ADR accepts.
+The same drill confirmed the two properties that make it tolerable —
+maintenance jobs coordinate by advisory lock (one runs, the others skip) and
+a revocation on one instance is refused by another on the very next request,
+because authentication reads the database rather than a cache.
+
 ## Consequences
 
 - **The documented limits are per instance.** [operations.md](../operations.md)

@@ -2,7 +2,6 @@ package apiconnect
 
 import (
 	"context"
-	"net"
 	"strings"
 
 	"connectrpc.com/connect"
@@ -11,12 +10,21 @@ import (
 )
 
 // MetaInterceptor stamps request id, client IP and user agent into context.
-// The IP comes from the PEER address, never a client header — X-Forwarded-For
-// is only believable behind a proxy you control, which is a deployment
-// decision, not a default.
-type MetaInterceptor struct{}
+//
+// The IP comes from the PEER address unless a trusted proxy is configured:
+// X-Forwarded-For is only believable behind a proxy you control, which is a
+// deployment decision, not a default. Nothing is trusted until named
+// (ANUBIS_TRUSTED_PROXIES) — but naming it matters, because TLS termination
+// means a proxy, and behind one an unconfigured server sees every request as
+// coming from that proxy, collapsing per-IP rate limits into a single bucket
+// for the whole installation.
+type MetaInterceptor struct {
+	trust *authctx.ProxyTrust
+}
 
-func NewMetaInterceptor() *MetaInterceptor { return &MetaInterceptor{} }
+func NewMetaInterceptor(trust *authctx.ProxyTrust) *MetaInterceptor {
+	return &MetaInterceptor{trust: trust}
+}
 
 func (i *MetaInterceptor) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
 	return func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
@@ -27,8 +35,9 @@ func (i *MetaInterceptor) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
 			}
 		}
 		ctx = authctx.WithRequestID(ctx, rid)
-		if host, _, err := net.SplitHostPort(req.Peer().Addr); err == nil {
-			ctx = authctx.WithClientIP(ctx, host)
+		if ip := authctx.ClientIPFrom(req.Peer().Addr,
+			req.Header().Get("X-Forwarded-For"), i.trust); ip != "" {
+			ctx = authctx.WithClientIP(ctx, ip)
 		}
 		if ua := req.Header().Get("User-Agent"); ua != "" {
 			ctx = authctx.WithUserAgent(ctx, truncate(ua, 256))

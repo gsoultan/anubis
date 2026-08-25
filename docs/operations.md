@@ -10,13 +10,15 @@ Everything an on-call engineer needs at 3am, and nothing that duplicates
 3. [Database roles](#database-roles)
 4. [Health and readiness](#health-and-readiness)
 5. [Metrics](#metrics)
-6. [Machine credentials for pipelines](#machine-credentials-for-pipelines)
-7. [Maintenance jobs](#maintenance-jobs)
-8. [Key rotation](#key-rotation)
-9. [Incident: refresh token reuse](#incident-refresh-token-reuse)
-10. [Incident: signing key compromise](#incident-signing-key-compromise)
-11. [Restoring from backup](#restoring-from-backup)
-12. [Performance budgets](#performance-budgets)
+6. [TLS and the reverse proxy](#tls-and-the-reverse-proxy)
+7. [Running more than one instance](#running-more-than-one-instance)
+8. [Machine credentials for pipelines](#machine-credentials-for-pipelines)
+9. [Maintenance jobs](#maintenance-jobs)
+10. [Key rotation](#key-rotation)
+11. [Incident: refresh token reuse](#incident-refresh-token-reuse)
+12. [Incident: signing key compromise](#incident-signing-key-compromise)
+13. [Restoring from backup](#restoring-from-backup)
+14. [Performance budgets](#performance-budgets)
 
 ---
 
@@ -63,6 +65,7 @@ says how to get the real one.
 | `ANUBIS_SNAPSHOT_MAX_AGE` | `5m` | Past this the gate fails closed **and readiness fails** |
 | `ANUBIS_DEBUG_LISTEN` | *(off)* | pprof/expvar; bind loopback only |
 | `ANUBIS_UI_ORIGIN` | *(off)* | Dev CORS only; production is same-origin |
+| `ANUBIS_TRUSTED_PROXIES` | *(none)* | CIDRs whose `X-Forwarded-For` is believed. **Set this behind a TLS proxy** or every caller shares one rate-limit bucket |
 
 **Rate limits are per instance.** Counters live in the process
 (`internal/platform/ratelimit`), so N replicas enforce N times the published
@@ -113,6 +116,97 @@ and `anubis_build_info{version}`.
 Alert rules, thresholds and the runbook section each one points at live in
 [alerting.md](alerting.md). If you wire up exactly one alert, make it
 refresh-token reuse.
+
+## TLS and the reverse proxy
+
+Anubis does not terminate TLS. It serves plain HTTP on `ANUBIS_LISTEN` and
+expects a proxy in front — which is not optional if anyone signs in through a
+browser: the SSO and sign-out cookies use the `__Host-` prefix, and browsers
+only accept that over HTTPS.
+
+Two settings make a proxied deployment correct, and both are easy to miss:
+
+**1. Name your proxies.** `ANUBIS_TRUSTED_PROXIES` is a comma-separated list
+of CIDRs (or bare addresses) whose `X-Forwarded-For` is believed. Leave it
+empty and the client IP is the PROXY's on every request — so the per-IP rate
+limits stop bounding one caller and start bounding the entire installation,
+which fails a busy morning rather than an attacker. Set it and the header is
+believed from those peers only. The header is read RIGHT to left, taking the
+first hop that is not itself a trusted proxy, so a client that prepends its
+own `X-Forwarded-For` cannot choose its address.
+
+```
+ANUBIS_TRUSTED_PROXIES=127.0.0.1/32,10.0.0.0/8
+```
+
+**2. `ANUBIS_ISSUER` must be the public HTTPS URL**, not the internal one.
+It is the `iss` claim every SDK verifies and the base for every page URL and
+discovery document. Getting it wrong produces token failures that look like
+a key problem.
+
+### nginx
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name auth.example.com;
+
+    ssl_certificate     /etc/letsencrypt/live/auth.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/auth.example.com/privkey.pem;
+
+    location / {
+        proxy_pass http://127.0.0.1:7448;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Connect/gRPC needs HTTP/1.1 with upgrade support; the default
+        # HTTP/1.0 upstream breaks streaming RPCs.
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+
+        # Long enough for the KDF on sign-in (~50ms) plus headroom, short
+        # enough to fail before the client gives up.
+        proxy_read_timeout 60s;
+    }
+}
+```
+
+### Caddy
+
+Caddy sets `X-Forwarded-*` itself and manages certificates, so it is two
+lines:
+
+```
+auth.example.com {
+    reverse_proxy 127.0.0.1:7448
+}
+```
+
+Either way, keep the debug listener (`ANUBIS_DEBUG_LISTEN`) on loopback and
+**never** proxy it: it serves `/metrics` and pprof.
+
+## Running more than one instance
+
+Anubis is designed for it — nothing is stored in the process that another
+instance needs — but until now nobody had watched two run together. Drill
+performed 2026-08-25, two instances against one database:
+
+| Behaviour | Observed |
+| :--- | :--- |
+| Maintenance jobs | Each boot job ran on **exactly one** instance; the other recorded `result="skipped"`. That is `pg_try_advisory_lock` working, and it is why there is no leader election |
+| Revocation | An API key revoked on instance A was refused by instance B on the **very next request** (200 → 401), with no restart and no cache to expire |
+| Rate limits | Instance A refused the 6th attempt; instance B accepted the same account immediately — the per-instance multiplier [ADR-0012](adr/0012-rate-limits-across-replicas.md) accepts on purpose |
+
+So: add instances freely for throughput (one saturates near 11.8k
+decisions/s), and remember that the published rate limits multiply by the
+instance count. If a real per-account ceiling matters, divide the configured
+limit by the number of instances.
+
+The gate's snapshot is also per-instance, refreshed on a poll and by
+LISTEN/NOTIFY. `/readyz` fails once a snapshot passes
+`ANUBIS_SNAPSHOT_MAX_AGE`, which is what takes a stale instance out of the
+load balancer rather than letting it deny traffic it should allow.
 
 ## Machine credentials for pipelines
 

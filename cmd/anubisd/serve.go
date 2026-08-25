@@ -21,6 +21,7 @@ import (
 	"github.com/gsoultan/anubis/internal/platform/metrics"
 	"github.com/gsoultan/anubis/internal/platform/migrate"
 	"github.com/gsoultan/anubis/internal/platform/ratelimit"
+	"github.com/gsoultan/anubis/internal/shared/authctx"
 	"github.com/gsoultan/anubis/migrations"
 )
 
@@ -89,9 +90,20 @@ func runServe(ctx context.Context, logger *slog.Logger) error {
 	}
 	defer app.close()
 
+	// Behind TLS termination the peer address is always the proxy, so per-IP
+	// limits would bound the whole installation rather than one caller.
+	// Naming the proxies is what makes the client's own address visible.
+	trust, err := authctx.NewProxyTrust(cfg.TrustedProxies)
+	if err != nil {
+		return fmt.Errorf("ANUBIS_TRUSTED_PROXIES: %w", err)
+	}
+	if cfg.TrustedProxies != "" {
+		logger.Info("trusting X-Forwarded-For from proxies", "cidrs", cfg.TrustedProxies)
+	}
+
 	limiter := ratelimit.New()
 	opts := connect.WithInterceptors(
-		apiconnect.NewMetaInterceptor(),
+		apiconnect.NewMetaInterceptor(trust),
 		apiconnect.NewAuthnInterceptor(cfg.Issuer, app.ring, app.tenancy, app.auth, app.control, app.clock),
 	)
 

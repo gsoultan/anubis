@@ -23,6 +23,35 @@ chmod 0700 /etc/anubis/secrets
 
 systemctl daemon-reload >/dev/null 2>&1 || true
 
+# An UPGRADE must not read like a fresh install. Printing "create the master
+# key" to somebody who already has one is, at best, noise they learn to skip
+# — and at worst an instruction that destroys every sealed key in their
+# database if followed. The key file is the reliable marker: it exists on
+# every configured install and on no fresh one.
+if [ -f /etc/anubis/secrets/master.key ]; then
+    systemctl is-active --quiet anubisd 2>/dev/null && RUNNING=yes || RUNNING=no
+    cat <<UPGRADE
+
+anubisd upgraded. Your master key and configuration were left untouched.
+
+  1. Apply any new migrations, as the OWNER role. Forward-only, and they
+     take an advisory lock so several hosts cannot race:
+
+       ANUBIS_DB_URL=postgres://anubis_owner:...@host/anubis anubisd migrate
+
+  2. Restart:
+
+       systemctl restart anubisd
+
+  3. Confirm it came back:
+
+       curl -sf http://127.0.0.1:7448/readyz && echo ready
+
+UPGRADE
+    [ "$RUNNING" = yes ] && echo "  (anubisd is running the OLD binary until you restart it.)" && echo
+    exit 0
+fi
+
 cat <<'BANNER'
 
 anubisd installed. Before starting it:
@@ -36,7 +65,9 @@ anubisd installed. Before starting it:
          > /etc/anubis/secrets/master.key
        chmod 0400 /etc/anubis/secrets/master.key
 
-  2. Set ANUBIS_DB_URL and ANUBIS_ISSUER in /etc/anubis/anubisd.env.
+  2. Set ANUBIS_DB_URL and ANUBIS_ISSUER in /etc/anubis/anubisd.env. Behind
+     a TLS proxy, set ANUBIS_TRUSTED_PROXIES too, or every caller shares one
+     rate-limit bucket.
 
   3. Apply the schema as the OWNER role (a separate step on purpose, so a
      schema change is a deliberate deploy with its own rollback plan):
