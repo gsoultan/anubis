@@ -383,12 +383,23 @@ function RootLayout() {
    out visitor would now get a wall of failed requests instead of a sign-in
    form. One gate is also one place to get right. */
 export const Route = createRootRoute({
-  beforeLoad: ({ location }) => {
+  beforeLoad: async ({ location }) => {
     // The installer and the sign-in form are the two pages that exist before
     // anybody is signed in.
     if (location.pathname === '/signin' || location.pathname === '/setup') return
     if (!isAuthenticated()) {
       throw redirect({ to: '/signin', search: { next: location.href } })
+    }
+    // Resolve the working tenant BEFORE any screen mounts. Every admin query
+    // carries X-Anubis-Tenant; on a fresh session the picker used to choose
+    // the default in an effect, and any screen that rendered first fired
+    // tenant-scoped requests with no tenant — a wall of failed calls right
+    // after sign-in. (The server now refuses those cleanly as
+    // no_tenant_selected, but the console should not make them at all.)
+    if (!currentTenant()) {
+      const tenants = await myTenants().catch(() => [])
+      const first = tenants[0]
+      if (first) setCurrentTenant(first.slug)
     }
   },
   component: RootLayout,

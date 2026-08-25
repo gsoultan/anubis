@@ -107,8 +107,39 @@ async function refreshIfNeeded(): Promise<void> {
   await refreshing;
 }
 
+/* Admin calls need the working-tenant header, but on a fresh session the
+   default tenant is only chosen once MyTenants answers. Shell components
+   mount the moment tokens exist and their queries used to race that choice —
+   a wall of headerless requests failing right after sign-in. This gate holds
+   tenant-scoped calls at ONE choke point until the tenant is resolved, or
+   provably unresolvable (no tenants assigned), or 5s passes (never deadlock
+   the console over a nicety). PlatformAuth calls bypass it: MyTenants is
+   what RESOLVES the gate and must never wait on it. */
+let tenantGate: Promise<void> | null = null;
+let openTenantGate: (() => void) | null = null;
+
+function tenantResolved(): void {
+  openTenantGate?.();
+  openTenantGate = null;
+  tenantGate = null;
+}
+
+function awaitTenant(): Promise<void> {
+  if (currentTenant()) return Promise.resolve();
+  if (!tenantGate) {
+    tenantGate = new Promise((resolve) => {
+      openTenantGate = resolve;
+      setTimeout(resolve, 5000);
+    });
+  }
+  return tenantGate;
+}
+
 const authInterceptor: Interceptor = (next) => async (req) => {
   await refreshIfNeeded();
+  if (!req.service.typeName.startsWith("anubis.v1.PlatformAuth")) {
+    await awaitTenant();
+  }
   if (tokens) req.header.set("Authorization", `Bearer ${tokens.accessToken}`);
   const tenant = currentTenant();
   if (tenant) req.header.set("X-Anubis-Tenant", tenant);
@@ -188,7 +219,12 @@ export async function confirmTotpEnrolment(code: string) {
 /** Which tenants the signed-in operator may administer. */
 export async function myTenants() {
   const resp = await api.platformSession.myTenants({});
-  return resp.tenants.map((t) => ({ slug: t.slug, name: t.name, role: t.role, all: t.all }));
+  const tenants = resp.tenants.map((t) => ({ slug: t.slug, name: t.name, role: t.role, all: t.all }));
+  // An empty answer is also an answer: a fresh installation has no tenants
+  // to select, and held requests must proceed to their clean refusals
+  // rather than wait out the gate's timeout.
+  if (tenants.length === 0) tenantResolved();
+  return tenants;
 }
 
 /* The tenant an operator is working in. It travels as a request header and is
@@ -205,5 +241,6 @@ export function currentTenant(): string {
 export function setCurrentTenant(slug: string) {
   if (slug) sessionStorage.setItem(TENANT_KEY, slug);
   else sessionStorage.removeItem(TENANT_KEY);
+  if (slug) tenantResolved();
   for (const fn of listeners) fn();
 }

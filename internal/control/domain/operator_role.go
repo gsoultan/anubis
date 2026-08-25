@@ -75,15 +75,36 @@ var adminPermissions = append([]string{
 	"anubis:manifest:apply",
 }, operatorPermissions...)
 
-// ownerPermissions is the installation itself: the tenants that exist, and
-// who operates it. An owner is not a bigger operator — they answer a
-// different question.
-var ownerPermissions = append([]string{
+// installationPermissions operate on the installation itself — the tenants
+// that exist, who operates it, the signing keys — rather than inside some
+// selected tenant. These are the only calls that legitimately run with NO
+// tenant selected; everything else an operator does happens inside the
+// working tenant and needs one.
+var installationPermissions = []string{
 	PermAssignOperators,
 	PermManageTenants,
 	"anubis:tenant:admin",
 	"anubis:key:admin",
-}, adminPermissions...)
+}
+
+// InstallationScoped reports whether a permission belongs to the
+// installation plane. The guard demands a selected tenant for everything
+// else: global authority means ANY tenant, not NO tenant, and a
+// tenant-scoped call slipping through with an empty tenant id reaches the
+// repositories as an internal error instead of a usable refusal.
+func InstallationScoped(permission string) bool {
+	for _, p := range installationPermissions {
+		if p == permission {
+			return true
+		}
+	}
+	return false
+}
+
+// ownerPermissions is the installation itself: the tenants that exist, and
+// who operates it. An owner is not a bigger operator — they answer a
+// different question.
+var ownerPermissions = append(append([]string{}, installationPermissions...), adminPermissions...)
 
 // Valid reports whether r is a role the schema will accept.
 func (r OperatorRole) Valid() bool {

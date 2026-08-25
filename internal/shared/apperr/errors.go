@@ -21,6 +21,10 @@ var (
 	// Authorization.
 	ErrPermissionDenied = E(KindPermissionDenied, "permission_denied", "Permission denied")
 	ErrStepUpRequired   = E(KindPermissionDenied, "step_up_required", "Step-up authentication required")
+	// An operator with installation-wide authority asked about a tenant
+	// without selecting one. Not a refusal of the operator — a missing
+	// parameter the client can supply (X-Anubis-Tenant).
+	ErrNoTenantSelected = E(KindFailedPrecondition, "no_tenant_selected", "No tenant selected")
 
 	// Requests.
 	ErrInvalidArgument = E(KindInvalidArgument, "invalid_argument", "Invalid argument")

@@ -76,11 +76,20 @@ func (g *Guard) requirePlatform(ctx context.Context, p *authctx.Principal, permi
 	now := g.now()
 
 	// A global assignment is authority over the INSTALLATION, not over some
-	// particular tenant, so it does not need one selected. That is not a
-	// convenience: an owner creating the first tenant has none to select, and
-	// requiring one would make a fresh installation impossible to populate.
+	// particular tenant, so installation-plane calls do not need one
+	// selected. That is not a convenience: an owner creating the first
+	// tenant has none to select, and requiring one would make a fresh
+	// installation impossible to populate. Tenant-scoped calls still need a
+	// tenant even under global authority — "any tenant" is not "no tenant",
+	// and letting one through empty surfaces as an internal error deep in a
+	// repository instead of a refusal the console can act on.
 	for _, a := range mine {
 		if a.Global() && a.Live(now) && a.Role.Allows(permission) {
+			if p.TenantID == "" && !controldomain.InstallationScoped(permission) {
+				return nil, apperr.ErrNoTenantSelected.
+					With("permission", permission).
+					With("hint", "send X-Anubis-Tenant")
+			}
 			return p, nil
 		}
 	}

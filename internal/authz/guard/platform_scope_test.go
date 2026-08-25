@@ -2,10 +2,12 @@ package guard
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
 	controldomain "github.com/gsoultan/anubis/internal/control/domain"
+	"github.com/gsoultan/anubis/internal/shared/apperr"
 	"github.com/gsoultan/anubis/internal/shared/authctx"
 )
 
@@ -95,5 +97,41 @@ func TestTenantIdentityIsRefusedOutright(t *testing.T) {
 	p := &authctx.Principal{IdentityID: "alice", TenantID: "t1", Roles: []string{"anything"}}
 	if _, err := g.Require(ctxFor(p), "anubis:identity:read"); err == nil {
 		t.Fatal("a tenant identity passed the admin guard")
+	}
+}
+
+// Global authority means ANY tenant, not NO tenant: a tenant-scoped call
+// with none selected must come back as a usable precondition failure the
+// console can act on — not slip through to a repository with an empty
+// tenant id and surface as an internal error. (Found live: a fresh session
+// fired list queries before the tenant picker chose a default, and every
+// one of them 500ed.)
+func TestGlobalOwnerStillNeedsATenantForTenantScopedCalls(t *testing.T) {
+	g := (&Guard{}).WithOperators(fakeOps{rows: []controldomain.AssignmentRecord{
+		{OperatorID: "op", Role: controldomain.RoleOwner}, // global
+	}}, time.Now)
+
+	p := &authctx.Principal{IdentityID: "op", Platform: true}
+	_, err := g.Require(ctxFor(p), "anubis:identity:read")
+	if err == nil {
+		t.Fatal("a tenant-scoped call passed with no tenant selected")
+	}
+	var ae *apperr.Error
+	if !errors.As(err, &ae) || ae.Code != "no_tenant_selected" {
+		t.Fatalf("want no_tenant_selected, got %v", err)
+	}
+
+	// The same owner with a tenant selected sails through.
+	withTenant := &authctx.Principal{IdentityID: "op", TenantID: "t1", Platform: true}
+	if _, err := g.Require(ctxFor(withTenant), "anubis:identity:read"); err != nil {
+		t.Fatalf("owner refused inside a selected tenant: %v", err)
+	}
+
+	// Installation-plane calls never need one.
+	for _, perm := range []string{controldomain.PermManageTenants,
+		controldomain.PermAssignOperators, "anubis:tenant:admin", "anubis:key:admin"} {
+		if _, err := g.Require(ctxFor(p), perm); err != nil {
+			t.Fatalf("installation permission %q refused with no tenant: %v", perm, err)
+		}
 	}
 }
