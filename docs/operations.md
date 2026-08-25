@@ -217,6 +217,29 @@ Measured, and enforced by tests rather than asserted in prose:
 | Offline token verify (SDK) | ~50 µs, no I/O *(measured 62 µs)* | `BenchmarkVerify` |
 | Path normalise + match | µs *(measured 0.9 + 0.8 µs)* | `BenchmarkNormalizePath`, `BenchmarkMatch` |
 | Login | KDF-dominated *(~49 ms)* — **do not "optimise"** | `TestLoginTimingDoesNotRevealUserExistence` |
+| Decision API under load | p99 < 50 ms at 32-way concurrency *(measured 5.6 ms)* | `TestAuthorizeUnderConcurrency` |
+
+### What the API layer actually does under load
+
+`authorize()` is fast in the database and through pgx, but both measure one
+caller at a time. `TestAuthorizeUnderConcurrency` drives the whole path —
+interceptor, guard, endpoint middleware, pool — and the shape is worth
+knowing before you size anything:
+
+| Concurrent callers | Throughput | p50 | p99 |
+| :--- | :--- | :--- | :--- |
+| 32 | 11,800/s | 2.6 ms | 5.6 ms |
+| 64 | 11,700/s | 5.2 ms | 10.4 ms |
+| 128 | 12,100/s | 10.4 ms | 14.3 ms |
+| 256 | 11,800/s | 21.3 ms | 28.3 ms |
+
+Throughput is flat and latency rises linearly, which is the signature of a
+saturated system: past roughly 32 concurrent callers an instance is queueing,
+not going faster. **Scale out, not up** — adding callers to one instance buys
+latency and nothing else. (Measured on a development machine against a local
+database; treat the shape as the lesson and re-measure on your own hardware.)
+
+Turn it up for a soak: `ANUBIS_LOAD_WORKERS`, `ANUBIS_LOAD_SECONDS`.
 
 The login number is a security property, not a performance problem: the KDF
 cost is what makes offline cracking expensive, and it must be paid identically
