@@ -642,3 +642,64 @@ TWO DOCS WERE WRONG about controls that never existed: security.md claimed
 rate-limit "counters in Redis" and api.md claimed nonce GETDEL via Redis.
 There is no Redis; counters are in-process (which is WHY they are
 per-replica) and nonces use DELETE ... RETURNING.
+
+## Shipping as a Linux binary (2026-08-25) — NOT Kubernetes
+.goreleaser.yaml builds linux amd64/arm64 + tar.gz + .deb/.rpm (nfpm).
+scripts/build-console.sh is a before-hook that builds ui/dist AND greps for
+the placeholder: the binary embeds ui/dist, so a failed console build would
+otherwise ship a "console not built" page silently. CI runs a snapshot on
+every push and greps the binary; release.yml builds on a v* tag after
+re-running the gates.
+systemd unit (packaging/): Type=exec — anubisd does NOT speak sd_notify and a
+notify unit that never notifies hangs until timeout. Master key arrives as a
+CREDENTIAL (LoadCredential -> ANUBIS_KEY_FILE=%d/master.key), not an env var.
+ProtectSystem=strict means the INSTALLER cannot run under the unit (it writes
+config.yaml) — fine, because ANUBIS_DB_URL is set so it never runs.
+
+BUGS FOUND BY ACTUALLY INSTALLING/RUNNING, all fixed:
+1. config.Load() read the master key from ANUBIS_MASTER_KEY ONLY, so prod with
+   a valid key FILE refused to boot. Now either; and a source that is
+   CONFIGURED-but-broken is fatal even in dev (falling back to the printed dev
+   key would seal prod data under it).
+2. A fresh prod install has NO signing key (AutoKeys off outside dev):
+   /readyz 503, every login fails. `anubisd keys init access` mints+promotes,
+   refuses if an active key exists. Step 4 of the runbook.
+3. ~1 API KEY IN 9 COULD NEVER AUTHENTICATE. Keys are anb_live_<prefix>_<secret>
+   with an 8-char base64url prefix — an alphabet containing '_'. SplitAPIKey
+   searched for the FIRST '_', so a prefix containing one parsed as malformed.
+   Measured 214/2000 = 10.7%. Affects TENANT keys (0030) as shipped, not just
+   platform keys. Fixed by splitting at the known offset; backward compatible.
+4. Behind a TLS proxy the client IP was the PROXY on every request, so per-IP
+   rate limits bounded the WHOLE INSTALLATION — one attacker locks out
+   everyone. ANUBIS_TRUSTED_PROXIES names CIDRs whose X-Forwarded-For is
+   believed; header read RIGHT-to-left taking the first untrusted hop (so a
+   client prepending a hop cannot choose its identity). MUST be set behind a
+   proxy.
+
+CI IS REAL AND GREEN (first run ever: 2026-08-25). It found #3 by passing
+then failing on the SAME commit — the signature of a probabilistic bug, not a
+flaky test. Two CI-specific pins learned: protoc-gen-go must be v1.36.11 (the
+version that produced the committed bytes; 1.36.12 rewrites only the header,
+enough to fail drift), and buf.gen.yaml uses `local:` plugins so CI must
+install protoc-gen-go AND protoc-gen-connect-go or gen-drift cannot run at
+all. Load-test latency budget is env-dependent (ANUBIS_LOAD_BUDGET_MS): a
+shared runner does ~1,100 decisions/s vs ~11,800 here. Correctness assertions
+(zero errors, no deny-flips) are NOT relaxed. Fuzz -parallel is bounded or an
+oversubscribed host times a worker out and reports a finding it never made.
+
+DRILLS PERFORMED (were only ever procedures):
+- Restore: pg_dump -Fc + pg_restore. Schema, data, revocations and CHECK
+  guards all survive; /readyz 200 afterwards, which means the restored SEALED
+  keys opened — the same fact that makes a stolen backup worthless.
+- Soak: ~300k decisions, goroutines flat at 17, RSS returned to 26MB from an
+  83MB peak. No leaks. Throughput from that run is NOT recorded: host was at
+  load average 35, and a timing on a busy machine is not a measurement.
+- Two instances, one DB: each boot job ran on exactly one (advisory locks,
+  other says skipped); a key revoked on A was refused by B on the NEXT
+  request; rate limits confirmed per-instance (A limited, B unaffected).
+
+Migration 0034: identities.attributes CHECK (= '{}'). ADR-0013 marks it for
+sealing, the write path does not exist, every row is empty (0 of 57,012), so
+plaintext there is now UNSTORABLE until somebody drops the constraint — which
+forces them to read the ADR. There is no 0032 (withdrawn; sync-run history
+already existed since 0017).
