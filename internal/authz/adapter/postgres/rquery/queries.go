@@ -1,8 +1,11 @@
-// Package authzrquery is the ONE file where this context's SQL lives in Go —
-// the successor to db/queries/authz/*.sql under ADR-0009's reworded rule: SQL
-// is reviewable in exactly one place per context, and every statement here is
+// Package authzrquery is the ONE place where this context's SQL lives in Go —
+// the successor to db/queries/authz/*.sql under ADR-0009 §5: SQL is
+// reviewable in exactly one package per context, and every statement here is
 // PREPAREd against the live schema at generate time, so a query that drifts
 // from the database fails the build naming the column, not the request.
+//
+// Files mirror the old db/queries/authz layout one-to-one (authz.go, role.go,
+// grant.go, membership.go, permission.go) so review diffs read side by side.
 //
 // uuid columns are selected `::text` and bound as strings, deliberately: the
 // domain layer speaks string ids (as it did under sqlc), and the cast keeps
@@ -11,44 +14,30 @@ package authzrquery
 
 import "github.com/gsoultan/raorm"
 
-// AuthorizeRow carries the engine's one-bit answer.
-type AuthorizeRow struct {
-	Allow bool
-}
-
-// Authorize is THE engine call. Semantics live in migrations/0013 (+0009
-// gates); Go never re-implements them on the online path.
-var Authorize = raorm.SQL[AuthorizeRow](`
-SELECT authorize($1, $2, $3, $4::jsonb) AS allow`)
-
-// RoleNameRow is one role name.
-type RoleNameRow struct {
-	Name string
-}
-
-// RolesForIdentity lists the distinct live-grant role names for an identity.
-var RolesForIdentity = raorm.SQL[RoleNameRow](`
-SELECT DISTINCT r.name
-FROM grants g
-JOIN roles r ON r.id = g.role_id
-WHERE g.identity_id = $1 AND g.tenant_id = $2
-  AND g.revoked_at IS NULL AND g.valid_from <= now()
-  AND (g.valid_until IS NULL OR g.valid_until > now())
-ORDER BY r.name`)
-
-// CreatedRoleRow is a fresh role's id.
-type CreatedRoleRow struct {
-	ID string
-}
-
-// CreateRole mirrors the sqlc statement exactly, nullable application and all.
-var CreateRole = raorm.SQL[CreatedRoleRow](`
-INSERT INTO roles (tenant_id, name, description, application_id, is_system,
-                   allowed_realm_kinds, assignable_at)
-VALUES ($1, $2, $3, $4, $5, $6::text[], $7::text[])
-RETURNING id::text AS id`)
-
-// Queries is what the generator validates and emits scanners for.
+// Queries is what cmd/raormgen validates and emits scanners for. Every
+// declaration in the package MUST be listed — an omitted one still runs, but
+// without generate-time schema checking, which is the property this package
+// exists to provide.
 func Queries() []raorm.RawDecl {
-	return []raorm.RawDecl{Authorize, RolesForIdentity, CreateRole}
+	return []raorm.RawDecl{
+		// authz.go
+		Authorize, AuthorizeExplain, GetPermissionByKey, RolesForIdentity,
+		EffectivePermissionsForIdentity, AuthorizeStrictSim, SampleAuthorizeDecisions,
+		// role.go
+		ListRoles, GetRole, CreateRole, UpdateRole,
+		ListRoleParents, DeleteRoleParents, InsertRoleParent,
+		ListRolePatterns, DeleteRolePatterns, InsertRolePattern,
+		DeleteRolePermissions, InsertRolePermission,
+		RecomputeRoleEffective, RolesBelow, GetRoleEffective, ListRolesUsingPattern,
+		// grant.go
+		ListGrantsByIdentity, ListGrantScopes, CreateGrant, InsertGrantScope,
+		RevokeGrant, SearchGrants, CountLiveGrants,
+		// membership.go
+		ListMemberships, GetMembership, CreateMembership,
+		ListMembershipEntries, ListMembershipEntryScopes,
+		DeleteMembershipEntries, InsertMembershipEntry, InsertMembershipEntryScope,
+		AssignMembership, UnassignMembership, ResyncMembership,
+		// permission.go
+		ListPermissions, UpsertPermission, DeprecatePermissionsExcept, PermissionIDByKey,
+	}
 }

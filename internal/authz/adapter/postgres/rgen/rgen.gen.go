@@ -30,12 +30,62 @@ func NewUnit() *runtime.Unit { return runtime.NewUnit(FlushOrder) }
 // results with no reflect and no `any`, exactly like a table scanner.
 func init() {
 	raorm.RegisterScanner(scanAuthorizeRow)
+	raorm.RegisterScanner(scanExplainRow)
+	raorm.RegisterScanner(scanPermissionMetaRow)
 	raorm.RegisterScanner(scanRoleNameRow)
+	raorm.RegisterScanner(scanPermissionKeyRow)
+	raorm.RegisterScanner(scanStrictSimRow)
+	raorm.RegisterScanner(scanDecisionDetailRow)
+	raorm.RegisterScanner(scanRoleRow)
 	raorm.RegisterScanner(scanCreatedRoleRow)
+	raorm.RegisterScanner(scanParentRow)
+	raorm.RegisterScanner(scanPatternRow)
+	raorm.RegisterScanner(scanDoneRow)
+	raorm.RegisterScanner(scanRoleIDRow)
+	raorm.RegisterScanner(scanEffectiveRow)
+	raorm.RegisterScanner(scanGrantRow)
+	raorm.RegisterScanner(scanGrantScopeRow)
+	raorm.RegisterScanner(scanCreatedGrantRow)
+	raorm.RegisterScanner(scanRevokedGrantRow)
+	raorm.RegisterScanner(scanSearchGrantRow)
+	raorm.RegisterScanner(scanCountRow)
+	raorm.RegisterScanner(scanMembershipListRow)
+	raorm.RegisterScanner(scanMembershipRow)
+	raorm.RegisterScanner(scanCreatedMembershipRow)
+	raorm.RegisterScanner(scanEntryRow)
+	raorm.RegisterScanner(scanEntryScopeRow)
+	raorm.RegisterScanner(scanInsertedEntryRow)
+	raorm.RegisterScanner(scanAssignRow)
+	raorm.RegisterScanner(scanUnassignRow)
+	raorm.RegisterScanner(scanResyncRow)
+	raorm.RegisterScanner(scanPermissionRow)
+	raorm.RegisterScanner(scanUpsertedPermissionRow)
+	raorm.RegisterScanner(scanDeprecatedKeyRow)
+	raorm.RegisterScanner(scanPermissionIDRow)
 }
 
 func scanAuthorizeRow(rv [][]byte, r *authzrquery.AuthorizeRow, sl *runtime.Slab) error {
 	r.Allow = runtime.Bool(rv[0])
+	return nil
+}
+
+func scanExplainRow(rv [][]byte, r *authzrquery.ExplainRow, sl *runtime.Slab) error {
+	r.Detail = sl.Str(rv[0])
+	return nil
+}
+
+func scanPermissionMetaRow(rv [][]byte, r *authzrquery.PermissionMetaRow, sl *runtime.Slab) error {
+	var decErr error
+	r.ID = sl.Str(rv[0])
+	r.Key = runtime.NullText(rv[1], sl)
+	r.Risk = sl.Str(rv[2])
+	r.MinAssurance = runtime.Int2(rv[3])
+	r.RequiresAmr, decErr = runtime.TextArray(rv[4], sl)
+	if decErr != nil {
+		return decErr
+	}
+	r.MaxAuthAge = sl.Str(rv[5])
+	r.DeprecatedAt = runtime.Nullable(rv[6], runtime.Timestamptz)
 	return nil
 }
 
@@ -44,7 +94,221 @@ func scanRoleNameRow(rv [][]byte, r *authzrquery.RoleNameRow, sl *runtime.Slab) 
 	return nil
 }
 
+func scanPermissionKeyRow(rv [][]byte, r *authzrquery.PermissionKeyRow, sl *runtime.Slab) error {
+	r.Key = runtime.NullText(rv[0], sl)
+	return nil
+}
+
+func scanStrictSimRow(rv [][]byte, r *authzrquery.StrictSimRow, sl *runtime.Slab) error {
+	r.Allow = runtime.Bool(rv[0])
+	return nil
+}
+
+func scanDecisionDetailRow(rv [][]byte, r *authzrquery.DecisionDetailRow, sl *runtime.Slab) error {
+	r.Detail = runtime.JSON(runtime.JSONB(rv[0], sl))
+	return nil
+}
+
+func scanRoleRow(rv [][]byte, r *authzrquery.RoleRow, sl *runtime.Slab) error {
+	var decErr error
+	r.ID = sl.Str(rv[0])
+	r.TenantID = sl.Str(rv[1])
+	r.Name = sl.Str(rv[2])
+	r.Description = sl.Str(rv[3])
+	r.IsSystem = runtime.Bool(rv[4])
+	r.AllowedRealmKinds, decErr = runtime.TextArray(rv[5], sl)
+	if decErr != nil {
+		return decErr
+	}
+	r.AssignableAt, decErr = runtime.TextArray(rv[6], sl)
+	if decErr != nil {
+		return decErr
+	}
+	r.ApplicationID = runtime.NullText(rv[7], sl)
+	r.ApplicationSlug = runtime.NullText(rv[8], sl)
+	return nil
+}
+
 func scanCreatedRoleRow(rv [][]byte, r *authzrquery.CreatedRoleRow, sl *runtime.Slab) error {
+	r.ID = sl.Str(rv[0])
+	return nil
+}
+
+func scanParentRow(rv [][]byte, r *authzrquery.ParentRow, sl *runtime.Slab) error {
+	r.ParentID = sl.Str(rv[0])
+	return nil
+}
+
+func scanPatternRow(rv [][]byte, r *authzrquery.PatternRow, sl *runtime.Slab) error {
+	r.Pattern = sl.Str(rv[0])
+	return nil
+}
+
+func scanDoneRow(rv [][]byte, r *authzrquery.DoneRow, sl *runtime.Slab) error {
+	r.Done = runtime.Bool(rv[0])
+	return nil
+}
+
+func scanRoleIDRow(rv [][]byte, r *authzrquery.RoleIDRow, sl *runtime.Slab) error {
+	r.RoleID = sl.Str(rv[0])
+	return nil
+}
+
+func scanEffectiveRow(rv [][]byte, r *authzrquery.EffectiveRow, sl *runtime.Slab) error {
+	r.PermissionKey = runtime.NullText(rv[0], sl)
+	r.ViaRole = sl.Str(rv[1])
+	return nil
+}
+
+func scanGrantRow(rv [][]byte, r *authzrquery.GrantRow, sl *runtime.Slab) error {
+	r.ID = sl.Str(rv[0])
+	r.IdentityID = sl.Str(rv[1])
+	r.RoleID = sl.Str(rv[2])
+	r.RoleName = sl.Str(rv[3])
+	r.SelfScoped = runtime.Bool(rv[4])
+	r.ValidFrom = runtime.Timestamptz(rv[5])
+	r.ValidUntil = runtime.Nullable(rv[6], runtime.Timestamptz)
+	r.RevokedAt = runtime.Nullable(rv[7], runtime.Timestamptz)
+	r.GrantedBy = sl.Str(rv[8])
+	r.Reason = runtime.NullText(rv[9], sl)
+	r.ViaMembershipID = runtime.NullText(rv[10], sl)
+	return nil
+}
+
+func scanGrantScopeRow(rv [][]byte, r *authzrquery.GrantScopeRow, sl *runtime.Slab) error {
+	r.GrantID = sl.Str(rv[0])
+	r.AxisCode = sl.Str(rv[1])
+	r.ScopeNodeID = sl.Str(rv[2])
+	r.Inherit = runtime.Bool(rv[3])
+	r.NodeName = sl.Str(rv[4])
+	return nil
+}
+
+func scanCreatedGrantRow(rv [][]byte, r *authzrquery.CreatedGrantRow, sl *runtime.Slab) error {
+	r.ID = sl.Str(rv[0])
+	r.ValidFrom = runtime.Timestamptz(rv[1])
+	return nil
+}
+
+func scanRevokedGrantRow(rv [][]byte, r *authzrquery.RevokedGrantRow, sl *runtime.Slab) error {
+	r.ID = sl.Str(rv[0])
+	r.IdentityID = sl.Str(rv[1])
+	r.RoleID = sl.Str(rv[2])
+	return nil
+}
+
+func scanSearchGrantRow(rv [][]byte, r *authzrquery.SearchGrantRow, sl *runtime.Slab) error {
+	r.ID = sl.Str(rv[0])
+	r.IdentityID = sl.Str(rv[1])
+	r.Username = sl.Str(rv[2])
+	r.RoleID = sl.Str(rv[3])
+	r.RoleName = sl.Str(rv[4])
+	r.SelfScoped = runtime.Bool(rv[5])
+	r.ValidFrom = runtime.Timestamptz(rv[6])
+	r.ValidUntil = runtime.Nullable(rv[7], runtime.Timestamptz)
+	r.RevokedAt = runtime.Nullable(rv[8], runtime.Timestamptz)
+	r.GrantedBy = sl.Str(rv[9])
+	r.Reason = runtime.NullText(rv[10], sl)
+	r.ViaMembershipID = runtime.NullText(rv[11], sl)
+	r.CreatedAt = runtime.Timestamptz(rv[12])
+	return nil
+}
+
+func scanCountRow(rv [][]byte, r *authzrquery.CountRow, sl *runtime.Slab) error {
+	r.Count = runtime.Int8(rv[0])
+	return nil
+}
+
+func scanMembershipListRow(rv [][]byte, r *authzrquery.MembershipListRow, sl *runtime.Slab) error {
+	r.ID = sl.Str(rv[0])
+	r.Name = sl.Str(rv[1])
+	r.Description = sl.Str(rv[2])
+	r.MemberCount = runtime.Int4(rv[3])
+	return nil
+}
+
+func scanMembershipRow(rv [][]byte, r *authzrquery.MembershipRow, sl *runtime.Slab) error {
+	r.ID = sl.Str(rv[0])
+	r.TenantID = sl.Str(rv[1])
+	r.Name = sl.Str(rv[2])
+	r.Description = sl.Str(rv[3])
+	return nil
+}
+
+func scanCreatedMembershipRow(rv [][]byte, r *authzrquery.CreatedMembershipRow, sl *runtime.Slab) error {
+	r.ID = sl.Str(rv[0])
+	return nil
+}
+
+func scanEntryRow(rv [][]byte, r *authzrquery.EntryRow, sl *runtime.Slab) error {
+	r.ID = sl.Str(rv[0])
+	r.MembershipID = sl.Str(rv[1])
+	r.RoleID = sl.Str(rv[2])
+	r.RoleName = sl.Str(rv[3])
+	return nil
+}
+
+func scanEntryScopeRow(rv [][]byte, r *authzrquery.EntryScopeRow, sl *runtime.Slab) error {
+	r.EntryID = sl.Str(rv[0])
+	r.AxisCode = sl.Str(rv[1])
+	r.ScopeNodeID = sl.Str(rv[2])
+	r.Inherit = runtime.Bool(rv[3])
+	r.NodeName = sl.Str(rv[4])
+	return nil
+}
+
+func scanInsertedEntryRow(rv [][]byte, r *authzrquery.InsertedEntryRow, sl *runtime.Slab) error {
+	r.ID = sl.Str(rv[0])
+	return nil
+}
+
+func scanAssignRow(rv [][]byte, r *authzrquery.AssignRow, sl *runtime.Slab) error {
+	r.GrantsCreated = runtime.Int4(rv[0])
+	return nil
+}
+
+func scanUnassignRow(rv [][]byte, r *authzrquery.UnassignRow, sl *runtime.Slab) error {
+	r.GrantsRevoked = runtime.Int4(rv[0])
+	return nil
+}
+
+func scanResyncRow(rv [][]byte, r *authzrquery.ResyncRow, sl *runtime.Slab) error {
+	r.GrantsChanged = runtime.Int4(rv[0])
+	return nil
+}
+
+func scanPermissionRow(rv [][]byte, r *authzrquery.PermissionRow, sl *runtime.Slab) error {
+	var decErr error
+	r.ID = sl.Str(rv[0])
+	r.Key = runtime.NullText(rv[1], sl)
+	r.AppSlug = sl.Str(rv[2])
+	r.Resource = sl.Str(rv[3])
+	r.Action = sl.Str(rv[4])
+	r.Risk = sl.Str(rv[5])
+	r.Description = sl.Str(rv[6])
+	r.MinAssurance = runtime.Int2(rv[7])
+	r.RequiresAmr, decErr = runtime.TextArray(rv[8], sl)
+	if decErr != nil {
+		return decErr
+	}
+	r.MaxAuthAge = sl.Str(rv[9])
+	r.DeprecatedAt = runtime.Nullable(rv[10], runtime.Timestamptz)
+	return nil
+}
+
+func scanUpsertedPermissionRow(rv [][]byte, r *authzrquery.UpsertedPermissionRow, sl *runtime.Slab) error {
+	r.ID = sl.Str(rv[0])
+	r.Key = runtime.NullText(rv[1], sl)
+	r.Inserted = runtime.Nullable(rv[2], runtime.Bool)
+	return nil
+}
+
+func scanDeprecatedKeyRow(rv [][]byte, r *authzrquery.DeprecatedKeyRow, sl *runtime.Slab) error {
+	r.Key = runtime.NullText(rv[0], sl)
+	return nil
+}
+
+func scanPermissionIDRow(rv [][]byte, r *authzrquery.PermissionIDRow, sl *runtime.Slab) error {
 	r.ID = sl.Str(rv[0])
 	return nil
 }

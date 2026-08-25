@@ -50,9 +50,21 @@ func run() error {
 	var scanners []codegen.RawScanner
 	for i, d := range authzrquery.Queries() {
 		rt, sql := raorm.DeclOf(d)
+		name := "raorm.SQLExec"
+		if rt != nil {
+			name = "raorm.SQL[" + rt.Name() + "]"
+		}
 		sd, err := conn.Prepare(ctx, fmt.Sprintf("raormgen_%d", i), sql)
 		if err != nil {
-			return fmt.Errorf("raorm.SQL[%s] does not prepare against the schema:\n  %w", rt.Name(), err)
+			return fmt.Errorf("%s does not prepare against the schema:\n  %w", name, err)
+		}
+		if rt == nil {
+			if len(sd.Fields) > 0 {
+				return fmt.Errorf(
+					"%s returns %d column(s) — use raorm.SQL[T] to read them:\n%s",
+					name, len(sd.Fields), sql)
+			}
+			continue
 		}
 		fields := make([]codegen.RawField, len(sd.Fields))
 		for j, f := range sd.Fields {
@@ -60,7 +72,7 @@ func run() error {
 		}
 		rs, err := codegen.ResolveRawScanner(rt, rt.PkgPath(), fields)
 		if err != nil {
-			return fmt.Errorf("raorm.SQL[%s]\n  %w", rt.Name(), err)
+			return fmt.Errorf("%s\n  %w", name, err)
 		}
 		scanners = append(scanners, rs)
 	}

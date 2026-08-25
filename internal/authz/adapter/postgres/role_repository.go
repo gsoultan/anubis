@@ -3,7 +3,6 @@ package authzpg
 import (
 	"context"
 
-	gen "github.com/gsoultan/anubis/internal/authz/adapter/postgres/gen"
 	rrole "github.com/gsoultan/anubis/internal/authz/adapter/postgres/rgen/role"
 	authzrquery "github.com/gsoultan/anubis/internal/authz/adapter/postgres/rquery"
 	authzdomain "github.com/gsoultan/anubis/internal/authz/domain"
@@ -11,34 +10,40 @@ import (
 	"github.com/gsoultan/anubis/internal/shared/apperr"
 )
 
+func roleRecordOf(r authzrquery.RoleRow) authzdomain.RoleRecord {
+	return authzdomain.RoleRecord{
+		ID: r.ID, Name: r.Name, Description: r.Description,
+		ApplicationSlug: r.ApplicationSlug.V, IsSystem: r.IsSystem,
+		AllowedRealmKinds: r.AllowedRealmKinds, AssignableAt: r.AssignableAt,
+	}
+}
+
 func (s *Repository) ListRoles(ctx context.Context, tenantID, query string) ([]authzdomain.RoleRecord, error) {
-	rows, err := s.q(ctx).ListRoles(ctx, gen.ListRolesParams{TenantID: tenantID, Query: database.OptStr(query)})
+	rows, err := authzrquery.ListRoles.Query(ctx, s.rex(ctx), tenantID, database.OptStr(query))
 	if err != nil {
 		return nil, database.MapErr(err)
 	}
 	out := make([]authzdomain.RoleRecord, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, authzdomain.RoleRecord{
-			ID: r.ID, Name: r.Name, Description: r.Description,
-			ApplicationSlug: database.Deref(r.ApplicationSlug), IsSystem: r.IsSystem,
-			AllowedRealmKinds: r.AllowedRealmKinds, AssignableAt: r.AssignableAt,
-		})
+		out = append(out, roleRecordOf(r))
 	}
 	return out, nil
 }
 
 func (s *Repository) RoleByID(ctx context.Context, tenantID, id string) (*authzdomain.RoleRecord, error) {
-	r, err := s.q(ctx).GetRole(ctx, gen.GetRoleParams{ID: id, TenantID: tenantID})
+	r, ok, err := authzrquery.GetRole.One(ctx, s.rex(ctx), id, tenantID)
 	if err != nil {
 		return nil, database.MapErr(err)
 	}
-	return &authzdomain.RoleRecord{
-		ID: r.ID, Name: r.Name, Description: r.Description,
-		ApplicationSlug: database.Deref(r.ApplicationSlug), IsSystem: r.IsSystem,
-		AllowedRealmKinds: r.AllowedRealmKinds, AssignableAt: r.AssignableAt,
-	}, nil
+	if !ok {
+		return nil, apperr.ErrNotFound
+	}
+	rec := roleRecordOf(r)
+	return &rec, nil
 }
 
+// RoleByName is the migration's builder query: no SQL anywhere, the predicate
+// set compiled from the rmodel projection.
 func (s *Repository) RoleByName(ctx context.Context, tenantID, name string) (*authzdomain.RoleRecord, error) {
 	tid, err := parseUUID(tenantID)
 	if err != nil {
@@ -75,26 +80,31 @@ func (s *Repository) CreateRole(ctx context.Context, tenantID string, r authzdom
 }
 
 func (s *Repository) UpdateRole(ctx context.Context, tenantID string, r authzdomain.RoleRecord) error {
-	_, err := s.q(ctx).UpdateRole(ctx, gen.UpdateRoleParams{
-		ID: r.ID, TenantID: tenantID, Description: r.Description,
-		AllowedRealmKinds: orDefaultKinds(r.AllowedRealmKinds),
-		AssignableAt:      database.EmptyIfNil(r.AssignableAt),
-	})
+	_, err := authzrquery.UpdateRole.Exec(ctx, s.rex(ctx),
+		r.ID, tenantID, r.Description,
+		orDefaultKinds(r.AllowedRealmKinds), database.EmptyIfNil(r.AssignableAt))
 	return database.MapErr(err)
 }
 
 func (s *Repository) RoleParents(ctx context.Context, roleID string) ([]string, error) {
-	out, err := s.q(ctx).ListRoleParents(ctx, roleID)
-	return out, database.MapErr(err)
+	rows, err := authzrquery.ListRoleParents.Query(ctx, s.rex(ctx), roleID)
+	if err != nil {
+		return nil, database.MapErr(err)
+	}
+	var out []string
+	for _, r := range rows {
+		out = append(out, r.ParentID)
+	}
+	return out, nil
 }
 
 func (s *Repository) SetRoleParents(ctx context.Context, roleID string, parents []string) error {
 	return s.WithinTx(ctx, func(ctx context.Context) error {
-		if err := s.q(ctx).DeleteRoleParents(ctx, roleID); err != nil {
+		if _, err := authzrquery.DeleteRoleParents.Exec(ctx, s.rex(ctx), roleID); err != nil {
 			return database.MapErr(err)
 		}
 		for _, p := range parents {
-			if err := s.q(ctx).InsertRoleParent(ctx, gen.InsertRoleParentParams{RoleID: roleID, ParentID: p}); err != nil {
+			if _, err := authzrquery.InsertRoleParent.Exec(ctx, s.rex(ctx), roleID, p); err != nil {
 				return database.MapErr(err)
 			}
 		}
@@ -103,17 +113,24 @@ func (s *Repository) SetRoleParents(ctx context.Context, roleID string, parents 
 }
 
 func (s *Repository) RolePatterns(ctx context.Context, roleID string) ([]string, error) {
-	out, err := s.q(ctx).ListRolePatterns(ctx, roleID)
-	return out, database.MapErr(err)
+	rows, err := authzrquery.ListRolePatterns.Query(ctx, s.rex(ctx), roleID)
+	if err != nil {
+		return nil, database.MapErr(err)
+	}
+	var out []string
+	for _, r := range rows {
+		out = append(out, r.Pattern)
+	}
+	return out, nil
 }
 
 func (s *Repository) SetRolePatterns(ctx context.Context, roleID string, patterns []string) error {
 	return s.WithinTx(ctx, func(ctx context.Context) error {
-		if err := s.q(ctx).DeleteRolePatterns(ctx, roleID); err != nil {
+		if _, err := authzrquery.DeleteRolePatterns.Exec(ctx, s.rex(ctx), roleID); err != nil {
 			return database.MapErr(err)
 		}
 		for _, p := range patterns {
-			if err := s.q(ctx).InsertRolePattern(ctx, gen.InsertRolePatternParams{RoleID: roleID, Pattern: p}); err != nil {
+			if _, err := authzrquery.InsertRolePattern.Exec(ctx, s.rex(ctx), roleID, p); err != nil {
 				return database.MapErr(err)
 			}
 		}
@@ -123,11 +140,11 @@ func (s *Repository) SetRolePatterns(ctx context.Context, roleID string, pattern
 
 func (s *Repository) SetRolePermissions(ctx context.Context, roleID string, permissionIDs []string) error {
 	return s.WithinTx(ctx, func(ctx context.Context) error {
-		if err := s.q(ctx).DeleteRolePermissions(ctx, roleID); err != nil {
+		if _, err := authzrquery.DeleteRolePermissions.Exec(ctx, s.rex(ctx), roleID); err != nil {
 			return database.MapErr(err)
 		}
 		for _, p := range permissionIDs {
-			if err := s.q(ctx).InsertRolePermission(ctx, gen.InsertRolePermissionParams{RoleID: roleID, PermissionID: p}); err != nil {
+			if _, err := authzrquery.InsertRolePermission.Exec(ctx, s.rex(ctx), roleID, p); err != nil {
 				return database.MapErr(err)
 			}
 		}
@@ -136,34 +153,48 @@ func (s *Repository) SetRolePermissions(ctx context.Context, roleID string, perm
 }
 
 func (s *Repository) AddRolePermission(ctx context.Context, roleID, permissionID string) error {
-	return database.MapErr(s.q(ctx).InsertRolePermission(ctx, gen.InsertRolePermissionParams{
-		RoleID: roleID, PermissionID: permissionID,
-	}))
+	_, err := authzrquery.InsertRolePermission.Exec(ctx, s.rex(ctx), roleID, permissionID)
+	return database.MapErr(err)
 }
 
 func (s *Repository) RecomputeRole(ctx context.Context, roleID string) error {
-	return database.MapErr(s.q(ctx).RecomputeRoleEffective(ctx, roleID))
+	_, _, err := authzrquery.RecomputeRoleEffective.One(ctx, s.rex(ctx), roleID)
+	return database.MapErr(err)
 }
 
 func (s *Repository) RolesBelow(ctx context.Context, roleID string) ([]string, error) {
-	out, err := s.q(ctx).RolesBelow(ctx, roleID)
-	return out, database.MapErr(err)
+	rows, err := authzrquery.RolesBelow.Query(ctx, s.rex(ctx), roleID)
+	if err != nil {
+		return nil, database.MapErr(err)
+	}
+	var out []string
+	for _, r := range rows {
+		out = append(out, r.RoleID)
+	}
+	return out, nil
 }
 
 func (s *Repository) RolesUsingPatterns(ctx context.Context, tenantID string) ([]string, error) {
-	out, err := s.q(ctx).ListRolesUsingPattern(ctx, tenantID)
-	return out, database.MapErr(err)
+	rows, err := authzrquery.ListRolesUsingPattern.Query(ctx, s.rex(ctx), tenantID)
+	if err != nil {
+		return nil, database.MapErr(err)
+	}
+	var out []string
+	for _, r := range rows {
+		out = append(out, r.RoleID)
+	}
+	return out, nil
 }
 
 func (s *Repository) RoleEffective(ctx context.Context, roleID string) ([]authzdomain.EffectivePermissionRecord, error) {
-	rows, err := s.q(ctx).GetRoleEffective(ctx, roleID)
+	rows, err := authzrquery.GetRoleEffective.Query(ctx, s.rex(ctx), roleID)
 	if err != nil {
 		return nil, database.MapErr(err)
 	}
 	out := make([]authzdomain.EffectivePermissionRecord, 0, len(rows))
 	for _, r := range rows {
 		out = append(out, authzdomain.EffectivePermissionRecord{
-			Key: database.Deref(r.PermissionKey), ViaRole: r.ViaRole,
+			Key: r.PermissionKey.V, ViaRole: r.ViaRole,
 		})
 	}
 	return out, nil

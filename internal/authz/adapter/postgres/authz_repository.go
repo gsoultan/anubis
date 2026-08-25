@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	gen "github.com/gsoultan/anubis/internal/authz/adapter/postgres/gen"
 	authzrquery "github.com/gsoultan/anubis/internal/authz/adapter/postgres/rquery"
 	authzdomain "github.com/gsoultan/anubis/internal/authz/domain"
 	"github.com/gsoultan/anubis/internal/platform/database"
@@ -26,32 +25,43 @@ func (s *Repository) Authorize(ctx context.Context, identityID, tenantID, permis
 }
 
 func (s *Repository) AuthorizeExplain(ctx context.Context, identityID, tenantID, permission string, targets []byte) (string, error) {
-	detail, err := s.q(ctx).AuthorizeExplain(ctx, gen.AuthorizeExplainParams{
-		IdentityID: identityID, TenantID: tenantID,
-		Permission: permission, Targets: database.OrEmptyJSON(targets),
-	})
-	return detail, database.MapErr(err)
+	row, ok, err := authzrquery.AuthorizeExplain.One(ctx, s.rex(ctx),
+		identityID, tenantID, permission, database.OrEmptyJSON(targets))
+	if err != nil {
+		return "", database.MapErr(err)
+	}
+	if !ok {
+		return "", apperr.ErrNotFound
+	}
+	return row.Detail, nil
 }
 
 func (s *Repository) AuthorizeStrictSim(ctx context.Context, identityID, tenantID, permission string, targets []byte, strictAxis string) (bool, error) {
-	allow, err := s.q(ctx).AuthorizeStrictSim(ctx, gen.AuthorizeStrictSimParams{
-		IdentityID: identityID, TenantID: tenantID, Permission: database.OptStr(permission),
-		Targets: database.OrEmptyJSON(targets), StrictAxis: strictAxis,
-	})
-	return allow, database.MapErr(err)
+	row, ok, err := authzrquery.AuthorizeStrictSim.One(ctx, s.rex(ctx),
+		identityID, tenantID, database.OptStr(permission),
+		database.OrEmptyJSON(targets), strictAxis)
+	if err != nil {
+		return false, database.MapErr(err)
+	}
+	if !ok {
+		return false, apperr.ErrNotFound
+	}
+	return row.Allow, nil
 }
 
 func (s *Repository) PermissionByKey(ctx context.Context, tenantID, key string) (*authzdomain.PermissionMeta, error) {
-	row, err := s.q(ctx).GetPermissionByKey(ctx, gen.GetPermissionByKeyParams{
-		TenantID: tenantID, Key: database.OptStr(key),
-	})
+	row, ok, err := authzrquery.GetPermissionByKey.One(ctx, s.rex(ctx),
+		tenantID, database.OptStr(key))
 	if err != nil {
 		return nil, database.MapErr(err)
 	}
+	if !ok {
+		return nil, apperr.ErrNotFound
+	}
 	meta := &authzdomain.PermissionMeta{
-		ID: row.ID, Key: database.Deref(row.Key), Risk: row.Risk,
+		ID: row.ID, Key: row.Key.V, Risk: row.Risk,
 		MinAssurance: int(row.MinAssurance), RequiresAMR: row.RequiresAmr,
-		Deprecated: row.DeprecatedAt != nil,
+		Deprecated: row.DeprecatedAt.Valid,
 	}
 	if row.MaxAuthAge != "" {
 		if d, perr := parsePgInterval(row.MaxAuthAge); perr == nil {
@@ -75,26 +85,29 @@ func (s *Repository) RolesForIdentity(ctx context.Context, tenantID, identityID 
 }
 
 func (s *Repository) EffectivePermissionsForIdentity(ctx context.Context, tenantID, identityID string) ([]string, error) {
-	keys, err := s.q(ctx).EffectivePermissionsForIdentity(ctx, gen.EffectivePermissionsForIdentityParams{
-		IdentityID: identityID, TenantID: tenantID,
-	})
+	rows, err := authzrquery.EffectivePermissionsForIdentity.Query(ctx, s.rex(ctx), identityID, tenantID)
 	if err != nil {
 		return nil, database.MapErr(err)
 	}
-	out := make([]string, 0, len(keys))
-	for _, k := range keys {
-		if k != nil {
-			out = append(out, *k)
+	out := make([]string, 0, len(rows))
+	for _, r := range rows {
+		if r.Key.Valid {
+			out = append(out, r.Key.V)
 		}
 	}
 	return out, nil
 }
 
 func (s *Repository) SampleAuthorizeDecisions(ctx context.Context, tenantID string, n int) ([][]byte, error) {
-	rows, err := s.q(ctx).SampleAuthorizeDecisions(ctx, gen.SampleAuthorizeDecisionsParams{
-		TenantID: tenantID, SampleSize: int32(n),
-	})
-	return rows, database.MapErr(err)
+	rows, err := authzrquery.SampleAuthorizeDecisions.Query(ctx, s.rex(ctx), tenantID, n)
+	if err != nil {
+		return nil, database.MapErr(err)
+	}
+	var out [][]byte
+	for _, r := range rows {
+		out = append(out, []byte(r.Detail))
+	}
+	return out, nil
 }
 
 // parsePgInterval understands the interval::text renderings the queries emit

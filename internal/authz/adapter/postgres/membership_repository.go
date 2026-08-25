@@ -3,13 +3,14 @@ package authzpg
 import (
 	"context"
 
-	gen "github.com/gsoultan/anubis/internal/authz/adapter/postgres/gen"
+	authzrquery "github.com/gsoultan/anubis/internal/authz/adapter/postgres/rquery"
 	"github.com/gsoultan/anubis/internal/authz/domain/membership"
 	"github.com/gsoultan/anubis/internal/platform/database"
+	"github.com/gsoultan/anubis/internal/shared/apperr"
 )
 
 func (s *Repository) ListMemberships(ctx context.Context, tenantID string) ([]membership.MembershipRecord, error) {
-	rows, err := s.q(ctx).ListMemberships(ctx, tenantID)
+	rows, err := authzrquery.ListMemberships.Query(ctx, s.rex(ctx), tenantID)
 	if err != nil {
 		return nil, database.MapErr(err)
 	}
@@ -24,25 +25,32 @@ func (s *Repository) ListMemberships(ctx context.Context, tenantID string) ([]me
 }
 
 func (s *Repository) MembershipByID(ctx context.Context, tenantID, id string) (*membership.MembershipRecord, error) {
-	r, err := s.q(ctx).GetMembership(ctx, gen.GetMembershipParams{ID: id, TenantID: tenantID})
+	r, ok, err := authzrquery.GetMembership.One(ctx, s.rex(ctx), id, tenantID)
 	if err != nil {
 		return nil, database.MapErr(err)
+	}
+	if !ok {
+		return nil, apperr.ErrNotFound
 	}
 	return &membership.MembershipRecord{ID: r.ID, Name: r.Name, Description: r.Description}, nil
 }
 
 func (s *Repository) CreateMembership(ctx context.Context, tenantID, name, description string) (string, error) {
-	id, err := s.q(ctx).CreateMembership(ctx, gen.CreateMembershipParams{
-		TenantID: tenantID, Name: name, Description: description,
-	})
-	return id, database.MapErr(err)
+	row, ok, err := authzrquery.CreateMembership.One(ctx, s.rex(ctx), tenantID, name, description)
+	if err != nil {
+		return "", database.MapErr(err)
+	}
+	if !ok {
+		return "", apperr.ErrNotFound
+	}
+	return row.ID, nil
 }
 
 func (s *Repository) MembershipEntries(ctx context.Context, membershipIDs []string) ([]membership.MembershipEntryRecord, error) {
 	if len(membershipIDs) == 0 {
 		return nil, nil
 	}
-	rows, err := s.q(ctx).ListMembershipEntries(ctx, membershipIDs)
+	rows, err := authzrquery.ListMembershipEntries.Query(ctx, s.rex(ctx), membershipIDs)
 	if err != nil {
 		return nil, database.MapErr(err)
 	}
@@ -59,7 +67,7 @@ func (s *Repository) MembershipEntryScopes(ctx context.Context, entryIDs []strin
 	if len(entryIDs) == 0 {
 		return nil, nil
 	}
-	rows, err := s.q(ctx).ListMembershipEntryScopes(ctx, entryIDs)
+	rows, err := authzrquery.ListMembershipEntryScopes.Query(ctx, s.rex(ctx), entryIDs)
 	if err != nil {
 		return nil, database.MapErr(err)
 	}
@@ -75,21 +83,21 @@ func (s *Repository) MembershipEntryScopes(ctx context.Context, entryIDs []strin
 
 func (s *Repository) ReplaceMembershipEntries(ctx context.Context, tenantID, membershipID string, entries []membership.MembershipEntryInput) error {
 	return s.WithinTx(ctx, func(ctx context.Context) error {
-		if err := s.q(ctx).DeleteMembershipEntries(ctx, membershipID); err != nil {
+		if _, err := authzrquery.DeleteMembershipEntries.Exec(ctx, s.rex(ctx), membershipID); err != nil {
 			return database.MapErr(err)
 		}
 		for _, e := range entries {
-			entryID, err := s.q(ctx).InsertMembershipEntry(ctx, gen.InsertMembershipEntryParams{
-				MembershipID: membershipID, TenantID: tenantID, RoleID: e.RoleID,
-			})
+			row, ok, err := authzrquery.InsertMembershipEntry.One(ctx, s.rex(ctx),
+				membershipID, tenantID, e.RoleID)
 			if err != nil {
 				return database.MapErr(err)
 			}
+			if !ok {
+				return apperr.ErrNotFound
+			}
 			for _, sc := range e.Scopes {
-				if err := s.q(ctx).InsertMembershipEntryScope(ctx, gen.InsertMembershipEntryScopeParams{
-					EntryID: entryID, TenantID: tenantID, AxisCode: sc.Axis,
-					ScopeNodeID: sc.NodeID, Inherit: sc.Inherit,
-				}); err != nil {
+				if _, err := authzrquery.InsertMembershipEntryScope.Exec(ctx, s.rex(ctx),
+					row.ID, tenantID, sc.Axis, sc.NodeID, sc.Inherit); err != nil {
 					return database.MapErr(err)
 				}
 			}
@@ -99,20 +107,35 @@ func (s *Repository) ReplaceMembershipEntries(ctx context.Context, tenantID, mem
 }
 
 func (s *Repository) AssignMembership(ctx context.Context, identityID, membershipID, assignedBy string) (int, error) {
-	n, err := s.q(ctx).AssignMembership(ctx, gen.AssignMembershipParams{
-		IdentityID: identityID, MembershipID: membershipID, AssignedBy: assignedBy,
-	})
-	return int(n), database.MapErr(err)
+	row, ok, err := authzrquery.AssignMembership.One(ctx, s.rex(ctx),
+		identityID, membershipID, assignedBy)
+	if err != nil {
+		return 0, database.MapErr(err)
+	}
+	if !ok {
+		return 0, apperr.ErrNotFound
+	}
+	return int(row.GrantsCreated), nil
 }
 
 func (s *Repository) UnassignMembership(ctx context.Context, identityID, membershipID string) (int, error) {
-	n, err := s.q(ctx).UnassignMembership(ctx, gen.UnassignMembershipParams{
-		IdentityID: identityID, MembershipID: membershipID,
-	})
-	return int(n), database.MapErr(err)
+	row, ok, err := authzrquery.UnassignMembership.One(ctx, s.rex(ctx), identityID, membershipID)
+	if err != nil {
+		return 0, database.MapErr(err)
+	}
+	if !ok {
+		return 0, apperr.ErrNotFound
+	}
+	return int(row.GrantsRevoked), nil
 }
 
 func (s *Repository) ResyncMembership(ctx context.Context, membershipID string) (int, error) {
-	n, err := s.q(ctx).ResyncMembership(ctx, membershipID)
-	return int(n), database.MapErr(err)
+	row, ok, err := authzrquery.ResyncMembership.One(ctx, s.rex(ctx), membershipID)
+	if err != nil {
+		return 0, database.MapErr(err)
+	}
+	if !ok {
+		return 0, apperr.ErrNotFound
+	}
+	return int(row.GrantsChanged), nil
 }
