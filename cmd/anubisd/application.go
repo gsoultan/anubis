@@ -201,9 +201,13 @@ func (a *application) registerRPC(rpc *http.ServeMux, opts connect.HandlerOption
 	// appears in this list like any other operator.
 	operatorAdmin := controlapp.NewOperatorAdminInteractor(a.control, a.tenancy,
 		a.control, a.control, a.clock, a.identity, a.auditor)
+	// Machine credentials for operators: how a pipeline administers the
+	// installation now that tenant identities cannot (0029).
+	platformKeys := controlapp.NewPlatformAPIKeyInteractor(a.control, a.control,
+		a.control, a.clock, a.auditor)
 	rpc.Handle(anubisv1connect.NewPlatformAdminServiceHandler(
 		controlrpc.NewPlatformAdminHandler(
-			controlsvc.NewControlService(operatorAdmin), f, a.clock.Now), opts))
+			controlsvc.NewControlService(operatorAdmin, platformKeys), f, a.clock.Now), opts))
 
 	// The operators' own door. Separate from AuthService, which resolves a
 	// tenant identity — a platform user is deliberately not one.

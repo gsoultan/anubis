@@ -9,6 +9,7 @@ import (
 	"connectrpc.com/connect"
 
 	authport "github.com/gsoultan/anubis/internal/auth/port"
+	controlport "github.com/gsoultan/anubis/internal/control/port"
 	"github.com/gsoultan/anubis/internal/platform/crypto/keyring"
 	"github.com/gsoultan/anubis/internal/platform/crypto/secret"
 	"github.com/gsoultan/anubis/internal/shared/authctx"
@@ -28,11 +29,16 @@ type AuthnInterceptor struct {
 	ring    *keyring.Manager
 	tenants tenancyport.TenantRepository
 	apiKeys authport.APIKeyRepository
-	clock   clock.Clock
+	// platformKeys are operators' machine credentials (0033). A separate
+	// store because they are a separate population: one authenticates a
+	// tenant's system, the other a person who operates the installation.
+	platformKeys controlport.PlatformAPIKeyStore
+	clock        clock.Clock
 }
 
-func NewAuthnInterceptor(issuer string, ring *keyring.Manager, tenants tenancyport.TenantRepository, apiKeys authport.APIKeyRepository, clock clock.Clock) *AuthnInterceptor {
-	return &AuthnInterceptor{issuer: issuer, ring: ring, tenants: tenants, apiKeys: apiKeys, clock: clock}
+func NewAuthnInterceptor(issuer string, ring *keyring.Manager, tenants tenancyport.TenantRepository, apiKeys authport.APIKeyRepository, platformKeys controlport.PlatformAPIKeyStore, clock clock.Clock) *AuthnInterceptor {
+	return &AuthnInterceptor{issuer: issuer, ring: ring, tenants: tenants,
+		apiKeys: apiKeys, platformKeys: platformKeys, clock: clock}
 }
 
 func (i *AuthnInterceptor) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
@@ -50,7 +56,11 @@ func (i *AuthnInterceptor) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
 					ctx = authctx.With(ctx, p)
 				}
 			case strings.HasPrefix(cred, "anb_live_"):
-				if p := i.principalFromAPIKey(ctx, cred); p != nil {
+				// An operator's key first: the two share a wire format, and
+				// only one of the two lookups can match a given key.
+				if p := i.principalFromPlatformKey(ctx, cred, wanted); p != nil {
+					ctx = authctx.With(ctx, p)
+				} else if p := i.principalFromAPIKey(ctx, cred); p != nil {
 					ctx = authctx.With(ctx, p)
 				}
 			}
@@ -187,6 +197,51 @@ func (i *AuthnInterceptor) principalFromAPIKey(ctx context.Context, key string) 
 		TenantSlug: k.TenantSlug,
 		Service:    true,
 	}
+}
+
+// principalFromPlatformKey authenticates an operator's machine credential.
+//
+// The key acts AS its owner: the principal carries the OPERATOR's id, so the
+// guard reads their assignments on every call exactly as it does for a
+// browser session. A key therefore can never do more than the person who
+// created it, and revoking their access revokes their pipeline's at the same
+// moment. Service marks it as machine-driven so audit does not imply a human
+// was at a keyboard.
+func (i *AuthnInterceptor) principalFromPlatformKey(ctx context.Context, key, wantTenant string) *authctx.Principal {
+	if i.platformKeys == nil {
+		return nil
+	}
+	lookup, secretPart, ok := secret.SplitAPIKey(key)
+	if !ok {
+		return nil
+	}
+	k, err := i.platformKeys.PlatformAPIKeyByLookup(ctx, lookup)
+	if err != nil || k == nil {
+		return nil
+	}
+	// The owner's CURRENT standing, not their standing when the key was
+	// minted: disabling an operator must stop their automation now.
+	if k.OwnerStatus != "active" || !k.ExpiresAt.After(i.clock.Now()) {
+		return nil
+	}
+	if !secret.Equal(secret.Hash(secretPart), mustHexOrRaw(k.SecretHash)) {
+		return nil
+	}
+	i.platformKeys.TouchPlatformAPIKeyUsed(ctx, k.ID)
+	p := &authctx.Principal{
+		IdentityID: k.PlatformUserID,
+		Epoch:      k.TokenEpoch,
+		Platform:   true,
+		Service:    true,
+	}
+	// Same rule as a platform token: the tenant being worked in is a
+	// request, and the guard decides whether the assignment allows it.
+	if wantTenant != "" {
+		if t, terr := i.tenants.TenantBySlug(ctx, wantTenant); terr == nil && t != nil {
+			p.TenantID, p.TenantSlug = t.ID, t.Slug
+		}
+	}
+	return p
 }
 
 // mustHexOrRaw accepts the stored sha256 either hex-encoded or raw base64;

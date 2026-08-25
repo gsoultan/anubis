@@ -92,7 +92,7 @@ func runServe(ctx context.Context, logger *slog.Logger) error {
 	limiter := ratelimit.New()
 	opts := connect.WithInterceptors(
 		apiconnect.NewMetaInterceptor(),
-		apiconnect.NewAuthnInterceptor(cfg.Issuer, app.ring, app.tenancy, app.auth, app.clock),
+		apiconnect.NewAuthnInterceptor(cfg.Issuer, app.ring, app.tenancy, app.auth, app.control, app.clock),
 	)
 
 	rpc := http.NewServeMux()

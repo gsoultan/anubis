@@ -28,6 +28,71 @@ func NewPlatformAdminHandler(svc controlsvc.ControlService, f mw.Factory, now fu
 
 var _ anubisv1connect.PlatformAdminServiceHandler = (*PlatformAdminHandler)(nil)
 
+func apiKeyProto(k controldomain.PlatformAPIKey) *anubisv1.PlatformApiKey {
+	out := &anubisv1.PlatformApiKey{
+		Id: k.ID, PlatformUserId: k.PlatformUserID, Username: k.Username,
+		Label: k.Label, Lookup: k.Lookup,
+		CreatedAt: k.CreatedAt.Unix(), ExpiresAt: k.ExpiresAt.Unix(),
+	}
+	if k.LastUsedAt != nil {
+		out.LastUsedAt = k.LastUsedAt.Unix()
+	}
+	if k.RevokedAt != nil {
+		out.RevokedAt = k.RevokedAt.Unix()
+	}
+	return out
+}
+
+func (h *PlatformAdminHandler) CreatePlatformApiKey(ctx context.Context,
+	req *connect.Request[anubisv1.CreatePlatformApiKeyRequest],
+) (*connect.Response[anubisv1.CreatePlatformApiKeyResponse], error) {
+	type minted struct {
+		full string
+		rec  *controldomain.PlatformAPIKey
+	}
+	out, err := h.f.Do(ctx, "platform.apikey.create", func(ctx context.Context) (any, error) {
+		full, rec, cerr := h.svc.CreateAPIKey(ctx, controlapp.CreateAPIKeyInput{
+			OwnerID: req.Msg.OwnerId, Label: req.Msg.Label,
+			ExpiresIn: time.Duration(req.Msg.ExpiresInDays) * 24 * time.Hour,
+		})
+		return minted{full: full, rec: rec}, cerr
+	})
+	if err != nil {
+		return nil, apiconnect.Err(ctx, err)
+	}
+	m := out.(minted)
+	return connect.NewResponse(&anubisv1.CreatePlatformApiKeyResponse{
+		Key: apiKeyProto(*m.rec), ApiKey: m.full,
+	}), nil
+}
+
+func (h *PlatformAdminHandler) ListPlatformApiKeys(ctx context.Context,
+	_ *connect.Request[anubisv1.ListPlatformApiKeysRequest],
+) (*connect.Response[anubisv1.ListPlatformApiKeysResponse], error) {
+	out, err := h.f.Do(ctx, "platform.apikey.list", func(ctx context.Context) (any, error) {
+		return h.svc.ListAPIKeys(ctx)
+	})
+	if err != nil {
+		return nil, apiconnect.Err(ctx, err)
+	}
+	resp := &anubisv1.ListPlatformApiKeysResponse{}
+	for _, k := range out.([]controldomain.PlatformAPIKey) {
+		resp.Keys = append(resp.Keys, apiKeyProto(k))
+	}
+	return connect.NewResponse(resp), nil
+}
+
+func (h *PlatformAdminHandler) RevokePlatformApiKey(ctx context.Context,
+	req *connect.Request[anubisv1.RevokePlatformApiKeyRequest],
+) (*connect.Response[anubisv1.RevokePlatformApiKeyResponse], error) {
+	if _, err := h.f.Do(ctx, "platform.apikey.revoke", func(ctx context.Context) (any, error) {
+		return nil, h.svc.RevokeAPIKey(ctx, req.Msg.Id)
+	}); err != nil {
+		return nil, apiconnect.Err(ctx, err)
+	}
+	return connect.NewResponse(&anubisv1.RevokePlatformApiKeyResponse{}), nil
+}
+
 func (h *PlatformAdminHandler) ListOperators(ctx context.Context,
 	req *connect.Request[anubisv1.ListOperatorsRequest],
 ) (*connect.Response[anubisv1.ListOperatorsResponse], error) {

@@ -162,6 +162,123 @@ function AssignDialog({ onDone }: { onDone: () => void }) {
   )
 }
 
+
+/* Machine credentials. A key acts AS its owner and carries exactly their
+   assignments, checked on every call — so it can never do more than they
+   can, and revoking their access revokes the key's at the same moment.
+   This is how a pipeline applies a manifest: migration 0029 made
+   administration operator-only and took the old API-key path with it. */
+function ApiKeys() {
+  const { data, refetch } = useQuery({
+    queryKey: ['platform-api-keys'],
+    queryFn: async () => (await api.platformAdmin.listPlatformApiKeys({})).keys,
+    retry: false,
+  })
+  const [open, setOpen] = useState(false)
+  const [label, setLabel] = useState('')
+  const [days, setDays] = useState('30')
+  const [minted, setMinted] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  const create = async () => {
+    setBusy(true)
+    try {
+      const resp = await api.platformAdmin.createPlatformApiKey({
+        label, expiresInDays: Number(days) || 30,
+      })
+      // Shown once: it is stored as a hash and cannot be recovered.
+      setMinted(resp.apiKey)
+      setLabel('')
+      await refetch()
+    } catch (e) { notifyRejected(e) } finally { setBusy(false) }
+  }
+
+  const revoke = async (id: string, what: string) => {
+    try {
+      await api.platformAdmin.revokePlatformApiKey({ id })
+      notifyCreated('Key revoked', `${what} stops working on its next request.`)
+      await refetch()
+    } catch (e) { notifyRejected(e) }
+  }
+
+  const live = (k: { revokedAt: bigint; expiresAt: bigint }) =>
+    Number(k.revokedAt) === 0 && Number(k.expiresAt) * 1000 > Date.now()
+
+  return (
+    <div className="panel mt-5 p-4">
+      <div className="mb-2.5 flex items-start justify-between gap-3">
+        <div>
+          <div className="t-h1">API keys</div>
+          <p className="t-sm" style={{ maxWidth: 620 }}>
+            For pipelines. A key acts as the operator who owns it and carries
+            exactly their authority — it can never do more than they can, and
+            it stops the moment their access does. Every key expires; 90 days
+            is the ceiling.
+          </p>
+        </div>
+        <Button size="compact-sm" leftSection={<IconPlus size={14} />} onClick={() => setOpen(true)}>
+          New key
+        </Button>
+      </div>
+
+      {(data?.length ?? 0) === 0 ? (
+        <p className="t-xs">No keys yet.</p>
+      ) : (
+        <div className="flex flex-col gap-1.5">
+          {data!.map((k) => (
+            <div key={k.id} className="panel-inset flex items-center justify-between gap-3 px-2.5 py-1.5">
+              <div className="min-w-0">
+                <span className="t-body" style={{ fontWeight: 550 }}>{k.label || '(no label)'}</span>
+                <span className="chip ml-2">{k.username}</span>
+                {!live(k) && <span className="chip ml-2">inactive</span>}
+                <div className="t-xs tnum">
+                  {k.lookup}… · expires {new Date(Number(k.expiresAt) * 1000).toISOString().slice(0, 10)}
+                  {Number(k.lastUsedAt) > 0
+                    ? ` · last used ${new Date(Number(k.lastUsedAt) * 1000).toISOString().slice(0, 10)}`
+                    : ' · never used'}
+                </div>
+              </div>
+              {live(k) && (
+                <Button size="compact-xs" variant="subtle" color="red"
+                  leftSection={<IconTrash size={12} />}
+                  onClick={() => void revoke(k.id, k.label || 'The key')}>
+                  Revoke
+                </Button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <Modal opened={open} onClose={() => { setOpen(false); setMinted(null) }}
+        title={minted ? 'Copy this key now' : 'New API key'} centered>
+        {minted ? (
+          <div className="flex flex-col gap-2.5">
+            <p className="t-sm">
+              This is the only time the key is shown. It is stored as a hash;
+              nobody, including this console, can recover it.
+            </p>
+            <code className="panel-inset block break-all px-2.5 py-2" style={{ fontSize: 12 }}>{minted}</code>
+            <Button onClick={() => { setOpen(false); setMinted(null) }}>Done</Button>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2.5">
+            <TextInput label="Label" placeholder="release pipeline" value={label}
+              onChange={(e) => setLabel(e.currentTarget.value)} />
+            <Select label="Expires in" value={days} onChange={(v) => setDays(v ?? '30')}
+              data={[
+                { value: '7', label: '7 days' },
+                { value: '30', label: '30 days' },
+                { value: '90', label: '90 days (maximum)' },
+              ]} />
+            <Button loading={busy} onClick={() => void create()}>Create key</Button>
+          </div>
+        )}
+      </Modal>
+    </div>
+  )
+}
+
 function Operators() {
   const [query, setQuery] = useState('')
   /* A stack, not a page number: keyset paging can go forward from a cursor
@@ -281,6 +398,8 @@ function Operators() {
           )}
         </>
       )}
+
+      <ApiKeys />
     </Page>
   )
 }

@@ -303,6 +303,15 @@ const (
 	// PlatformAdminServiceListOperatorsProcedure is the fully-qualified name of the
 	// PlatformAdminService's ListOperators RPC.
 	PlatformAdminServiceListOperatorsProcedure = "/anubis.v1.PlatformAdminService/ListOperators"
+	// PlatformAdminServiceCreatePlatformApiKeyProcedure is the fully-qualified name of the
+	// PlatformAdminService's CreatePlatformApiKey RPC.
+	PlatformAdminServiceCreatePlatformApiKeyProcedure = "/anubis.v1.PlatformAdminService/CreatePlatformApiKey"
+	// PlatformAdminServiceListPlatformApiKeysProcedure is the fully-qualified name of the
+	// PlatformAdminService's ListPlatformApiKeys RPC.
+	PlatformAdminServiceListPlatformApiKeysProcedure = "/anubis.v1.PlatformAdminService/ListPlatformApiKeys"
+	// PlatformAdminServiceRevokePlatformApiKeyProcedure is the fully-qualified name of the
+	// PlatformAdminService's RevokePlatformApiKey RPC.
+	PlatformAdminServiceRevokePlatformApiKeyProcedure = "/anubis.v1.PlatformAdminService/RevokePlatformApiKey"
 	// PlatformAdminServiceCreateOperatorProcedure is the fully-qualified name of the
 	// PlatformAdminService's CreateOperator RPC.
 	PlatformAdminServiceCreateOperatorProcedure = "/anubis.v1.PlatformAdminService/CreateOperator"
@@ -2885,6 +2894,13 @@ type PlatformAdminServiceClient interface {
 	// ListOperators is everyone who can administer this installation, with the
 	// assignments that say where.
 	ListOperators(context.Context, *connect.Request[v1.ListOperatorsRequest]) (*connect.Response[v1.ListOperatorsResponse], error)
+	// Machine credentials for operators. A key acts AS its owner and carries
+	// exactly their assignments, checked on every call — so it can never do
+	// more than they can, and revoking their access revokes the key's too.
+	// This is how a pipeline applies a manifest (0029 removed the old path).
+	CreatePlatformApiKey(context.Context, *connect.Request[v1.CreatePlatformApiKeyRequest]) (*connect.Response[v1.CreatePlatformApiKeyResponse], error)
+	ListPlatformApiKeys(context.Context, *connect.Request[v1.ListPlatformApiKeysRequest]) (*connect.Response[v1.ListPlatformApiKeysResponse], error)
+	RevokePlatformApiKey(context.Context, *connect.Request[v1.RevokePlatformApiKeyRequest]) (*connect.Response[v1.RevokePlatformApiKeyResponse], error)
 	// CreateOperator adds a platform administrator: an account in the platform
 	// tenant, which is a separate population from any tenant's own people.
 	CreateOperator(context.Context, *connect.Request[v1.CreateOperatorRequest]) (*connect.Response[v1.CreateOperatorResponse], error)
@@ -2912,6 +2928,24 @@ func NewPlatformAdminServiceClient(httpClient connect.HTTPClient, baseURL string
 			httpClient,
 			baseURL+PlatformAdminServiceListOperatorsProcedure,
 			connect.WithSchema(platformAdminServiceMethods.ByName("ListOperators")),
+			connect.WithClientOptions(opts...),
+		),
+		createPlatformApiKey: connect.NewClient[v1.CreatePlatformApiKeyRequest, v1.CreatePlatformApiKeyResponse](
+			httpClient,
+			baseURL+PlatformAdminServiceCreatePlatformApiKeyProcedure,
+			connect.WithSchema(platformAdminServiceMethods.ByName("CreatePlatformApiKey")),
+			connect.WithClientOptions(opts...),
+		),
+		listPlatformApiKeys: connect.NewClient[v1.ListPlatformApiKeysRequest, v1.ListPlatformApiKeysResponse](
+			httpClient,
+			baseURL+PlatformAdminServiceListPlatformApiKeysProcedure,
+			connect.WithSchema(platformAdminServiceMethods.ByName("ListPlatformApiKeys")),
+			connect.WithClientOptions(opts...),
+		),
+		revokePlatformApiKey: connect.NewClient[v1.RevokePlatformApiKeyRequest, v1.RevokePlatformApiKeyResponse](
+			httpClient,
+			baseURL+PlatformAdminServiceRevokePlatformApiKeyProcedure,
+			connect.WithSchema(platformAdminServiceMethods.ByName("RevokePlatformApiKey")),
 			connect.WithClientOptions(opts...),
 		),
 		createOperator: connect.NewClient[v1.CreateOperatorRequest, v1.CreateOperatorResponse](
@@ -2943,16 +2977,34 @@ func NewPlatformAdminServiceClient(httpClient connect.HTTPClient, baseURL string
 
 // platformAdminServiceClient implements PlatformAdminServiceClient.
 type platformAdminServiceClient struct {
-	listOperators     *connect.Client[v1.ListOperatorsRequest, v1.ListOperatorsResponse]
-	createOperator    *connect.Client[v1.CreateOperatorRequest, v1.CreateOperatorResponse]
-	assignOperator    *connect.Client[v1.AssignOperatorRequest, v1.AssignOperatorResponse]
-	revokeAssignment  *connect.Client[v1.RevokeAssignmentRequest, v1.RevokeAssignmentResponse]
-	setOperatorStatus *connect.Client[v1.SetOperatorStatusRequest, v1.SetOperatorStatusResponse]
+	listOperators        *connect.Client[v1.ListOperatorsRequest, v1.ListOperatorsResponse]
+	createPlatformApiKey *connect.Client[v1.CreatePlatformApiKeyRequest, v1.CreatePlatformApiKeyResponse]
+	listPlatformApiKeys  *connect.Client[v1.ListPlatformApiKeysRequest, v1.ListPlatformApiKeysResponse]
+	revokePlatformApiKey *connect.Client[v1.RevokePlatformApiKeyRequest, v1.RevokePlatformApiKeyResponse]
+	createOperator       *connect.Client[v1.CreateOperatorRequest, v1.CreateOperatorResponse]
+	assignOperator       *connect.Client[v1.AssignOperatorRequest, v1.AssignOperatorResponse]
+	revokeAssignment     *connect.Client[v1.RevokeAssignmentRequest, v1.RevokeAssignmentResponse]
+	setOperatorStatus    *connect.Client[v1.SetOperatorStatusRequest, v1.SetOperatorStatusResponse]
 }
 
 // ListOperators calls anubis.v1.PlatformAdminService.ListOperators.
 func (c *platformAdminServiceClient) ListOperators(ctx context.Context, req *connect.Request[v1.ListOperatorsRequest]) (*connect.Response[v1.ListOperatorsResponse], error) {
 	return c.listOperators.CallUnary(ctx, req)
+}
+
+// CreatePlatformApiKey calls anubis.v1.PlatformAdminService.CreatePlatformApiKey.
+func (c *platformAdminServiceClient) CreatePlatformApiKey(ctx context.Context, req *connect.Request[v1.CreatePlatformApiKeyRequest]) (*connect.Response[v1.CreatePlatformApiKeyResponse], error) {
+	return c.createPlatformApiKey.CallUnary(ctx, req)
+}
+
+// ListPlatformApiKeys calls anubis.v1.PlatformAdminService.ListPlatformApiKeys.
+func (c *platformAdminServiceClient) ListPlatformApiKeys(ctx context.Context, req *connect.Request[v1.ListPlatformApiKeysRequest]) (*connect.Response[v1.ListPlatformApiKeysResponse], error) {
+	return c.listPlatformApiKeys.CallUnary(ctx, req)
+}
+
+// RevokePlatformApiKey calls anubis.v1.PlatformAdminService.RevokePlatformApiKey.
+func (c *platformAdminServiceClient) RevokePlatformApiKey(ctx context.Context, req *connect.Request[v1.RevokePlatformApiKeyRequest]) (*connect.Response[v1.RevokePlatformApiKeyResponse], error) {
+	return c.revokePlatformApiKey.CallUnary(ctx, req)
 }
 
 // CreateOperator calls anubis.v1.PlatformAdminService.CreateOperator.
@@ -2980,6 +3032,13 @@ type PlatformAdminServiceHandler interface {
 	// ListOperators is everyone who can administer this installation, with the
 	// assignments that say where.
 	ListOperators(context.Context, *connect.Request[v1.ListOperatorsRequest]) (*connect.Response[v1.ListOperatorsResponse], error)
+	// Machine credentials for operators. A key acts AS its owner and carries
+	// exactly their assignments, checked on every call — so it can never do
+	// more than they can, and revoking their access revokes the key's too.
+	// This is how a pipeline applies a manifest (0029 removed the old path).
+	CreatePlatformApiKey(context.Context, *connect.Request[v1.CreatePlatformApiKeyRequest]) (*connect.Response[v1.CreatePlatformApiKeyResponse], error)
+	ListPlatformApiKeys(context.Context, *connect.Request[v1.ListPlatformApiKeysRequest]) (*connect.Response[v1.ListPlatformApiKeysResponse], error)
+	RevokePlatformApiKey(context.Context, *connect.Request[v1.RevokePlatformApiKeyRequest]) (*connect.Response[v1.RevokePlatformApiKeyResponse], error)
 	// CreateOperator adds a platform administrator: an account in the platform
 	// tenant, which is a separate population from any tenant's own people.
 	CreateOperator(context.Context, *connect.Request[v1.CreateOperatorRequest]) (*connect.Response[v1.CreateOperatorResponse], error)
@@ -3003,6 +3062,24 @@ func NewPlatformAdminServiceHandler(svc PlatformAdminServiceHandler, opts ...con
 		PlatformAdminServiceListOperatorsProcedure,
 		svc.ListOperators,
 		connect.WithSchema(platformAdminServiceMethods.ByName("ListOperators")),
+		connect.WithHandlerOptions(opts...),
+	)
+	platformAdminServiceCreatePlatformApiKeyHandler := connect.NewUnaryHandler(
+		PlatformAdminServiceCreatePlatformApiKeyProcedure,
+		svc.CreatePlatformApiKey,
+		connect.WithSchema(platformAdminServiceMethods.ByName("CreatePlatformApiKey")),
+		connect.WithHandlerOptions(opts...),
+	)
+	platformAdminServiceListPlatformApiKeysHandler := connect.NewUnaryHandler(
+		PlatformAdminServiceListPlatformApiKeysProcedure,
+		svc.ListPlatformApiKeys,
+		connect.WithSchema(platformAdminServiceMethods.ByName("ListPlatformApiKeys")),
+		connect.WithHandlerOptions(opts...),
+	)
+	platformAdminServiceRevokePlatformApiKeyHandler := connect.NewUnaryHandler(
+		PlatformAdminServiceRevokePlatformApiKeyProcedure,
+		svc.RevokePlatformApiKey,
+		connect.WithSchema(platformAdminServiceMethods.ByName("RevokePlatformApiKey")),
 		connect.WithHandlerOptions(opts...),
 	)
 	platformAdminServiceCreateOperatorHandler := connect.NewUnaryHandler(
@@ -3033,6 +3110,12 @@ func NewPlatformAdminServiceHandler(svc PlatformAdminServiceHandler, opts ...con
 		switch r.URL.Path {
 		case PlatformAdminServiceListOperatorsProcedure:
 			platformAdminServiceListOperatorsHandler.ServeHTTP(w, r)
+		case PlatformAdminServiceCreatePlatformApiKeyProcedure:
+			platformAdminServiceCreatePlatformApiKeyHandler.ServeHTTP(w, r)
+		case PlatformAdminServiceListPlatformApiKeysProcedure:
+			platformAdminServiceListPlatformApiKeysHandler.ServeHTTP(w, r)
+		case PlatformAdminServiceRevokePlatformApiKeyProcedure:
+			platformAdminServiceRevokePlatformApiKeyHandler.ServeHTTP(w, r)
 		case PlatformAdminServiceCreateOperatorProcedure:
 			platformAdminServiceCreateOperatorHandler.ServeHTTP(w, r)
 		case PlatformAdminServiceAssignOperatorProcedure:
@@ -3052,6 +3135,18 @@ type UnimplementedPlatformAdminServiceHandler struct{}
 
 func (UnimplementedPlatformAdminServiceHandler) ListOperators(context.Context, *connect.Request[v1.ListOperatorsRequest]) (*connect.Response[v1.ListOperatorsResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.PlatformAdminService.ListOperators is not implemented"))
+}
+
+func (UnimplementedPlatformAdminServiceHandler) CreatePlatformApiKey(context.Context, *connect.Request[v1.CreatePlatformApiKeyRequest]) (*connect.Response[v1.CreatePlatformApiKeyResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.PlatformAdminService.CreatePlatformApiKey is not implemented"))
+}
+
+func (UnimplementedPlatformAdminServiceHandler) ListPlatformApiKeys(context.Context, *connect.Request[v1.ListPlatformApiKeysRequest]) (*connect.Response[v1.ListPlatformApiKeysResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.PlatformAdminService.ListPlatformApiKeys is not implemented"))
+}
+
+func (UnimplementedPlatformAdminServiceHandler) RevokePlatformApiKey(context.Context, *connect.Request[v1.RevokePlatformApiKeyRequest]) (*connect.Response[v1.RevokePlatformApiKeyResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.PlatformAdminService.RevokePlatformApiKey is not implemented"))
 }
 
 func (UnimplementedPlatformAdminServiceHandler) CreateOperator(context.Context, *connect.Request[v1.CreateOperatorRequest]) (*connect.Response[v1.CreateOperatorResponse], error) {

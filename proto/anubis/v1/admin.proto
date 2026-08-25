@@ -1141,6 +1141,13 @@ service PlatformAdminService {
   // ListOperators is everyone who can administer this installation, with the
   // assignments that say where.
   rpc ListOperators(ListOperatorsRequest) returns (ListOperatorsResponse);
+  // Machine credentials for operators. A key acts AS its owner and carries
+  // exactly their assignments, checked on every call — so it can never do
+  // more than they can, and revoking their access revokes the key's too.
+  // This is how a pipeline applies a manifest (0029 removed the old path).
+  rpc CreatePlatformApiKey(CreatePlatformApiKeyRequest) returns (CreatePlatformApiKeyResponse);
+  rpc ListPlatformApiKeys(ListPlatformApiKeysRequest) returns (ListPlatformApiKeysResponse);
+  rpc RevokePlatformApiKey(RevokePlatformApiKeyRequest) returns (RevokePlatformApiKeyResponse);
   // CreateOperator adds a platform administrator: an account in the platform
   // tenant, which is a separate population from any tenant's own people.
   rpc CreateOperator(CreateOperatorRequest) returns (CreateOperatorResponse);
@@ -1179,6 +1186,46 @@ message Operator {
   // does not.
   bool mfa_enrolled = 9;
 }
+
+message PlatformApiKey {
+  string id = 1;
+  string platform_user_id = 2;
+  string username = 3;
+  string label = 4;
+  // The public half: identifies the key without being usable alone.
+  string lookup = 5;
+  int64 created_at = 6;
+  int64 last_used_at = 7;
+  int64 expires_at = 8;
+  int64 revoked_at = 9;
+}
+
+message CreatePlatformApiKeyRequest {
+  // Empty means the caller themselves.
+  string owner_id = 1;
+  string label = 2;
+  // Bounded by the server at 90 days. A credential that administers the
+  // installation must not outlive the reason it was made.
+  int32 expires_in_days = 3;
+}
+
+message CreatePlatformApiKeyResponse {
+  PlatformApiKey key = 1;
+  // Shown ONCE. It is stored only as a hash and cannot be recovered.
+  string api_key = 2;
+}
+
+message ListPlatformApiKeysRequest {}
+
+message ListPlatformApiKeysResponse {
+  repeated PlatformApiKey keys = 1;
+}
+
+message RevokePlatformApiKeyRequest {
+  string id = 1;
+}
+
+message RevokePlatformApiKeyResponse {}
 
 message ListOperatorsRequest {
   string query = 1;      // username substring

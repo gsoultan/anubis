@@ -257,6 +257,19 @@ type PiiKeyTombstone struct {
 	Reason     string
 }
 
+type PlatformApiKey struct {
+	ID             pgtype.UUID
+	PlatformUserID pgtype.UUID
+	Label          string
+	Lookup         string
+	SecretHash     string
+	CreatedAt      pgtype.Timestamptz
+	CreatedBy      pgtype.UUID
+	LastUsedAt     pgtype.Timestamptz
+	ExpiresAt      pgtype.Timestamptz
+	RevokedAt      pgtype.Timestamptz
+}
+
 // Which tenants a platform user may administer. Never a substitute for a grant, which is what a tenant's own members hold.
 type PlatformAssignment struct {
 	CreatedAt  pgtype.Timestamptz

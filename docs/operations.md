@@ -10,12 +10,13 @@ Everything an on-call engineer needs at 3am, and nothing that duplicates
 3. [Database roles](#database-roles)
 4. [Health and readiness](#health-and-readiness)
 5. [Metrics](#metrics)
-6. [Maintenance jobs](#maintenance-jobs)
-7. [Key rotation](#key-rotation)
-8. [Incident: refresh token reuse](#incident-refresh-token-reuse)
-9. [Incident: signing key compromise](#incident-signing-key-compromise)
-10. [Restoring from backup](#restoring-from-backup)
-11. [Performance budgets](#performance-budgets)
+6. [Machine credentials for pipelines](#machine-credentials-for-pipelines)
+7. [Maintenance jobs](#maintenance-jobs)
+8. [Key rotation](#key-rotation)
+9. [Incident: refresh token reuse](#incident-refresh-token-reuse)
+10. [Incident: signing key compromise](#incident-signing-key-compromise)
+11. [Restoring from backup](#restoring-from-backup)
+12. [Performance budgets](#performance-budgets)
 
 ---
 
@@ -98,6 +99,36 @@ and `anubis_build_info{version}`.
 Alert rules, thresholds and the runbook section each one points at live in
 [alerting.md](alerting.md). If you wire up exactly one alert, make it
 refresh-token reuse.
+
+## Machine credentials for pipelines
+
+Administration is operator-only (ADR-0011), so a pipeline that applies an
+application manifest authenticates as an operator, with a platform API key:
+
+```bash
+curl -X POST "$ANUBIS/anubis.v1.AuthzAdminService/ApplyManifest" \
+  -H "Authorization: Bearer $ANUBIS_API_KEY" \
+  -H "X-Anubis-Tenant: $TENANT" \
+  -H 'content-type: application/json' \
+  -d @manifest.json
+```
+
+Create one under **Platform users → API keys**. Facts worth knowing before
+you put one in CI:
+
+- The key **acts as its owner** and carries exactly their assignments,
+  re-read on every call. It can never do more than they can, and revoking
+  or disabling them stops the key at the same moment.
+- **Every key expires**; 90 days is the ceiling and there is no unbounded
+  option. A credential that administers the installation should not outlive
+  the reason it was made.
+- It is shown **once**. Only a hash is stored, so a lost key is replaced,
+  not recovered.
+- Revocation takes effect on the next request — the lookup index excludes
+  revoked rows.
+- `X-Anubis-Tenant` is required for anything tenant-scoped, exactly as for a
+  human operator; without it the call fails `no_tenant_selected` rather than
+  guessing which tenant was meant.
 
 ## Maintenance jobs
 
