@@ -1,0 +1,38 @@
+# Tag a version, get Linux binaries and packages. The console is built by
+# GoReleaser's before-hook (scripts/build-console.sh), which FAILS the
+# release if the placeholder survived — a release that quietly ships
+# "console not built" is worse than no release.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # GoReleaser derives the changelog from history; a shallow clone
+          # produces an empty one.
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: oven-sh/setup-bun@v2
+      - name: gate the release on the suite that guards it
+        # A tag must not produce artefacts the pipeline would have rejected.
+        run: |
+          for s in scripts/check/*.sh; do bash "$s"; done
+          go test ./...
+          cd pkg/anubis && go test ./...
+      - uses: goreleaser/goreleaser-action@v6
+        with:
+          version: "~> v2"
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
