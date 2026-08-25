@@ -205,6 +205,27 @@ After any restore, bump `token_epoch` for affected identities unless you can
 prove the snapshot post-dates the last revocation. `test/integration`
 exercises this case explicitly.
 
+### The drill, performed
+
+Run this before you need it. Performed 2026-08-25 against a real database,
+`pg_dump -Fc` then `pg_restore` into a fresh one:
+
+| Checked | Result |
+| :--- | :--- |
+| Schema and data survive | 33 migrations, identities, operators and signing keys all identical |
+| Schema guards survive | The `attributes` CHECK still refuses plaintext in the restored copy |
+| Revocations survive | Revoked API keys came back revoked (8 of 8), not live |
+| The copy actually serves | `/readyz` 200 and an operator login succeeded against it |
+
+The last row is the one worth dwelling on. `/readyz` passing means the
+restored **sealed signing keys opened**, which is only true because the
+master key was supplied separately — the same fact that makes a stolen
+backup worthless. Restore the database somewhere without the master key and
+the instance cannot start, by design.
+
+A drill nobody has run is a procedure, not a capability. Repeat it whenever
+the schema changes shape.
+
 ## Sign-in and sign-out pages
 
 Each tenant publishes as many as it needs; each has its own URL
@@ -254,6 +275,13 @@ latency and nothing else. (Measured on a development machine against a local
 database; treat the shape as the lesson and re-measure on your own hardware.)
 
 Turn it up for a soak: `ANUBIS_LOAD_WORKERS`, `ANUBIS_LOAD_SECONDS`.
+
+**Soak, performed.** ~300,000 decisions across two rounds: goroutines held
+at exactly 17 throughout, and RSS returned to 26 MB when idle after a 83 MB
+working peak. No goroutine leak, no connection-handler leak, no heap that
+only grows. Note that the throughput figures from that run are worthless —
+the machine was at load average 35 — which is the general lesson: leak
+checks survive a noisy host, latency measurements do not.
 
 The login number is a security property, not a performance problem: the KDF
 cost is what makes offline cracking expensive, and it must be paid identically
