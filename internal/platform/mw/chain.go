@@ -10,6 +10,7 @@ import (
 	"github.com/go-kit/kit/endpoint"
 
 	"github.com/gsoultan/anubis/internal/platform/crypto/secret"
+	"github.com/gsoultan/anubis/internal/platform/metrics"
 	"github.com/gsoultan/anubis/internal/shared/apperr"
 	"github.com/gsoultan/anubis/internal/shared/authctx"
 )
@@ -79,8 +80,8 @@ func Logging(name string, logger *slog.Logger) endpoint.Middleware {
 	}
 }
 
-// Metrics publishes per-endpoint counters via expvar (served on the debug
-// listener). Stdlib-only by design.
+// Metrics publishes per-endpoint counters via expvar plus the Prometheus
+// registry (both served on the debug listener). Stdlib-only by design.
 var (
 	mCalls    = expvar.NewMap("anubis_endpoint_calls")
 	mErrors   = expvar.NewMap("anubis_endpoint_errors")
@@ -92,11 +93,16 @@ func Metrics(name string) endpoint.Middleware {
 		return func(ctx context.Context, req any) (any, error) {
 			start := time.Now()
 			resp, err := next(ctx, req)
+			elapsed := time.Since(start)
 			mCalls.Add(name, 1)
-			mDuration.Add(name, time.Since(start).Milliseconds())
+			mDuration.Add(name, elapsed.Milliseconds())
+			code := "ok"
 			if err != nil {
 				mErrors.Add(name, 1)
+				code = apperr.AsError(err).Code
 			}
+			metrics.IncEndpoint(name, code)
+			metrics.ObserveEndpoint(name, elapsed)
 			return resp, err
 		}
 	}

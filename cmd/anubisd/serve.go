@@ -18,6 +18,7 @@ import (
 	apihttp "github.com/gsoultan/anubis/internal/api/http"
 	"github.com/gsoultan/anubis/internal/platform/config"
 	"github.com/gsoultan/anubis/internal/platform/database"
+	"github.com/gsoultan/anubis/internal/platform/metrics"
 	"github.com/gsoultan/anubis/internal/platform/migrate"
 	"github.com/gsoultan/anubis/internal/platform/ratelimit"
 	"github.com/gsoultan/anubis/migrations"
@@ -96,6 +97,16 @@ func runServe(ctx context.Context, logger *slog.Logger) error {
 
 	rpc := http.NewServeMux()
 	app.registerRPC(rpc, opts, limiter, logger)
+
+	metrics.SetBuildInfo(version)
+	metrics.RegisterPoolStats(func() metrics.PoolStats {
+		s := pool.Stat()
+		return metrics.PoolStats{
+			Acquired: int64(s.AcquiredConns()), Idle: int64(s.IdleConns()),
+			Total: int64(s.TotalConns()), Max: int64(s.MaxConns()),
+			EmptyAcquireCount: s.EmptyAcquireCount(),
+		}
+	})
 
 	health := apihttp.NewHealthHandler(pool, app.ring)
 	srv := apihttp.NewServer(logger, cfg.UIOrigin, rpc, health)

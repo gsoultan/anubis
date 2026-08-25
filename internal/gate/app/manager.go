@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/gsoultan/anubis/internal/gate/snapshot"
+	"github.com/gsoultan/anubis/internal/platform/metrics"
 )
 
 // Loader is what the Manager needs from the repository layer.
@@ -156,6 +157,7 @@ func (m *Manager) load(ctx context.Context, tenantID, slug string) {
 	m.mu.Lock()
 	m.data[slug] = d
 	m.mu.Unlock()
+	metrics.SetSnapshotLoaded(slug, time.Now())
 	m.logger.Info("snapshot loaded", "tenant", slug, "version", d.Version,
 		"grants", len(d.GrantsByIdentity), "routes", len(d.Routes))
 }

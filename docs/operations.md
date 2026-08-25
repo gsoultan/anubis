@@ -9,12 +9,13 @@ Everything an on-call engineer needs at 3am, and nothing that duplicates
 2. [Configuration](#configuration)
 3. [Database roles](#database-roles)
 4. [Health and readiness](#health-and-readiness)
-5. [Maintenance jobs](#maintenance-jobs)
-6. [Key rotation](#key-rotation)
-7. [Incident: refresh token reuse](#incident-refresh-token-reuse)
-8. [Incident: signing key compromise](#incident-signing-key-compromise)
-9. [Restoring from backup](#restoring-from-backup)
-10. [Performance budgets](#performance-budgets)
+5. [Metrics](#metrics)
+6. [Maintenance jobs](#maintenance-jobs)
+7. [Key rotation](#key-rotation)
+8. [Incident: refresh token reuse](#incident-refresh-token-reuse)
+9. [Incident: signing key compromise](#incident-signing-key-compromise)
+10. [Restoring from backup](#restoring-from-backup)
+11. [Performance budgets](#performance-budgets)
 
 ---
 
@@ -31,7 +32,11 @@ migrations itself; production does not, because a schema change should be a
 deliberate deploy step with its own rollback plan (which is: roll forward).
 
 The image (`Dockerfile`) is distroless and non-root, and embeds the
-migrations — nothing is mounted.
+migrations **and the admin console** — nothing is mounted. The console is
+served by `anubisd` itself at `/` on the API origin (same-origin by design;
+the CORS knob is dev-only), so deploying the binary deploys the console.
+A binary built without `scripts/build.sh` serves a placeholder page that
+says how to get the real one.
 
 ## Configuration
 
@@ -78,6 +83,21 @@ no credential ever lands in a migration file.
 
 Readiness includes snapshot age because past that age the gate fails closed:
 the instance is denying traffic it should allow, and must stop receiving it.
+
+## Metrics
+
+Prometheus text format at `/metrics` on the **debug listener**
+(`ANUBIS_DEBUG_LISTEN`) — beside pprof and expvar, off the public surface.
+Families: `anubis_endpoint_requests_total{endpoint,code}` and
+`anubis_endpoint_duration_seconds` (histogram) for every RPC,
+`anubis_audit_events_total{action}` (this is where `token.reuse_detected`
+pages from), `anubis_job_runs_total{job,result}`,
+`anubis_gate_snapshot_loaded_timestamp_seconds{tenant}`, `anubis_db_pool_*`,
+and `anubis_build_info{version}`.
+
+Alert rules, thresholds and the runbook section each one points at live in
+[alerting.md](alerting.md). If you wire up exactly one alert, make it
+refresh-token reuse.
 
 ## Maintenance jobs
 

@@ -11,6 +11,8 @@ import (
 	"context"
 	"log/slog"
 	"time"
+
+	"github.com/gsoultan/anubis/internal/platform/metrics"
 )
 
 // Job is one unit of recurring maintenance.
@@ -91,10 +93,12 @@ func (s *Scheduler) once(ctx context.Context, j Job) {
 	acquired, release, err := s.locker.TryLock(runCtx, j.LockID)
 	if err != nil {
 		s.logger.Warn("job lock failed", "job", j.Name, "error", err)
+		metrics.IncJob(j.Name, "error")
 		return
 	}
 	if !acquired {
-		return // another replica is doing it; not an error
+		metrics.IncJob(j.Name, "skipped") // another replica is doing it; not an error
+		return
 	}
 	defer release()
 
@@ -102,7 +106,9 @@ func (s *Scheduler) once(ctx context.Context, j Job) {
 	if err := j.Run(runCtx); err != nil {
 		s.logger.Error("job failed", "job", j.Name,
 			"duration_ms", time.Since(start).Milliseconds(), "error", err)
+		metrics.IncJob(j.Name, "error")
 		return
 	}
 	s.logger.Info("job ok", "job", j.Name, "duration_ms", time.Since(start).Milliseconds())
+	metrics.IncJob(j.Name, "ok")
 }

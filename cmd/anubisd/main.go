@@ -10,6 +10,11 @@ import (
 	"syscall"
 )
 
+// version is stamped by the build: -ldflags="-X main.version=<sha>". The
+// Dockerfile has passed it since day one — this variable is what it was
+// always supposed to land in.
+var version = "dev"
+
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	slog.SetDefault(logger)
@@ -34,7 +39,7 @@ func main() {
 	case "bootstrap":
 		err = runBootstrap(ctx, logger, os.Args[2:])
 	case "version":
-		fmt.Println("anubisd dev")
+		fmt.Println("anubisd " + version)
 	default:
 		err = fmt.Errorf("unknown command %q (serve|migrate|baseline|keys|bootstrap)", cmd)
 	}

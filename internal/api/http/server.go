@@ -8,6 +8,8 @@ import (
 	"net/http/pprof"
 	"strings"
 	"time"
+
+	"github.com/gsoultan/anubis/internal/platform/metrics"
 )
 
 // Server assembles both surfaces onto one listener: the connect mux
@@ -115,9 +117,12 @@ func isStreaming(r *http.Request) bool {
 		strings.HasPrefix(ct, "application/connect+")
 }
 
-// DebugServer serves pprof and expvar on a loopback-only listener.
+// DebugServer serves pprof, expvar and Prometheus metrics on a loopback-only
+// listener. Metrics live here rather than on the API port: they describe the
+// installation's operation and belong to the operator, not the internet.
 func DebugServer(addr string) *http.Server {
 	mux := http.NewServeMux()
+	mux.Handle("/metrics", metrics.Handler())
 	mux.Handle("/debug/vars", expvar.Handler())
 	mux.HandleFunc("/debug/pprof/", pprof.Index)
 	mux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)

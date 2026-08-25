@@ -6,3 +6,4 @@ graphify-out/
 *.log
 ui/.tanstack/
 /anubisd
+.gstack/

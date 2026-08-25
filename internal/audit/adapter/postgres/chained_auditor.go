@@ -8,6 +8,7 @@ import (
 	"time"
 
 	auditdomain "github.com/gsoultan/anubis/internal/audit/domain"
+	"github.com/gsoultan/anubis/internal/platform/metrics"
 )
 
 // ChainedAuditor implements auditport.Auditor with the per-tenant hash
@@ -37,6 +38,9 @@ func (a *ChainedAuditor) Emit(ctx context.Context, ev auditdomain.AuditEvent) {
 	if ev.TenantID == "" {
 		return
 	}
+	// Counted at emission, before any queueing or sampling: the metric asks
+	// "did the system observe this", and token.reuse_detected is the pager.
+	metrics.IncAudit(ev.Action)
 	if ev.Action == "authorize" {
 		select {
 		case a.queue <- ev:
