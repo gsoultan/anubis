@@ -5,17 +5,24 @@ import (
 	"time"
 
 	gen "github.com/gsoultan/anubis/internal/authz/adapter/postgres/gen"
+	authzrquery "github.com/gsoultan/anubis/internal/authz/adapter/postgres/rquery"
 	authzdomain "github.com/gsoultan/anubis/internal/authz/domain"
 	"github.com/gsoultan/anubis/internal/platform/database"
 	"github.com/gsoultan/anubis/internal/shared/apperr"
 )
 
 func (s *Repository) Authorize(ctx context.Context, identityID, tenantID, permission string, targets []byte) (bool, error) {
-	allow, err := s.q(ctx).Authorize(ctx, gen.AuthorizeParams{
-		IdentityID: identityID, TenantID: tenantID,
-		Permission: permission, Targets: database.OrEmptyJSON(targets),
-	})
-	return allow, database.MapErr(err)
+	row, ok, err := authzrquery.Authorize.One(ctx, s.rex(ctx),
+		identityID, tenantID, permission, database.OrEmptyJSON(targets))
+	if err != nil {
+		return false, database.MapErr(err)
+	}
+	if !ok {
+		// authorize() is scalar and always yields a row; no row means the
+		// call never ran. Deny and say why rather than invent a decision.
+		return false, apperr.ErrNotFound
+	}
+	return row.Allow, nil
 }
 
 func (s *Repository) AuthorizeExplain(ctx context.Context, identityID, tenantID, permission string, targets []byte) (string, error) {
@@ -55,10 +62,16 @@ func (s *Repository) PermissionByKey(ctx context.Context, tenantID, key string) 
 }
 
 func (s *Repository) RolesForIdentity(ctx context.Context, tenantID, identityID string) ([]string, error) {
-	roles, err := s.q(ctx).RolesForIdentity(ctx, gen.RolesForIdentityParams{
-		IdentityID: identityID, TenantID: tenantID,
-	})
-	return roles, database.MapErr(err)
+	rows, err := authzrquery.RolesForIdentity.Query(ctx, s.rex(ctx), identityID, tenantID)
+	if err != nil {
+		return nil, database.MapErr(err)
+	}
+	// nil (not empty) when no rows, as the sqlc form returned.
+	var roles []string
+	for _, r := range rows {
+		roles = append(roles, r.Name)
+	}
+	return roles, nil
 }
 
 func (s *Repository) EffectivePermissionsForIdentity(ctx context.Context, tenantID, identityID string) ([]string, error) {

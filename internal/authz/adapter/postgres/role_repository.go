@@ -4,8 +4,11 @@ import (
 	"context"
 
 	gen "github.com/gsoultan/anubis/internal/authz/adapter/postgres/gen"
+	rrole "github.com/gsoultan/anubis/internal/authz/adapter/postgres/rgen/role"
+	authzrquery "github.com/gsoultan/anubis/internal/authz/adapter/postgres/rquery"
 	authzdomain "github.com/gsoultan/anubis/internal/authz/domain"
 	"github.com/gsoultan/anubis/internal/platform/database"
+	"github.com/gsoultan/anubis/internal/shared/apperr"
 )
 
 func (s *Repository) ListRoles(ctx context.Context, tenantID, query string) ([]authzdomain.RoleRecord, error) {
@@ -37,24 +40,38 @@ func (s *Repository) RoleByID(ctx context.Context, tenantID, id string) (*authzd
 }
 
 func (s *Repository) RoleByName(ctx context.Context, tenantID, name string) (*authzdomain.RoleRecord, error) {
-	r, err := s.q(ctx).GetRoleByName(ctx, gen.GetRoleByNameParams{TenantID: tenantID, Name: name})
+	tid, err := parseUUID(tenantID)
+	if err != nil {
+		return nil, err
+	}
+	r, ok, err := rrole.New().
+		Where(rrole.TenantID.Eq(tid), rrole.Name.Eq(name)).
+		One(ctx, s.rex(ctx))
 	if err != nil {
 		return nil, database.MapErr(err)
 	}
+	if !ok {
+		return nil, apperr.ErrNotFound
+	}
 	return &authzdomain.RoleRecord{
-		ID: r.ID, Name: r.Name, Description: r.Description,
+		ID: uuidStr(r.ID), Name: r.Name, Description: r.Description,
 		IsSystem: r.IsSystem, AllowedRealmKinds: r.AllowedRealmKinds,
 	}, nil
 }
 
 func (s *Repository) CreateRole(ctx context.Context, tenantID string, r authzdomain.RoleRecord, applicationID string) (string, error) {
-	id, err := s.q(ctx).CreateRole(ctx, gen.CreateRoleParams{
-		TenantID: tenantID, Name: r.Name, Description: r.Description,
-		ApplicationID: database.OptStr(applicationID), IsSystem: r.IsSystem,
-		AllowedRealmKinds: orDefaultKinds(r.AllowedRealmKinds),
-		AssignableAt:      database.EmptyIfNil(r.AssignableAt),
-	})
-	return id, database.MapErr(err)
+	row, ok, err := authzrquery.CreateRole.One(ctx, s.rex(ctx),
+		tenantID, r.Name, r.Description, database.OptStr(applicationID), r.IsSystem,
+		orDefaultKinds(r.AllowedRealmKinds), database.EmptyIfNil(r.AssignableAt))
+	if err != nil {
+		return "", database.MapErr(err)
+	}
+	if !ok {
+		// INSERT … RETURNING yields a row or an error; no row means the
+		// statement never ran.
+		return "", apperr.ErrNotFound
+	}
+	return row.ID, nil
 }
 
 func (s *Repository) UpdateRole(ctx context.Context, tenantID string, r authzdomain.RoleRecord) error {

@@ -1,6 +1,6 @@
 # ADR-0009 — All SQL lives in .sql files; sqlc compiles it
 
-**Status:** accepted · **Date:** 2026-08-22
+**Status:** accepted, amended §5 · **Date:** 2026-08-22 · **Amended:** 2026-08-25
 
 ## Context
 
@@ -37,6 +37,32 @@ operator's own configured query verbatim, and `db_table` assembles a
 and quoted through `pgx.Identifier.Sanitize()`. Neither path can touch
 Anubis's own schema — a different connection, a different database.
 Everything reading Anubis's tables still goes through `db/queries`.
+
+## §5 Amendment (2026-08-25): raorm in the authz context
+
+The authz context is migrating from sqlc to [raorm](https://github.com/gsoultan/raorm)
+(M6 of raorm's plan; anubis is the first adopter). The *rule* — SQL is
+reviewed in one designated place per context and checked against the real
+schema before it can build — is unchanged. The *mechanism* gains a second
+sanctioned form:
+
+1. **Builder queries carry no SQL at all.** `rgen/` packages are generated
+   from the model in `rmodel/`; their SQL text is emitted by raorm's
+   compiler, structurally injection-safe, and never hand-edited.
+2. **Raw SQL lives in exactly one package per context:**
+   `internal/<context>/adapter/postgres/rquery/`, as `raorm.SQL[T]`
+   declarations. `cmd/raormgen` PREPAREs every declaration against the live
+   dev schema at generation time — column drift or type drift fails the
+   *build*, preserving the property sqlc gave `db/queries/*.sql`.
+3. The model in `rmodel/` is a **projection** of the schema; `migrations/`
+   remains the schema of record. raorm's DDL generation is not used.
+4. `scripts/check/no-sql-in-go.sh` now also catches backtick SQL bodies and
+   exempts only `rquery/` (designated), `gen/`/`rgen/` (generated), and the
+   two §-exemptions above — so `raorm.SQL` cannot quietly spread beyond the
+   designated file.
+
+While the migration is in flight, sqlc's `gen/` and raorm's `rgen/` coexist
+in the authz context; the sqlc side shrinks as call sites move.
 
 ## The tooling line ADR-0002 implies
 
