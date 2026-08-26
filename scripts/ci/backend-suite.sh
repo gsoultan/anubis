@@ -25,9 +25,10 @@ go run ./cmd/anubisd migrate
 # schema raormgen can PREPARE the rquery declarations against. A declaration
 # that drifted from migrations, or generated output that drifted from a
 # declaration, fails here naming the statement.
-go run ./cmd/raormgen >/dev/null
+go run ./cmd/raormgen generate internal/authz/adapter/postgres/rgen \
+  -raw-schema live -dsn "$ANUBIS_DB_URL" >/dev/null
 if ! git diff --exit-code --quiet internal/*/adapter/postgres/rgen; then
-  echo "FAIL: raorm generated code drifted — run 'go run ./cmd/raormgen' and commit" >&2
+  echo "FAIL: raorm generated code drifted — regenerate and commit (see cmd/raormgen)" >&2
   git --no-pager diff --stat internal/*/adapter/postgres/rgen >&2
   exit 1
 fi
