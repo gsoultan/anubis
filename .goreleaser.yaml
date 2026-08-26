@@ -80,6 +80,35 @@ nfpms:
 checksum:
   name_template: "checksums.txt"
 
+# A checksum file proves integrity only to somebody who already trusts where
+# they got it from. Anyone able to replace the artefact can replace the
+# checksum beside it. Signing the checksum file breaks that: verify the
+# signature once and every artefact it lists is covered.
+#
+# Keyless (Sigstore): the signing identity is the GitHub workflow itself,
+# recorded in a public transparency log. No private key to store, rotate or
+# leak — which matters for a project whose whole subject is key handling.
+signs:
+  - cmd: cosign
+    signature: "${artifact}.sig"
+    certificate: "${artifact}.pem"
+    args:
+      - sign-blob
+      - "--output-signature=${signature}"
+      - "--output-certificate=${certificate}"
+      - "${artifact}"
+      - "--yes"
+    artifacts: checksum
+    output: true
+
+# What is actually inside the binary, in a format a scanner can read. An
+# operator asking "am I exposed to CVE-X" should not have to guess from a
+# go.mod.
+sboms:
+  - artifacts: archive
+    documents:
+      - "${artifact}.sbom.json"
+
 snapshot:
   version_template: "{{ incpatch .Version }}-next"
 

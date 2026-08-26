@@ -10,6 +10,9 @@ on:
 
 permissions:
   contents: write
+  # Keyless signing exchanges this token for a short-lived Sigstore
+  # certificate; there is no private key anywhere in this repository.
+  id-token: write
 
 env:
   # Must match ci.yml: a tag builds the same console CI proved.
@@ -45,6 +48,8 @@ jobs:
           for s in scripts/check/*.sh; do echo "== $s"; bash "$s"; done
           go test ./...
           cd pkg/anubis && go test ./...
+      - uses: sigstore/cosign-installer@v3
+      - uses: anchore/sbom-action/download-syft@v0
       - uses: goreleaser/goreleaser-action@v6
         with:
           version: "~> v2"

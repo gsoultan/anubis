@@ -119,12 +119,18 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ env.BUN_VERSION }}
+      # The release generates SBOMs, so the snapshot must too — otherwise
+      # this job stops proving what a tag will actually do.
+      - uses: anchore/sbom-action/download-syft@v0
       # Proves the packaging works BEFORE a tag depends on it — including
       # that the console really got embedded rather than the placeholder.
       - uses: goreleaser/goreleaser-action@v6
         with:
           version: "~> v2"
-          args: release --snapshot --clean --skip=publish
+          # Signing is skipped here and only here: keyless signing needs the
+          # OIDC identity of the release workflow, which a snapshot does not
+          # have. Everything else a tag does, this does.
+          args: release --snapshot --clean --skip=publish,sign
       - name: the binary must carry the real console
         run: |
           bin=$(find dist -name anubisd -path '*linux_amd64*' | head -1)
