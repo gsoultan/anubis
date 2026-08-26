@@ -24,10 +24,22 @@ jobs:
         with:
           go-version-file: go.mod
       - uses: oven-sh/setup-bun@v2
+      # go.work names sibling modules by relative path; without them every
+      # go command fails.
+      - run: bash scripts/ci/fetch-workspace-modules.sh
+      - name: install buf + sqlc + protoc plugins (pinned)
+        # The gates regenerate code to check for drift, so they need the
+        # same toolchain CI uses — pinned to the versions that produced the
+        # committed bytes.
+        run: |
+          go install github.com/bufbuild/buf/cmd/buf@v1.72.0
+          go install github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.11
+          go install connectrpc.com/connect/cmd/protoc-gen-connect-go@v1.20.0
       - name: gate the release on the suite that guards it
         # A tag must not produce artefacts the pipeline would have rejected.
         run: |
-          for s in scripts/check/*.sh; do bash "$s"; done
+          for s in scripts/check/*.sh; do echo "== $s"; bash "$s"; done
           go test ./...
           cd pkg/anubis && go test ./...
       - uses: goreleaser/goreleaser-action@v6
