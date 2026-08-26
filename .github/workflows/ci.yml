@@ -25,6 +25,9 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+      # go.work lists sibling modules by relative path, which exist only on
+      # the machine that wrote it. Materialise them or every go command fails.
+      - run: bash scripts/ci/fetch-workspace-modules.sh
       - name: install buf + sqlc + protoc plugins (pinned)
         # buf.gen.yaml resolves protoc-gen-go and protoc-gen-connect-go from
         # PATH (`local:`), so the drift check cannot regenerate anything
@@ -52,6 +55,9 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+      # go.work lists sibling modules by relative path, which exist only on
+      # the machine that wrote it. Materialise them or every go command fails.
+      - run: bash scripts/ci/fetch-workspace-modules.sh
       - run: go vet ./...
       - run: go build ./...
       - run: go test -race -shuffle=on ./...
@@ -81,6 +87,9 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+      # go.work lists sibling modules by relative path, which exist only on
+      # the machine that wrote it. Materialise them or every go command fails.
+      - run: bash scripts/ci/fetch-workspace-modules.sh
       - run: bash scripts/ci/backend-suite.sh
         env:
           # A shared runner is ~10x slower than a development machine (1,100
@@ -112,6 +121,9 @@ jobs:
         with:
           go-version-file: go.mod
       - uses: oven-sh/setup-bun@v2
+      # go.work lists sibling modules by relative path, which exist only on
+      # the machine that wrote it. Materialise them or every go command fails.
+      - run: bash scripts/ci/fetch-workspace-modules.sh
       # Proves the packaging works BEFORE a tag depends on it — including
       # that the console really got embedded rather than the placeholder.
       - uses: goreleaser/goreleaser-action@v6

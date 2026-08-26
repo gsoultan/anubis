@@ -256,3 +256,35 @@ math/rand                     banned repository-wide
 == on any secret              banned; use crypto/subtle
 imports in internal/domain    stdlib only
 ```
+
+## Building this repository elsewhere
+
+`go.work` lists a sibling module by relative path:
+
+```
+use (
+	.
+	../raorm
+	./pkg/anubis
+)
+```
+
+That path exists on the machine that wrote it and nowhere else, so a fresh
+clone — or CI — fails every `go` command with `cannot load module ../raorm
+listed in go.work file`. `scripts/ci/fetch-workspace-modules.sh` clones the
+siblings named there (pin with `ANUBIS_RAORM_REF`), and CI runs it before
+anything else.
+
+**The sibling must actually be published for that to work.** As of this
+writing `gsoultan/raorm` is an empty repository — the code has never been
+pushed — so nobody but its author can build this branch. Three ways out,
+in increasing order of permanence:
+
+1. **Push it.** The fetch script then works unchanged, and CI pins a ref.
+2. **Tag it and depend on a version.** Drop the sibling from `go.work` and
+   let `go.mod` require `github.com/gsoultan/raorm vX.Y.Z`. This is the
+   normal answer once the module stops changing hourly.
+3. **Vendor it**, if it is never meant to be consumed by anything else.
+
+Until one of those, treat `go.work` as a local file: it is convenient for
+whoever has both checkouts and an outright blocker for everyone else.

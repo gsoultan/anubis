@@ -15,6 +15,7 @@ default:
 checks:
   stage: check
   script:
+    - bash scripts/ci/fetch-workspace-modules.sh
     - go install github.com/bufbuild/buf/cmd/buf@v1.72.0
     - go install github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1
     # buf.gen.yaml resolves these from PATH; without them nothing regenerates.
@@ -27,6 +28,7 @@ checks:
 build-unit:
   stage: test
   script:
+    - bash scripts/ci/fetch-workspace-modules.sh
     - go vet ./...
     - go build ./...
     - go test -race -shuffle=on ./...
@@ -45,6 +47,7 @@ backend-suite:
     ANUBIS_LOAD_WORKERS: "8"
     ANUBIS_LOAD_BUDGET_MS: "400"
   script:
+    - bash scripts/ci/fetch-workspace-modules.sh
     - bash scripts/ci/backend-suite.sh
 
 console:
