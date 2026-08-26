@@ -39,7 +39,8 @@ fi
 
 # 4. Generated code still matches its declarations and the live schema.
 drift="clean"
-if ! go run ./cmd/raormgen >/dev/null 2>&1; then
+if ! go run ./cmd/raormgen generate internal/authz/adapter/postgres/rgen \
+     -raw-schema live -dsn "$ANUBIS_DB_URL" >/dev/null 2>&1; then
   drift="raormgen FAILED"
 elif ! git diff --quiet -- internal/authz/adapter/postgres/rgen; then
   drift="DRIFTED"

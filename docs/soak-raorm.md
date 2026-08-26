@@ -11,3 +11,4 @@ the gate; these are.
 | when | p95 via pgx | p95 via raorm | shapes | flushes | anubisd RSS | rgen |
 |---|---|---|---|---|---|---|
 | 2026-08-26 04:01 UTC | 229.041µs | 195.166µs | shapes 1 → 1 | flushes 0 → 0 | not running | clean |
+| 2026-08-26 11:27 UTC | 226.959µs | 200.417µs | shapes 1 → 1 | flushes 0 → 0 | not running | clean |
