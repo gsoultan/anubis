@@ -41,10 +41,49 @@ plane, forward-auth gate from a REPEATABLE READ snapshot. See
 Go 1.26's standard library makes this genuinely achievable. Anubis has
 **zero third-party cryptography**.
 
-## Quick start
+## Installing a release
 
-Requires [Apple Container](https://github.com/apple/container), [Bun](https://bun.sh)
-1.3+, and Go 1.26+ (once the API exists).
+Linux, amd64 or arm64. The admin console is compiled into the binary, so
+there is no second artefact to deploy.
+
+```bash
+# .deb / .rpm are published on the releases page, with a systemd unit
+sudo dpkg -i anubisd_0.1.0_linux_amd64.deb
+
+# The master key unseals every signing key and every encrypted column.
+# Back it up somewhere that is not this host; losing it loses the data.
+sudo install -d -m 0700 /etc/anubis/secrets
+head -c 32 /dev/urandom | basenc --base64url | tr -d '=' \
+  | sudo tee /etc/anubis/secrets/master.key >/dev/null
+sudo chmod 0400 /etc/anubis/secrets/master.key
+
+sudo -e /etc/anubis/anubisd.env          # ANUBIS_DB_URL, ANUBIS_ISSUER
+anubisd migrate                          # schema, as the owner role
+anubisd keys init access                 # FIRST INSTALL ONLY — without a
+                                         # signing key /readyz is 503
+sudo systemctl enable --now anubisd
+```
+
+Behind a TLS proxy — which browser sign-in requires, because `__Host-`
+cookies do — also set `ANUBIS_TRUSTED_PROXIES`, or every caller shares one
+rate-limit bucket. [operations.md](docs/operations.md) has worked nginx and
+Caddy configs, and the runbook.
+
+Releases ship an SBOM per archive and a signed `checksums.txt`. Verify
+before installing:
+
+```bash
+cosign verify-blob checksums.txt \
+  --signature checksums.txt.sig --certificate checksums.txt.pem \
+  --certificate-identity-regexp 'https://github.com/gsoultan/anubis/.*' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+sha256sum -c checksums.txt --ignore-missing
+```
+
+## Quick start (development)
+
+Requires [Apple Container](https://github.com/apple/container),
+[Bun](https://bun.sh) 1.4.0, and Go 1.26+.
 
 ```bash
 scripts/dev.sh          # database + api (when built) + console
@@ -54,9 +93,10 @@ scripts/dev.sh          # database + api (when built) + console
 | :--- | :--- |
 | `scripts/dev.sh` | Whole environment. `--no-db`, `--ui-only`. |
 | `scripts/ui.sh` | Console only, port 7447 |
-| `scripts/api.sh` | API only, port 7448 (no-ops until the Go module exists) |
+| `scripts/api.sh` | API only, port 7448 |
 | `scripts/db.sh` | `up · down · status · migrate · baseline · reset · recreate · psql` |
 | `scripts/build.sh` | Build every workspace |
+| `scripts/ci/local.sh` | The whole pipeline on this machine. `--quick` skips the suites. |
 | `bench/rebuild.sh` | Migrate, seed and validate the database end to end |
 
 ### Ports

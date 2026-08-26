@@ -24,6 +24,11 @@ Everything an on-call engineer needs at 3am, and nothing that duplicates
 
 ## Deploying
 
+Before pushing anything that will become a release, the whole pipeline runs
+locally: `scripts/ci/local.sh` (or `--quick` to skip the suites). It performs
+the same five stages CI does, in the same order — which is also how you keep
+working when the runner is unavailable.
+
 ```bash
 anubisd migrate          # schema, as anubis_owner — a separate step, on purpose
 anubisd keys init access # FIRST INSTALL ONLY: mint the signing key
