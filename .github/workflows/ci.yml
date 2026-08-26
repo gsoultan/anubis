@@ -151,6 +151,11 @@ jobs:
     name: container image
     runs-on: ubuntu-latest
     needs: [checks, build-unit, backend-suite, console, release-build]
+    # Only on main. This repository deploys a .deb under systemd, not a
+    # container, so the image is a secondary artefact — worth proving before
+    # it reaches main, not worth a runner on every push to a branch. Private
+    # repositories bill Actions minutes, and this job spends them last.
+    if: github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4
       - name: build image
