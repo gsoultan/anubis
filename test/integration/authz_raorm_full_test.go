@@ -6,8 +6,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"testing"
 
+	rrole "github.com/gsoultan/anubis/internal/authz/adapter/postgres/rgen/role"
 	authzdomain "github.com/gsoultan/anubis/internal/authz/domain"
 	"github.com/gsoultan/anubis/internal/authz/domain/grant"
 	"github.com/gsoultan/anubis/internal/authz/domain/membership"
@@ -430,4 +432,43 @@ func mustJSON(t *testing.T, v any) []byte {
 		t.Fatal(err)
 	}
 	return b
+}
+
+// The thesis, asserted at the adopter rather than in raorm's own fixtures:
+// a query's identity is its STRUCTURE, so a thousand lookups with a thousand
+// different names must compile one statement, not a thousand. This is also
+// the soak signal for P1.1 — if a repository method ever mints shapes from
+// request data, the count grows here first and the shape cache starts
+// flushing in production later.
+func TestRaormFull_VaryingValuesDoNotMintShapes(t *testing.T) {
+	skipWithoutDB(t)
+	ctx := context.Background()
+	tenant := firstTenant(ctx, t)
+	repo := sliceRepo()
+
+	// Warm whatever this call site compiles, then measure from there.
+	if _, err := repo.RoleByName(ctx, tenant, "warm-up"); err != nil && !errors.Is(err, apperr.ErrNotFound) {
+		t.Fatal(err)
+	}
+	before, flushesBefore := rrole.Shapes(), rrole.ShapeFlushes()
+
+	for i := 0; i < 500; i++ {
+		name := fmt.Sprintf("raorm-shape-probe-%d", i)
+		if _, err := repo.RoleByName(ctx, tenant, name); err != nil && !errors.Is(err, apperr.ErrNotFound) {
+			t.Fatal(err)
+		}
+	}
+
+	after, flushesAfter := rrole.Shapes(), rrole.ShapeFlushes()
+	t.Logf("500 lookups with 500 distinct names: shapes %d → %d, flushes %d → %d",
+		before, after, flushesBefore, flushesAfter)
+
+	if after != before {
+		t.Fatalf("500 distinct VALUES compiled %d new statements — a value is leaking into the query structure",
+			after-before)
+	}
+	if flushesAfter != flushesBefore {
+		t.Fatalf("the shape cache flushed during a fixed-structure workload (%d → %d)",
+			flushesBefore, flushesAfter)
+	}
 }
