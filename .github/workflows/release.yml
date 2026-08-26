@@ -24,9 +24,6 @@ jobs:
         with:
           go-version-file: go.mod
       - uses: oven-sh/setup-bun@v2
-      # go.work names sibling modules by relative path; without them every
-      # go command fails.
-      - run: bash scripts/ci/fetch-workspace-modules.sh
       - name: install buf + sqlc + protoc plugins (pinned)
         # The gates regenerate code to check for drift, so they need the
         # same toolchain CI uses — pinned to the versions that produced the

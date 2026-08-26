@@ -10,13 +10,6 @@ RUN bun run build
 
 FROM golang:1.26-alpine AS build
 ARG VERSION=dev
-# go.mod replaces github.com/gsoultan/raorm with ../raorm, which from /src
-# resolves to /raorm. It is a sibling checkout on a developer's machine and
-# has to be fetched here, before `go mod download` tries to resolve it.
-ARG RAORM_REF=main
-RUN apk add --no-cache git \
- && git clone --depth 1 --branch "$RAORM_REF" \
-      https://github.com/gsoultan/raorm.git /raorm
 WORKDIR /src
 
 # Dependencies first: this layer only changes when go.mod/go.sum do.

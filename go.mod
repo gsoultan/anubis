@@ -3,7 +3,7 @@ module github.com/gsoultan/anubis
 go 1.26.6
 
 require (
-	github.com/gsoultan/raorm v0.0.0-00010101000000-000000000000
+	github.com/gsoultan/raorm v0.1.0
 	connectrpc.com/connect v1.20.0 // indirect
 	github.com/go-kit/kit v0.13.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
@@ -13,4 +13,3 @@ require (
 	google.golang.org/protobuf v1.36.12 // indirect
 )
 
-replace github.com/gsoultan/raorm => ../raorm
