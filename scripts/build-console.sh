@@ -14,6 +14,16 @@ if ! command -v bun >/dev/null 2>&1; then
   exit 1
 fi
 
+# The console is compiled INTO the release binary, so the bundler version is
+# part of what ships. CI and the Dockerfile pin 1.4.0; warn when a local
+# build would produce something they cannot reproduce.
+want="${ANUBIS_BUN_VERSION:-1.4.0}"
+have="$(bun --version 2>/dev/null || echo unknown)"
+if [ "$have" != "$want" ]; then
+  echo "WARNING: bun $have, but CI and the Dockerfile build with $want." >&2
+  echo "         The bundle may differ from what ships. Install $want to match." >&2
+fi
+
 (cd ui && bun install --frozen-lockfile && bun run build)
 
 if grep -q "Console not built" ui/dist/index.html; then

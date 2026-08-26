@@ -1,7 +1,7 @@
 # Anubis daemon. Multi-stage: a console build, a Go build with the
 # toolchain, and a runtime image with nothing but the binary — no shell, no
 # package manager, nothing for an attacker who reaches RCE to pivot with.
-FROM oven/bun:1 AS console
+FROM oven/bun:1.4.0 AS console
 WORKDIR /src/ui
 COPY ui/package.json ui/bun.lock ./
 RUN bun install --frozen-lockfile
