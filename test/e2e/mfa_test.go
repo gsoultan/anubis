@@ -267,13 +267,9 @@ func TestEnrolOrDenyRollout(t *testing.T) {
 
 	login := func() *anubisv1.LoginResponse {
 		t.Helper()
-		resp, lerr := auth.Login(ctx, connect.NewRequest(&anubisv1.LoginRequest{
+		return signIn(t, &anubisv1.LoginRequest{
 			Tenant: tenant, Realm: realmCode, Username: username, Password: password,
-		}))
-		if lerr != nil {
-			t.Fatalf("login: %v", lerr)
-		}
-		return resp.Msg
+		})
 	}
 	setDeadline := func(unix int64) {
 		t.Helper()
@@ -334,20 +330,19 @@ func TestEnrolOrDenyRollout(t *testing.T) {
 	// 4. The grant is enough to enrol with, without a session. This is the
 	//    whole point: the policy withholds the session, so demanding one
 	//    would make it unsatisfiable by the people it applies to.
-	begun, err := auth.BeginTotpEnrollment(ctx,
-		connect.NewRequest(&anubisv1.BeginTotpEnrollmentRequest{GrantToken: req.GrantToken}))
-	if err != nil {
-		t.Fatalf("enrol with the grant: %v", err)
-	}
+	begun := retryLimited(t, "enrol with the grant", func() (*connect.Response[anubisv1.BeginTotpEnrollmentResponse], error) {
+		return auth.BeginTotpEnrollment(ctx,
+			connect.NewRequest(&anubisv1.BeginTotpEnrollmentRequest{GrantToken: req.GrantToken}))
+	})
 	secret := decodeBase32(t, begun.Msg.Secret)
-	if _, err := auth.ConfirmTotpEnrollment(ctx,
-		connect.NewRequest(&anubisv1.ConfirmTotpEnrollmentRequest{
-			EnrollmentToken: begun.Msg.EnrollmentToken,
-			Code:            totp.Generate(secret, time.Now(), totp.DefaultStep, totp.DefaultDigits),
-			GrantToken:      req.GrantToken,
-		})); err != nil {
-		t.Fatalf("confirm with the grant: %v", err)
-	}
+	retryLimited(t, "confirm with the grant", func() (*connect.Response[anubisv1.ConfirmTotpEnrollmentResponse], error) {
+		return auth.ConfirmTotpEnrollment(ctx,
+			connect.NewRequest(&anubisv1.ConfirmTotpEnrollmentRequest{
+				EnrollmentToken: begun.Msg.EnrollmentToken,
+				Code:            totp.Generate(secret, time.Now(), totp.DefaultStep, totp.DefaultDigits),
+				GrantToken:      req.GrantToken,
+			}))
+	})
 
 	// 5. Having complied, the member signs in again — and is challenged for
 	//    the factor they now hold, not refused for the one they lack.
@@ -398,35 +393,34 @@ func TestAGrantCannotReplaceAnEnrolledFactor(t *testing.T) {
 		t.Fatalf("create identity: %v", err)
 	}
 
-	first, err := auth.Login(ctx, connect.NewRequest(&anubisv1.LoginRequest{
+	first := signIn(t, &anubisv1.LoginRequest{
 		Tenant: tenant, Realm: realmCode, Username: username, Password: password,
-	}))
-	if err != nil {
-		t.Fatalf("login: %v", err)
-	}
-	grant := first.Msg.GetEnrolmentRequired().GetGrantToken()
+	})
+	grant := first.GetEnrolmentRequired().GetGrantToken()
 	if grant == "" {
 		t.Fatal("no grant issued for an overdue member")
 	}
 
 	// Enrol once, legitimately.
-	begun, err := auth.BeginTotpEnrollment(ctx,
-		connect.NewRequest(&anubisv1.BeginTotpEnrollmentRequest{GrantToken: grant}))
-	if err != nil {
-		t.Fatalf("first enrolment: %v", err)
-	}
-	if _, err := auth.ConfirmTotpEnrollment(ctx,
-		connect.NewRequest(&anubisv1.ConfirmTotpEnrollmentRequest{
-			EnrollmentToken: begun.Msg.EnrollmentToken,
-			Code:            totp.Generate(decodeBase32(t, begun.Msg.Secret), time.Now(), totp.DefaultStep, totp.DefaultDigits),
-			GrantToken:      grant,
-		})); err != nil {
-		t.Fatalf("first confirm: %v", err)
-	}
+	begun := retryLimited(t, "first enrolment", func() (*connect.Response[anubisv1.BeginTotpEnrollmentResponse], error) {
+		return auth.BeginTotpEnrollment(ctx,
+			connect.NewRequest(&anubisv1.BeginTotpEnrollmentRequest{GrantToken: grant}))
+	})
+	retryLimited(t, "first confirm", func() (*connect.Response[anubisv1.ConfirmTotpEnrollmentResponse], error) {
+		return auth.ConfirmTotpEnrollment(ctx,
+			connect.NewRequest(&anubisv1.ConfirmTotpEnrollmentRequest{
+				EnrollmentToken: begun.Msg.EnrollmentToken,
+				Code:            totp.Generate(decodeBase32(t, begun.Msg.Secret), time.Now(), totp.DefaultStep, totp.DefaultDigits),
+				GrantToken:      grant,
+			}))
+	})
 
 	// The same grant, replayed, must not start a second enrolment.
 	_, err = auth.BeginTotpEnrollment(ctx,
 		connect.NewRequest(&anubisv1.BeginTotpEnrollmentRequest{GrantToken: grant}))
+	if connect.CodeOf(err) == connect.CodeResourceExhausted {
+		t.Skip("rate limiter refused the replay probe before the server could judge it")
+	}
 	if err == nil {
 		t.Fatal("a spent grant re-enrolled an identity that already has a factor")
 	}

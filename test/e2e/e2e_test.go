@@ -327,3 +327,47 @@ func TestRateLimitTripsOnHammering(t *testing.T) {
 		t.Fatal("per-account limiter never tripped after 40 attempts")
 	}
 }
+
+// retryLimited runs an RPC until the rate limiter stops refusing it.
+//
+// Several endpoints are deliberately limited — login, enrolment confirmation,
+// registration — and by the time any one test runs, the suite has spent that
+// budget on the tests before it. A 429 there is the limiter working, so
+// treating it as a failure makes the suite report a working defence as a bug.
+func retryLimited[T any](t *testing.T, what string, call func() (T, error)) T {
+	t.Helper()
+	deadline := time.Now().Add(90 * time.Second)
+	for {
+		out, err := call()
+		if connect.CodeOf(err) == connect.CodeResourceExhausted && time.Now().Before(deadline) {
+			time.Sleep(2 * time.Second)
+			continue
+		}
+		if err != nil {
+			t.Fatalf("%s: %v", what, err)
+		}
+		return out
+	}
+}
+
+// signIn is Login with the rate limiter respected.
+//
+// The suite signs in many times before reaching any one test, and the per-IP
+// login limit is real: a test that treats a 429 as a failure is reporting the
+// limiter working as a bug. platformLogin already does this; anything driving
+// the identity plane through several logins needs it too.
+func signIn(t *testing.T, req *anubisv1.LoginRequest) *anubisv1.LoginResponse {
+	t.Helper()
+	deadline := time.Now().Add(90 * time.Second)
+	for {
+		resp, err := authClient().Login(context.Background(), connect.NewRequest(req))
+		if connect.CodeOf(err) == connect.CodeResourceExhausted && time.Now().Before(deadline) {
+			time.Sleep(2 * time.Second)
+			continue
+		}
+		if err != nil {
+			t.Fatalf("login %s: %v", req.Username, err)
+		}
+		return resp.Msg
+	}
+}
