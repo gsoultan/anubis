@@ -56,6 +56,11 @@ export const api = {
 
   identities: (realmId?: string, q?: string) => live.identities(realmId, q),
   identity: (id: Uuid) => live.identity(id),
+  /* Encrypted at rest and read through its own call, because it is the only
+     part of an identity this server cannot see without a key (ADR-0013). */
+  identityAttributes: (id: Uuid) => live.identityAttributes(id),
+  setIdentityAttributes: (id: Uuid, a: Record<string, string>) =>
+    live.setIdentityAttributes(id, a),
 
   permissions: () => live.permissions(),
   roles: () => live.roles(),

@@ -19,6 +19,9 @@ func Handler() http.Handler {
 		writeCounterFamily(&b, "anubis_audit_events_total",
 			"Audit events emitted, by action. token.reuse_detected means a refresh token was stolen.",
 			"audit", "action")
+		writeCounterFamily(&b, "anubis_audit_dropped_total",
+			"Audit events that could not be written. Any increase means the audit log is incomplete.",
+			"audit_dropped", "action")
 		writeJobFamily(&b)
 		writeSnapshots(&b)
 		writePool(&b)

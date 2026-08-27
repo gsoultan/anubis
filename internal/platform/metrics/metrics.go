@@ -94,6 +94,14 @@ func IncAudit(action string) {
 	counter(key("audit", action)).Add(1)
 }
 
+// IncAuditDropped counts an audit event that could NOT be written. The audit
+// log is the artefact a regulator reads, so an entry that never lands is not
+// a log line to notice later — it is the one number that says the record is
+// incomplete. Alert on any increase.
+func IncAuditDropped(action string) {
+	counter(key("audit_dropped", action)).Add(1)
+}
+
 // IncJob counts a maintenance job run by outcome: ok, error, or skipped
 // (another replica held the advisory lock — normal, not a failure).
 func IncJob(job, result string) {

@@ -69,6 +69,10 @@ func (a *ChainedAuditor) run() {
 	defer close(a.done)
 	for ev := range a.queue {
 		if err := a.append(context.Background(), ev); err != nil {
+			// A log line is not enough for this one. The audit log is the
+			// artefact a regulator reads; an entry that never lands makes it
+			// incomplete, and nobody greps yesterday's logs to find out.
+			metrics.IncAuditDropped(ev.Action)
 			a.logger.Error("audit append failed", "action", ev.Action, "error", err)
 		}
 	}

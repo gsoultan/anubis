@@ -54,6 +54,10 @@ func NewScopeAdminInteractor(
 	}
 }
 
+// emit records an administrative change. target must be a UUID or empty:
+// audit_log.target_id is a uuid column, and an axis or node type is
+// identified by a code, not an id. Those belong in detail — passing a code
+// here silently threw the entry away for as long as this code existed.
 func (u *scopeAdminInteractor) emit(ctx context.Context, p *authctx.Principal, action, target string, detail map[string]string) {
 	u.audit.Emit(ctx, auditdomain.AuditEvent{
 		TenantID: p.TenantID, ActorID: p.IdentityID, ActorKind: "identity",
@@ -80,7 +84,7 @@ func (u *scopeAdminInteractor) CreateScopeAxis(ctx context.Context, a scopedomai
 	if err := u.axes.CreateScopeAxis(ctx, a); err != nil {
 		return nil, err
 	}
-	u.emit(ctx, p, "scope.axis_create", a.Code, map[string]string{"effect": a.DefaultEffect})
+	u.emit(ctx, p, "scope.axis_create", "", map[string]string{"axis": a.Code, "effect": a.DefaultEffect})
 	return u.axes.ScopeAxis(ctx, a.Code)
 }
 
@@ -92,7 +96,7 @@ func (u *scopeAdminInteractor) UpdateScopeAxis(ctx context.Context, a scopedomai
 	if err := u.axes.UpdateScopeAxis(ctx, a); err != nil {
 		return nil, err
 	}
-	u.emit(ctx, p, "scope.axis_update", a.Code, map[string]string{"effect": a.DefaultEffect, "status": a.Status})
+	u.emit(ctx, p, "scope.axis_update", "", map[string]string{"axis": a.Code, "effect": a.DefaultEffect, "status": a.Status})
 	return u.axes.ScopeAxis(ctx, a.Code)
 }
 
@@ -156,7 +160,7 @@ func (u *scopeAdminInteractor) CreateScopeNodeType(ctx context.Context, t scoped
 	if err := u.nodes.CreateScopeNodeType(ctx, t); err != nil {
 		return err
 	}
-	u.emit(ctx, p, "scope.node_type_create", t.Code, map[string]string{"axis": t.Axis})
+	u.emit(ctx, p, "scope.node_type_create", "", map[string]string{"axis": t.Axis, "node_type": t.Code})
 	return nil
 }
 
@@ -326,7 +330,7 @@ func (u *scopeAdminInteractor) UpsertScopeNodes(ctx context.Context, axis, defau
 		if err := u.tx.WithinTx(ctx, run); err != nil {
 			return "", err
 		}
-		u.emit(ctx, p, "scope.bulk_upsert", axis, map[string]string{"rows": itoaLen(rows)})
+		u.emit(ctx, p, "scope.bulk_upsert", "", map[string]string{"axis": axis, "rows": itoaLen(rows)})
 	}
 	report["added"], report["renamed"], report["moved"] = added, renamed, moved
 	report["archived"], report["unchanged"], report["errors"] = archived, unchanged, errs

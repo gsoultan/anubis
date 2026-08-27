@@ -716,6 +716,25 @@ export async function setIdentityStatus(id: Uuid, status: 'active' | 'disabled')
   }
 }
 
+/* The one part of a person this server stores encrypted (ADR-0013). `erased`
+   is not an error: the identity's key was shredded, so the data is gone for
+   good and the screen should say so rather than show an empty form. */
+export async function identityAttributes(
+  id: Uuid,
+): Promise<{ attributes: Record<string, string>; erased: boolean }> {
+  const resp = await rpc.identityAdmin.getIdentityAttributes({ id })
+  return { attributes: { ...resp.attributes }, erased: resp.erased }
+}
+
+/* Replaces the whole map — an empty object clears it. There is no partial
+   update on the server, and offering one here would only invent a merge the
+   backend does not do. */
+export async function setIdentityAttributes(
+  id: Uuid, attributes: Record<string, string>,
+): Promise<void> {
+  await rpc.identityAdmin.setIdentityAttributes({ id, attributes })
+}
+
 export async function realmCategories(realmId?: Uuid): Promise<RealmCategory[]> {
   const resp = await rpc.tenantAdmin.listRealmCategories({ realmId: realmId ?? '' })
   return resp.categories.map((c): RealmCategory => ({

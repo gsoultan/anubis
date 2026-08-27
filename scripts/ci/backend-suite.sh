@@ -73,7 +73,11 @@ go test -count=1 -tags integration ./test/e2e/
 # this one — left where it lives it would skip in CI forever, which reads the
 # same as passing. Run it here, verbosely, so the log carries either the
 # structure it read or the reason it stood down.
-go test -count=1 -v -run 'MySQL' ./internal/scope/adapter/feed/
+# ALLOW_LOOPBACK applies to whoever opens the connection, and this test opens
+# it in-process rather than through the server — on a runner where the source
+# is a service container on 127.0.0.1, the egress policy refuses it otherwise.
+ANUBIS_SYNC_ALLOW_LOOPBACK=1 \
+  go test -count=1 -v -run 'MySQL' ./internal/scope/adapter/feed/
 
 # Fuzz smoke: seconds per target, enough to catch a corpus regression. The
 # path-normalisation fuzzer has found real bypasses before; it stays.
