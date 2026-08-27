@@ -703,3 +703,53 @@ sealing, the write path does not exist, every row is empty (0 of 57,012), so
 plaintext there is now UNSTORABLE until somebody drops the constraint — which
 forces them to read the ADR. There is no 0032 (withdrawn; sync-run history
 already existed since 0017).
+
+## The audit chain did not work (found and fixed 2026-08-27)
+migrations/0005 claims "an attacker with UPDATE rights on this table still
+cannot silently rewrite history". VerifyChain existed; nothing had ever
+tampered with a row to check. It was BROKEN: `detail` is jsonb, so Postgres
+re-renders what it stores (space after every colon, keys reordered), while
+the hash was taken over the bytes the WRITER sent. 21,424 of 21,439 entries
+in the dev database reported as tampered — a verifier nobody would keep
+believing.
+FIX: chainHash hashes canonicalJSON(detail) — parse and re-marshal, so both
+sides agree whatever jsonb did to the formatting. Backward compatible with
+no migration BECAUSE current writers already emit compact key-sorted JSON,
+so canonical(stored) == the bytes the old writer hashed.
+TWO THINGS THE REAL DATA TAUGHT, neither guessable:
+- A detail-less entry has TWO historical readings: early call sites passed
+  {} and later ones passed nil, and jsonb stores {} either way. Verification
+  accepts both, narrowly, or history written before they were reconciled
+  cannot verify. Proven by reconstructing seq 302's hash both ways.
+- canonicalJSON maps empty AND {} to nothing, because storage cannot tell
+  them apart.
+LIMITS, now in docs/security.md: rewriting an entry AND every entry after it
+is self-consistent (the defence is that it is no longer silent — anchoring
+the head hash outside the database is what would close it), and the first row
+of a queried range anchors the walk, so narrow ranges check less.
+TEST SAFETY, learned by breaking it: the delete-detection test removes a row,
+which breaks that tenant's chain PERMANENTLY. Pointed at the installation's
+first tenant it destroyed real evidence in the dev database (77 probe rows +
+a gap; repaired by deleting exactly the probes, which were all above the last
+real seq). test/integration/auditchain now creates and drops its own tenant.
+
+## grep -q under pipefail is a trap (2026-08-27)
+`cmd | grep -q PATTERN` with `set -o pipefail` FAILS WHEN THE PATTERN IS
+FOUND: grep exits at the first match, the writer takes SIGPIPE, pipefail
+propagates it. It passes on short output and fails on long, so it presents as
+a flake. Found in three places: scripts/lib/common.sh container_exists (could
+report a running container as absent), scripts/ci/local.sh's DROP DATABASE
+guard, and ci.yml's console-embedded check (safe only because the default
+Actions shell omits pipefail). All now read the whole stream — count, or
+capture then test.
+
+## Release state (2026-08-27)
+v0.1.1 published and verified end to end: cosign verify-blob on
+checksums.txt returns Verified OK against the workflow identity, that
+checksum matches the downloaded artefact, the SBOM lists the real tree
+including github.com/gsoultan/storm, and the shipped binary reports 0.1.1
+with the real console (zero placeholder markers) and the canonicalJSON fix.
+v0.1.0 is still public and carries the broken verifier.
+scripts/ci/local.sh runs the whole pipeline offline — written when GitHub
+refused every job over account billing, which is also why the container-image
+job now runs only on main.
