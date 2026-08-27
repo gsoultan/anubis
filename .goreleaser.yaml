@@ -134,3 +134,27 @@ release:
     **Upgrading:** run `anubisd migrate` before starting the new version.
     Migrations are forward-only and take an advisory lock, so several hosts
     starting at once cannot race.
+
+    **Read this before upgrading past 0.2.0.** Migration 0037 revokes
+    `USAGE ON SCHEMA public` from `PUBLIC`. Until it, every role in the
+    database reached the schema whether or not anything had granted it —
+    which made the least-privilege grants decorative. `anubis_app` and
+    `anubis_readonly` hold USAGE explicitly and are unaffected.
+
+    Any OTHER role you added — a reporting user, a BI connector, an
+    integration — will stop working and report
+    `relation "…" does not exist`, which is Postgres describing a schema it
+    may not use. Fix it deliberately:
+
+    ```sql
+    GRANT USAGE ON SCHEMA public TO your_role;
+    ```
+
+    Check for affected roles before you upgrade:
+
+    ```sql
+    SELECT rolname FROM pg_roles
+    WHERE rolcanlogin
+      AND rolname NOT IN ('anubis_app','anubis_readonly','anubis_owner')
+      AND NOT rolsuper;
+    ```
