@@ -1,16 +1,30 @@
 # Rolling out a required second factor
 
-The rule today: **an enrolled factor is always demanded.** Enrol TOTP and
-every subsequent sign-in asks for it, on both planes — tenant identities and
-platform operators.
+Two rules are in force.
 
-The rule that is deliberately NOT implemented: *required but not enrolled*.
-A realm listing `totp` in `required_factors` still admits a password-only
-login from somebody who has not enrolled one.
+**An enrolled factor is always demanded.** Enrol TOTP and every subsequent
+sign-in asks for it, on both planes — tenant identities and platform
+operators. That holds whatever the realm requires.
 
-## Why it is not a config flag
+**Required but not enrolled is governed by a date**, not a flag:
+`realms.factor_enrolment_deadline`. NULL — the state of every realm until you
+set one — means the policy is not in force and a realm listing `totp` still
+admits a password-only login. Set a date and:
 
-Because flipping it is not a configuration change, it is a lockout event.
+- **before it**, sign-in works and the response carries `enrolment_due`: the
+  factors owed and the deadline. A client that ignores it costs its user
+  access on the day with no warning.
+- **on and after it**, sign-in returns `enrolment_required` instead of a
+  session — carrying a `grant_token` that is accepted by
+  `BeginTotpEnrollment` and `ConfirmTotpEnrollment` in place of one.
+
+That token is the whole design. The policy withholds the session, and
+enrolment needs a session, so without it the policy would be unsatisfiable by
+exactly the people it applies to.
+
+## Why it is a date and not a config flag
+
+Because flipping a flag is not a configuration change, it is a lockout event.
 
 At the moment the flag turns on, every user who has not enrolled loses
 access — and the enrolment endpoint itself requires a session, so they
@@ -84,17 +98,27 @@ population that still exercises a real sign-in flow. Watch, for 24 hours:
 Public and partner realms last. Those users have the least context, the
 worst recovery options, and no service desk of their own.
 
-## What "in force" must actually do
+## What "in force" actually does
 
-When the flag exists, the refusal has to be **enrol-or-deny, not deny**:
-a login that fails the policy returns a challenge that carries an enrolment
-path, not a bare `mfa_required` the user cannot act on. A policy that locks
-people out without telling them how to comply is a support incident with
-extra steps.
+The refusal is **enrol-or-deny, not deny**. A login that fails the policy
+returns a challenge carrying an enrolment path, not a bare `mfa_required` the
+user cannot act on. A policy that locks people out without telling them how to
+comply is a support incident with extra steps.
+
+Two safeguards are worth knowing about:
+
+- A grant is minted **only for a member with none of the required factors
+  enrolled**. Redeeming one against an identity that already has a factor is
+  refused with a conflict — otherwise a leaked grant would *replace* somebody's
+  authenticator rather than add their first, which is an account takeover
+  wearing a compliance hat.
+- A grant lives 15 minutes and buys one thing: enrolling a factor for that
+  identity. It is not a session, carries no scopes, and is issued only after
+  the correct password was presented.
 
 ## Rolling back
 
-Removing the factor from `required_factors` restores the previous behaviour
-immediately — no token or session is invalidated by the policy itself, so
+Setting `factor_enrolment_deadline` back to NULL — or removing the factor
+from `required_factors` — restores the previous behaviour immediately — no token or session is invalidated by the policy itself, so
 rollback is a config change and nothing else. **Enrolments survive**, which
 means the second attempt starts ahead of the first.

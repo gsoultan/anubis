@@ -22,7 +22,7 @@ func (s *Repository) ListRealms(ctx context.Context, tenantID string) ([]identit
 			AllowedFactors: r.AllowedFactors, RequiredFactors: r.RequiredFactors,
 			SessionTTL: r.SessionTtl, AccessTokenTTL: r.AccessTokenTtl,
 			RefreshTokenTTL: r.RefreshTokenTtl, DefaultRetention: r.DefaultRetention,
-			PasswordPolicy: r.PasswordPolicy,
+			PasswordPolicy: r.PasswordPolicy, FactorEnrolmentDeadline: r.FactorEnrolmentDeadline,
 		})
 	}
 	return out, nil
@@ -34,11 +34,12 @@ func (s *Repository) CreateRealm(ctx context.Context, tenantID string, r identit
 		MinAssurance: int16(r.MinAssurance), SelfRegistration: r.SelfRegistration,
 		EmailVerificationRequired: r.EmailVerification, PiiEncryption: r.PIIEncryption,
 		AllowedFactors: database.EmptyIfNil(r.AllowedFactors), RequiredFactors: database.EmptyIfNil(r.RequiredFactors),
-		PasswordPolicy:   database.OrEmptyJSON(r.PasswordPolicy),
-		SessionTtl:       database.OrDefaultStr(r.SessionTTL, "12 hours"),
-		AccessTokenTtl:   database.OrDefaultStr(r.AccessTokenTTL, "10 minutes"),
-		RefreshTokenTtl:  database.OrDefaultStr(r.RefreshTokenTTL, "30 days"),
-		DefaultRetention: r.DefaultRetention,
+		PasswordPolicy:          database.OrEmptyJSON(r.PasswordPolicy),
+		SessionTtl:              database.OrDefaultStr(r.SessionTTL, "12 hours"),
+		AccessTokenTtl:          database.OrDefaultStr(r.AccessTokenTTL, "10 minutes"),
+		RefreshTokenTtl:         database.OrDefaultStr(r.RefreshTokenTTL, "30 days"),
+		DefaultRetention:        r.DefaultRetention,
+		FactorEnrolmentDeadline: r.FactorEnrolmentDeadline,
 	})
 	return id, database.MapErr(err)
 }
@@ -50,11 +51,12 @@ func (s *Repository) UpdateRealm(ctx context.Context, tenantID string, r identit
 		SelfRegistration: r.SelfRegistration, EmailVerificationRequired: r.EmailVerification,
 		PiiEncryption:  r.PIIEncryption,
 		AllowedFactors: database.EmptyIfNil(r.AllowedFactors), RequiredFactors: database.EmptyIfNil(r.RequiredFactors),
-		PasswordPolicy:   database.OrEmptyJSON(r.PasswordPolicy),
-		SessionTtl:       database.OrDefaultStr(r.SessionTTL, "12 hours"),
-		AccessTokenTtl:   database.OrDefaultStr(r.AccessTokenTTL, "10 minutes"),
-		RefreshTokenTtl:  database.OrDefaultStr(r.RefreshTokenTTL, "30 days"),
-		DefaultRetention: r.DefaultRetention,
+		PasswordPolicy:          database.OrEmptyJSON(r.PasswordPolicy),
+		SessionTtl:              database.OrDefaultStr(r.SessionTTL, "12 hours"),
+		AccessTokenTtl:          database.OrDefaultStr(r.AccessTokenTTL, "10 minutes"),
+		RefreshTokenTtl:         database.OrDefaultStr(r.RefreshTokenTTL, "30 days"),
+		DefaultRetention:        r.DefaultRetention,
+		FactorEnrolmentDeadline: r.FactorEnrolmentDeadline,
 	})
 	return database.MapErr(err)
 }

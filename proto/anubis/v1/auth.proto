@@ -39,7 +39,15 @@ service AuthService {
   rpc ClientCredentials(ClientCredentialsRequest) returns (ClientCredentialsResponse);
 }
 
-message BeginTotpEnrollmentRequest {}
+message BeginTotpEnrollmentRequest {
+  // Only for the enrol-or-deny path: the grant_token from a refused sign-in,
+  // which proves the password was accepted. Ordinary enrolment sends nothing
+  // here and is authorised by the session.
+  //
+  // Not to be confused with `enrollment_token` below, which carries the
+  // pending secret between Begin and Confirm.
+  string grant_token = 1;
+}
 
 message BeginTotpEnrollmentResponse {
   // otpauth:// URI for the QR code, and the raw secret for manual entry.
@@ -53,6 +61,8 @@ message BeginTotpEnrollmentResponse {
 message ConfirmTotpEnrollmentRequest {
   string enrollment_token = 1;
   string code = 2;
+  // As on BeginTotpEnrollmentRequest.
+  string grant_token = 3;
 }
 
 message ConfirmTotpEnrollmentResponse {
@@ -106,7 +116,29 @@ message LoginResponse {
   oneof result {
     TokenPair tokens = 1;
     MfaChallenge mfa = 2;
+    // The realm requires a factor this member has not enrolled, and the
+    // deadline has passed. No session is issued — but the refusal carries
+    // the means to comply, which is what makes it enrol-or-deny rather than
+    // deny. See docs/enrolment-rollout.md.
+    EnrolmentChallenge enrolment_required = 3;
   }
+  // Set ALONGSIDE `tokens` while the deadline is still ahead: sign-in works
+  // and this is the warning. A client that ignores it costs its user access
+  // on the deadline with no notice.
+  EnrolmentChallenge enrolment_due = 4;
+}
+
+message EnrolmentChallenge {
+  // What the realm requires and this member has not enrolled.
+  repeated string factors = 1;
+  // Unix seconds: when enforcement starts, or when it started.
+  int64 deadline = 2;
+  // Set only when the deadline has passed. Pass it to BeginTotpEnrollment
+  // and ConfirmTotpEnrollment in place of a session — the session is exactly
+  // what the policy is withholding, so requiring one would make the policy
+  // impossible to satisfy.
+  string grant_token = 3;
+  int32 expires_in = 4;
 }
 
 message VerifyMfaRequest {

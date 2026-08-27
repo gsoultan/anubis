@@ -885,6 +885,14 @@ message Realm {
   string refresh_token_ttl = 13;
   string default_retention = 14;  // empty = no statutory limit
   string password_policy_json = 15;
+  // Unix seconds: when required_factors starts being enforced against
+  // members who have not enrolled. 0 = not in force, which is the default
+  // and the state of every realm until an operator sets a date.
+  //
+  // This is a rollout switch, not a flag — read docs/enrolment-rollout.md
+  // before setting it. Before the date, sign-in works and warns; after it,
+  // sign-in returns an enrolment challenge instead of a session.
+  int64 factor_enrolment_deadline = 16;
 }
 
 message ListRealmsRequest {}

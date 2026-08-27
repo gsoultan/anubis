@@ -62,6 +62,28 @@ per account, per tenant. Per-account is the one that stops credential stuffing.
 > otherwise response timing is a user-enumeration oracle — invisible in
 > functional testing, visible in a timing histogram.
 
+#### Enrol-or-deny
+
+A realm can require a factor its members have not enrolled. What happens then
+is decided by `realms.factor_enrolment_deadline`, not by a boolean — read
+[enrolment-rollout.md](enrolment-rollout.md) before setting one.
+
+```jsonc
+// Inside the grace period: signed in, and told.
+{ "tokens": { … },
+  "enrolment_due": { "factors": ["totp"], "deadline": 1788000000 } }
+
+// Past it: no session, but a way to earn one.
+{ "enrolment_required": {
+    "factors": ["totp"], "deadline": 1787000000,
+    "grant_token": "anb.local.v1…", "expires_in": 900 } }
+```
+
+Pass `grant_token` to `BeginTotpEnrollment` and `ConfirmTotpEnrollment` in
+place of a session. It lasts 15 minutes, authorises nothing but enrolling a
+factor for that identity, and is refused (`409`) if one is already enrolled —
+so a leaked grant cannot replace somebody's authenticator.
+
 ### `POST /v1/auth/mfa/verify`
 
 ```jsonc

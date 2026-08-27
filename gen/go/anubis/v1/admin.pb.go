@@ -7107,8 +7107,16 @@ type Realm struct {
 	RefreshTokenTtl           string                 `protobuf:"bytes,13,opt,name=refresh_token_ttl,json=refreshTokenTtl,proto3" json:"refresh_token_ttl,omitempty"`
 	DefaultRetention          string                 `protobuf:"bytes,14,opt,name=default_retention,json=defaultRetention,proto3" json:"default_retention,omitempty"` // empty = no statutory limit
 	PasswordPolicyJson        string                 `protobuf:"bytes,15,opt,name=password_policy_json,json=passwordPolicyJson,proto3" json:"password_policy_json,omitempty"`
-	unknownFields             protoimpl.UnknownFields
-	sizeCache                 protoimpl.SizeCache
+	// Unix seconds: when required_factors starts being enforced against
+	// members who have not enrolled. 0 = not in force, which is the default
+	// and the state of every realm until an operator sets a date.
+	//
+	// This is a rollout switch, not a flag — read docs/enrolment-rollout.md
+	// before setting it. Before the date, sign-in works and warns; after it,
+	// sign-in returns an enrolment challenge instead of a session.
+	FactorEnrolmentDeadline int64 `protobuf:"varint,16,opt,name=factor_enrolment_deadline,json=factorEnrolmentDeadline,proto3" json:"factor_enrolment_deadline,omitempty"`
+	unknownFields           protoimpl.UnknownFields
+	sizeCache               protoimpl.SizeCache
 }
 
 func (x *Realm) Reset() {
@@ -7244,6 +7252,13 @@ func (x *Realm) GetPasswordPolicyJson() string {
 		return x.PasswordPolicyJson
 	}
 	return ""
+}
+
+func (x *Realm) GetFactorEnrolmentDeadline() int64 {
+	if x != nil {
+		return x.FactorEnrolmentDeadline
+	}
+	return 0
 }
 
 type ListRealmsRequest struct {
@@ -13548,7 +13563,7 @@ const file_anubis_v1_admin_proto_rawDesc = "" +
 	"\x04slug\x18\x01 \x01(\tR\x04slug\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\"A\n" +
 	"\x14CreateTenantResponse\x12)\n" +
-	"\x06tenant\x18\x01 \x01(\v2\x11.anubis.v1.TenantR\x06tenant\"\xc5\x04\n" +
+	"\x06tenant\x18\x01 \x01(\v2\x11.anubis.v1.TenantR\x06tenant\"\x81\x05\n" +
 	"\x05Realm\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04code\x18\x02 \x01(\tR\x04code\x12\x12\n" +
@@ -13566,7 +13581,8 @@ const file_anubis_v1_admin_proto_rawDesc = "" +
 	"\x10access_token_ttl\x18\f \x01(\tR\x0eaccessTokenTtl\x12*\n" +
 	"\x11refresh_token_ttl\x18\r \x01(\tR\x0frefreshTokenTtl\x12+\n" +
 	"\x11default_retention\x18\x0e \x01(\tR\x10defaultRetention\x120\n" +
-	"\x14password_policy_json\x18\x0f \x01(\tR\x12passwordPolicyJson\"\x13\n" +
+	"\x14password_policy_json\x18\x0f \x01(\tR\x12passwordPolicyJson\x12:\n" +
+	"\x19factor_enrolment_deadline\x18\x10 \x01(\x03R\x17factorEnrolmentDeadline\"\x13\n" +
 	"\x11ListRealmsRequest\">\n" +
 	"\x12ListRealmsResponse\x12(\n" +
 	"\x06realms\x18\x01 \x03(\v2\x10.anubis.v1.RealmR\x06realms\"<\n" +

@@ -12,12 +12,23 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file anubis/v1/auth.proto.
  */
 export const file_anubis_v1_auth: GenFile = /*@__PURE__*/
-  fileDesc("ChRhbnViaXMvdjEvYXV0aC5wcm90bxIJYW51YmlzLnYxIhwKGkJlZ2luVG90cEVucm9sbG1lbnRSZXF1ZXN0InUKG0JlZ2luVG90cEVucm9sbG1lbnRSZXNwb25zZRIYChBwcm92aXNpb25pbmdfdXJpGAEgASgJEg4KBnNlY3JldBgCIAEoCRIYChBlbnJvbGxtZW50X3Rva2VuGAMgASgJEhIKCmV4cGlyZXNfaW4YBCABKAUiRgocQ29uZmlybVRvdHBFbnJvbGxtZW50UmVxdWVzdBIYChBlbnJvbGxtZW50X3Rva2VuGAEgASgJEgwKBGNvZGUYAiABKAkiTgodQ29uZmlybVRvdHBFbnJvbGxtZW50UmVzcG9uc2USFQoNY3JlZGVudGlhbF9pZBgBIAEoCRIWCg5yZWNvdmVyeV9jb2RlcxgCIAMoCSI7ChZFbnJvbGxEZXZpY2VLZXlSZXF1ZXN0EhIKCnB1YmxpY19rZXkYASABKAkSDQoFbGFiZWwYAiABKAkiMAoXRW5yb2xsRGV2aWNlS2V5UmVzcG9uc2USFQoNY3JlZGVudGlhbF9pZBgBIAEoCSJmChhDbGllbnRDcmVkZW50aWFsc1JlcXVlc3QSDgoGdGVuYW50GAEgASgJEhEKCWNsaWVudF9pZBgCIAEoCRIVCg1jbGllbnRfc2VjcmV0GAMgASgJEhAKCGF1ZGllbmNlGAQgASgJIlkKGUNsaWVudENyZWRlbnRpYWxzUmVzcG9uc2USFAoMYWNjZXNzX3Rva2VuGAEgASgJEhIKCnRva2VuX3R5cGUYAiABKAkSEgoKZXhwaXJlc19pbhgDIAEoBSJ3CgxMb2dpblJlcXVlc3QSDgoGdGVuYW50GAEgASgJEg0KBXJlYWxtGAIgASgJEhAKCHVzZXJuYW1lGAMgASgJEhAKCHBhc3N3b3JkGAQgASgJEhEKCWNsaWVudF9pZBgFIAEoCRIRCglkZXZpY2VfZnAYBiABKAkiRgoMTWZhQ2hhbGxlbmdlEhEKCW1mYV90b2tlbhgBIAEoCRIPCgdtZXRob2RzGAIgAygJEhIKCmV4cGlyZXNfaW4YAyABKAUiaQoNTG9naW5SZXNwb25zZRImCgZ0b2tlbnMYASABKAsyFC5hbnViaXMudjEuVG9rZW5QYWlySAASJgoDbWZhGAIgASgLMhcuYW51YmlzLnYxLk1mYUNoYWxsZW5nZUgAQggKBnJlc3VsdCJDChBWZXJpZnlNZmFSZXF1ZXN0EhEKCW1mYV90b2tlbhgBIAEoCRIOCgZtZXRob2QYAiABKAkSDAoEY29kZRgDIAEoCSI5ChFWZXJpZnlNZmFSZXNwb25zZRIkCgZ0b2tlbnMYASABKAsyFC5hbnViaXMudjEuVG9rZW5QYWlyIicKDlJlZnJlc2hSZXF1ZXN0EhUKDXJlZnJlc2hfdG9rZW4YASABKAkiNwoPUmVmcmVzaFJlc3BvbnNlEiQKBnRva2VucxgBIAEoCzIULmFudWJpcy52MS5Ub2tlblBhaXIiDwoNTG9nb3V0UmVxdWVzdCIQCg5Mb2dvdXRSZXNwb25zZSISChBMb2dvdXRBbGxSZXF1ZXN0Ii0KEUxvZ291dEFsbFJlc3BvbnNlEhgKEHNlc3Npb25zX3Jldm9rZWQYASABKAUiKgoUTG9nb3V0U2Vzc2lvblJlcXVlc3QSEgoKc2Vzc2lvbl9pZBgBIAEoCSIXChVMb2dvdXRTZXNzaW9uUmVzcG9uc2UiSgoWRGV2aWNlQ2hhbGxlbmdlUmVxdWVzdBIOCgZ0ZW5hbnQYASABKAkSDQoFcmVhbG0YAiABKAkSEQoJZGV2aWNlX2lkGAMgASgJIjwKF0RldmljZUNoYWxsZW5nZVJlc3BvbnNlEg0KBW5vbmNlGAEgASgJEhIKCmV4cGlyZXNfaW4YAiABKAUifQoTRGV2aWNlVmVyaWZ5UmVxdWVzdBIOCgZ0ZW5hbnQYASABKAkSDQoFbm9uY2UYAiABKAkSDgoGa2V5X2lkGAMgASgJEhEKCXNpZ25hdHVyZRgEIAEoCRIRCgljbGllbnRfaWQYBSABKAkSEQoJZGV2aWNlX2ZwGAYgASgJIjwKFERldmljZVZlcmlmeVJlc3BvbnNlEiQKBnRva2VucxgBIAEoCzIULmFudWJpcy52MS5Ub2tlblBhaXIiNwoMQ29uc2VudElucHV0Eg8KB3B1cnBvc2UYASABKAkSFgoOcG9saWN5X3ZlcnNpb24YAiABKAkijgEKD1JlZ2lzdGVyUmVxdWVzdBIOCgZ0ZW5hbnQYASABKAkSDQoFcmVhbG0YAiABKAkSEAoIdXNlcm5hbWUYAyABKAkSDQoFZW1haWwYBCABKAkSEAoIcGFzc3dvcmQYBSABKAkSKQoIY29uc2VudHMYBiADKAsyFy5hbnViaXMudjEuQ29uc2VudElucHV0IkYKEFJlZ2lzdGVyUmVzcG9uc2USEwoLaWRlbnRpdHlfaWQYASABKAkSHQoVdmVyaWZpY2F0aW9uX3JlcXVpcmVkGAIgASgIIiMKElZlcmlmeUVtYWlsUmVxdWVzdBINCgV0b2tlbhgBIAEoCSIVChNWZXJpZnlFbWFpbFJlc3BvbnNlMvgICgtBdXRoU2VydmljZRI6CgVMb2dpbhIXLmFudWJpcy52MS5Mb2dpblJlcXVlc3QaGC5hbnViaXMudjEuTG9naW5SZXNwb25zZRJGCglWZXJpZnlNZmESGy5hbnViaXMudjEuVmVyaWZ5TWZhUmVxdWVzdBocLmFudWJpcy52MS5WZXJpZnlNZmFSZXNwb25zZRJACgdSZWZyZXNoEhkuYW51YmlzLnYxLlJlZnJlc2hSZXF1ZXN0GhouYW51YmlzLnYxLlJlZnJlc2hSZXNwb25zZRI9CgZMb2dvdXQSGC5hbnViaXMudjEuTG9nb3V0UmVxdWVzdBoZLmFudWJpcy52MS5Mb2dvdXRSZXNwb25zZRJGCglMb2dvdXRBbGwSGy5hbnViaXMudjEuTG9nb3V0QWxsUmVxdWVzdBocLmFudWJpcy52MS5Mb2dvdXRBbGxSZXNwb25zZRJSCg1Mb2dvdXRTZXNzaW9uEh8uYW51YmlzLnYxLkxvZ291dFNlc3Npb25SZXF1ZXN0GiAuYW51YmlzLnYxLkxvZ291dFNlc3Npb25SZXNwb25zZRJYCg9EZXZpY2VDaGFsbGVuZ2USIS5hbnViaXMudjEuRGV2aWNlQ2hhbGxlbmdlUmVxdWVzdBoiLmFudWJpcy52MS5EZXZpY2VDaGFsbGVuZ2VSZXNwb25zZRJPCgxEZXZpY2VWZXJpZnkSHi5hbnViaXMudjEuRGV2aWNlVmVyaWZ5UmVxdWVzdBofLmFudWJpcy52MS5EZXZpY2VWZXJpZnlSZXNwb25zZRJDCghSZWdpc3RlchIaLmFudWJpcy52MS5SZWdpc3RlclJlcXVlc3QaGy5hbnViaXMudjEuUmVnaXN0ZXJSZXNwb25zZRJMCgtWZXJpZnlFbWFpbBIdLmFudWJpcy52MS5WZXJpZnlFbWFpbFJlcXVlc3QaHi5hbnViaXMudjEuVmVyaWZ5RW1haWxSZXNwb25zZRJkChNCZWdpblRvdHBFbnJvbGxtZW50EiUuYW51YmlzLnYxLkJlZ2luVG90cEVucm9sbG1lbnRSZXF1ZXN0GiYuYW51YmlzLnYxLkJlZ2luVG90cEVucm9sbG1lbnRSZXNwb25zZRJqChVDb25maXJtVG90cEVucm9sbG1lbnQSJy5hbnViaXMudjEuQ29uZmlybVRvdHBFbnJvbGxtZW50UmVxdWVzdBooLmFudWJpcy52MS5Db25maXJtVG90cEVucm9sbG1lbnRSZXNwb25zZRJYCg9FbnJvbGxEZXZpY2VLZXkSIS5hbnViaXMudjEuRW5yb2xsRGV2aWNlS2V5UmVxdWVzdBoiLmFudWJpcy52MS5FbnJvbGxEZXZpY2VLZXlSZXNwb25zZRJeChFDbGllbnRDcmVkZW50aWFscxIjLmFudWJpcy52MS5DbGllbnRDcmVkZW50aWFsc1JlcXVlc3QaJC5hbnViaXMudjEuQ2xpZW50Q3JlZGVudGlhbHNSZXNwb25zZUI2WjRnaXRodWIuY29tL2dzb3VsdGFuL2FudWJpcy9nZW4vZ28vYW51YmlzL3YxO2FudWJpc3YxYgZwcm90bzM", [file_anubis_v1_common]);
+  fileDesc("ChRhbnViaXMvdjEvYXV0aC5wcm90bxIJYW51YmlzLnYxIjEKGkJlZ2luVG90cEVucm9sbG1lbnRSZXF1ZXN0EhMKC2dyYW50X3Rva2VuGAEgASgJInUKG0JlZ2luVG90cEVucm9sbG1lbnRSZXNwb25zZRIYChBwcm92aXNpb25pbmdfdXJpGAEgASgJEg4KBnNlY3JldBgCIAEoCRIYChBlbnJvbGxtZW50X3Rva2VuGAMgASgJEhIKCmV4cGlyZXNfaW4YBCABKAUiWwocQ29uZmlybVRvdHBFbnJvbGxtZW50UmVxdWVzdBIYChBlbnJvbGxtZW50X3Rva2VuGAEgASgJEgwKBGNvZGUYAiABKAkSEwoLZ3JhbnRfdG9rZW4YAyABKAkiTgodQ29uZmlybVRvdHBFbnJvbGxtZW50UmVzcG9uc2USFQoNY3JlZGVudGlhbF9pZBgBIAEoCRIWCg5yZWNvdmVyeV9jb2RlcxgCIAMoCSI7ChZFbnJvbGxEZXZpY2VLZXlSZXF1ZXN0EhIKCnB1YmxpY19rZXkYASABKAkSDQoFbGFiZWwYAiABKAkiMAoXRW5yb2xsRGV2aWNlS2V5UmVzcG9uc2USFQoNY3JlZGVudGlhbF9pZBgBIAEoCSJmChhDbGllbnRDcmVkZW50aWFsc1JlcXVlc3QSDgoGdGVuYW50GAEgASgJEhEKCWNsaWVudF9pZBgCIAEoCRIVCg1jbGllbnRfc2VjcmV0GAMgASgJEhAKCGF1ZGllbmNlGAQgASgJIlkKGUNsaWVudENyZWRlbnRpYWxzUmVzcG9uc2USFAoMYWNjZXNzX3Rva2VuGAEgASgJEhIKCnRva2VuX3R5cGUYAiABKAkSEgoKZXhwaXJlc19pbhgDIAEoBSJ3CgxMb2dpblJlcXVlc3QSDgoGdGVuYW50GAEgASgJEg0KBXJlYWxtGAIgASgJEhAKCHVzZXJuYW1lGAMgASgJEhAKCHBhc3N3b3JkGAQgASgJEhEKCWNsaWVudF9pZBgFIAEoCRIRCglkZXZpY2VfZnAYBiABKAkiRgoMTWZhQ2hhbGxlbmdlEhEKCW1mYV90b2tlbhgBIAEoCRIPCgdtZXRob2RzGAIgAygJEhIKCmV4cGlyZXNfaW4YAyABKAUi3AEKDUxvZ2luUmVzcG9uc2USJgoGdG9rZW5zGAEgASgLMhQuYW51YmlzLnYxLlRva2VuUGFpckgAEiYKA21mYRgCIAEoCzIXLmFudWJpcy52MS5NZmFDaGFsbGVuZ2VIABI7ChJlbnJvbG1lbnRfcmVxdWlyZWQYAyABKAsyHS5hbnViaXMudjEuRW5yb2xtZW50Q2hhbGxlbmdlSAASNAoNZW5yb2xtZW50X2R1ZRgEIAEoCzIdLmFudWJpcy52MS5FbnJvbG1lbnRDaGFsbGVuZ2VCCAoGcmVzdWx0ImAKEkVucm9sbWVudENoYWxsZW5nZRIPCgdmYWN0b3JzGAEgAygJEhAKCGRlYWRsaW5lGAIgASgDEhMKC2dyYW50X3Rva2VuGAMgASgJEhIKCmV4cGlyZXNfaW4YBCABKAUiQwoQVmVyaWZ5TWZhUmVxdWVzdBIRCgltZmFfdG9rZW4YASABKAkSDgoGbWV0aG9kGAIgASgJEgwKBGNvZGUYAyABKAkiOQoRVmVyaWZ5TWZhUmVzcG9uc2USJAoGdG9rZW5zGAEgASgLMhQuYW51YmlzLnYxLlRva2VuUGFpciInCg5SZWZyZXNoUmVxdWVzdBIVCg1yZWZyZXNoX3Rva2VuGAEgASgJIjcKD1JlZnJlc2hSZXNwb25zZRIkCgZ0b2tlbnMYASABKAsyFC5hbnViaXMudjEuVG9rZW5QYWlyIg8KDUxvZ291dFJlcXVlc3QiEAoOTG9nb3V0UmVzcG9uc2UiEgoQTG9nb3V0QWxsUmVxdWVzdCItChFMb2dvdXRBbGxSZXNwb25zZRIYChBzZXNzaW9uc19yZXZva2VkGAEgASgFIioKFExvZ291dFNlc3Npb25SZXF1ZXN0EhIKCnNlc3Npb25faWQYASABKAkiFwoVTG9nb3V0U2Vzc2lvblJlc3BvbnNlIkoKFkRldmljZUNoYWxsZW5nZVJlcXVlc3QSDgoGdGVuYW50GAEgASgJEg0KBXJlYWxtGAIgASgJEhEKCWRldmljZV9pZBgDIAEoCSI8ChdEZXZpY2VDaGFsbGVuZ2VSZXNwb25zZRINCgVub25jZRgBIAEoCRISCgpleHBpcmVzX2luGAIgASgFIn0KE0RldmljZVZlcmlmeVJlcXVlc3QSDgoGdGVuYW50GAEgASgJEg0KBW5vbmNlGAIgASgJEg4KBmtleV9pZBgDIAEoCRIRCglzaWduYXR1cmUYBCABKAkSEQoJY2xpZW50X2lkGAUgASgJEhEKCWRldmljZV9mcBgGIAEoCSI8ChREZXZpY2VWZXJpZnlSZXNwb25zZRIkCgZ0b2tlbnMYASABKAsyFC5hbnViaXMudjEuVG9rZW5QYWlyIjcKDENvbnNlbnRJbnB1dBIPCgdwdXJwb3NlGAEgASgJEhYKDnBvbGljeV92ZXJzaW9uGAIgASgJIo4BCg9SZWdpc3RlclJlcXVlc3QSDgoGdGVuYW50GAEgASgJEg0KBXJlYWxtGAIgASgJEhAKCHVzZXJuYW1lGAMgASgJEg0KBWVtYWlsGAQgASgJEhAKCHBhc3N3b3JkGAUgASgJEikKCGNvbnNlbnRzGAYgAygLMhcuYW51YmlzLnYxLkNvbnNlbnRJbnB1dCJGChBSZWdpc3RlclJlc3BvbnNlEhMKC2lkZW50aXR5X2lkGAEgASgJEh0KFXZlcmlmaWNhdGlvbl9yZXF1aXJlZBgCIAEoCCIjChJWZXJpZnlFbWFpbFJlcXVlc3QSDQoFdG9rZW4YASABKAkiFQoTVmVyaWZ5RW1haWxSZXNwb25zZTL4CAoLQXV0aFNlcnZpY2USOgoFTG9naW4SFy5hbnViaXMudjEuTG9naW5SZXF1ZXN0GhguYW51YmlzLnYxLkxvZ2luUmVzcG9uc2USRgoJVmVyaWZ5TWZhEhsuYW51YmlzLnYxLlZlcmlmeU1mYVJlcXVlc3QaHC5hbnViaXMudjEuVmVyaWZ5TWZhUmVzcG9uc2USQAoHUmVmcmVzaBIZLmFudWJpcy52MS5SZWZyZXNoUmVxdWVzdBoaLmFudWJpcy52MS5SZWZyZXNoUmVzcG9uc2USPQoGTG9nb3V0EhguYW51YmlzLnYxLkxvZ291dFJlcXVlc3QaGS5hbnViaXMudjEuTG9nb3V0UmVzcG9uc2USRgoJTG9nb3V0QWxsEhsuYW51YmlzLnYxLkxvZ291dEFsbFJlcXVlc3QaHC5hbnViaXMudjEuTG9nb3V0QWxsUmVzcG9uc2USUgoNTG9nb3V0U2Vzc2lvbhIfLmFudWJpcy52MS5Mb2dvdXRTZXNzaW9uUmVxdWVzdBogLmFudWJpcy52MS5Mb2dvdXRTZXNzaW9uUmVzcG9uc2USWAoPRGV2aWNlQ2hhbGxlbmdlEiEuYW51YmlzLnYxLkRldmljZUNoYWxsZW5nZVJlcXVlc3QaIi5hbnViaXMudjEuRGV2aWNlQ2hhbGxlbmdlUmVzcG9uc2USTwoMRGV2aWNlVmVyaWZ5Eh4uYW51YmlzLnYxLkRldmljZVZlcmlmeVJlcXVlc3QaHy5hbnViaXMudjEuRGV2aWNlVmVyaWZ5UmVzcG9uc2USQwoIUmVnaXN0ZXISGi5hbnViaXMudjEuUmVnaXN0ZXJSZXF1ZXN0GhsuYW51YmlzLnYxLlJlZ2lzdGVyUmVzcG9uc2USTAoLVmVyaWZ5RW1haWwSHS5hbnViaXMudjEuVmVyaWZ5RW1haWxSZXF1ZXN0Gh4uYW51YmlzLnYxLlZlcmlmeUVtYWlsUmVzcG9uc2USZAoTQmVnaW5Ub3RwRW5yb2xsbWVudBIlLmFudWJpcy52MS5CZWdpblRvdHBFbnJvbGxtZW50UmVxdWVzdBomLmFudWJpcy52MS5CZWdpblRvdHBFbnJvbGxtZW50UmVzcG9uc2USagoVQ29uZmlybVRvdHBFbnJvbGxtZW50EicuYW51YmlzLnYxLkNvbmZpcm1Ub3RwRW5yb2xsbWVudFJlcXVlc3QaKC5hbnViaXMudjEuQ29uZmlybVRvdHBFbnJvbGxtZW50UmVzcG9uc2USWAoPRW5yb2xsRGV2aWNlS2V5EiEuYW51YmlzLnYxLkVucm9sbERldmljZUtleVJlcXVlc3QaIi5hbnViaXMudjEuRW5yb2xsRGV2aWNlS2V5UmVzcG9uc2USXgoRQ2xpZW50Q3JlZGVudGlhbHMSIy5hbnViaXMudjEuQ2xpZW50Q3JlZGVudGlhbHNSZXF1ZXN0GiQuYW51YmlzLnYxLkNsaWVudENyZWRlbnRpYWxzUmVzcG9uc2VCNlo0Z2l0aHViLmNvbS9nc291bHRhbi9hbnViaXMvZ2VuL2dvL2FudWJpcy92MTthbnViaXN2MWIGcHJvdG8z", [file_anubis_v1_common]);
 
 /**
  * @generated from message anubis.v1.BeginTotpEnrollmentRequest
  */
 export type BeginTotpEnrollmentRequest = Message<"anubis.v1.BeginTotpEnrollmentRequest"> & {
+  /**
+   * Only for the enrol-or-deny path: the grant_token from a refused sign-in,
+   * which proves the password was accepted. Ordinary enrolment sends nothing
+   * here and is authorised by the session.
+   *
+   * Not to be confused with `enrollment_token` below, which carries the
+   * pending secret between Begin and Confirm.
+   *
+   * @generated from field: string grant_token = 1;
+   */
+  grantToken: string;
 };
 
 /**
@@ -76,6 +87,13 @@ export type ConfirmTotpEnrollmentRequest = Message<"anubis.v1.ConfirmTotpEnrollm
    * @generated from field: string code = 2;
    */
   code: string;
+
+  /**
+   * As on BeginTotpEnrollmentRequest.
+   *
+   * @generated from field: string grant_token = 3;
+   */
+  grantToken: string;
 };
 
 /**
@@ -311,7 +329,27 @@ export type LoginResponse = Message<"anubis.v1.LoginResponse"> & {
      */
     value: MfaChallenge;
     case: "mfa";
+  } | {
+    /**
+     * The realm requires a factor this member has not enrolled, and the
+     * deadline has passed. No session is issued — but the refusal carries
+     * the means to comply, which is what makes it enrol-or-deny rather than
+     * deny. See docs/enrolment-rollout.md.
+     *
+     * @generated from field: anubis.v1.EnrolmentChallenge enrolment_required = 3;
+     */
+    value: EnrolmentChallenge;
+    case: "enrolmentRequired";
   } | { case: undefined; value?: undefined };
+
+  /**
+   * Set ALONGSIDE `tokens` while the deadline is still ahead: sign-in works
+   * and this is the warning. A client that ignores it costs its user access
+   * on the deadline with no notice.
+   *
+   * @generated from field: anubis.v1.EnrolmentChallenge enrolment_due = 4;
+   */
+  enrolmentDue?: EnrolmentChallenge | undefined;
 };
 
 /**
@@ -320,6 +358,47 @@ export type LoginResponse = Message<"anubis.v1.LoginResponse"> & {
  */
 export const LoginResponseSchema: GenMessage<LoginResponse> = /*@__PURE__*/
   messageDesc(file_anubis_v1_auth, 10);
+
+/**
+ * @generated from message anubis.v1.EnrolmentChallenge
+ */
+export type EnrolmentChallenge = Message<"anubis.v1.EnrolmentChallenge"> & {
+  /**
+   * What the realm requires and this member has not enrolled.
+   *
+   * @generated from field: repeated string factors = 1;
+   */
+  factors: string[];
+
+  /**
+   * Unix seconds: when enforcement starts, or when it started.
+   *
+   * @generated from field: int64 deadline = 2;
+   */
+  deadline: bigint;
+
+  /**
+   * Set only when the deadline has passed. Pass it to BeginTotpEnrollment
+   * and ConfirmTotpEnrollment in place of a session — the session is exactly
+   * what the policy is withholding, so requiring one would make the policy
+   * impossible to satisfy.
+   *
+   * @generated from field: string grant_token = 3;
+   */
+  grantToken: string;
+
+  /**
+   * @generated from field: int32 expires_in = 4;
+   */
+  expiresIn: number;
+};
+
+/**
+ * Describes the message anubis.v1.EnrolmentChallenge.
+ * Use `create(EnrolmentChallengeSchema)` to create a new message.
+ */
+export const EnrolmentChallengeSchema: GenMessage<EnrolmentChallenge> = /*@__PURE__*/
+  messageDesc(file_anubis_v1_auth, 11);
 
 /**
  * @generated from message anubis.v1.VerifyMfaRequest
@@ -348,7 +427,7 @@ export type VerifyMfaRequest = Message<"anubis.v1.VerifyMfaRequest"> & {
  * Use `create(VerifyMfaRequestSchema)` to create a new message.
  */
 export const VerifyMfaRequestSchema: GenMessage<VerifyMfaRequest> = /*@__PURE__*/
-  messageDesc(file_anubis_v1_auth, 11);
+  messageDesc(file_anubis_v1_auth, 12);
 
 /**
  * @generated from message anubis.v1.VerifyMfaResponse
@@ -365,7 +444,7 @@ export type VerifyMfaResponse = Message<"anubis.v1.VerifyMfaResponse"> & {
  * Use `create(VerifyMfaResponseSchema)` to create a new message.
  */
 export const VerifyMfaResponseSchema: GenMessage<VerifyMfaResponse> = /*@__PURE__*/
-  messageDesc(file_anubis_v1_auth, 12);
+  messageDesc(file_anubis_v1_auth, 13);
 
 /**
  * @generated from message anubis.v1.RefreshRequest
@@ -382,7 +461,7 @@ export type RefreshRequest = Message<"anubis.v1.RefreshRequest"> & {
  * Use `create(RefreshRequestSchema)` to create a new message.
  */
 export const RefreshRequestSchema: GenMessage<RefreshRequest> = /*@__PURE__*/
-  messageDesc(file_anubis_v1_auth, 13);
+  messageDesc(file_anubis_v1_auth, 14);
 
 /**
  * @generated from message anubis.v1.RefreshResponse
@@ -399,7 +478,7 @@ export type RefreshResponse = Message<"anubis.v1.RefreshResponse"> & {
  * Use `create(RefreshResponseSchema)` to create a new message.
  */
 export const RefreshResponseSchema: GenMessage<RefreshResponse> = /*@__PURE__*/
-  messageDesc(file_anubis_v1_auth, 14);
+  messageDesc(file_anubis_v1_auth, 15);
 
 /**
  * @generated from message anubis.v1.LogoutRequest
@@ -412,7 +491,7 @@ export type LogoutRequest = Message<"anubis.v1.LogoutRequest"> & {
  * Use `create(LogoutRequestSchema)` to create a new message.
  */
 export const LogoutRequestSchema: GenMessage<LogoutRequest> = /*@__PURE__*/
-  messageDesc(file_anubis_v1_auth, 15);
+  messageDesc(file_anubis_v1_auth, 16);
 
 /**
  * @generated from message anubis.v1.LogoutResponse
@@ -425,7 +504,7 @@ export type LogoutResponse = Message<"anubis.v1.LogoutResponse"> & {
  * Use `create(LogoutResponseSchema)` to create a new message.
  */
 export const LogoutResponseSchema: GenMessage<LogoutResponse> = /*@__PURE__*/
-  messageDesc(file_anubis_v1_auth, 16);
+  messageDesc(file_anubis_v1_auth, 17);
 
 /**
  * @generated from message anubis.v1.LogoutAllRequest
@@ -438,7 +517,7 @@ export type LogoutAllRequest = Message<"anubis.v1.LogoutAllRequest"> & {
  * Use `create(LogoutAllRequestSchema)` to create a new message.
  */
 export const LogoutAllRequestSchema: GenMessage<LogoutAllRequest> = /*@__PURE__*/
-  messageDesc(file_anubis_v1_auth, 17);
+  messageDesc(file_anubis_v1_auth, 18);
 
 /**
  * @generated from message anubis.v1.LogoutAllResponse
@@ -455,7 +534,7 @@ export type LogoutAllResponse = Message<"anubis.v1.LogoutAllResponse"> & {
  * Use `create(LogoutAllResponseSchema)` to create a new message.
  */
 export const LogoutAllResponseSchema: GenMessage<LogoutAllResponse> = /*@__PURE__*/
-  messageDesc(file_anubis_v1_auth, 18);
+  messageDesc(file_anubis_v1_auth, 19);
 
 /**
  * @generated from message anubis.v1.LogoutSessionRequest
@@ -472,7 +551,7 @@ export type LogoutSessionRequest = Message<"anubis.v1.LogoutSessionRequest"> & {
  * Use `create(LogoutSessionRequestSchema)` to create a new message.
  */
 export const LogoutSessionRequestSchema: GenMessage<LogoutSessionRequest> = /*@__PURE__*/
-  messageDesc(file_anubis_v1_auth, 19);
+  messageDesc(file_anubis_v1_auth, 20);
 
 /**
  * @generated from message anubis.v1.LogoutSessionResponse
@@ -485,7 +564,7 @@ export type LogoutSessionResponse = Message<"anubis.v1.LogoutSessionResponse"> &
  * Use `create(LogoutSessionResponseSchema)` to create a new message.
  */
 export const LogoutSessionResponseSchema: GenMessage<LogoutSessionResponse> = /*@__PURE__*/
-  messageDesc(file_anubis_v1_auth, 20);
+  messageDesc(file_anubis_v1_auth, 21);
 
 /**
  * @generated from message anubis.v1.DeviceChallengeRequest
@@ -514,7 +593,7 @@ export type DeviceChallengeRequest = Message<"anubis.v1.DeviceChallengeRequest">
  * Use `create(DeviceChallengeRequestSchema)` to create a new message.
  */
 export const DeviceChallengeRequestSchema: GenMessage<DeviceChallengeRequest> = /*@__PURE__*/
-  messageDesc(file_anubis_v1_auth, 21);
+  messageDesc(file_anubis_v1_auth, 22);
 
 /**
  * @generated from message anubis.v1.DeviceChallengeResponse
@@ -538,7 +617,7 @@ export type DeviceChallengeResponse = Message<"anubis.v1.DeviceChallengeResponse
  * Use `create(DeviceChallengeResponseSchema)` to create a new message.
  */
 export const DeviceChallengeResponseSchema: GenMessage<DeviceChallengeResponse> = /*@__PURE__*/
-  messageDesc(file_anubis_v1_auth, 22);
+  messageDesc(file_anubis_v1_auth, 23);
 
 /**
  * @generated from message anubis.v1.DeviceVerifyRequest
@@ -584,7 +663,7 @@ export type DeviceVerifyRequest = Message<"anubis.v1.DeviceVerifyRequest"> & {
  * Use `create(DeviceVerifyRequestSchema)` to create a new message.
  */
 export const DeviceVerifyRequestSchema: GenMessage<DeviceVerifyRequest> = /*@__PURE__*/
-  messageDesc(file_anubis_v1_auth, 23);
+  messageDesc(file_anubis_v1_auth, 24);
 
 /**
  * @generated from message anubis.v1.DeviceVerifyResponse
@@ -601,7 +680,7 @@ export type DeviceVerifyResponse = Message<"anubis.v1.DeviceVerifyResponse"> & {
  * Use `create(DeviceVerifyResponseSchema)` to create a new message.
  */
 export const DeviceVerifyResponseSchema: GenMessage<DeviceVerifyResponse> = /*@__PURE__*/
-  messageDesc(file_anubis_v1_auth, 24);
+  messageDesc(file_anubis_v1_auth, 25);
 
 /**
  * @generated from message anubis.v1.ConsentInput
@@ -623,7 +702,7 @@ export type ConsentInput = Message<"anubis.v1.ConsentInput"> & {
  * Use `create(ConsentInputSchema)` to create a new message.
  */
 export const ConsentInputSchema: GenMessage<ConsentInput> = /*@__PURE__*/
-  messageDesc(file_anubis_v1_auth, 25);
+  messageDesc(file_anubis_v1_auth, 26);
 
 /**
  * @generated from message anubis.v1.RegisterRequest
@@ -665,7 +744,7 @@ export type RegisterRequest = Message<"anubis.v1.RegisterRequest"> & {
  * Use `create(RegisterRequestSchema)` to create a new message.
  */
 export const RegisterRequestSchema: GenMessage<RegisterRequest> = /*@__PURE__*/
-  messageDesc(file_anubis_v1_auth, 26);
+  messageDesc(file_anubis_v1_auth, 27);
 
 /**
  * @generated from message anubis.v1.RegisterResponse
@@ -687,7 +766,7 @@ export type RegisterResponse = Message<"anubis.v1.RegisterResponse"> & {
  * Use `create(RegisterResponseSchema)` to create a new message.
  */
 export const RegisterResponseSchema: GenMessage<RegisterResponse> = /*@__PURE__*/
-  messageDesc(file_anubis_v1_auth, 27);
+  messageDesc(file_anubis_v1_auth, 28);
 
 /**
  * @generated from message anubis.v1.VerifyEmailRequest
@@ -704,7 +783,7 @@ export type VerifyEmailRequest = Message<"anubis.v1.VerifyEmailRequest"> & {
  * Use `create(VerifyEmailRequestSchema)` to create a new message.
  */
 export const VerifyEmailRequestSchema: GenMessage<VerifyEmailRequest> = /*@__PURE__*/
-  messageDesc(file_anubis_v1_auth, 28);
+  messageDesc(file_anubis_v1_auth, 29);
 
 /**
  * @generated from message anubis.v1.VerifyEmailResponse
@@ -717,7 +796,7 @@ export type VerifyEmailResponse = Message<"anubis.v1.VerifyEmailResponse"> & {
  * Use `create(VerifyEmailResponseSchema)` to create a new message.
  */
 export const VerifyEmailResponseSchema: GenMessage<VerifyEmailResponse> = /*@__PURE__*/
-  messageDesc(file_anubis_v1_auth, 29);
+  messageDesc(file_anubis_v1_auth, 30);
 
 /**
  * Authentication. Failure responses are uniform in message AND timing: the

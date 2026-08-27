@@ -82,12 +82,16 @@ func NewAuthEndpoints(svc authsvc.AuthService, logger *slog.Logger, limiter *rat
 		VerifyEmail: wrap("auth.verify_email", limited, func(ctx context.Context, req any) (any, error) {
 			return nil, svc.VerifyEmail(ctx, req.(string))
 		}),
-		BeginTotp: wrap("auth.totp_enroll_begin", none, func(ctx context.Context, _ any) (any, error) {
-			return svc.BeginTotpEnrollment(ctx)
+		// The grant token rides in the request rather than the context: it
+		// is not a session, and treating it like one would put it in reach
+		// of every other endpoint the middleware serves.
+		BeginTotp: wrap("auth.totp_enroll_begin", none, func(ctx context.Context, req any) (any, error) {
+			grant, _ := req.(string)
+			return svc.BeginTotpEnrollment(ctx, grant)
 		}),
 		ConfirmTotp: wrap("auth.totp_enroll_confirm", limited, func(ctx context.Context, req any) (any, error) {
-			r := req.([2]string)
-			return svc.ConfirmTotpEnrollment(ctx, r[0], r[1])
+			r := req.([3]string)
+			return svc.ConfirmTotpEnrollment(ctx, r[0], r[1], r[2])
 		}),
 		EnrollDeviceKey: wrap("auth.device_enroll", none, func(ctx context.Context, req any) (any, error) {
 			r := req.([2]string)

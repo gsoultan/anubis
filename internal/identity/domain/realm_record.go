@@ -1,5 +1,7 @@
 package identitydomain
 
+import "time"
+
 // RealmRecord is the admin-plane realm shape. JSON-ish fields stay []byte
 // (jsonb pass-through); the transport renders them, nothing in between
 // parses them.
@@ -14,9 +16,12 @@ type RealmRecord struct {
 	PIIEncryption     bool
 	AllowedFactors    []string
 	RequiredFactors   []string
-	SessionTTL        string
-	AccessTokenTTL    string
-	RefreshTokenTTL   string
-	DefaultRetention  string
-	PasswordPolicy    []byte
+	// FactorEnrolmentDeadline: nil leaves the policy out of force. See
+	// docs/enrolment-rollout.md — this is a rollout switch, not a flag.
+	FactorEnrolmentDeadline *time.Time
+	SessionTTL              string
+	AccessTokenTTL          string
+	RefreshTokenTTL         string
+	DefaultRetention        string
+	PasswordPolicy          []byte
 }

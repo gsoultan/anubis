@@ -89,12 +89,12 @@ func (s *authService) VerifyEmail(ctx context.Context, token string) error {
 	return s.verifyEmail.Execute(ctx, token)
 }
 
-func (s *authService) BeginTotpEnrollment(ctx context.Context) (*enroll.TOTPEnrollment, error) {
-	return s.enrollment.BeginTOTP(ctx)
+func (s *authService) BeginTotpEnrollment(ctx context.Context, grantToken string) (*enroll.TOTPEnrollment, error) {
+	return s.enrollment.BeginTOTP(ctx, grantToken)
 }
 
-func (s *authService) ConfirmTotpEnrollment(ctx context.Context, enrollmentToken, code string) (*enroll.TOTPConfirmation, error) {
-	return s.enrollment.ConfirmTOTP(ctx, enrollmentToken, code)
+func (s *authService) ConfirmTotpEnrollment(ctx context.Context, enrollmentToken, code, grantToken string) (*enroll.TOTPConfirmation, error) {
+	return s.enrollment.ConfirmTOTP(ctx, enrollmentToken, code, grantToken)
 }
 
 func (s *authService) EnrollDeviceKey(ctx context.Context, publicKey, label string) (string, error) {

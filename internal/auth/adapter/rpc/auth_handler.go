@@ -58,14 +58,24 @@ func (h *AuthHandler) Login(ctx context.Context, req *connect.Request[anubisv1.L
 	}
 	lo := out.(*signin.LoginOutput)
 	resp := &anubisv1.LoginResponse{}
-	if lo.MFA != nil {
+	switch {
+	case lo.MFA != nil:
 		resp.Result = &anubisv1.LoginResponse_Mfa{Mfa: &anubisv1.MfaChallenge{
 			MfaToken:  lo.MFA.MFAToken,
 			Methods:   lo.MFA.Methods,
 			ExpiresIn: int32(lo.MFA.ExpiresIn),
 		}}
-	} else {
+	case lo.Tokens == nil && lo.Enrolment != nil:
+		// Enrol-or-deny: no session, but a way to earn one.
+		resp.Result = &anubisv1.LoginResponse_EnrolmentRequired{
+			EnrolmentRequired: enrolmentProto(lo.Enrolment),
+		}
+	default:
 		resp.Result = &anubisv1.LoginResponse_Tokens{Tokens: TokenPairProto(lo.Tokens)}
+		if lo.Enrolment != nil {
+			// Signed in, and warned: the deadline is still ahead.
+			resp.EnrolmentDue = enrolmentProto(lo.Enrolment)
+		}
 	}
 	return connect.NewResponse(resp), nil
 }
@@ -169,8 +179,8 @@ func (h *AuthHandler) VerifyEmail(ctx context.Context, req *connect.Request[anub
 	return connect.NewResponse(&anubisv1.VerifyEmailResponse{}), nil
 }
 
-func (h *AuthHandler) BeginTotpEnrollment(ctx context.Context, _ *connect.Request[anubisv1.BeginTotpEnrollmentRequest]) (*connect.Response[anubisv1.BeginTotpEnrollmentResponse], error) {
-	out, err := h.eps.BeginTotp(ctx, nil)
+func (h *AuthHandler) BeginTotpEnrollment(ctx context.Context, req *connect.Request[anubisv1.BeginTotpEnrollmentRequest]) (*connect.Response[anubisv1.BeginTotpEnrollmentResponse], error) {
+	out, err := h.eps.BeginTotp(ctx, req.Msg.GrantToken)
 	if err != nil {
 		return nil, apiconnect.Err(ctx, err)
 	}
@@ -182,7 +192,7 @@ func (h *AuthHandler) BeginTotpEnrollment(ctx context.Context, _ *connect.Reques
 }
 
 func (h *AuthHandler) ConfirmTotpEnrollment(ctx context.Context, req *connect.Request[anubisv1.ConfirmTotpEnrollmentRequest]) (*connect.Response[anubisv1.ConfirmTotpEnrollmentResponse], error) {
-	out, err := h.eps.ConfirmTotp(ctx, [2]string{req.Msg.EnrollmentToken, req.Msg.Code})
+	out, err := h.eps.ConfirmTotp(ctx, [3]string{req.Msg.EnrollmentToken, req.Msg.Code, req.Msg.GrantToken})
 	if err != nil {
 		return nil, apiconnect.Err(ctx, err)
 	}
@@ -212,4 +222,16 @@ func (h *AuthHandler) ClientCredentials(ctx context.Context, req *connect.Reques
 	return connect.NewResponse(&anubisv1.ClientCredentialsResponse{
 		AccessToken: c.AccessToken, TokenType: c.TokenType, ExpiresIn: int32(c.ExpiresIn),
 	}), nil
+}
+
+func enrolmentProto(c *authapp.EnrolmentChallenge) *anubisv1.EnrolmentChallenge {
+	out := &anubisv1.EnrolmentChallenge{
+		Factors:    c.Factors,
+		GrantToken: c.GrantToken,
+		ExpiresIn:  int32(c.ExpiresIn),
+	}
+	if !c.Deadline.IsZero() {
+		out.Deadline = c.Deadline.Unix()
+	}
+	return out
 }

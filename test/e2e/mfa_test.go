@@ -220,3 +220,217 @@ func decodeBase32(t *testing.T, s string) []byte {
 	}
 	return out
 }
+
+// --- enrol-or-deny rollout (docs/enrolment-rollout.md) ---
+
+// The whole enrol-or-deny arc, in the order an operator would live it.
+//
+// The gap this closes: a realm could list `totp` in required_factors and still
+// admit a password-only login from somebody who never enrolled one. It stayed
+// open deliberately, because closing it with a boolean is a lockout — the
+// enrolment endpoint needs a session, and the policy withholds exactly that.
+//
+// So the switch is a date, and the refusal carries the means to comply. This
+// walks all four states: not in force, inside the grace period, past it, and
+// after the member enrols.
+func TestEnrolOrDenyRollout(t *testing.T) {
+	requireServer(t)
+	ctx := context.Background()
+	token := platformLogin(t)
+	auth := authClient()
+	admin := anubisv1connect.NewTenantAdminServiceClient(http.DefaultClient, baseURL)
+	idAdmin := anubisv1connect.NewIdentityAdminServiceClient(http.DefaultClient, baseURL)
+
+	realmCode := fmt.Sprintf("enrol%d", time.Now().UnixNano()%1e6)
+	created, err := admin.CreateRealm(ctx, operatorBearer(connect.NewRequest(&anubisv1.CreateRealmRequest{
+		Realm: &anubisv1.Realm{
+			Code: realmCode, Kind: "internal", DisplayName: "Enrolment probe",
+			MinAssurance:    1,
+			AllowedFactors:  []string{"password", "totp"},
+			RequiredFactors: []string{"password", "totp"},
+			SessionTtl:      "8 hours", AccessTokenTtl: "10 minutes",
+			RefreshTokenTtl: "30 days",
+		},
+	}), token))
+	if err != nil {
+		t.Fatalf("create realm: %v", err)
+	}
+	realm := created.Msg.GetRealm()
+
+	username := fmt.Sprintf("enrolee-%d", time.Now().UnixNano())
+	const password = "enrolee-probe-password-1234"
+	if _, err := idAdmin.CreateIdentity(ctx, operatorBearer(connect.NewRequest(&anubisv1.CreateIdentityRequest{
+		Realm: realmCode, Username: username, Password: password,
+	}), token)); err != nil {
+		t.Fatalf("create identity: %v", err)
+	}
+
+	login := func() *anubisv1.LoginResponse {
+		t.Helper()
+		resp, lerr := auth.Login(ctx, connect.NewRequest(&anubisv1.LoginRequest{
+			Tenant: tenant, Realm: realmCode, Username: username, Password: password,
+		}))
+		if lerr != nil {
+			t.Fatalf("login: %v", lerr)
+		}
+		return resp.Msg
+	}
+	setDeadline := func(unix int64) {
+		t.Helper()
+		realm.FactorEnrolmentDeadline = unix
+		if _, uerr := admin.UpdateRealm(ctx, operatorBearer(connect.NewRequest(&anubisv1.UpdateRealmRequest{
+			Realm: realm,
+		}), token)); uerr != nil {
+			t.Fatalf("set deadline %d: %v", unix, uerr)
+		}
+	}
+
+	// 1. required_factors says totp, nobody has enrolled, no deadline set.
+	//    This must behave exactly as it did before the feature existed, or
+	//    upgrading Anubis locks out every realm that ever listed a factor.
+	if got := login(); got.GetTokens() == nil {
+		t.Fatalf("a realm with no deadline refused a login: %T", got.GetResult())
+	} else if got.GetEnrolmentDue() != nil {
+		t.Fatal("warned about a deadline that does not exist")
+	}
+
+	// 2. Inside the grace period: sign-in still works, and now says why it
+	//    will not later. A grace period that refuses is not a grace period.
+	deadline := time.Now().Add(48 * time.Hour)
+	setDeadline(deadline.Unix())
+	graced := login()
+	if graced.GetTokens() == nil {
+		t.Fatalf("the grace period refused a login: %T", graced.GetResult())
+	}
+	due := graced.GetEnrolmentDue()
+	if due == nil {
+		t.Fatal("signed in inside the grace period with no warning at all")
+	}
+	if len(due.Factors) != 1 || due.Factors[0] != "totp" {
+		t.Fatalf("warned about %v, want [totp]", due.Factors)
+	}
+	if due.Deadline != deadline.Unix() {
+		t.Fatalf("warned about %d, want %d", due.Deadline, deadline.Unix())
+	}
+	if due.GrantToken != "" {
+		t.Fatal("a grant token was issued alongside a real session — " +
+			"that is a second credential nobody asked for")
+	}
+
+	// 3. Past the deadline: no session, and a challenge that can be acted on.
+	setDeadline(time.Now().Add(-1 * time.Hour).Unix())
+	refused := login()
+	if refused.GetTokens() != nil {
+		t.Fatal("an overdue member was let in anyway")
+	}
+	req := refused.GetEnrolmentRequired()
+	if req == nil {
+		t.Fatalf("overdue login returned %T, not an enrolment challenge", refused.GetResult())
+	}
+	if req.GrantToken == "" {
+		t.Fatal("refused without a grant token — that is deny, not enrol-or-deny")
+	}
+
+	// 4. The grant is enough to enrol with, without a session. This is the
+	//    whole point: the policy withholds the session, so demanding one
+	//    would make it unsatisfiable by the people it applies to.
+	begun, err := auth.BeginTotpEnrollment(ctx,
+		connect.NewRequest(&anubisv1.BeginTotpEnrollmentRequest{GrantToken: req.GrantToken}))
+	if err != nil {
+		t.Fatalf("enrol with the grant: %v", err)
+	}
+	secret := decodeBase32(t, begun.Msg.Secret)
+	if _, err := auth.ConfirmTotpEnrollment(ctx,
+		connect.NewRequest(&anubisv1.ConfirmTotpEnrollmentRequest{
+			EnrollmentToken: begun.Msg.EnrollmentToken,
+			Code:            totp.Generate(secret, time.Now(), totp.DefaultStep, totp.DefaultDigits),
+			GrantToken:      req.GrantToken,
+		})); err != nil {
+		t.Fatalf("confirm with the grant: %v", err)
+	}
+
+	// 5. Having complied, the member signs in again — and is challenged for
+	//    the factor they now hold, not refused for the one they lack.
+	after := login()
+	if after.GetEnrolmentRequired() != nil {
+		t.Fatal("still refused after enrolling")
+	}
+	if after.GetMfa() == nil {
+		t.Fatalf("after enrolling, login returned %T instead of an MFA challenge",
+			after.GetResult())
+	}
+}
+
+// A grant is minted only for a member with nothing enrolled. Once one is
+// enrolled, redeeming an old grant would REPLACE the authenticator — turning
+// a leaked grant into an account takeover rather than a first enrolment.
+func TestAGrantCannotReplaceAnEnrolledFactor(t *testing.T) {
+	requireServer(t)
+	ctx := context.Background()
+	token := platformLogin(t)
+	auth := authClient()
+	admin := anubisv1connect.NewTenantAdminServiceClient(http.DefaultClient, baseURL)
+	idAdmin := anubisv1connect.NewIdentityAdminServiceClient(http.DefaultClient, baseURL)
+
+	realmCode := fmt.Sprintf("regrant%d", time.Now().UnixNano()%1e6)
+	created, err := admin.CreateRealm(ctx, operatorBearer(connect.NewRequest(&anubisv1.CreateRealmRequest{
+		Realm: &anubisv1.Realm{
+			Code: realmCode, Kind: "internal", DisplayName: "Grant reuse probe",
+			MinAssurance:    1,
+			AllowedFactors:  []string{"password", "totp"},
+			RequiredFactors: []string{"password", "totp"},
+			SessionTtl:      "8 hours", AccessTokenTtl: "10 minutes",
+			RefreshTokenTtl: "30 days",
+			// Already overdue, so the first login hands out a grant.
+			FactorEnrolmentDeadline: time.Now().Add(-time.Hour).Unix(),
+		},
+	}), token))
+	if err != nil {
+		t.Fatalf("create realm: %v", err)
+	}
+	_ = created
+
+	username := fmt.Sprintf("regrant-%d", time.Now().UnixNano())
+	const password = "regrant-probe-password-1234"
+	if _, err := idAdmin.CreateIdentity(ctx, operatorBearer(connect.NewRequest(&anubisv1.CreateIdentityRequest{
+		Realm: realmCode, Username: username, Password: password,
+	}), token)); err != nil {
+		t.Fatalf("create identity: %v", err)
+	}
+
+	first, err := auth.Login(ctx, connect.NewRequest(&anubisv1.LoginRequest{
+		Tenant: tenant, Realm: realmCode, Username: username, Password: password,
+	}))
+	if err != nil {
+		t.Fatalf("login: %v", err)
+	}
+	grant := first.Msg.GetEnrolmentRequired().GetGrantToken()
+	if grant == "" {
+		t.Fatal("no grant issued for an overdue member")
+	}
+
+	// Enrol once, legitimately.
+	begun, err := auth.BeginTotpEnrollment(ctx,
+		connect.NewRequest(&anubisv1.BeginTotpEnrollmentRequest{GrantToken: grant}))
+	if err != nil {
+		t.Fatalf("first enrolment: %v", err)
+	}
+	if _, err := auth.ConfirmTotpEnrollment(ctx,
+		connect.NewRequest(&anubisv1.ConfirmTotpEnrollmentRequest{
+			EnrollmentToken: begun.Msg.EnrollmentToken,
+			Code:            totp.Generate(decodeBase32(t, begun.Msg.Secret), time.Now(), totp.DefaultStep, totp.DefaultDigits),
+			GrantToken:      grant,
+		})); err != nil {
+		t.Fatalf("first confirm: %v", err)
+	}
+
+	// The same grant, replayed, must not start a second enrolment.
+	_, err = auth.BeginTotpEnrollment(ctx,
+		connect.NewRequest(&anubisv1.BeginTotpEnrollmentRequest{GrantToken: grant}))
+	if err == nil {
+		t.Fatal("a spent grant re-enrolled an identity that already has a factor")
+	}
+	if connect.CodeOf(err) != connect.CodeAlreadyExists {
+		t.Fatalf("want a conflict on grant replay, got %v", err)
+	}
+}

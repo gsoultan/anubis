@@ -7,13 +7,15 @@ package gen
 
 import (
 	"context"
+	"time"
 )
 
 const createRealm = `-- name: CreateRealm :one
 INSERT INTO realms (tenant_id, code, kind, display_name, min_assurance,
                     self_registration, email_verification_required, pii_encryption,
                     allowed_factors, required_factors, password_policy,
-                    session_ttl, access_token_ttl, refresh_token_ttl, default_retention)
+                    session_ttl, access_token_ttl, refresh_token_ttl, default_retention,
+                    factor_enrolment_deadline)
 VALUES ($1, $2, $3, $4,
         $5, $6,
         $7, $8,
@@ -21,7 +23,8 @@ VALUES ($1, $2, $3, $4,
         $11::jsonb,
         $12::text::interval, $13::text::interval,
         $14::text::interval,
-        nullif($15, '')::interval)
+        nullif($15, '')::interval,
+        $16::timestamptz)
 RETURNING id
 `
 
@@ -41,6 +44,7 @@ type CreateRealmParams struct {
 	AccessTokenTtl            string
 	RefreshTokenTtl           string
 	DefaultRetention          interface{}
+	FactorEnrolmentDeadline   *time.Time
 }
 
 func (q *Queries) CreateRealm(ctx context.Context, arg CreateRealmParams) (string, error) {
@@ -60,6 +64,7 @@ func (q *Queries) CreateRealm(ctx context.Context, arg CreateRealmParams) (strin
 		arg.AccessTokenTtl,
 		arg.RefreshTokenTtl,
 		arg.DefaultRetention,
+		arg.FactorEnrolmentDeadline,
 	)
 	var id string
 	err := row.Scan(&id)
@@ -112,6 +117,7 @@ const getRealm = `-- name: GetRealm :one
 SELECT id, tenant_id, code, kind, display_name, min_assurance, self_registration,
        email_verification_required, pii_encryption,
        allowed_factors, required_factors, password_policy,
+       factor_enrolment_deadline,
        session_ttl::text  AS session_ttl,
        access_token_ttl::text AS access_token_ttl,
        refresh_token_ttl::text AS refresh_token_ttl,
@@ -136,6 +142,7 @@ type GetRealmRow struct {
 	AllowedFactors            []string
 	RequiredFactors           []string
 	PasswordPolicy            []byte
+	FactorEnrolmentDeadline   *time.Time
 	SessionTtl                string
 	AccessTokenTtl            string
 	RefreshTokenTtl           string
@@ -161,6 +168,7 @@ func (q *Queries) GetRealm(ctx context.Context, id string) (GetRealmRow, error) 
 		&i.AllowedFactors,
 		&i.RequiredFactors,
 		&i.PasswordPolicy,
+		&i.FactorEnrolmentDeadline,
 		&i.SessionTtl,
 		&i.AccessTokenTtl,
 		&i.RefreshTokenTtl,
@@ -176,6 +184,7 @@ const getRealmByCode = `-- name: GetRealmByCode :one
 SELECT id, tenant_id, code, kind, display_name, min_assurance, self_registration,
        email_verification_required, pii_encryption,
        allowed_factors, required_factors, password_policy,
+       factor_enrolment_deadline,
        session_ttl::text  AS session_ttl,
        access_token_ttl::text AS access_token_ttl,
        refresh_token_ttl::text AS refresh_token_ttl,
@@ -205,6 +214,7 @@ type GetRealmByCodeRow struct {
 	AllowedFactors            []string
 	RequiredFactors           []string
 	PasswordPolicy            []byte
+	FactorEnrolmentDeadline   *time.Time
 	SessionTtl                string
 	AccessTokenTtl            string
 	RefreshTokenTtl           string
@@ -230,6 +240,7 @@ func (q *Queries) GetRealmByCode(ctx context.Context, arg GetRealmByCodeParams) 
 		&i.AllowedFactors,
 		&i.RequiredFactors,
 		&i.PasswordPolicy,
+		&i.FactorEnrolmentDeadline,
 		&i.SessionTtl,
 		&i.AccessTokenTtl,
 		&i.RefreshTokenTtl,
@@ -318,6 +329,7 @@ const listRealms = `-- name: ListRealms :many
 SELECT id, tenant_id, code, kind, display_name, min_assurance, self_registration,
        email_verification_required, pii_encryption,
        allowed_factors, required_factors, password_policy,
+       factor_enrolment_deadline,
        session_ttl::text  AS session_ttl,
        access_token_ttl::text AS access_token_ttl,
        refresh_token_ttl::text AS refresh_token_ttl,
@@ -340,6 +352,7 @@ type ListRealmsRow struct {
 	AllowedFactors            []string
 	RequiredFactors           []string
 	PasswordPolicy            []byte
+	FactorEnrolmentDeadline   *time.Time
 	SessionTtl                string
 	AccessTokenTtl            string
 	RefreshTokenTtl           string
@@ -368,6 +381,7 @@ func (q *Queries) ListRealms(ctx context.Context, tenantID string) ([]ListRealms
 			&i.AllowedFactors,
 			&i.RequiredFactors,
 			&i.PasswordPolicy,
+			&i.FactorEnrolmentDeadline,
 			&i.SessionTtl,
 			&i.AccessTokenTtl,
 			&i.RefreshTokenTtl,
@@ -397,8 +411,11 @@ UPDATE realms SET
     access_token_ttl = $10::text::interval,
     refresh_token_ttl = $11::text::interval,
     default_retention = nullif($12, '')::interval,
+    -- NULL takes the policy out of force again; enrolments already made
+    -- survive, so a second rollout starts ahead of the first.
+    factor_enrolment_deadline = $13::timestamptz,
     updated_at = now()
-WHERE id = $13
+WHERE id = $14
 RETURNING id
 `
 
@@ -415,6 +432,7 @@ type UpdateRealmParams struct {
 	AccessTokenTtl            string
 	RefreshTokenTtl           string
 	DefaultRetention          interface{}
+	FactorEnrolmentDeadline   *time.Time
 	ID                        string
 }
 
@@ -432,6 +450,7 @@ func (q *Queries) UpdateRealm(ctx context.Context, arg UpdateRealmParams) (strin
 		arg.AccessTokenTtl,
 		arg.RefreshTokenTtl,
 		arg.DefaultRetention,
+		arg.FactorEnrolmentDeadline,
 		arg.ID,
 	)
 	var id string

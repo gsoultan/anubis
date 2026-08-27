@@ -28,6 +28,12 @@ import (
 
 const mfaTokenTTL = 60 * time.Second
 
+// enrolGrantTTL is longer than an MFA challenge on purpose: the holder has to
+// install an authenticator app, scan a code and type a number, not read six
+// digits they already have. Still short enough that a leaked grant is a
+// narrow window.
+const enrolGrantTTL = 15 * time.Minute
+
 // loginInteractor implements LoginUsecase.
 type loginInteractor struct {
 	tenants  tenancyport.TenantRepository
@@ -115,9 +121,10 @@ func (u *loginInteractor) Execute(ctx context.Context, in LoginInput) (*LoginOut
 	}
 
 	// Second factor: realm policy demands it and the identity has one
-	// enrolled. Required-but-unenrolled lets the login through (the
-	// enrollment gap) — visible in amr, closed by admin policy.
-	methods := u.availableSecondFactors(ctx, realm, identity.ID)
+	// enrolled. Enrolment is honoured on its own, before any realm policy —
+	// somebody who added an authenticator is asked for it either way.
+	enrolled := u.enrolledFactorKinds(ctx, identity.ID)
+	methods := allowedOf(realm, enrolled)
 	if len(methods) > 0 {
 		challenge, err := u.mintMFAChallenge(ctx, tenant, realm, identity, in, methods)
 		if err != nil {
@@ -127,19 +134,85 @@ func (u *loginInteractor) Execute(ctx context.Context, in LoginInput) (*LoginOut
 		return &LoginOutput{MFA: challenge}, nil
 	}
 
+	// Required but NOT enrolled. Which of the two answers this gets is the
+	// difference between a rollout and a lockout, so it is decided by a date
+	// the operator set, not by a flag.
+	stance, missing := realm.EnrolmentStanceFor(enrolled, u.clock.Now())
+	if stance == identitydomain.EnrolmentOverdue {
+		challenge, err := u.mintEnrolmentGrant(ctx, tenant, realm, identity, missing)
+		if err != nil {
+			return nil, err
+		}
+		u.auditLogin(ctx, tenant, identity, "deny", "enrolment_required")
+		return &LoginOutput{Enrolment: challenge}, nil
+	}
+
 	pair, err := u.establishSession(ctx, tenant, realm, identity, in, []string{authapp.AMRPassword})
 	if err != nil {
 		return nil, err
 	}
 	u.auditLogin(ctx, tenant, identity, "allow", "password")
-	return &LoginOutput{Tokens: pair}, nil
+	out := &LoginOutput{Tokens: pair}
+	if stance == identitydomain.EnrolmentDue {
+		// Sign-in worked; this is the warning that it will not next month.
+		out.Enrolment = &authapp.EnrolmentChallenge{
+			Factors: missing, Deadline: realm.FactorEnrolmentDeadline,
+		}
+	}
+	return out, nil
+}
+
+// mintEnrolmentGrant issues the token that makes the refusal actionable.
+//
+// It is minted only for a member with NONE of the required factors enrolled,
+// which is what stops it being a way to replace somebody's authenticator:
+// there is nothing to replace. Its holder has already presented the correct
+// password — the same bar as an MFA challenge token, and it buys strictly
+// less.
+func (u *loginInteractor) mintEnrolmentGrant(ctx context.Context, tenant *tenancydomain.TenantRef, realm *identitydomain.Realm, identity *identitydomain.Identity, missing []string) (*authapp.EnrolmentChallenge, error) {
+	key, err := u.ring.Ring().ActiveLocal()
+	if err != nil {
+		return nil, apperr.ErrInternal.Wrap(err)
+	}
+	jti, err := secret.New(16)
+	if err != nil {
+		return nil, apperr.ErrInternal.Wrap(err)
+	}
+	token, err := localtoken.Seal(key.Secret, key.Kid, "enrol_grant", jti, authapp.EnrolmentGrant{
+		TenantID:   tenant.ID,
+		TenantSlug: tenant.Slug,
+		IdentityID: identity.ID,
+		RealmID:    realm.ID,
+		Factors:    missing,
+	}, enrolGrantTTL, u.clock.Now())
+	if err != nil {
+		return nil, apperr.ErrInternal.Wrap(err)
+	}
+	return &authapp.EnrolmentChallenge{
+		Factors:    missing,
+		Deadline:   realm.FactorEnrolmentDeadline,
+		GrantToken: token,
+		ExpiresIn:  int(enrolGrantTTL.Seconds()),
+	}, nil
+}
+
+// allowedOf keeps only the factors the realm still accepts. A credential row
+// can outlive the policy that allowed it.
+func allowedOf(realm *identitydomain.Realm, kinds []string) []string {
+	var out []string
+	for _, k := range kinds {
+		if realm.AllowsFactor(k) {
+			out = append(out, k)
+		}
+	}
+	return out
 }
 
 func (u *loginInteractor) burnKDF(password string) {
 	_, _, _ = kdf.Verify(password, kdf.Dummy())
 }
 
-// availableSecondFactors decides whether this login needs a second step.
+// enrolledFactorKinds lists the second factors this identity actually holds.
 //
 // A factor is demanded when the identity HAS IT ENROLLED — not only when the
 // realm requires it. Enrolment is an opt-in to stronger authentication, and
@@ -147,15 +220,13 @@ func (u *loginInteractor) burnKDF(password string) {
 // deliberately added an authenticator still signs in with a password alone.
 // That is the entire value of the feature, silently discarded.
 //
-// The realm's allowed_factors still governs: a factor the realm forbids is
-// not offered even if a credential row survives from before the policy
-// changed.
+// The realm's allowed_factors still governs, in allowedOf: a factor the realm
+// forbids is not offered even if a credential row survives from before the
+// policy changed.
 //
-// The remaining gap is deliberate and documented: a realm that REQUIRES totp
-// still admits a password-only login from someone who has not enrolled yet.
-// Closing it means locking out every existing user the moment the policy
-// flips, so it is a rollout decision (enrol-or-deny), not a default.
-func (u *loginInteractor) availableSecondFactors(ctx context.Context, realm *identitydomain.Realm, identityID string) []string {
+// Required-but-unenrolled is handled separately, by the realm's enrolment
+// deadline: see Realm.EnrolmentStanceFor and docs/enrolment-rollout.md.
+func (u *loginInteractor) enrolledFactorKinds(ctx context.Context, identityID string) []string {
 	kinds, err := u.creds.ActiveCredentialKinds(ctx, identityID)
 	if err != nil {
 		return nil
@@ -164,9 +235,7 @@ func (u *loginInteractor) availableSecondFactors(ctx context.Context, realm *ide
 	for _, k := range kinds {
 		switch k {
 		case "totp", "device_key":
-			if realm.AllowsFactor(k) {
-				out = append(out, k)
-			}
+			out = append(out, k)
 		}
 	}
 	return out

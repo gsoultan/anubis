@@ -26,8 +26,8 @@ type AuthService interface {
 	Register(ctx context.Context, in registration.RegisterInput) (*registration.RegisterOutput, error)
 	VerifyEmail(ctx context.Context, token string) error
 
-	BeginTotpEnrollment(ctx context.Context) (*enroll.TOTPEnrollment, error)
-	ConfirmTotpEnrollment(ctx context.Context, enrollmentToken, code string) (*enroll.TOTPConfirmation, error)
+	BeginTotpEnrollment(ctx context.Context, grantToken string) (*enroll.TOTPEnrollment, error)
+	ConfirmTotpEnrollment(ctx context.Context, enrollmentToken, code, grantToken string) (*enroll.TOTPConfirmation, error)
 	EnrollDeviceKey(ctx context.Context, publicKey, label string) (string, error)
 	ClientCredentials(ctx context.Context, in clientcreds.ClientCredentialsInput) (*clientcreds.ClientCredentialsOutput, error)
 }

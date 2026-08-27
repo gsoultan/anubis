@@ -333,6 +333,8 @@ type Realm struct {
 	AllowedFactors            []string
 	RequiredFactors           []string
 	PasswordPolicy            []byte
+	// When required_factors starts being enforced against members who have not enrolled. NULL = not in force. Future = grace period, sign-in works and warns. Past = enrol-or-deny. See docs/enrolment-rollout.md.
+	FactorEnrolmentDeadline pgtype.Timestamptz
 }
 
 type RealmCategory struct {

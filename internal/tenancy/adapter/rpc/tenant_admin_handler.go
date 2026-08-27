@@ -45,7 +45,8 @@ func realmProto(r identitydomain.RealmRecord) *anubisv1.Realm {
 		AllowedFactors: r.AllowedFactors, RequiredFactors: r.RequiredFactors,
 		SessionTtl: r.SessionTTL, AccessTokenTtl: r.AccessTokenTTL,
 		RefreshTokenTtl: r.RefreshTokenTTL, DefaultRetention: r.DefaultRetention,
-		PasswordPolicyJson: string(r.PasswordPolicy),
+		PasswordPolicyJson:      string(r.PasswordPolicy),
+		FactorEnrolmentDeadline: unixOrZero(r.FactorEnrolmentDeadline),
 	}
 }
 
@@ -57,8 +58,28 @@ func realmRecord(r *anubisv1.Realm) identitydomain.RealmRecord {
 		AllowedFactors: r.AllowedFactors, RequiredFactors: r.RequiredFactors,
 		SessionTTL: r.SessionTtl, AccessTokenTTL: r.AccessTokenTtl,
 		RefreshTokenTTL: r.RefreshTokenTtl, DefaultRetention: r.DefaultRetention,
-		PasswordPolicy: []byte(r.PasswordPolicyJson),
+		PasswordPolicy:          []byte(r.PasswordPolicyJson),
+		FactorEnrolmentDeadline: timeOrNil(r.FactorEnrolmentDeadline),
 	}
+}
+
+// 0 is "not in force" on the wire and nil in the record: a realm that has
+// never started enforcing enrolment and one that stopped are the same state,
+// and both must round-trip through an ordinary UpdateRealm without a console
+// accidentally setting a deadline of 1970.
+func unixOrZero(t *time.Time) int64 {
+	if t == nil || t.IsZero() {
+		return 0
+	}
+	return t.Unix()
+}
+
+func timeOrNil(sec int64) *time.Time {
+	if sec == 0 {
+		return nil
+	}
+	t := time.Unix(sec, 0).UTC()
+	return &t
 }
 
 func appProto(a *tenancydomain.ApplicationRecord) *anubisv1.Application {

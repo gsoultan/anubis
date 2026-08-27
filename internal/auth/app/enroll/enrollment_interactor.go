@@ -9,6 +9,7 @@ import (
 
 	auditdomain "github.com/gsoultan/anubis/internal/audit/domain"
 	auditport "github.com/gsoultan/anubis/internal/audit/port"
+	authapp "github.com/gsoultan/anubis/internal/auth/app"
 	authport "github.com/gsoultan/anubis/internal/auth/port"
 	credential "github.com/gsoultan/anubis/internal/identity/domain/credential"
 	identityport "github.com/gsoultan/anubis/internal/identity/port"
@@ -57,10 +58,10 @@ func NewEnrollmentInteractor(
 	}
 }
 
-func (u *enrollmentInteractor) BeginTOTP(ctx context.Context) (*TOTPEnrollment, error) {
-	p, ok := authctx.From(ctx)
-	if !ok || p.Service {
-		return nil, apperr.ErrUnauthenticated
+func (u *enrollmentInteractor) BeginTOTP(ctx context.Context, grantToken string) (*TOTPEnrollment, error) {
+	p, err := u.caller(ctx, grantToken)
+	if err != nil {
+		return nil, err
 	}
 	identity, err := u.ids.Identity(ctx, p.TenantID, p.IdentityID)
 	if err != nil {
@@ -102,10 +103,10 @@ func (u *enrollmentInteractor) BeginTOTP(ctx context.Context) (*TOTPEnrollment, 
 	}, nil
 }
 
-func (u *enrollmentInteractor) ConfirmTOTP(ctx context.Context, enrollmentToken, code string) (*TOTPConfirmation, error) {
-	p, ok := authctx.From(ctx)
-	if !ok || p.Service {
-		return nil, apperr.ErrUnauthenticated
+func (u *enrollmentInteractor) ConfirmTOTP(ctx context.Context, enrollmentToken, code, grantToken string) (*TOTPConfirmation, error) {
+	p, err := u.caller(ctx, grantToken)
+	if err != nil {
+		return nil, err
 	}
 	kid, err := localtoken.Kid(enrollmentToken)
 	if err != nil {
@@ -253,4 +254,56 @@ func base32Secret(b []byte) string {
 		out = append(out, alpha[(buf<<(5-bits))&31])
 	}
 	return string(out)
+}
+
+// caller resolves who is enrolling.
+//
+// Normally that is the session. The exception is enrol-or-deny: the realm's
+// deadline has passed, the member has no factor, and the session is exactly
+// what is being withheld — so a grant token minted by the refused sign-in
+// stands in for it. Requiring a session there would make the policy
+// unsatisfiable by the only people it applies to.
+//
+// A grant is worth strictly less than a session: it says a password was
+// accepted for this identity, and nothing else.
+func (u *enrollmentInteractor) caller(ctx context.Context, grantToken string) (*authctx.Principal, error) {
+	if grantToken == "" {
+		p, ok := authctx.From(ctx)
+		if !ok || p.Service {
+			return nil, apperr.ErrUnauthenticated
+		}
+		return p, nil
+	}
+	kid, err := localtoken.Kid(grantToken)
+	if err != nil {
+		return nil, apperr.ErrUnauthenticated
+	}
+	key, err := u.ring.Ring().Lookup(kid)
+	if err != nil || len(key.Secret) == 0 {
+		return nil, apperr.ErrUnauthenticated
+	}
+	_, raw, err := localtoken.Open(key.Secret, grantToken, "enrol_grant", u.clock.Now())
+	if err != nil {
+		return nil, apperr.ErrUnauthenticated
+	}
+	var grant authapp.EnrolmentGrant
+	if json.Unmarshal(raw, &grant) != nil {
+		return nil, apperr.ErrUnauthenticated
+	}
+	// A grant is issued only to a member with nothing enrolled. If one is
+	// enrolled by the time it is redeemed, somebody else got there first —
+	// and honouring it would let a stolen grant REPLACE an authenticator
+	// rather than add the first one.
+	kinds, err := u.creds.ActiveCredentialKinds(ctx, grant.IdentityID)
+	if err != nil {
+		return nil, apperr.ErrInternal.Wrap(err)
+	}
+	for _, k := range kinds {
+		if k == "totp" {
+			return nil, apperr.ErrConflict
+		}
+	}
+	return &authctx.Principal{
+		TenantID: grant.TenantID, IdentityID: grant.IdentityID,
+	}, nil
 }
