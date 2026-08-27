@@ -77,8 +77,24 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
+      # Anubis claims scope can be synced from any SQL engine, not just the one
+      # it stores in. A second engine in CI is what keeps that claim true: the
+      # e2e sync test seeds this server and reads the hierarchy back through
+      # the API. Without it the multi-engine test silently skips.
+      mysql:
+        image: mysql:8
+        env:
+          MYSQL_ROOT_PASSWORD: anubis
+          MYSQL_DATABASE: anubis_src
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -uroot -panubis"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
     env:
       ANUBIS_DB_URL: postgres://anubis:anubis@localhost:5432/anubis_ci?sslmode=disable
+      ANUBIS_TEST_MYSQL_DSN: mysql://root:anubis@127.0.0.1:3306/anubis_src
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5

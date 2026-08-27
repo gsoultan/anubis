@@ -37,11 +37,19 @@ backend-suite:
   services:
     - name: postgres:18
       alias: postgres
+    # The engine Anubis syncs FROM, which is deliberately not the one it stores
+    # in: the e2e sync test seeds it and reads the hierarchy back through the
+    # API. Drop it and that test skips without saying so.
+    - name: mysql:8
+      alias: mysql
   variables:
     POSTGRES_USER: anubis
     POSTGRES_PASSWORD: anubis
     POSTGRES_DB: anubis_ci
+    MYSQL_ROOT_PASSWORD: anubis
+    MYSQL_DATABASE: anubis_src
     ANUBIS_DB_URL: postgres://anubis:anubis@postgres:5432/anubis_ci?sslmode=disable
+    ANUBIS_TEST_MYSQL_DSN: mysql://root:anubis@mysql:3306/anubis_src
     ANUBIS_LOAD_WORKERS: "8"
     ANUBIS_LOAD_BUDGET_MS: "400"
   script:

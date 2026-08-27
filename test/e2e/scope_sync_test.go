@@ -4,11 +4,15 @@ package e2e
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
+
+	_ "github.com/go-sql-driver/mysql"
 	"testing"
 
 	"connectrpc.com/connect"
@@ -275,7 +279,7 @@ func TestScopeSyncRecordsHistory(t *testing.T) {
 		fmt.Sprintf(`{"url":%q,"default_node_type":"e2e_hist_node"}`, feed.URL))
 
 	before := len(listRuns(t, token, src))
-	runSync(t, token, src, true)  // a dry run is history too
+	runSync(t, token, src, true) // a dry run is history too
 	runSync(t, token, src, false)
 
 	runs := listRuns(t, token, src)
@@ -300,4 +304,116 @@ func listRuns(t *testing.T, token, sourceID string) []*anubisv1.SyncRun {
 		t.Fatalf("list sync runs: %v", err)
 	}
 	return resp.Msg.Runs
+}
+
+// The structure a company keeps is rarely in Postgres, and this proves the
+// whole path against one that is not: create a db_table source pointed at a
+// real MySQL server, run the sync through the API, and read the nodes back.
+//
+// The fetcher's own MySQL test covers the driver; this covers everything
+// after it — the RPC, the reconciler, parents-first ordering across an engine
+// with no NULLS FIRST, and the rows landing in the right axis.
+//
+// Skipped unless ANUBIS_TEST_MYSQL_DSN names a server, so the ordinary suite
+// needs no second database.
+func TestScopeSyncFromMySQL(t *testing.T) {
+	requireServer(t)
+	dsn := os.Getenv("ANUBIS_TEST_MYSQL_DSN")
+	if dsn == "" {
+		t.Skip("ANUBIS_TEST_MYSQL_DSN not set")
+	}
+	table := seedMySQL(t, dsn)
+	token := platformLogin(t)
+	ctx := context.Background()
+	const axis = "e2e_mysql_axis"
+	ensureAxis(t, token, axis, "e2e_mysql_root", "e2e_mysql_node")
+
+	src := createSource(t, token, axis, "db_table", fmt.Sprintf(
+		`{"dsn":%q,"table":%q,"default_node_type":"e2e_mysql_node",
+		  "columns":{"ref":"code","parent_ref":"parent","name":"label"}}`, dsn, table))
+
+	report := runSync(t, token, src, false)
+	if errs, _ := report["errors"].([]any); len(errs) > 0 {
+		t.Fatalf("sync reported errors: %v", errs)
+	}
+	// On a fresh database these are adds; on a re-run they are unchanged.
+	// Either way the sync must have seen every row.
+	if seen := num(t, report, "added") + num(t, report, "unchanged"); seen < 3 {
+		t.Fatalf("sync saw %d of 3 rows: %v", seen, report)
+	}
+
+	list, err := scopeClient().ListScopeNodes(ctx,
+		operatorBearer(connect.NewRequest(&anubisv1.ListScopeNodesRequest{Axis: axis}), token))
+	if err != nil {
+		t.Fatalf("list nodes: %v", err)
+	}
+	byRef := map[string]*anubisv1.ScopeNode{}
+	byID := map[string]*anubisv1.ScopeNode{}
+	for _, n := range list.Msg.Nodes {
+		byID[n.Id] = n
+		if n.ExternalRef != "" {
+			byRef[n.ExternalRef] = n
+		}
+	}
+	div, team := byRef["DIV"], byRef["TEAM"]
+	if div == nil || team == nil {
+		t.Fatalf("MySQL rows did not become nodes: %v", byRef)
+	}
+	if team.ParentId != div.Id {
+		t.Fatalf("hierarchy lost across MySQL: TEAM's parent is %q, want DIV",
+			byID[team.ParentId].GetExternalRef())
+	}
+	if div.Name != "Engineering Division" {
+		t.Fatalf("column mapping wrong: %q", div.Name)
+	}
+	// AAA sorts before its parent TEAM, so a fetcher that returned rows in
+	// natural order would try to attach a child to a node that does not exist
+	// yet. Reaching this line means the ordering survived an engine with no
+	// NULLS FIRST of its own.
+	alpha := byRef["AAA"]
+	if alpha == nil {
+		t.Fatal("grandchild AAA never landed")
+	}
+	if alpha.ParentId != team.Id {
+		t.Fatalf("AAA attached to %q, want TEAM",
+			byID[alpha.ParentId].GetExternalRef())
+	}
+}
+
+// seedMySQL builds the little org chart the test reads back, so the test needs
+// no set-up beyond a reachable server. It returns the table name.
+//
+// The mysql:// URL is translated here the same way the fetcher translates it;
+// duplicating three lines keeps the seeding honest about what it connects to
+// without exporting the dialect internals.
+func seedMySQL(t *testing.T, dsn string) string {
+	t.Helper()
+	u, err := url.Parse(dsn)
+	if err != nil {
+		t.Fatalf("ANUBIS_TEST_MYSQL_DSN is not a URL: %v", err)
+	}
+	driverDSN := u.User.String() + "@tcp(" + u.Host + ")" + u.Path
+	db, err := sql.Open("mysql", driverDSN)
+	if err != nil {
+		t.Fatalf("open mysql: %v", err)
+	}
+	defer db.Close()
+
+	const table = "anubis_e2e_org"
+	// AAA sorts before the parent it names, so natural row order is wrong on
+	// purpose: the sync has to order roots first and resolve forward
+	// references, on an engine that has no NULLS FIRST.
+	for _, stmt := range []string{
+		`CREATE TABLE IF NOT EXISTS ` + table + ` (
+		   code VARCHAR(32) PRIMARY KEY, parent VARCHAR(32) NULL, label VARCHAR(128))`,
+		`INSERT IGNORE INTO ` + table + ` VALUES
+		   ('AAA','TEAM','Alpha Squad'),
+		   ('TEAM','DIV','Platform Team'),
+		   ('DIV',NULL,'Engineering Division')`,
+	} {
+		if _, err := db.ExecContext(context.Background(), stmt); err != nil {
+			t.Fatalf("seed mysql: %v", err)
+		}
+	}
+	return table
 }
