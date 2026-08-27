@@ -10,6 +10,42 @@ import (
 	"time"
 )
 
+const correctEmptyRealmIdentity = `-- name: CorrectEmptyRealmIdentity :execrows
+UPDATE realms SET code = $1, kind = $2, updated_at = now()
+WHERE realms.id = $3
+  AND realms.tenant_id = $4
+  AND NOT EXISTS (SELECT 1 FROM identities i WHERE i.realm_id = realms.id)
+`
+
+type CorrectEmptyRealmIdentityParams struct {
+	Code     string
+	Kind     string
+	ID       string
+	TenantID string
+}
+
+// A realm's code and kind decide which roles its members may hold
+// (migrations/0010 enforces it on every grant), so changing them on a
+// populated realm would retroactively re-decide access that has already been
+// granted and evaluated. They are therefore not part of UpdateRealm at all.
+//
+// A realm with no members has decided nothing yet, and that is when a typo is
+// actually caught. This corrects one — and the emptiness test lives in the
+// statement, not in the caller, so an identity created between a check and an
+// update cannot slip through: the UPDATE simply matches no row.
+func (q *Queries) CorrectEmptyRealmIdentity(ctx context.Context, arg CorrectEmptyRealmIdentityParams) (int64, error) {
+	result, err := q.db.Exec(ctx, correctEmptyRealmIdentity,
+		arg.Code,
+		arg.Kind,
+		arg.ID,
+		arg.TenantID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const createRealm = `-- name: CreateRealm :one
 INSERT INTO realms (tenant_id, code, kind, display_name, min_assurance,
                     self_registration, email_verification_required, pii_encryption,

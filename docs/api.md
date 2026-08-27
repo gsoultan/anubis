@@ -278,6 +278,26 @@ POST /v1/admin/realms
 | `POST /v1/admin/identities/{id}/disable` | **Immediate, complete deprovisioning.** `authorize()` gates on identity state, so no grant needs touching. |
 | `GET`/`POST` `/v1/admin/identities/{id}/attributes` | The **encrypted** part of an identity (ADR-0013) — see below |
 
+#### A realm's `kind` is nearly immutable — and that is the point
+
+`kind` (`internal` | `partner` | `public` | `service`) decides which roles a
+realm's members may hold. `migrations/0010` enforces it on **every grant**, so
+a realm created as `internal` when you meant `partner` lets employee-only
+roles reach outsiders.
+
+| Realm state | `UpdateRealm` changing `kind` or `code` |
+| :--- | :--- |
+| No members yet | **Allowed.** Nothing has been decided, and this is when a typo is caught. |
+| Has members | **`409`**, naming the field and why. Changing it would retroactively re-decide access those members already hold. |
+
+There is deliberately no `DeleteRealm`: identities, grants and audit entries
+reference a realm, so deleting one would either cascade through the record of
+what access existed or orphan it. To retire a mistake that already has
+members, create the correct realm and move the identities.
+
+Everything else — display name, factors, TTLs, retention, the enrolment
+deadline — updates normally at any time.
+
 #### The installation's own audit trail
 
 A platform user belongs to no tenant, so their actions — sign-in, failed

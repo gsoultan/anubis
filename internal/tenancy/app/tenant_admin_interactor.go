@@ -179,6 +179,36 @@ func (u *tenantAdminInteractor) UpdateRealm(ctx context.Context, r identitydomai
 	if err != nil {
 		return nil, err
 	}
+	// `kind` and `code` are not part of UpdateRealm, and until now a caller
+	// that changed either got 200 OK and no change: the SQL simply did not
+	// list those columns. An operator correcting a realm they created as
+	// `internal` when they meant `partner` was told it worked, and it had
+	// not. That matters because kind decides which roles the realm's members
+	// may hold (migrations/0010 enforces it on every grant), so a realm
+	// mislabelled `internal` lets employee-only roles reach outsiders.
+	current, err := u.realmByID(ctx, p.TenantID, r.ID)
+	if err != nil {
+		return nil, err
+	}
+	if r.Kind != current.Kind || r.Code != current.Code {
+		// Correctable only while nobody is in it: an empty realm has decided
+		// nothing, and that is when a typo is actually noticed. On a
+		// populated realm this would retroactively re-decide access already
+		// granted, so it is refused with a reason rather than ignored.
+		ok, cerr := u.realms.CorrectEmptyRealmIdentity(ctx, p.TenantID, r.ID, r.Code, r.Kind)
+		if cerr != nil {
+			return nil, cerr
+		}
+		if !ok {
+			return nil, apperr.ErrConflict.
+				With("field", kindOrCode(r, current)).
+				With("reason", "a realm's code and kind are fixed once it has members, because kind decides which roles those members may hold; create a new realm and move the identities")
+		}
+		u.emit(ctx, p, "realm.identity_corrected", r.ID, map[string]string{
+			"from_code": current.Code, "to_code": r.Code,
+			"from_kind": current.Kind, "to_kind": r.Kind,
+		})
+	}
 	if err := u.realms.UpdateRealm(ctx, p.TenantID, r); err != nil {
 		return nil, err
 	}
@@ -479,4 +509,17 @@ func (u *tenantAdminInteractor) RevokeAPIKey(ctx context.Context, id string) err
 	}
 	u.emit(ctx, p, "apikey.revoke", id, nil)
 	return nil
+}
+
+// kindOrCode names the field the caller actually tried to change, so the
+// refusal says which one rather than making them guess.
+func kindOrCode(want identitydomain.RealmRecord, have *identitydomain.RealmRecord) string {
+	switch {
+	case want.Kind != have.Kind && want.Code != have.Code:
+		return "kind,code"
+	case want.Kind != have.Kind:
+		return "kind"
+	default:
+		return "code"
+	}
 }

@@ -115,3 +115,15 @@ func (s *Repository) RealmCategoryByCode(ctx context.Context, realmID, code stri
 		DisplayName: r.DisplayName, SortOrder: int(r.SortOrder),
 	}, nil
 }
+
+func (s *Repository) CorrectEmptyRealmIdentity(ctx context.Context, tenantID, realmID, code, kind string) (bool, error) {
+	n, err := s.q(ctx).CorrectEmptyRealmIdentity(ctx, gen.CorrectEmptyRealmIdentityParams{
+		ID: realmID, TenantID: tenantID, Code: code, Kind: kind,
+	})
+	if err != nil {
+		return false, database.MapErr(err)
+	}
+	// Zero rows means the realm has members — the statement's own NOT EXISTS
+	// refused it, so there is no window between deciding and writing.
+	return n > 0, nil
+}

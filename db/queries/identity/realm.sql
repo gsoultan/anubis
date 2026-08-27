@@ -95,3 +95,18 @@ INSERT INTO realm_categories (tenant_id, realm_id, code, display_name, sort_orde
 VALUES (sqlc.arg(tenant_id), sqlc.arg(realm_id), sqlc.arg(code),
         sqlc.arg(display_name), sqlc.arg(sort_order))
 RETURNING id, realm_id, code, display_name, sort_order;
+
+-- name: CorrectEmptyRealmIdentity :execrows
+-- A realm's code and kind decide which roles its members may hold
+-- (migrations/0010 enforces it on every grant), so changing them on a
+-- populated realm would retroactively re-decide access that has already been
+-- granted and evaluated. They are therefore not part of UpdateRealm at all.
+--
+-- A realm with no members has decided nothing yet, and that is when a typo is
+-- actually caught. This corrects one — and the emptiness test lives in the
+-- statement, not in the caller, so an identity created between a check and an
+-- update cannot slip through: the UPDATE simply matches no row.
+UPDATE realms SET code = sqlc.arg(code), kind = sqlc.arg(kind), updated_at = now()
+WHERE realms.id = sqlc.arg(id)
+  AND realms.tenant_id = sqlc.arg(tenant_id)
+  AND NOT EXISTS (SELECT 1 FROM identities i WHERE i.realm_id = realms.id);
