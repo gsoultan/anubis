@@ -34,7 +34,19 @@ DEBUG_PORT="${ANUBIS_SOAK_DEBUG_PORT:-7471}"
 ANUBIS_LISTEN=":${PORT}" ANUBIS_ISSUER="${ANUBIS_E2E_BASE_URL}" \
   ANUBIS_DEBUG_LISTEN="127.0.0.1:${DEBUG_PORT}" "$BIN" serve >/dev/null 2>&1 &
 SERVER=$!
-trap 'kill "$SERVER" 2>/dev/null || true' EXIT
+# Wait for the drain, do not just signal it. serve.go says why: "an audit
+# event dropped during drain is a security record lost", and the audit writer
+# is a queue with a grace period. Killing and exiting immediately leaves that
+# queue unflushed.
+drain() {
+  kill "$SERVER" 2>/dev/null || return 0
+  for _ in $(seq 1 30); do
+    kill -0 "$SERVER" 2>/dev/null || return 0
+    sleep 1
+  done
+  kill -9 "$SERVER" 2>/dev/null || true
+}
+trap drain EXIT
 
 for i in $(seq 1 60); do
   curl -fsS "${ANUBIS_E2E_BASE_URL}/healthz" >/dev/null 2>&1 && break

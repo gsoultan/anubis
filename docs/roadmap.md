@@ -137,6 +137,7 @@ property regresses (`go test -tags integration ./test/integration/`).
 | Path normalisation matches between gate and app | `internal/gate/routepath` corpus + `FuzzNormalizePath` | Shared corpus; it found two real bypasses (percent-encoded dot-segments, overlong UTF-8) that are now fixed |
 | Uniform login timing | `TestLoginTimingDoesNotRevealUserExistence` | Existing vs unknown user: median 49.2 ms vs 48.8 ms — 0.6% apart, both paying full KDF cost |
 | Backup restore cannot resurrect access | `TestBackupRestoreCannotResurrectAccess` | A restored refresh row stays useless: its session is revoked and `token_epoch` has advanced |
+| The audit chain is tamper-evident | `TestAuditChainDetectsAnEditedRow`, `…DeletedRow`, `…VerifiesWhenIntact` | Editing a `deny` into an `allow` is caught at that row; deleting an entry is caught at the next. **Finding: it did not work at all.** `detail` is `jsonb`, so Postgres re-renders what it stores, and the hash was taken over the bytes the writer sent — 21,424 of 21,439 real entries read as tampered. Both sides now hash a canonical form; that same history verifies |
 
 Performance budgets are enforced the same way — by tests, not prose. See
 [operations.md](operations.md#performance-budgets).

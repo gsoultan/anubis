@@ -1,9 +1,11 @@
 package auditpg
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/binary"
+	"encoding/json"
 	"log/slog"
 	"time"
 
@@ -92,10 +94,57 @@ func (a *ChainedAuditor) append(ctx context.Context, ev auditdomain.AuditEvent) 
 	})
 }
 
+// canonicalJSON renders a detail the way BOTH sides can agree on.
+//
+// detail is a jsonb column, and Postgres does not store the bytes it is
+// given: it parses and re-renders them, inserting a space after every colon
+// and reordering keys. So hashing what the writer happened to send produces
+// a hash the reader can never reproduce — every entry with a detail reads as
+// tampered. Parsing and re-marshalling on both sides removes the difference,
+// because whatever jsonb did to the formatting is undone before hashing.
+//
+// An absent detail and an empty object collapse to the same thing, because
+// the column cannot tell them apart: a writer that passes nil and one that
+// passes {} both leave {} in the row. The hash must make the same
+// identification or every detail-less entry fails to verify — which is what
+// the audit log's own history does, and what proved this rule rather than
+// assuming it.
+//
+// UseNumber keeps numeric literals as written rather than routing them
+// through float64, where a large integer would come back a different number
+// than it went in. A detail that is not valid JSON is hashed as-is: it
+// should not exist, and silently hashing something else would hide it.
+func canonicalJSON(b []byte) []byte {
+	if len(b) == 0 {
+		return nil
+	}
+	dec := json.NewDecoder(bytes.NewReader(b))
+	dec.UseNumber()
+	var v any
+	if err := dec.Decode(&v); err != nil {
+		return b
+	}
+	out, err := json.Marshal(v)
+	if err != nil {
+		return b
+	}
+	if bytes.Equal(out, []byte("{}")) {
+		return nil
+	}
+	return out
+}
+
 // chainHash is the canonical hash every verifier must reproduce:
 // sha256(prev_hash || be64(seq) || tenant || action || result || actor ||
-// target || session || detail).
+// target || session || canonical(detail)).
 func chainHash(prev []byte, seq int64, ev auditdomain.AuditEvent) []byte {
+	return chainHashDetail(prev, seq, ev, canonicalJSON(ev.Detail))
+}
+
+// chainHashDetail is chainHash with the detail bytes supplied, so
+// verification can test a second reading of a detail-less entry — see
+// VerifyChain.
+func chainHashDetail(prev []byte, seq int64, ev auditdomain.AuditEvent, detail []byte) []byte {
 	h := sha256.New()
 	h.Write(prev)
 	var seqB [8]byte
@@ -105,7 +154,7 @@ func chainHash(prev []byte, seq int64, ev auditdomain.AuditEvent) []byte {
 		h.Write([]byte(s))
 		h.Write([]byte{0})
 	}
-	h.Write(ev.Detail)
+	h.Write(detail)
 	return h.Sum(nil)
 }
 
@@ -135,7 +184,23 @@ func (a *ChainedAuditor) VerifyChain(ctx context.Context, tenantID string, from,
 				Detail: r.Detail,
 			})
 			if !equalBytes(want, r.EntryHash) {
-				return checked, r.Seq, nil
+				// A detail-less entry has two possible readings and the row
+				// cannot say which it was: early call sites passed an empty
+				// object where later ones passed nothing, and jsonb stores {}
+				// either way. Accepting both is the price of verifying history
+				// written before the two were reconciled; it costs an attacker
+				// nothing less than a second SHA-256 preimage, and only for
+				// entries that carry no detail to forge.
+				if len(canonicalJSON(r.Detail)) != 0 {
+					return checked, r.Seq, nil
+				}
+				alt := chainHashDetail(prev, r.Seq, auditdomain.AuditEvent{
+					TenantID: tenantID, Action: r.Action, Result: r.Result,
+					ActorID: r.ActorID, TargetID: r.TargetID, SessionID: r.SessionID,
+				}, []byte("{}"))
+				if !equalBytes(alt, r.EntryHash) {
+					return checked, r.Seq, nil
+				}
 			}
 			prev = r.EntryHash
 			checked++

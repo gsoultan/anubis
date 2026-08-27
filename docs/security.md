@@ -61,6 +61,27 @@ The login endpoint must not reveal whether an account exists.
 > This is invisible in functional testing and visible in a timing histogram. Test
 > it with a histogram, not an assertion.
 
+### Verifying the audit log
+
+`VerifyAuditChain` walks a tenant's entries recomputing each hash from the
+one before, and reports the first sequence where the chain breaks. Editing an
+entry is caught at that entry; deleting one is caught at the entry after it.
+Both are asserted by tests that actually tamper with rows as an attacker with
+database write access would.
+
+Two limits worth stating plainly. An attacker who rewrites an entry **and**
+every entry after it produces a self-consistent chain — the defence is that
+this is no longer silent, not that it is impossible; anchoring the head hash
+somewhere outside the database is what would close it. And the first entry in
+a queried range anchors the walk, so narrowing the range narrows what can be
+checked; verify from the beginning when it matters.
+
+The hash covers a CANONICAL rendering of `detail`, not the bytes the writer
+happened to send. `detail` is `jsonb` and Postgres re-renders what it stores,
+so hashing the sent bytes produced a hash no reader could reproduce: before
+this was fixed, 21,424 of 21,439 entries in a real database reported as
+tampered, which is a verifier nobody would keep believing.
+
 ### Knowing what we ship, and whether it is exposed
 
 Every release publishes an SBOM per archive, and `scripts/check/vulns.sh`
