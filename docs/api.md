@@ -254,6 +254,34 @@ POST /v1/admin/realms
 | `POST /v1/consents` · `DELETE /v1/consents/{id}` | Lawful-basis capture. Withdrawal appends a row, never updates one. |
 | `POST /v1/identities/{id}/erasure` | Right-to-erasure request → sets `deletion_requested_at` |
 | `POST /v1/admin/identities/{id}/disable` | **Immediate, complete deprovisioning.** `authorize()` gates on identity state, so no grant needs touching. |
+| `GET`/`POST` `/v1/admin/identities/{id}/attributes` | The **encrypted** part of an identity (ADR-0013) — see below |
+
+#### Attributes — the one encrypted column
+
+`identities.attributes` is free-form, tenant-defined, and the only column
+Anubis encrypts at rest. Everything else on an identity is a lookup or join
+key; this is the one whose contents are arbitrary enough to be a home address
+or a case note.
+
+```http
+POST /v1/admin/identities/{id}/attributes
+{ "attributes": { "employee_id": "E-4471", "cost_centre": "CC-12" } }
+```
+
+- **Replace, not merge.** Sending an empty map clears the attributes. There is
+  no partial update, because a partial update cannot express "delete this
+  field" — and a field that outlives an erasure request is the failure this
+  column exists to prevent.
+- **Names are sealed too.** The whole map is one ciphertext, so `diagnosis` is
+  no more visible in a database dump than its value.
+- **Bounded**: 64 attributes, 128-byte keys, 8 KiB total.
+- **`erased: true`** on read means the identity's key was shredded. The data
+  is unrecoverable — a completed erasure reported as a fact, not an error.
+  Writing attributes to an erased identity is refused (`409`) rather than
+  silently minting a new key and undoing the erasure.
+
+The key is per identity and stored sealed under the master key, so neither a
+dump of `identities` nor of `pii_keys` is any use on its own.
 
 Delegated administration uses ordinary permissions — `anubis:identity:create`,
 `anubis:grant:create` — scoped to a `partner_org` node. **Anubis is its own

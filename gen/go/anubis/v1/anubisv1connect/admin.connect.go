@@ -72,6 +72,12 @@ const (
 	// IdentityAdminServiceRequestErasureProcedure is the fully-qualified name of the
 	// IdentityAdminService's RequestErasure RPC.
 	IdentityAdminServiceRequestErasureProcedure = "/anubis.v1.IdentityAdminService/RequestErasure"
+	// IdentityAdminServiceGetIdentityAttributesProcedure is the fully-qualified name of the
+	// IdentityAdminService's GetIdentityAttributes RPC.
+	IdentityAdminServiceGetIdentityAttributesProcedure = "/anubis.v1.IdentityAdminService/GetIdentityAttributes"
+	// IdentityAdminServiceSetIdentityAttributesProcedure is the fully-qualified name of the
+	// IdentityAdminService's SetIdentityAttributes RPC.
+	IdentityAdminServiceSetIdentityAttributesProcedure = "/anubis.v1.IdentityAdminService/SetIdentityAttributes"
 	// IdentityAdminServiceListCredentialsProcedure is the fully-qualified name of the
 	// IdentityAdminService's ListCredentials RPC.
 	IdentityAdminServiceListCredentialsProcedure = "/anubis.v1.IdentityAdminService/ListCredentials"
@@ -364,6 +370,11 @@ type IdentityAdminServiceClient interface {
 	// Right-to-erasure: sets deletion_requested_at; the retention sweeper and
 	// crypto-shredding handle the rest.
 	RequestErasure(context.Context, *connect.Request[v1.RequestErasureRequest]) (*connect.Response[v1.RequestErasureResponse], error)
+	// The one part of an identity that is encrypted at rest (ADR-0013). Read
+	// and written through their own calls because they are the only fields
+	// whose contents this server cannot see without a key.
+	GetIdentityAttributes(context.Context, *connect.Request[v1.GetIdentityAttributesRequest]) (*connect.Response[v1.GetIdentityAttributesResponse], error)
+	SetIdentityAttributes(context.Context, *connect.Request[v1.SetIdentityAttributesRequest]) (*connect.Response[v1.SetIdentityAttributesResponse], error)
 	ListCredentials(context.Context, *connect.Request[v1.ListCredentialsRequest]) (*connect.Response[v1.ListCredentialsResponse], error)
 	RevokeCredential(context.Context, *connect.Request[v1.RevokeCredentialRequest]) (*connect.Response[v1.RevokeCredentialResponse], error)
 	ListConsents(context.Context, *connect.Request[v1.ListConsentsRequest]) (*connect.Response[v1.ListConsentsResponse], error)
@@ -437,6 +448,18 @@ func NewIdentityAdminServiceClient(httpClient connect.HTTPClient, baseURL string
 			connect.WithSchema(identityAdminServiceMethods.ByName("RequestErasure")),
 			connect.WithClientOptions(opts...),
 		),
+		getIdentityAttributes: connect.NewClient[v1.GetIdentityAttributesRequest, v1.GetIdentityAttributesResponse](
+			httpClient,
+			baseURL+IdentityAdminServiceGetIdentityAttributesProcedure,
+			connect.WithSchema(identityAdminServiceMethods.ByName("GetIdentityAttributes")),
+			connect.WithClientOptions(opts...),
+		),
+		setIdentityAttributes: connect.NewClient[v1.SetIdentityAttributesRequest, v1.SetIdentityAttributesResponse](
+			httpClient,
+			baseURL+IdentityAdminServiceSetIdentityAttributesProcedure,
+			connect.WithSchema(identityAdminServiceMethods.ByName("SetIdentityAttributes")),
+			connect.WithClientOptions(opts...),
+		),
 		listCredentials: connect.NewClient[v1.ListCredentialsRequest, v1.ListCredentialsResponse](
 			httpClient,
 			baseURL+IdentityAdminServiceListCredentialsProcedure,
@@ -472,20 +495,22 @@ func NewIdentityAdminServiceClient(httpClient connect.HTTPClient, baseURL string
 
 // identityAdminServiceClient implements IdentityAdminServiceClient.
 type identityAdminServiceClient struct {
-	listIdentities   *connect.Client[v1.ListIdentitiesRequest, v1.ListIdentitiesResponse]
-	getIdentity      *connect.Client[v1.GetIdentityRequest, v1.GetIdentityResponse]
-	createIdentity   *connect.Client[v1.CreateIdentityRequest, v1.CreateIdentityResponse]
-	disableIdentity  *connect.Client[v1.DisableIdentityRequest, v1.DisableIdentityResponse]
-	enableIdentity   *connect.Client[v1.EnableIdentityRequest, v1.EnableIdentityResponse]
-	bumpTokenEpoch   *connect.Client[v1.BumpTokenEpochRequest, v1.BumpTokenEpochResponse]
-	setPassword      *connect.Client[v1.SetPasswordRequest, v1.SetPasswordResponse]
-	linkIdentities   *connect.Client[v1.LinkIdentitiesRequest, v1.LinkIdentitiesResponse]
-	requestErasure   *connect.Client[v1.RequestErasureRequest, v1.RequestErasureResponse]
-	listCredentials  *connect.Client[v1.ListCredentialsRequest, v1.ListCredentialsResponse]
-	revokeCredential *connect.Client[v1.RevokeCredentialRequest, v1.RevokeCredentialResponse]
-	listConsents     *connect.Client[v1.ListConsentsRequest, v1.ListConsentsResponse]
-	recordConsent    *connect.Client[v1.RecordConsentRequest, v1.RecordConsentResponse]
-	withdrawConsent  *connect.Client[v1.WithdrawConsentRequest, v1.WithdrawConsentResponse]
+	listIdentities        *connect.Client[v1.ListIdentitiesRequest, v1.ListIdentitiesResponse]
+	getIdentity           *connect.Client[v1.GetIdentityRequest, v1.GetIdentityResponse]
+	createIdentity        *connect.Client[v1.CreateIdentityRequest, v1.CreateIdentityResponse]
+	disableIdentity       *connect.Client[v1.DisableIdentityRequest, v1.DisableIdentityResponse]
+	enableIdentity        *connect.Client[v1.EnableIdentityRequest, v1.EnableIdentityResponse]
+	bumpTokenEpoch        *connect.Client[v1.BumpTokenEpochRequest, v1.BumpTokenEpochResponse]
+	setPassword           *connect.Client[v1.SetPasswordRequest, v1.SetPasswordResponse]
+	linkIdentities        *connect.Client[v1.LinkIdentitiesRequest, v1.LinkIdentitiesResponse]
+	requestErasure        *connect.Client[v1.RequestErasureRequest, v1.RequestErasureResponse]
+	getIdentityAttributes *connect.Client[v1.GetIdentityAttributesRequest, v1.GetIdentityAttributesResponse]
+	setIdentityAttributes *connect.Client[v1.SetIdentityAttributesRequest, v1.SetIdentityAttributesResponse]
+	listCredentials       *connect.Client[v1.ListCredentialsRequest, v1.ListCredentialsResponse]
+	revokeCredential      *connect.Client[v1.RevokeCredentialRequest, v1.RevokeCredentialResponse]
+	listConsents          *connect.Client[v1.ListConsentsRequest, v1.ListConsentsResponse]
+	recordConsent         *connect.Client[v1.RecordConsentRequest, v1.RecordConsentResponse]
+	withdrawConsent       *connect.Client[v1.WithdrawConsentRequest, v1.WithdrawConsentResponse]
 }
 
 // ListIdentities calls anubis.v1.IdentityAdminService.ListIdentities.
@@ -533,6 +558,16 @@ func (c *identityAdminServiceClient) RequestErasure(ctx context.Context, req *co
 	return c.requestErasure.CallUnary(ctx, req)
 }
 
+// GetIdentityAttributes calls anubis.v1.IdentityAdminService.GetIdentityAttributes.
+func (c *identityAdminServiceClient) GetIdentityAttributes(ctx context.Context, req *connect.Request[v1.GetIdentityAttributesRequest]) (*connect.Response[v1.GetIdentityAttributesResponse], error) {
+	return c.getIdentityAttributes.CallUnary(ctx, req)
+}
+
+// SetIdentityAttributes calls anubis.v1.IdentityAdminService.SetIdentityAttributes.
+func (c *identityAdminServiceClient) SetIdentityAttributes(ctx context.Context, req *connect.Request[v1.SetIdentityAttributesRequest]) (*connect.Response[v1.SetIdentityAttributesResponse], error) {
+	return c.setIdentityAttributes.CallUnary(ctx, req)
+}
+
 // ListCredentials calls anubis.v1.IdentityAdminService.ListCredentials.
 func (c *identityAdminServiceClient) ListCredentials(ctx context.Context, req *connect.Request[v1.ListCredentialsRequest]) (*connect.Response[v1.ListCredentialsResponse], error) {
 	return c.listCredentials.CallUnary(ctx, req)
@@ -575,6 +610,11 @@ type IdentityAdminServiceHandler interface {
 	// Right-to-erasure: sets deletion_requested_at; the retention sweeper and
 	// crypto-shredding handle the rest.
 	RequestErasure(context.Context, *connect.Request[v1.RequestErasureRequest]) (*connect.Response[v1.RequestErasureResponse], error)
+	// The one part of an identity that is encrypted at rest (ADR-0013). Read
+	// and written through their own calls because they are the only fields
+	// whose contents this server cannot see without a key.
+	GetIdentityAttributes(context.Context, *connect.Request[v1.GetIdentityAttributesRequest]) (*connect.Response[v1.GetIdentityAttributesResponse], error)
+	SetIdentityAttributes(context.Context, *connect.Request[v1.SetIdentityAttributesRequest]) (*connect.Response[v1.SetIdentityAttributesResponse], error)
 	ListCredentials(context.Context, *connect.Request[v1.ListCredentialsRequest]) (*connect.Response[v1.ListCredentialsResponse], error)
 	RevokeCredential(context.Context, *connect.Request[v1.RevokeCredentialRequest]) (*connect.Response[v1.RevokeCredentialResponse], error)
 	ListConsents(context.Context, *connect.Request[v1.ListConsentsRequest]) (*connect.Response[v1.ListConsentsResponse], error)
@@ -644,6 +684,18 @@ func NewIdentityAdminServiceHandler(svc IdentityAdminServiceHandler, opts ...con
 		connect.WithSchema(identityAdminServiceMethods.ByName("RequestErasure")),
 		connect.WithHandlerOptions(opts...),
 	)
+	identityAdminServiceGetIdentityAttributesHandler := connect.NewUnaryHandler(
+		IdentityAdminServiceGetIdentityAttributesProcedure,
+		svc.GetIdentityAttributes,
+		connect.WithSchema(identityAdminServiceMethods.ByName("GetIdentityAttributes")),
+		connect.WithHandlerOptions(opts...),
+	)
+	identityAdminServiceSetIdentityAttributesHandler := connect.NewUnaryHandler(
+		IdentityAdminServiceSetIdentityAttributesProcedure,
+		svc.SetIdentityAttributes,
+		connect.WithSchema(identityAdminServiceMethods.ByName("SetIdentityAttributes")),
+		connect.WithHandlerOptions(opts...),
+	)
 	identityAdminServiceListCredentialsHandler := connect.NewUnaryHandler(
 		IdentityAdminServiceListCredentialsProcedure,
 		svc.ListCredentials,
@@ -694,6 +746,10 @@ func NewIdentityAdminServiceHandler(svc IdentityAdminServiceHandler, opts ...con
 			identityAdminServiceLinkIdentitiesHandler.ServeHTTP(w, r)
 		case IdentityAdminServiceRequestErasureProcedure:
 			identityAdminServiceRequestErasureHandler.ServeHTTP(w, r)
+		case IdentityAdminServiceGetIdentityAttributesProcedure:
+			identityAdminServiceGetIdentityAttributesHandler.ServeHTTP(w, r)
+		case IdentityAdminServiceSetIdentityAttributesProcedure:
+			identityAdminServiceSetIdentityAttributesHandler.ServeHTTP(w, r)
 		case IdentityAdminServiceListCredentialsProcedure:
 			identityAdminServiceListCredentialsHandler.ServeHTTP(w, r)
 		case IdentityAdminServiceRevokeCredentialProcedure:
@@ -747,6 +803,14 @@ func (UnimplementedIdentityAdminServiceHandler) LinkIdentities(context.Context, 
 
 func (UnimplementedIdentityAdminServiceHandler) RequestErasure(context.Context, *connect.Request[v1.RequestErasureRequest]) (*connect.Response[v1.RequestErasureResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.IdentityAdminService.RequestErasure is not implemented"))
+}
+
+func (UnimplementedIdentityAdminServiceHandler) GetIdentityAttributes(context.Context, *connect.Request[v1.GetIdentityAttributesRequest]) (*connect.Response[v1.GetIdentityAttributesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.IdentityAdminService.GetIdentityAttributes is not implemented"))
+}
+
+func (UnimplementedIdentityAdminServiceHandler) SetIdentityAttributes(context.Context, *connect.Request[v1.SetIdentityAttributesRequest]) (*connect.Response[v1.SetIdentityAttributesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.IdentityAdminService.SetIdentityAttributes is not implemented"))
 }
 
 func (UnimplementedIdentityAdminServiceHandler) ListCredentials(context.Context, *connect.Request[v1.ListCredentialsRequest]) (*connect.Response[v1.ListCredentialsResponse], error) {

@@ -181,8 +181,14 @@ func (a *application) registerRPC(rpc *http.ServeMux, opts connect.HandlerOption
 		a.identity, a.identity,
 		a.identity, a.identity, a.identity, a.identity, a.auth, a.auth, a.tenancy,
 		a.auth, a.clock, a.auditor)
+	// The master key goes to exactly one interactor: the one that seals
+	// identity attributes (ADR-0013). Nothing else in the identity plane
+	// needs it, so nothing else is given it.
+	identityAttrs := identityapp.NewAttributesInteractor(
+		a.control, a.clock.Now, a.identity, a.identity, a.auditor, a.masterKey)
 	rpc.Handle(anubisv1connect.NewIdentityAdminServiceHandler(
-		identityrpc.NewIdentityAdminHandler(identitysvc.NewIdentityAdminService(identityAdmin), f), opts))
+		identityrpc.NewIdentityAdminHandler(
+			identitysvc.NewIdentityAdminService(identityAdmin, identityAttrs), f), opts))
 
 	syncengines.Register()
 	scopeAdmin := scopeapp.NewScopeAdminInteractor(a.authz, a.control, a.clock.Now,

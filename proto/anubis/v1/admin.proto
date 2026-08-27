@@ -29,6 +29,11 @@ service IdentityAdminService {
   // Right-to-erasure: sets deletion_requested_at; the retention sweeper and
   // crypto-shredding handle the rest.
   rpc RequestErasure(RequestErasureRequest) returns (RequestErasureResponse);
+  // The one part of an identity that is encrypted at rest (ADR-0013). Read
+  // and written through their own calls because they are the only fields
+  // whose contents this server cannot see without a key.
+  rpc GetIdentityAttributes(GetIdentityAttributesRequest) returns (GetIdentityAttributesResponse);
+  rpc SetIdentityAttributes(SetIdentityAttributesRequest) returns (SetIdentityAttributesResponse);
   rpc ListCredentials(ListCredentialsRequest) returns (ListCredentialsResponse);
   rpc RevokeCredential(RevokeCredentialRequest) returns (RevokeCredentialResponse);
   rpc ListConsents(ListConsentsRequest) returns (ListConsentsResponse);
@@ -143,6 +148,29 @@ message RequestErasureRequest {
 }
 
 message RequestErasureResponse {}
+
+message GetIdentityAttributesRequest {
+  string id = 1;
+}
+
+message GetIdentityAttributesResponse {
+  map<string, string> attributes = 1;
+  // The key was shredded, so the attributes are unrecoverable. This is a
+  // completed erasure reported as a fact, not an error: attributes is empty
+  // because the data is gone, not because there was never any.
+  bool erased = 2;
+}
+
+message SetIdentityAttributesRequest {
+  string id = 1;
+  // Replaces the whole map. Sending an empty map clears the attributes; there
+  // is no partial update, because a partial update cannot express "delete
+  // this field" and a field that outlives an erasure request is the failure
+  // this column exists to prevent.
+  map<string, string> attributes = 2;
+}
+
+message SetIdentityAttributesResponse {}
 
 message ListCredentialsRequest {
   string identity_id = 1;

@@ -32,3 +32,26 @@ func (s *Repository) ShredPIIKey(ctx context.Context, keyID, reason string) (boo
 	ok, err := s.q(ctx).ShredPIIKey(ctx, gen.ShredPIIKeyParams{KeyID: keyID, Reason: reason})
 	return ok, database.MapErr(err)
 }
+
+func (s *Repository) IdentityAttributes(ctx context.Context, tenantID, identityID string) ([]byte, []byte, string, error) {
+	row, err := s.q(ctx).GetIdentityAttributes(ctx, gen.GetIdentityAttributesParams{
+		ID: identityID, TenantID: tenantID,
+	})
+	if err != nil {
+		return nil, nil, "", database.MapErr(err)
+	}
+	return row.Attributes, row.KeyEnc, database.Deref(row.PiiKeyID), nil
+}
+
+func (s *Repository) SetIdentityAttributes(ctx context.Context, tenantID, identityID string, envelope []byte) error {
+	n, err := s.q(ctx).SetIdentityAttributes(ctx, gen.SetIdentityAttributesParams{
+		ID: identityID, TenantID: tenantID, Attributes: envelope,
+	})
+	if err != nil {
+		return database.MapErr(err)
+	}
+	if n == 0 {
+		return database.NotFound()
+	}
+	return nil
+}

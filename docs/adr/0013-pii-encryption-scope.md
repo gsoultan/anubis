@@ -2,7 +2,10 @@
 
 ## Status
 
-Accepted. The mechanism is built; this decides where it is applied.
+Accepted and implemented. `identities.attributes` is sealed on write
+(`SetIdentityAttributes`), opened on read, and unrecoverable once the
+identity's key is shredded. Migration 0035 replaced the tripwire from 0034
+with a constraint that admits a sealed envelope and still refuses plaintext.
 
 ## Context
 

@@ -28,6 +28,34 @@ func (q *Queries) CreatePIIKey(ctx context.Context, arg CreatePIIKeyParams) (str
 	return id, err
 }
 
+const getIdentityAttributes = `-- name: GetIdentityAttributes :one
+SELECT i.attributes, i.pii_key_id, k.key_enc
+FROM identities i
+LEFT JOIN pii_keys k ON k.id = i.pii_key_id
+WHERE i.id = $1 AND i.tenant_id = $2
+`
+
+type GetIdentityAttributesParams struct {
+	ID       string
+	TenantID string
+}
+
+type GetIdentityAttributesRow struct {
+	Attributes []byte
+	PiiKeyID   *string
+	KeyEnc     []byte
+}
+
+// The envelope and the key that opens it, read together: fetching them in two
+// statements leaves a window where retention shreds the key in between and the
+// caller reports "corrupt" for what is actually a completed erasure.
+func (q *Queries) GetIdentityAttributes(ctx context.Context, arg GetIdentityAttributesParams) (GetIdentityAttributesRow, error) {
+	row := q.db.QueryRow(ctx, getIdentityAttributes, arg.ID, arg.TenantID)
+	var i GetIdentityAttributesRow
+	err := row.Scan(&i.Attributes, &i.PiiKeyID, &i.KeyEnc)
+	return i, err
+}
+
 const getPIIKey = `-- name: GetPIIKey :one
 SELECT id, tenant_id, key_enc FROM pii_keys
 WHERE id = $1 AND tenant_id = $2
@@ -49,6 +77,25 @@ func (q *Queries) GetPIIKey(ctx context.Context, arg GetPIIKeyParams) (GetPIIKey
 	var i GetPIIKeyRow
 	err := row.Scan(&i.ID, &i.TenantID, &i.KeyEnc)
 	return i, err
+}
+
+const setIdentityAttributes = `-- name: SetIdentityAttributes :execrows
+UPDATE identities SET attributes = $1, updated_at = now()
+WHERE id = $2 AND tenant_id = $3
+`
+
+type SetIdentityAttributesParams struct {
+	Attributes []byte
+	ID         string
+	TenantID   string
+}
+
+func (q *Queries) SetIdentityAttributes(ctx context.Context, arg SetIdentityAttributesParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setIdentityAttributes, arg.Attributes, arg.ID, arg.TenantID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const setIdentityPIIKey = `-- name: SetIdentityPIIKey :exec

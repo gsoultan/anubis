@@ -69,6 +69,12 @@ done
 go test -count=1 -tags integration ./test/integration/
 go test -count=1 -tags integration ./test/e2e/
 
+# The MySQL probe is a unit test, but the only job holding a MySQL service is
+# this one — left where it lives it would skip in CI forever, which reads the
+# same as passing. Run it here, verbosely, so the log carries either the
+# structure it read or the reason it stood down.
+go test -count=1 -v -run 'MySQL' ./internal/scope/adapter/feed/
+
 # Fuzz smoke: seconds per target, enough to catch a corpus regression. The
 # path-normalisation fuzzer has found real bypasses before; it stays.
 #

@@ -252,3 +252,26 @@ func (h *IdentityAdminHandler) WithdrawConsent(ctx context.Context, req *connect
 	}
 	return connect.NewResponse(&anubisv1.WithdrawConsentResponse{}), nil
 }
+
+func (h *IdentityAdminHandler) GetIdentityAttributes(ctx context.Context, req *connect.Request[anubisv1.GetIdentityAttributesRequest]) (*connect.Response[anubisv1.GetIdentityAttributesResponse], error) {
+	out, err := h.f.Do(ctx, "admin.identity.attributes_get", func(ctx context.Context) (any, error) {
+		attrs, erased, err := h.svc.IdentityAttributes(ctx, req.Msg.Id)
+		if err != nil {
+			return nil, err
+		}
+		return &anubisv1.GetIdentityAttributesResponse{Attributes: attrs, Erased: erased}, nil
+	})
+	if err != nil {
+		return nil, apiconnect.Err(ctx, err)
+	}
+	return connect.NewResponse(out.(*anubisv1.GetIdentityAttributesResponse)), nil
+}
+
+func (h *IdentityAdminHandler) SetIdentityAttributes(ctx context.Context, req *connect.Request[anubisv1.SetIdentityAttributesRequest]) (*connect.Response[anubisv1.SetIdentityAttributesResponse], error) {
+	if _, err := h.f.Do(ctx, "admin.identity.attributes_set", func(ctx context.Context) (any, error) {
+		return nil, h.svc.SetIdentityAttributes(ctx, req.Msg.Id, req.Msg.Attributes)
+	}); err != nil {
+		return nil, apiconnect.Err(ctx, err)
+	}
+	return connect.NewResponse(&anubisv1.SetIdentityAttributesResponse{}), nil
+}
