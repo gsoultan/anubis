@@ -156,6 +156,8 @@ Expected output:
 
 Full setup: [docs/development.md](docs/development.md).
 
+Reporting a vulnerability: [SECURITY.md](SECURITY.md).
+
 ## Documentation
 
 | Document | Contents |

@@ -1,0 +1,45 @@
+# Dependency updates. The SBOM says what ships and scripts/check/vulns.sh says
+# whether it is exposed; this is what closes the loop by proposing the bump.
+#
+# Weekly, not daily: this project has thirteen dependencies (ADR-0002 forbids
+# third-party libraries beyond infra drivers), so a daily cadence would mostly
+# produce silence, and noise is how update PRs start getting ignored.
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      # One PR for the pgx family rather than four that must land together.
+      postgres:
+        patterns: ["github.com/jackc/*"]
+
+  # The verifier SDK is a separate module that consumers compile into their
+  # own binaries, so its dependencies travel further than this repository.
+  - package-ecosystem: gomod
+    directory: /pkg/anubis
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+
+  # The console is compiled INTO the release binary, so its dependencies are
+  # part of what ships rather than a build-time detail.
+  - package-ecosystem: npm
+    directory: /ui
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      mantine:
+        patterns: ["@mantine/*"]
+      tanstack:
+        patterns: ["@tanstack/*"]

@@ -61,6 +61,21 @@ The login endpoint must not reveal whether an account exists.
 > This is invisible in functional testing and visible in a timing histogram. Test
 > it with a histogram, not an assertion.
 
+### Knowing what we ship, and whether it is exposed
+
+Every release publishes an SBOM per archive, and `scripts/check/vulns.sh`
+runs `govulncheck` over BOTH modules on every push — the service and the
+`pkg/anubis` verifier SDK, which consuming applications compile into
+themselves and where a vulnerability therefore travels further.
+
+govulncheck is deliberately narrower than a dependency scanner: it reports a
+vulnerability only when the vulnerable symbol is reachable from this code, so
+a CVE in a function nothing calls does not train anyone to ignore the output.
+
+A newly published advisory fails the gate on a push that changed nothing.
+That is intended — the exposure is real whether or not the commit caused it.
+Dependabot proposes the bump; the gate says whether it is urgent.
+
 ### Credential stuffing and brute force
 
 - Rate limits on **three axes** — per IP, per account, per tenant. Per-account is
