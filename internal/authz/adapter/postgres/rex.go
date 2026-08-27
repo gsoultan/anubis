@@ -11,14 +11,14 @@ import (
 	// The generated package's init registers this context's raw-row scanners;
 	// the blank import is what makes the rquery declarations executable.
 	_ "github.com/gsoultan/anubis/internal/authz/adapter/postgres/rgen"
-	"github.com/gsoultan/raorm"
-	"github.com/gsoultan/raorm/runtime"
-	"github.com/gsoultan/raorm/runtime/pgxdrv"
+	"github.com/gsoultan/storm"
+	"github.com/gsoultan/storm/runtime"
+	"github.com/gsoultan/storm/runtime/pgxdrv"
 )
 
-// rex adapts the ambient connection to raorm's executor port. database.Conn
+// rex adapts the ambient connection to storm's executor port. database.Conn
 // has exactly two producers — the ambient transaction or the pool — and both
-// concrete types already satisfy raorm's pgx adapter, so no anubis-side Rows
+// concrete types already satisfy storm's pgx adapter, so no anubis-side Rows
 // shim exists and transactional calls stay transactional for free.
 func (s *Repository) rex(ctx context.Context) runtime.Executor {
 	switch c := s.Conn(ctx).(type) {
@@ -30,7 +30,7 @@ func (s *Repository) rex(ctx context.Context) runtime.Executor {
 		// Unreachable while Conn keeps its two branches. Fail closed per
 		// call rather than panic, so a future refactor of database.Conn
 		// degrades to explicit errors instead of a crash.
-		return errExecutor{fmt.Errorf("authzpg: no raorm adapter for %T", c)}
+		return errExecutor{fmt.Errorf("authzpg: no storm adapter for %T", c)}
 	}
 }
 
@@ -49,7 +49,7 @@ func (e errExecutor) Batch(context.Context, []runtime.BatchOp, func(int, runtime
 
 // The domain layer speaks string ids end to end — a sqlc-era contract this
 // migration preserves (rquery casts uuid columns ::text for the same reason).
-// raorm builders speak [16]byte, and these two functions are the one crossing.
+// storm builders speak [16]byte, and these two functions are the one crossing.
 
 func parseUUID(s string) ([16]byte, error) {
 	var u [16]byte
@@ -71,4 +71,4 @@ func parseUUID(s string) ([16]byte, error) {
 	return u, nil
 }
 
-func uuidStr(u [16]byte) string { return raorm.UUID(u).String() }
+func uuidStr(u [16]byte) string { return storm.UUID(u).String() }

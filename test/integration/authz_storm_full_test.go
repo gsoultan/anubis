@@ -17,14 +17,14 @@ import (
 )
 
 // The full-context acceptance test for the M6 migration: every repository
-// family runs through the raorm-backed methods against real data. PREPARE at
+// family runs through the storm-backed methods against real data. PREPARE at
 // generate time proves each statement's SQL and row shape; what it CANNOT
 // prove is argument order at the call sites, so each family here asserts
 // values, and every write happens inside a deliberately rolled-back ambient
 // transaction.
 var errRollback = errors.New("deliberate rollback")
 
-func TestRaormFull_RoleFamily(t *testing.T) {
+func TestStormFull_RoleFamily(t *testing.T) {
 	skipWithoutDB(t)
 	ctx := context.Background()
 	tenant := firstTenant(ctx, t)
@@ -59,7 +59,7 @@ func TestRaormFull_RoleFamily(t *testing.T) {
 
 	err = repo.WithinTx(ctx, func(ctx context.Context) error {
 		id, err := repo.CreateRole(ctx, tenant, authzdomain.RoleRecord{
-			Name: "raorm-full-role", Description: "before",
+			Name: "storm-full-role", Description: "before",
 		}, "")
 		if err != nil {
 			return err
@@ -141,7 +141,7 @@ func TestRaormFull_RoleFamily(t *testing.T) {
 	}
 }
 
-func TestRaormFull_GrantFamily(t *testing.T) {
+func TestStormFull_GrantFamily(t *testing.T) {
 	skipWithoutDB(t)
 	ctx := context.Background()
 	tenant := firstTenant(ctx, t)
@@ -188,7 +188,7 @@ func TestRaormFull_GrantFamily(t *testing.T) {
 	err = repo.WithinTx(ctx, func(ctx context.Context) error {
 		id, err := repo.CreateGrant(ctx, grant.GrantCreate{
 			TenantID: tenant, IdentityID: identity, RoleID: roleID,
-			GrantedBy: identity, Reason: "raorm full test",
+			GrantedBy: identity, Reason: "storm full test",
 		})
 		if err != nil {
 			return err
@@ -206,7 +206,7 @@ func TestRaormFull_GrantFamily(t *testing.T) {
 		if mine == nil {
 			t.Fatalf("created grant %s not listed inside the tx", id)
 		}
-		if mine.Reason != "raorm full test" || mine.RoleID != roleID {
+		if mine.Reason != "storm full test" || mine.RoleID != roleID {
 			t.Fatalf("grant round-trip lost values: %+v", mine)
 		}
 		if err := repo.RevokeGrant(ctx, tenant, id, "undone"); err != nil {
@@ -228,7 +228,7 @@ func TestRaormFull_GrantFamily(t *testing.T) {
 	}
 }
 
-func TestRaormFull_MembershipFamily(t *testing.T) {
+func TestStormFull_MembershipFamily(t *testing.T) {
 	skipWithoutDB(t)
 	ctx := context.Background()
 	tenant := firstTenant(ctx, t)
@@ -242,7 +242,7 @@ func TestRaormFull_MembershipFamily(t *testing.T) {
 	}
 
 	err := repo.WithinTx(ctx, func(ctx context.Context) error {
-		mid, err := repo.CreateMembership(ctx, tenant, "raorm-full-membership", "probe")
+		mid, err := repo.CreateMembership(ctx, tenant, "storm-full-membership", "probe")
 		if err != nil {
 			return err
 		}
@@ -250,7 +250,7 @@ func TestRaormFull_MembershipFamily(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		if m.Name != "raorm-full-membership" {
+		if m.Name != "storm-full-membership" {
 			t.Fatalf("MembershipByID name %q", m.Name)
 		}
 		all, err := repo.ListMemberships(ctx, tenant)
@@ -309,7 +309,7 @@ func TestRaormFull_MembershipFamily(t *testing.T) {
 	}
 }
 
-func TestRaormFull_PermissionFamily(t *testing.T) {
+func TestStormFull_PermissionFamily(t *testing.T) {
 	skipWithoutDB(t)
 	ctx := context.Background()
 	tenant := firstTenant(ctx, t)
@@ -358,7 +358,7 @@ func TestRaormFull_PermissionFamily(t *testing.T) {
 	}
 	err = repo.WithinTx(ctx, func(ctx context.Context) error {
 		id, key, err := repo.UpsertPermission(ctx, tenant, appID, appSlug, authzdomain.PermissionRecord{
-			Resource: "raormfull", Action: "probe", Description: "acceptance probe",
+			Resource: "stormfull", Action: "probe", Description: "acceptance probe",
 		})
 		if err != nil {
 			return err
@@ -387,7 +387,7 @@ func TestRaormFull_PermissionFamily(t *testing.T) {
 	}
 }
 
-func TestRaormFull_ExplainAndSim(t *testing.T) {
+func TestStormFull_ExplainAndSim(t *testing.T) {
 	skipWithoutDB(t)
 	ctx := context.Background()
 	tenant := firstTenant(ctx, t)
@@ -434,13 +434,13 @@ func mustJSON(t *testing.T, v any) []byte {
 	return b
 }
 
-// The thesis, asserted at the adopter rather than in raorm's own fixtures:
+// The thesis, asserted at the adopter rather than in storm's own fixtures:
 // a query's identity is its STRUCTURE, so a thousand lookups with a thousand
 // different names must compile one statement, not a thousand. This is also
 // the soak signal for P1.1 — if a repository method ever mints shapes from
 // request data, the count grows here first and the shape cache starts
 // flushing in production later.
-func TestRaormFull_VaryingValuesDoNotMintShapes(t *testing.T) {
+func TestStormFull_VaryingValuesDoNotMintShapes(t *testing.T) {
 	skipWithoutDB(t)
 	ctx := context.Background()
 	tenant := firstTenant(ctx, t)
@@ -453,7 +453,7 @@ func TestRaormFull_VaryingValuesDoNotMintShapes(t *testing.T) {
 	before, flushesBefore := rrole.Shapes(), rrole.ShapeFlushes()
 
 	for i := 0; i < 500; i++ {
-		name := fmt.Sprintf("raorm-shape-probe-%d", i)
+		name := fmt.Sprintf("storm-shape-probe-%d", i)
 		if _, err := repo.RoleByName(ctx, tenant, name); err != nil && !errors.Is(err, apperr.ErrNotFound) {
 			t.Fatal(err)
 		}

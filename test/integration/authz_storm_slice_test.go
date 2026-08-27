@@ -17,7 +17,7 @@ import (
 )
 
 // The M6 slice moved Authorize, RolesForIdentity, RoleByName and CreateRole
-// from sqlc to raorm. Every test here checks the MIGRATED repository against
+// from sqlc to storm. Every test here checks the MIGRATED repository against
 // the database directly, so a scanner or binding mistake shows up as a value
 // difference, not a green suite that never crossed the new code.
 
@@ -25,7 +25,7 @@ func sliceRepo() *authzpg.Repository {
 	return authzpg.New(database.New(pool))
 }
 
-func TestRaormSlice_AuthorizeMatchesEngine(t *testing.T) {
+func TestStormSlice_AuthorizeMatchesEngine(t *testing.T) {
 	skipWithoutDB(t)
 	ctx := context.Background()
 	tenant := firstTenant(ctx, t)
@@ -49,7 +49,7 @@ func TestRaormSlice_AuthorizeMatchesEngine(t *testing.T) {
 	}
 
 	// A permission that cannot exist must come back as a clean deny.
-	got, err = sliceRepo().Authorize(ctx, identity, tenant, "raorm:slice:never", raw)
+	got, err = sliceRepo().Authorize(ctx, identity, tenant, "storm:slice:never", raw)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,7 +58,7 @@ func TestRaormSlice_AuthorizeMatchesEngine(t *testing.T) {
 	}
 }
 
-func TestRaormSlice_RolesForIdentityParity(t *testing.T) {
+func TestStormSlice_RolesForIdentityParity(t *testing.T) {
 	skipWithoutDB(t)
 	ctx := context.Background()
 	tenant := firstTenant(ctx, t)
@@ -104,7 +104,7 @@ func TestRaormSlice_RolesForIdentityParity(t *testing.T) {
 	}
 }
 
-func TestRaormSlice_RoleByNameParity(t *testing.T) {
+func TestStormSlice_RoleByNameParity(t *testing.T) {
 	skipWithoutDB(t)
 	ctx := context.Background()
 	tenant := firstTenant(ctx, t)
@@ -125,21 +125,21 @@ func TestRaormSlice_RoleByNameParity(t *testing.T) {
 			rec.ID, rec.Name, wantID, wantName)
 	}
 
-	if _, err := sliceRepo().RoleByName(ctx, tenant, "raorm-slice-no-such-role"); !errors.Is(err, apperr.ErrNotFound) {
+	if _, err := sliceRepo().RoleByName(ctx, tenant, "storm-slice-no-such-role"); !errors.Is(err, apperr.ErrNotFound) {
 		t.Fatalf("missing role returned %v, want apperr.ErrNotFound", err)
 	}
 }
 
 // CreateRole and the ambient-transaction path in one test: the write happens
-// inside WithinTx (raorm sees pgxdrv.Tx, not the pool), is visible to a read
+// inside WithinTx (storm sees pgxdrv.Tx, not the pool), is visible to a read
 // in the same transaction, and the rollback leaves the database untouched.
-func TestRaormSlice_CreateRoleInAmbientTx(t *testing.T) {
+func TestStormSlice_CreateRoleInAmbientTx(t *testing.T) {
 	skipWithoutDB(t)
 	ctx := context.Background()
 	tenant := firstTenant(ctx, t)
 	repo := sliceRepo()
 
-	const name = "raorm-slice-tx-probe"
+	const name = "storm-slice-tx-probe"
 	sentinel := errors.New("deliberate rollback")
 	err := repo.WithinTx(ctx, func(ctx context.Context) error {
 		id, err := repo.CreateRole(ctx, tenant, roleRecord(name), "")
@@ -168,8 +168,8 @@ func TestRaormSlice_CreateRoleInAmbientTx(t *testing.T) {
 
 // The budget test measured the engine over bare pgx. This is the same
 // methodology through the MIGRATED repository, so the two logs are directly
-// comparable and the raorm layer's overhead is a subtraction, not a guess.
-func TestRaormSlice_AuthorizeLatencyBudget(t *testing.T) {
+// comparable and the storm layer's overhead is a subtraction, not a guess.
+func TestStormSlice_AuthorizeLatencyBudget(t *testing.T) {
 	skipWithoutDB(t)
 	if testing.Short() {
 		t.Skip("latency budget")
@@ -200,12 +200,12 @@ func TestRaormSlice_AuthorizeLatencyBudget(t *testing.T) {
 	}
 	sort.Slice(lat, func(i, j int) bool { return lat[i] < lat[j] })
 	p50, p95, p99 := lat[len(lat)/2], lat[(len(lat)*95)/100], lat[(len(lat)*99)/100]
-	t.Logf("authorize over raorm repository: p50=%v p95=%v p99=%v (n=%d)", p50, p95, p99, samples)
+	t.Logf("authorize over storm repository: p50=%v p95=%v p99=%v (n=%d)", p50, p95, p99, samples)
 	if p95 > budget {
 		t.Fatalf("p95 %v exceeds the %v budget — the migrated path regressed", p95, budget)
 	}
 }
 
 func roleRecord(name string) authzdomain.RoleRecord {
-	return authzdomain.RoleRecord{Name: name, Description: "raorm M6 slice probe"}
+	return authzdomain.RoleRecord{Name: name, Description: "storm M6 slice probe"}
 }

@@ -1,8 +1,8 @@
 package authzrquery
 
 import (
-	"github.com/gsoultan/raorm"
-	"github.com/gsoultan/raorm/runtime"
+	"github.com/gsoultan/storm"
+	"github.com/gsoultan/storm/runtime"
 )
 
 // RoleRow is a role with its application slug, the shape ListRoles/GetRole
@@ -23,7 +23,7 @@ type RoleRow struct {
 // ADMINISTER the tenant is never here — that is platform_assignments
 // (ADR-0011), a different population in different tables. $2 is an optional
 // name filter.
-var ListRoles = raorm.SQL[RoleRow](`
+var ListRoles = storm.SQL[RoleRow](`
 SELECT r.id::text AS id, r.tenant_id::text AS tenant_id, r.name, r.description,
        r.is_system, r.allowed_realm_kinds, r.assignable_at,
        r.application_id::text AS application_id,
@@ -35,7 +35,7 @@ WHERE r.tenant_id = $1
 ORDER BY r.name`)
 
 // GetRole fetches one role by id within its tenant.
-var GetRole = raorm.SQL[RoleRow](`
+var GetRole = storm.SQL[RoleRow](`
 SELECT r.id::text AS id, r.tenant_id::text AS tenant_id, r.name, r.description,
        r.is_system, r.allowed_realm_kinds, r.assignable_at,
        r.application_id::text AS application_id,
@@ -53,14 +53,14 @@ type CreatedRoleRow struct {
 }
 
 // CreateRole mirrors the sqlc statement exactly, nullable application and all.
-var CreateRole = raorm.SQL[CreatedRoleRow](`
+var CreateRole = storm.SQL[CreatedRoleRow](`
 INSERT INTO roles (tenant_id, name, description, application_id, is_system,
                    allowed_realm_kinds, assignable_at)
 VALUES ($1, $2, $3, $4, $5, $6::text[], $7::text[])
 RETURNING id::text AS id`)
 
 // UpdateRole edits a non-system role's mutable fields. $1 id, $2 tenant.
-var UpdateRole = raorm.SQLExec(`
+var UpdateRole = storm.SQLExec(`
 UPDATE roles
 SET description = $3,
     allowed_realm_kinds = $4::text[],
@@ -74,15 +74,15 @@ type ParentRow struct {
 }
 
 // ListRoleParents lists a role's direct parents.
-var ListRoleParents = raorm.SQL[ParentRow](`
+var ListRoleParents = storm.SQL[ParentRow](`
 SELECT parent_id::text AS parent_id FROM role_parents WHERE role_id = $1`)
 
 // DeleteRoleParents clears a role's parent set before a replace.
-var DeleteRoleParents = raorm.SQLExec(`
+var DeleteRoleParents = storm.SQLExec(`
 DELETE FROM role_parents WHERE role_id = $1`)
 
 // InsertRoleParent adds one composition edge.
-var InsertRoleParent = raorm.SQLExec(`
+var InsertRoleParent = storm.SQLExec(`
 INSERT INTO role_parents (role_id, parent_id)
 VALUES ($1, $2)
 ON CONFLICT DO NOTHING`)
@@ -93,26 +93,26 @@ type PatternRow struct {
 }
 
 // ListRolePatterns lists a role's permission patterns.
-var ListRolePatterns = raorm.SQL[PatternRow](`
+var ListRolePatterns = storm.SQL[PatternRow](`
 SELECT pattern FROM role_permission_patterns WHERE role_id = $1
 ORDER BY pattern`)
 
 // DeleteRolePatterns clears a role's pattern set before a replace.
-var DeleteRolePatterns = raorm.SQLExec(`
+var DeleteRolePatterns = storm.SQLExec(`
 DELETE FROM role_permission_patterns WHERE role_id = $1`)
 
 // InsertRolePattern adds one pattern.
-var InsertRolePattern = raorm.SQLExec(`
+var InsertRolePattern = storm.SQLExec(`
 INSERT INTO role_permission_patterns (role_id, pattern)
 VALUES ($1, $2)
 ON CONFLICT DO NOTHING`)
 
 // DeleteRolePermissions clears a role's direct permission set.
-var DeleteRolePermissions = raorm.SQLExec(`
+var DeleteRolePermissions = storm.SQLExec(`
 DELETE FROM role_permissions WHERE role_id = $1`)
 
 // InsertRolePermission adds one direct permission.
-var InsertRolePermission = raorm.SQLExec(`
+var InsertRolePermission = storm.SQLExec(`
 INSERT INTO role_permissions (role_id, permission_id)
 VALUES ($1, $2)
 ON CONFLICT DO NOTHING`)
@@ -124,8 +124,8 @@ type DoneRow struct {
 
 // RecomputeRoleEffective rebuilds one role's effective permission set. The
 // function returns void; IS NULL turns that into a scannable boolean, because
-// raorm.SQLExec (rightly) refuses statements whose descriptor has columns.
-var RecomputeRoleEffective = raorm.SQL[DoneRow](`
+// storm.SQLExec (rightly) refuses statements whose descriptor has columns.
+var RecomputeRoleEffective = storm.SQL[DoneRow](`
 SELECT (role_recompute_effective($1) IS NULL) AS done`)
 
 // RoleIDRow is one role id.
@@ -136,7 +136,7 @@ type RoleIDRow struct {
 // RolesBelow finds descendants in the composition graph: every role that
 // inherits (directly or transitively) from this one and therefore needs its
 // effective set recomputed.
-var RolesBelow = raorm.SQL[RoleIDRow](`
+var RolesBelow = storm.SQL[RoleIDRow](`
 WITH RECURSIVE down AS (
     SELECT rp.role_id FROM role_parents rp WHERE rp.parent_id = $1
     UNION
@@ -151,7 +151,7 @@ type EffectiveRow struct {
 }
 
 // GetRoleEffective lists a role's effective permissions with provenance.
-var GetRoleEffective = raorm.SQL[EffectiveRow](`
+var GetRoleEffective = storm.SQL[EffectiveRow](`
 SELECT p.key AS permission_key, vr.name AS via_role
 FROM role_permissions_effective rpe
 JOIN permissions p ON p.id = rpe.permission_id
@@ -162,7 +162,7 @@ ORDER BY p.key`)
 // ListRolesUsingPattern finds every role with a pattern in the tenant: after
 // the permission catalog changes, each may match differently and needs
 // recomputation.
-var ListRolesUsingPattern = raorm.SQL[RoleIDRow](`
+var ListRolesUsingPattern = storm.SQL[RoleIDRow](`
 SELECT DISTINCT rp.role_id::text AS role_id
 FROM role_permission_patterns rp
 JOIN roles r ON r.id = rp.role_id

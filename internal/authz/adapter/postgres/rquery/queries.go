@@ -12,14 +12,14 @@
 // that contract at the SQL boundary instead of scattering conversions.
 package authzrquery
 
-import "github.com/gsoultan/raorm"
+import "github.com/gsoultan/storm"
 
-// Queries is what cmd/raormgen validates and emits scanners for. Every
+// Queries is what cmd/stormgen validates and emits scanners for. Every
 // declaration in the package MUST be listed — an omitted one still runs, but
 // without generate-time schema checking, which is the property this package
 // exists to provide.
-func Queries() []raorm.RawDecl {
-	return []raorm.RawDecl{
+func Queries() []storm.RawDecl {
+	return []storm.RawDecl{
 		// authz.go
 		Authorize, AuthorizeExplain, GetPermissionByKey, RolesForIdentity,
 		EffectivePermissionsForIdentity, AuthorizeStrictSim, SampleAuthorizeDecisions,

@@ -268,17 +268,17 @@ go build ./...
 
 `go.work` lists only this module and the nested SDK in `pkg/anubis`, both of
 which are in the repository. External modules, including
-`github.com/gsoultan/raorm`, are ordinary versioned dependencies resolved by
+`github.com/gsoultan/storm`, are ordinary versioned dependencies resolved by
 the module proxy.
 
-It was briefly otherwise: `go.work` named `../raorm`, a sibling checkout that
+It was briefly otherwise: `go.work` named `../storm`, a sibling checkout that
 existed on one machine, so CI and every fresh clone failed with `cannot load
-module ../raorm listed in go.work file`. Tagging raorm and depending on
+module ../storm listed in go.work file`. Tagging storm and depending on
 `v0.1.0` removed the problem rather than working around it — a scripted
 clone-the-sibling step, and the same clone inside the Dockerfile, both went
 with it.
 
 **Keep it that way.** A sibling entry in a committed `go.work` is convenient
 for whoever has both checkouts and an outright blocker for everybody else.
-When raorm needs changing, work on it locally with a `go.work` you do not
+When storm needs changing, work on it locally with a `go.work` you do not
 commit, then tag it and bump the requirement here.

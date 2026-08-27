@@ -3,8 +3,8 @@ package authzrquery
 import (
 	"time"
 
-	"github.com/gsoultan/raorm"
-	"github.com/gsoultan/raorm/runtime"
+	"github.com/gsoultan/storm"
+	"github.com/gsoultan/storm/runtime"
 )
 
 // AuthorizeRow carries the engine's one-bit answer.
@@ -14,7 +14,7 @@ type AuthorizeRow struct {
 
 // Authorize is THE engine call. Semantics live in migrations/0013 (+0009
 // gates); Go never re-implements them on the online path.
-var Authorize = raorm.SQL[AuthorizeRow](`
+var Authorize = storm.SQL[AuthorizeRow](`
 SELECT authorize($1, $2, $3, $4::jsonb) AS allow`)
 
 // ExplainRow is the engine's narrated decision.
@@ -23,7 +23,7 @@ type ExplainRow struct {
 }
 
 // AuthorizeExplain narrates a decision for the debugging screens.
-var AuthorizeExplain = raorm.SQL[ExplainRow](`
+var AuthorizeExplain = storm.SQL[ExplainRow](`
 SELECT authorize_explain($1, $2, $3, $4::jsonb)::text AS detail`)
 
 // PermissionMetaRow is the step-up metadata the middleware reads per request.
@@ -39,7 +39,7 @@ type PermissionMetaRow struct {
 
 // GetPermissionByKey feeds PermissionByKey; key is a generated column and
 // nullable in the descriptor even though a hit always has one.
-var GetPermissionByKey = raorm.SQL[PermissionMetaRow](`
+var GetPermissionByKey = storm.SQL[PermissionMetaRow](`
 SELECT id::text AS id, key, risk, min_assurance, requires_amr,
        COALESCE(max_auth_age::text, '')::text AS max_auth_age, deprecated_at
 FROM permissions
@@ -51,7 +51,7 @@ type RoleNameRow struct {
 }
 
 // RolesForIdentity lists the distinct live-grant role names for an identity.
-var RolesForIdentity = raorm.SQL[RoleNameRow](`
+var RolesForIdentity = storm.SQL[RoleNameRow](`
 SELECT DISTINCT r.name
 FROM grants g
 JOIN roles r ON r.id = g.role_id
@@ -67,7 +67,7 @@ type PermissionKeyRow struct {
 
 // EffectivePermissionsForIdentity lists every live permission key an
 // identity's grants confer.
-var EffectivePermissionsForIdentity = raorm.SQL[PermissionKeyRow](`
+var EffectivePermissionsForIdentity = storm.SQL[PermissionKeyRow](`
 SELECT DISTINCT p.key
 FROM grants g
 JOIN role_permissions_effective rpe ON rpe.role_id = g.role_id
@@ -89,7 +89,7 @@ type StrictSimRow struct {
 // changes, this must change with it (the integration suite asserts parity for
 // the axis-unchanged case). $1 identity, $2 tenant, $3 permission (nullable),
 // $4 targets jsonb, $5 strict axis.
-var AuthorizeStrictSim = raorm.SQL[StrictSimRow](`
+var AuthorizeStrictSim = storm.SQL[StrictSimRow](`
 WITH targets AS MATERIALIZED (
     SELECT t.key AS axis_code, t.value::uuid AS node_id
       FROM jsonb_each_text($4::jsonb) AS t(key, value)
@@ -150,7 +150,7 @@ type DecisionDetailRow struct {
 // SampleAuthorizeDecisions returns recent allow decisions with their
 // snapshotted inputs, for strict dry-run replay. The audit writer records
 // {subject, permission, targets} in detail.
-var SampleAuthorizeDecisions = raorm.SQL[DecisionDetailRow](`
+var SampleAuthorizeDecisions = storm.SQL[DecisionDetailRow](`
 SELECT detail
 FROM audit_log
 WHERE tenant_id = $1

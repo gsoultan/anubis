@@ -12,7 +12,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/gsoultan/raorm/runtime/pgxdrv"
+	"github.com/gsoultan/storm/runtime/pgxdrv"
 
 	"github.com/gsoultan/anubis/cmd/anubisd/install"
 	"github.com/gsoultan/anubis/gen/go/anubis/v1/anubisv1connect"
@@ -74,13 +74,13 @@ func runServe(ctx context.Context, logger *slog.Logger) error {
 	poolCfg.MaxConnIdleTime = 15 * time.Minute
 	poolCfg.HealthCheckPeriod = 30 * time.Second
 
-	// Built through raorm's constructor, not pgxpool's: the authz context runs
-	// raorm queries over this pool, and raorm installs per-connection codecs
+	// Built through storm's constructor, not pgxpool's: the authz context runs
+	// storm queries over this pool, and storm installs per-connection codecs
 	// (uuid[], Decimal, Interval) that a bare pgxpool has never heard of.
 	// Without them a uuid[] parameter takes pgx's generic path and a Decimal
 	// fails to encode at all — a trap that waits for the first context to use
 	// one. It also refuses an exec mode that would send every value as text,
-	// which raorm's scanners decode as binary.
+	// which storm's scanners decode as binary.
 	pool, err := pgxdrv.NewPoolConfig(ctx, poolCfg)
 	if err != nil {
 		return err

@@ -27,7 +27,7 @@ fail() { printf '\033[31mFAILED: %s\033[0m\n' "$1" >&2; exit 1; }
 psql_dev() { container exec "$CONTAINER" psql -U anubis -d anubis "$@"; }
 
 step "1/5  enforcement gates"
-# The raorm drift check needs a live database; without one it skips, and a
+# The storm drift check needs a live database; without one it skips, and a
 # skipped check is not a passed check.
 for s in scripts/check/*.sh; do
   ANUBIS_DB_URL="$DEV_URL" bash "$s" || fail "$(basename "$s")"

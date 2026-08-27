@@ -1,4 +1,4 @@
-// Package authzrmodel declares the authz tables raorm generates code for.
+// Package authzrmodel declares the authz tables storm generates code for.
 //
 // It is a PROJECTION of the schema, not its source of truth: anubis's schema
 // of record stays migrations/ (forward-only, checksummed), and this model is
@@ -7,17 +7,17 @@
 // Columns and defaults here must match `\d` on the table exactly.
 package authzrmodel
 
-import "github.com/gsoultan/raorm"
+import "github.com/gsoultan/storm"
 
-// Role is public.roles. The id default is uuidv7() in the migration; raorm's
-// Model declares gen_random_uuid(), which is irrelevant here because raorm
+// Role is public.roles. The id default is uuidv7() in the migration; storm's
+// Model declares gen_random_uuid(), which is irrelevant here because storm
 // emits no DDL for anubis — the masked insert simply leaves id unset and the
 // database's own default fires.
 type Role struct {
-	raorm.Model
+	storm.Model
 
-	TenantID          raorm.UUID
-	ApplicationID     *raorm.UUID
+	TenantID          storm.UUID
+	ApplicationID     *storm.UUID
 	IsSystem          bool
 	Name              string
 	Description       string
@@ -25,7 +25,7 @@ type Role struct {
 	AllowedRealmKinds []string
 }
 
-func (r *Role) Schema(t *raorm.Table) {
+func (r *Role) Schema(t *storm.Table) {
 	t.Unique(&r.TenantID, &r.Name)
 	t.Col(&r.Description).Default("''")
 	t.Col(&r.AssignableAt).Default("'{}'")

@@ -3,8 +3,8 @@ package authzrquery
 import (
 	"time"
 
-	"github.com/gsoultan/raorm"
-	"github.com/gsoultan/raorm/runtime"
+	"github.com/gsoultan/storm"
+	"github.com/gsoultan/storm/runtime"
 )
 
 // GrantRow is a grant with its role name, the ListGrantsByIdentity shape.
@@ -24,7 +24,7 @@ type GrantRow struct {
 
 // ListGrantsByIdentity lists an identity's grants, optionally with revoked
 // history. $3 include_revoked.
-var ListGrantsByIdentity = raorm.SQL[GrantRow](`
+var ListGrantsByIdentity = storm.SQL[GrantRow](`
 SELECT g.id::text AS id, g.identity_id::text AS identity_id,
        g.role_id::text AS role_id, r.name AS role_name, g.self_scoped,
        g.valid_from, g.valid_until, g.revoked_at,
@@ -46,7 +46,7 @@ type GrantScopeRow struct {
 }
 
 // ListGrantScopes fans out over a page of grants in ONE query.
-var ListGrantScopes = raorm.SQL[GrantScopeRow](`
+var ListGrantScopes = storm.SQL[GrantScopeRow](`
 SELECT gs.grant_id::text AS grant_id, gs.axis_code,
        gs.scope_node_id::text AS scope_node_id, gs.inherit,
        sn.name AS node_name
@@ -63,14 +63,14 @@ type CreatedGrantRow struct {
 
 // CreateGrant inserts the grant row; scopes follow in the same transaction.
 // $5 reason (” becomes NULL), $7 valid_until (nil for open-ended).
-var CreateGrant = raorm.SQL[CreatedGrantRow](`
+var CreateGrant = storm.SQL[CreatedGrantRow](`
 INSERT INTO grants (tenant_id, identity_id, role_id, granted_by, reason,
                     self_scoped, valid_until)
 VALUES ($1, $2, $3, $4, nullif($5, ''), $6, $7)
 RETURNING id::text AS id, valid_from`)
 
 // InsertGrantScope pins one axis of a grant.
-var InsertGrantScope = raorm.SQLExec(`
+var InsertGrantScope = storm.SQLExec(`
 INSERT INTO grant_scopes (grant_id, tenant_id, axis_code, scope_node_id, inherit)
 VALUES ($1, $2, $3, $4, $5)`)
 
@@ -83,7 +83,7 @@ type RevokedGrantRow struct {
 
 // RevokeGrant stamps revoked_at once; an already-revoked grant is not found.
 // $3 reason (” keeps the original).
-var RevokeGrant = raorm.SQL[RevokedGrantRow](`
+var RevokeGrant = storm.SQL[RevokedGrantRow](`
 UPDATE grants
 SET revoked_at = now(),
     reason = CASE WHEN $3 = '' THEN reason ELSE $3 END
@@ -118,7 +118,7 @@ type SearchGrantRow struct {
 // timestamp — which they do, in bulk imports. $1 tenant, $2 include_revoked,
 // $3 identity filter, $4 role filter, $5 source ('direct'|'membership'|”),
 // $6 text query, $7 cursor grant id, $8 page size.
-var SearchGrants = raorm.SQL[SearchGrantRow](`
+var SearchGrants = storm.SQL[SearchGrantRow](`
 SELECT g.id::text AS id, g.identity_id::text AS identity_id, i.username,
        g.role_id::text AS role_id, r.name AS role_name,
        g.self_scoped, g.valid_from, g.valid_until, g.revoked_at,
@@ -149,7 +149,7 @@ type CountRow struct {
 }
 
 // CountLiveGrants backs the dashboard: access currently in force.
-var CountLiveGrants = raorm.SQL[CountRow](`
+var CountLiveGrants = storm.SQL[CountRow](`
 SELECT count(*) AS count FROM grants
 WHERE tenant_id = $1 AND revoked_at IS NULL
   AND (valid_until IS NULL OR valid_until > now())`)

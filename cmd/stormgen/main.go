@@ -1,9 +1,9 @@
-// Command raormgen is this context's raorm tool.
+// Command stormgen is this context's storm tool.
 //
-//	ANUBIS_DB_URL=... go run ./cmd/raormgen generate internal/authz/adapter/postgres/rgen -raw-schema live
+//	ANUBIS_DB_URL=... go run ./cmd/stormgen generate internal/authz/adapter/postgres/rgen -raw-schema live
 //
-// It is five lines because raorm's commands are a library: they need to see
-// this module's models, and a binary installed from raorm's repository
+// It is five lines because storm's commands are a library: they need to see
+// this module's models, and a binary installed from storm's repository
 // cannot. Everything else — verify -stale, verify -pending, lint, explain —
 // comes with them, against THIS schema.
 //
@@ -17,7 +17,7 @@ package main
 import (
 	authzrmodel "github.com/gsoultan/anubis/internal/authz/adapter/postgres/rmodel"
 	authzrquery "github.com/gsoultan/anubis/internal/authz/adapter/postgres/rquery"
-	"github.com/gsoultan/raorm/tool"
+	"github.com/gsoultan/storm/tool"
 )
 
 func main() { tool.Main(authzrmodel.All(), authzrquery.Queries()) }

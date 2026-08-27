@@ -112,7 +112,7 @@ else
   echo
   echo "What the series is good for, which is comparison rather than absolutes:"
   echo "  · flat across the load rounds  → the request path retains nothing"
-  echo "    per request, whatever RSS does; that is the raorm claim."
+  echo "    per request, whatever RSS does; that is the storm claim."
   echo "  · rising while QUIET           → something periodic allocates. In"
   echo "    this application that is the 50k-grant snapshot rebuilt every 30s,"
   echo "    which runs whether or not requests arrive."
