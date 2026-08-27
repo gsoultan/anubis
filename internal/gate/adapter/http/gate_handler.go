@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	gateapp "github.com/gsoultan/anubis/internal/gate/app"
 	"github.com/gsoultan/anubis/internal/gate/routepath"
 	"github.com/gsoultan/anubis/internal/gate/snapshot"
 	"github.com/gsoultan/anubis/internal/platform/crypto/keyring"
@@ -18,15 +17,24 @@ import (
 // Traefik forwardAuth, Envoy ext_authz. Served ENTIRELY from the snapshot:
 // p99 < 1 ms, no database on the path. Fail-static while the snapshot is
 // within max age; fail-closed beyond it.
+// Snapshots is all this handler needs from the snapshot manager: the tenant's
+// data, and whether it is fresh enough to decide from. Narrow on purpose —
+// the same reason HealthHandler takes a probe rather than the manager. It
+// also makes the fail-closed branch testable without a database, which it was
+// not, which is why "fail-closed beyond max age" went unverified.
+type Snapshots interface {
+	Get(tenantSlug string) (*snapshot.Data, bool)
+}
+
 type GateHandler struct {
 	issuer   string
 	ring     *keyring.Manager
-	snaps    *gateapp.Manager
+	snaps    Snapshots
 	loginURL string
 	clock    func() time.Time
 }
 
-func NewGateHandler(issuer string, ring *keyring.Manager, snaps *gateapp.Manager) *GateHandler {
+func NewGateHandler(issuer string, ring *keyring.Manager, snaps Snapshots) *GateHandler {
 	return &GateHandler{
 		issuer: issuer, ring: ring, snaps: snaps,
 		loginURL: issuer + "/v1/authorize",
