@@ -102,7 +102,8 @@ func (u *apiKeyInteractor) CreateAPIKey(ctx context.Context, in CreateAPIKeyInpu
 		return "", nil, err
 	}
 	u.audit.Emit(ctx, auditdomain.AuditEvent{
-		ActorID: p.IdentityID, ActorKind: "platform_user", TargetID: id,
+		TenantID: auditdomain.InstallationTenant,
+		ActorID:  p.IdentityID, ActorKind: "platform_user", TargetID: id,
 		Action: "platform.apikey.create", Result: "allow", IP: authctx.ClientIP(ctx),
 	})
 	return full, &controldomain.PlatformAPIKey{
@@ -127,7 +128,8 @@ func (u *apiKeyInteractor) RevokeAPIKey(ctx context.Context, id string) error {
 		return err
 	}
 	u.audit.Emit(ctx, auditdomain.AuditEvent{
-		ActorID: p.IdentityID, ActorKind: "platform_user", TargetID: id,
+		TenantID: auditdomain.InstallationTenant,
+		ActorID:  p.IdentityID, ActorKind: "platform_user", TargetID: id,
 		Action: "platform.apikey.revoke", Result: "allow", IP: authctx.ClientIP(ctx),
 	})
 	return nil

@@ -256,6 +256,21 @@ POST /v1/admin/realms
 | `POST /v1/admin/identities/{id}/disable` | **Immediate, complete deprovisioning.** `authorize()` gates on identity state, so no grant needs touching. |
 | `GET`/`POST` `/v1/admin/identities/{id}/attributes` | The **encrypted** part of an identity (ADR-0013) — see below |
 
+#### The installation's own audit trail
+
+A platform user belongs to no tenant, so their actions — sign-in, failed
+sign-in, API keys, refresh-token theft — are filed under the installation
+rather than under any tenant. Query them by sending **no** `X-Anubis-Tenant`
+header: an operator asking without one is asking about the installation.
+
+```http
+POST /v1/admin/audit/query        # no X-Anubis-Tenant
+{ "action": "platform.login", "page_size": 50 }
+```
+
+The installation has its own hash chain, so `VerifyAuditChain` verifies it the
+same way and with the same call.
+
 #### Attributes — the one encrypted column
 
 `identities.attributes` is free-form, tenant-defined, and the only column

@@ -327,7 +327,11 @@ func (u *tenantAdminInteractor) QueryAudit(ctx context.Context, q auditdomain.Au
 	if err != nil {
 		return nil, "", err
 	}
-	list, err := u.auditRd.QueryAudit(ctx, p.TenantID, q)
+	// An operator with no tenant selected is asking about the installation
+	// itself, which is where the platform plane files its own events —
+	// logins, API keys, refresh-token theft. Without this they are recorded
+	// and unreadable, which is only marginally better than being lost.
+	list, err := u.auditRd.QueryAudit(ctx, auditdomain.TenantOrInstallation(p.TenantID), q)
 	if err != nil {
 		return nil, "", err
 	}
@@ -343,7 +347,9 @@ func (u *tenantAdminInteractor) VerifyAuditChain(ctx context.Context, from, to *
 	if err != nil {
 		return 0, 0, err
 	}
-	return u.verifier.VerifyChain(ctx, p.TenantID, from, to)
+	// Same scope rule as QueryAudit: the installation's chain is a chain in
+	// its own right and must be verifiable like any other.
+	return u.verifier.VerifyChain(ctx, auditdomain.TenantOrInstallation(p.TenantID), from, to)
 }
 
 func (u *tenantAdminInteractor) ListSigningKeys(ctx context.Context) ([]authdomain.KeyRecord, error) {

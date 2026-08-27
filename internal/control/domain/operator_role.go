@@ -85,6 +85,10 @@ var installationPermissions = []string{
 	PermManageTenants,
 	"anubis:tenant:admin",
 	"anubis:key:admin",
+	// The installation keeps an audit trail of its own — platform logins,
+	// API keys, refresh-token theft — and it belongs to no tenant. Reading
+	// it with none selected is the only way to reach it.
+	"anubis:audit:read",
 }
 
 // InstallationScoped reports whether a permission belongs to the

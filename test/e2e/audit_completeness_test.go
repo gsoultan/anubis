@@ -103,3 +103,57 @@ func droppedAudits(t *testing.T) int {
 	}
 	return total
 }
+
+// A failed administrator login is the single entry a break-in investigation
+// starts from, and for as long as the platform plane had no tenant to file
+// under, none was ever written: the auditor discarded tenant-less events
+// before it even counted them. So did every platform API key creation, every
+// platform logout, and token.reuse_detected — the event alerting.md calls the
+// highest-signal in the system, which could not fire for an operator at all.
+//
+// The installation now has a tenant id of its own, and this reads the trail
+// back through the ordinary audit API to prove it is stored AND reachable.
+func TestFailedPlatformLoginIsRecorded(t *testing.T) {
+	requireServer(t)
+	token := platformLogin(t)
+	before := droppedAudits(t)
+
+	who := fmt.Sprintf("ghost-%d", time.Now().UnixNano())
+	pc := anubisv1connect.NewPlatformAuthServiceClient(http.DefaultClient, baseURL)
+	_, err := pc.PlatformLogin(context.Background(),
+		connect.NewRequest(&anubisv1.PlatformLoginRequest{
+			Username: who, Password: "definitely-not-the-password",
+		}))
+	if err == nil {
+		t.Fatal("a login with a made-up username succeeded")
+	}
+
+	// No tenant header: an operator asking without one is asking about the
+	// installation, which is where platform-plane events live.
+	admin := anubisv1connect.NewTenantAdminServiceClient(http.DefaultClient, baseURL)
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		resp, qerr := admin.QueryAudit(context.Background(),
+			bearer(connect.NewRequest(&anubisv1.QueryAuditRequest{
+				Action: "platform.login", PageSize: 50,
+			}), token))
+		if qerr != nil {
+			t.Fatalf("query installation audit: %v", qerr)
+		}
+		for _, e := range resp.Msg.Entries {
+			if strings.Contains(e.DetailJson, who) {
+				if e.Result != "deny" {
+					t.Fatalf("failed login recorded as %q", e.Result)
+				}
+				if after := droppedAudits(t); after != before {
+					t.Fatalf("audit events were dropped: %d -> %d", before, after)
+				}
+				return
+			}
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("no audit entry for the failed login of %q", who)
+		}
+		time.Sleep(250 * time.Millisecond)
+	}
+}

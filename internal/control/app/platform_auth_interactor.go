@@ -19,6 +19,7 @@ import (
 	"github.com/gsoultan/anubis/internal/shared/apperr"
 	"github.com/gsoultan/anubis/internal/shared/authctx"
 	"github.com/gsoultan/anubis/internal/shared/clock"
+	"github.com/gsoultan/anubis/internal/shared/jsonx"
 	"github.com/gsoultan/anubis/pkg/anubis"
 	"github.com/gsoultan/anubis/pkg/anubis/paseto"
 )
@@ -185,7 +186,8 @@ func (u *platformAuthInteractor) Login(ctx context.Context, username, password s
 	}
 	u.users.TouchLogin(ctx, who.ID)
 	u.audit.Emit(ctx, auditdomain.AuditEvent{
-		ActorID: who.ID, ActorKind: "platform_user", TargetID: who.ID,
+		TenantID: auditdomain.InstallationTenant,
+		ActorID:  who.ID, ActorKind: "platform_user", TargetID: who.ID,
 		Action: "platform.login", Result: "allow", IP: authctx.ClientIP(ctx),
 	})
 	return sess, nil
@@ -252,9 +254,11 @@ func (u *platformAuthInteractor) signClaims(claims anubis.Claims) (string, error
 
 func (u *platformAuthInteractor) deny(ctx context.Context, username, reason string) {
 	u.audit.Emit(ctx, auditdomain.AuditEvent{
-		ActorKind: "platform_user", TargetID: username,
+		TenantID: auditdomain.InstallationTenant, ActorKind: "platform_user",
 		Action: "platform.login", Result: "deny", IP: authctx.ClientIP(ctx),
-		Detail: []byte(`{"reason":"` + reason + `"}`),
+		// The username goes in detail: target_id is a uuid, and a failed
+		// login from an unknown name has no id to put there at all.
+		Detail: jsonx.Must(map[string]string{"username": username, "reason": reason}),
 	})
 }
 
@@ -385,7 +389,8 @@ func (u *platformAuthInteractor) VerifyMFA(ctx context.Context, mfaToken, code s
 	}
 	u.users.TouchLogin(ctx, who.ID)
 	u.audit.Emit(ctx, auditdomain.AuditEvent{
-		ActorID: who.ID, ActorKind: "platform_user", TargetID: who.ID,
+		TenantID: auditdomain.InstallationTenant,
+		ActorID:  who.ID, ActorKind: "platform_user", TargetID: who.ID,
 		Action: "platform.login", Result: "allow", IP: authctx.ClientIP(ctx),
 		Detail: []byte(`{"amr":"totp"}`),
 	})
@@ -467,7 +472,8 @@ func (u *platformAuthInteractor) Refresh(ctx context.Context, refreshToken strin
 func (u *platformAuthInteractor) refreshReuse(ctx context.Context, rec *controldomain.PlatformRefresh) error {
 	_ = u.refresh.RevokeRefreshFamily(ctx, rec.FamilyID)
 	u.audit.Emit(ctx, auditdomain.AuditEvent{
-		ActorID: rec.PlatformUserID, ActorKind: "platform_user",
+		TenantID: auditdomain.InstallationTenant,
+		ActorID:  rec.PlatformUserID, ActorKind: "platform_user",
 		TargetID: rec.FamilyID, Action: "token.reuse_detected",
 		Result: "deny", IP: authctx.ClientIP(ctx),
 		Detail: []byte(`{"plane":"platform"}`),
@@ -487,7 +493,8 @@ func (u *platformAuthInteractor) Logout(ctx context.Context, refreshToken string
 	}
 	_ = u.refresh.RevokeRefreshFamily(ctx, rec.FamilyID)
 	u.audit.Emit(ctx, auditdomain.AuditEvent{
-		ActorID: rec.PlatformUserID, ActorKind: "platform_user",
+		TenantID: auditdomain.InstallationTenant,
+		ActorID:  rec.PlatformUserID, ActorKind: "platform_user",
 		TargetID: rec.FamilyID, Action: "platform.logout", Result: "allow",
 		IP: authctx.ClientIP(ctx),
 	})
@@ -553,7 +560,8 @@ func (u *platformAuthInteractor) ConfirmTOTPEnrolment(ctx context.Context, code 
 		return err
 	}
 	u.audit.Emit(ctx, auditdomain.AuditEvent{
-		ActorID: p.IdentityID, ActorKind: "platform_user", TargetID: p.IdentityID,
+		TenantID: auditdomain.InstallationTenant,
+		ActorID:  p.IdentityID, ActorKind: "platform_user", TargetID: p.IdentityID,
 		Action: "platform.mfa_enrol", Result: "allow", IP: authctx.ClientIP(ctx),
 	})
 	return nil

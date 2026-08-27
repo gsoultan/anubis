@@ -275,7 +275,11 @@ func (u *operatorAdminInteractor) emit(ctx context.Context, p *authctx.Principal
 	u.audit.Emit(ctx, auditdomain.AuditEvent{
 		// ActorKind distinguishes the two populations in the log: reading
 		// "identity" for somebody who is not one would misattribute the act.
-		TenantID: p.TenantID, ActorID: p.IdentityID, ActorKind: "platform_user",
+		// An installation owner has no tenant selected, and an event with no
+		// tenant cannot be stored at all — so theirs are filed under the
+		// installation rather than thrown away.
+		TenantID: auditdomain.TenantOrInstallation(p.TenantID),
+		ActorID:  p.IdentityID, ActorKind: "platform_user",
 		SessionID: p.SessionID, TargetID: target, Action: action, Result: "allow",
 		IP: authctx.ClientIP(ctx), Detail: jsonx.Must(detail),
 	})

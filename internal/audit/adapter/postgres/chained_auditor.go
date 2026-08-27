@@ -37,7 +37,13 @@ func NewChainedAuditor(store *Repository, logger *slog.Logger) *ChainedAuditor {
 }
 
 func (a *ChainedAuditor) Emit(ctx context.Context, ev auditdomain.AuditEvent) {
+	// An event with no tenant cannot be stored — the column is NOT NULL and
+	// every index leads with it. Platform-plane callers file theirs under
+	// auditdomain.InstallationTenant; anything still arriving without one is
+	// a caller that forgot, and it is counted rather than dropped in silence.
+	// Silence here is how the whole platform plane went unaudited.
 	if ev.TenantID == "" {
+		metrics.IncAuditDropped(ev.Action)
 		return
 	}
 	// Counted at emission, before any queueing or sampling: the metric asks
