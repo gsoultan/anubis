@@ -861,3 +861,33 @@ instant itself enforces.
 limiter had been spent by earlier tests. `retryLimited`/`signIn` in
 `test/e2e/e2e_test.go` are the fix. A test that reads 429 as a fault teaches
 whoever sees it to weaken the limit.
+
+## Database privilege was described, not enforced (2026-08-27)
+
+`migrations/0023` set up least privilege and granted `USAGE ON SCHEMA public`
+explicitly to `anubis_app` and `anubis_readonly` — while leaving PUBLIC's
+implicit grant in place. So those grants described an access path rather than
+controlling one: every role in the database reached the schema regardless.
+
+Found by diffing a freshly migrated database against the development one with
+`pg_dump --schema-only`. They were identical except for a single
+`REVOKE USAGE ON SCHEMA public FROM PUBLIC` that had been applied here by
+hand and never made it into a migration. That the dev database had been
+running with it is the evidence it is safe. Now `migrations/0037`.
+
+**Upgrade note that matters:** any role added later needs
+`GRANT USAGE ON SCHEMA public` BY NAME. An integration that used to work by
+default now gets `relation "…" does not exist`. Documented in operations.md.
+
+**Do not overclaim it:** `pg_catalog` stays world-readable, as in every
+Postgres, so an ungranted role still lists table names through `pg_tables`.
+It closes the data, not the catalog.
+
+The other privilege claims in operations.md all held when measured, and are
+now `TestDatabaseRolesCannotExceedTheirPrivilege` so they keep holding —
+verified by granting `UPDATE ON audit_log` and `SELECT ON credentials` and
+watching the test name both.
+
+Related: the suite now reads `anubis_audit_dropped_total` after every run and
+fails on any non-`authorize` drop. See [[audit-silent-drops]] reasoning in the
+audit section above.
