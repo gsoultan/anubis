@@ -39,8 +39,29 @@ reasonable.
 | Templating | `html/template` | No |
 | Embedded migrations | `embed` | No |
 
-**Result: zero third-party cryptography.** The only non-stdlib dependencies are
-`pgx` and a Redis client, neither on a security-critical path.
+**Result: zero third-party cryptography.**
+
+That claim went unenforced for a long time, which made it a description of
+the dependency list on the day someone last read it. `scripts/check/deps.sh`
+now runs in every pipeline and fails on three things: a direct requirement
+outside the allowlist below, an import of third-party cryptography, and an
+untidy `go.mod` — because a file that marks a direct import `// indirect`
+misreports the very list this policy is about. (It did: the MySQL driver sat
+`// indirect` while `cmd/anubisd/syncengines` imported it.)
+
+The allowlist, and what each earns:
+
+| Module | Tier | Why |
+| :--- | :--- | :--- |
+| `connectrpc.com/connect` | transport | RPC over HTTP, gRPC-compatible |
+| `github.com/go-kit/kit` | plumbing | endpoint and middleware composition |
+| `github.com/jackc/pgx/v5` | driver | Postgres wire protocol — the storage engine |
+| `github.com/go-sql-driver/mysql` | driver | a sync **source**, not storage; scope can be read from any engine |
+| `github.com/gsoultan/storm` | codegen | query generation on the authz hot path |
+| `google.golang.org/protobuf` | runtime | generated code needs its runtime |
+
+None is on a security-critical path. Adding a seventh means editing the
+allowlist, which means arriving here first — that is the whole mechanism.
 
 ## The one real gap: password hashing
 
