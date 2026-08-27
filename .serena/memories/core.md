@@ -891,3 +891,40 @@ watching the test name both.
 Related: the suite now reads `anubis_audit_dropped_total` after every run and
 fails on any non-`authorize` drop. See [[audit-silent-drops]] reasoning in the
 audit section above.
+
+## The gate's fail-closed promise was untested (2026-08-27)
+
+`internal/gate/app` had no test file at all, while operations.md promised that
+past `ANUBIS_SNAPSHOT_MAX_AGE` the gate refuses and `/readyz` pulls the
+instance from the balancer. The gate answers entirely from the snapshot, so a
+freshness check that stopped working would serve authorization from
+arbitrarily old data — honouring revoked access, at p99 under a millisecond,
+with no error anywhere. Fail-static is the feature; unbounded fail-static is
+the outage nobody notices.
+
+Covered at both levels now. `GateHandler` takes a `Snapshots` interface rather
+than the concrete `*gateapp.Manager` — `HealthHandler` already took a probe
+for the same reason, and the concrete dependency is precisely why this branch
+was untestable without a database.
+
+**Method note worth keeping:** the first handler test was worthless. It
+asserted `403` on a stale snapshot, passed, and passed again with the
+freshness check deleted — an empty snapshot denies everything anyway. It
+asserts the refusal REASON now, and the deleted check shows up as
+`403 "no route policy"`: the gate deciding from stale data rather than
+refusing to look. On a security boundary, a test that cannot tell
+refusing-to-decide from deciding is not testing the boundary.
+
+## Dependency policy is now enforced (2026-08-27)
+
+`scripts/check/deps.sh` fails on a direct requirement outside the ADR-0002
+allowlist, an import of third-party crypto, or an untidy `go.mod`. Every
+pipeline globs `scripts/check/*.sh`, so it runs everywhere without wiring.
+
+The tidy check earns its place: `go.mod` marked `go-sql-driver/mysql`
+`// indirect` while `cmd/anubisd/syncengines` imported it directly. A file
+that misreports which dependencies are direct cannot be used to review them.
+
+Two false positives to remember if editing it: the `require (` line parses as
+a dependency named `require`, and the crypto regex matches Anubis's OWN
+`pkg/anubis/paseto` — the stdlib implementation the rule exists to require.
