@@ -38,10 +38,13 @@ func main() {
 		err = runKeys(ctx, logger, os.Args[2:])
 	case "bootstrap":
 		err = runBootstrap(ctx, logger, os.Args[2:])
-	case "version":
+	// --version and -v are what people type on a host they have just been
+	// handed; refusing them and then omitting `version` from the usage line
+	// (as this did) sends them to the release page to guess.
+	case "version", "--version", "-v":
 		fmt.Println("anubisd " + version)
 	default:
-		err = fmt.Errorf("unknown command %q (serve|migrate|baseline|keys|bootstrap)", cmd)
+		err = fmt.Errorf("unknown command %q (serve|migrate|baseline|keys|bootstrap|version)", cmd)
 	}
 	if err != nil {
 		logger.Error("fatal", "cmd", cmd, "error", err)
