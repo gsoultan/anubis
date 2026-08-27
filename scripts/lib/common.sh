@@ -54,7 +54,15 @@ require_port() {
 }
 
 # --- containers -----------------------------------------------------------
-container_exists() { container ls -a --format json 2>/dev/null | grep -q "\"$1\""; }
+# Read the whole listing before testing it. `container ls | grep -q` looks
+# equivalent and is not: under `set -o pipefail` (line 5) grep exits at the
+# first match, `container` takes SIGPIPE, and the function reports FALSE for
+# a container that EXISTS. The bigger the listing, the likelier it is.
+container_exists() {
+  local listing
+  listing="$(container ls -a --format json 2>/dev/null || true)"
+  case "$listing" in *"\"$1\""*) return 0 ;; *) return 1 ;; esac
+}
 
 container_running() {
   container ls --format json 2>/dev/null \

@@ -54,8 +54,13 @@ step "4/5  integration, e2e and fuzz against a scratch database"
 # DROP DATABASE fails while ANY session holds the database open — including a
 # server left running from earlier work — and the failure is easy to miss.
 # Check it, rather than discovering the suite ran against yesterday's rows.
-psql_dev -c "DROP DATABASE IF EXISTS ${SCRATCH_DB}" | grep -qE "DROP DATABASE|does not exist" \
-  || fail "could not drop ${SCRATCH_DB} — something is still connected to it"
+# Captured, not piped: see the note on container_exists in lib/common.sh —
+# `| grep -q` under pipefail can fail on output it successfully matched.
+drop_out="$(psql_dev -c "DROP DATABASE IF EXISTS ${SCRATCH_DB}" 2>&1 || true)"
+case "$drop_out" in
+  *"DROP DATABASE"*|*"does not exist"*) ;;
+  *) fail "could not drop ${SCRATCH_DB} — something is still connected to it: ${drop_out}" ;;
+esac
 psql_dev -c "CREATE DATABASE ${SCRATCH_DB}" >/dev/null || fail "create ${SCRATCH_DB}"
 ANUBIS_DB_URL="$SCRATCH_URL" \
   ANUBIS_LOAD_WORKERS="${ANUBIS_LOAD_WORKERS:-8}" \
