@@ -753,3 +753,77 @@ v0.1.0 is still public and carries the broken verifier.
 scripts/ci/local.sh runs the whole pipeline offline — written when GitHub
 refused every job over account billing, which is also why the container-image
 job now runs only on main.
+## The audit log had two holes, both silent (2026-08-27)
+
+Found while reading CI output that had been printing the first one for weeks.
+Both were invisible from inside the running system, which is what made them
+last.
+
+**1. Anything filed under no tenant was discarded at the door.**
+`ChainedAuditor.Emit` opened with `if ev.TenantID == "" { return }` — before
+the metric, before the queue. `audit_log.tenant_id` is `NOT NULL` and every
+index leads with it, so a tenant-less event genuinely cannot be stored; the
+early return was correct about the constraint and catastrophic about the
+consequence. A platform user belongs to no tenant (ADR-0011), so the ENTIRE
+platform plane went unrecorded: every administrator sign-in, every failed
+sign-in, API keys, logout, MFA enrolment — and `token.reuse_detected`, which
+alerting.md calls the highest-signal event in the system. On the dev database:
+**0 `platform.login` rows against 320 `auth.login` rows.**
+
+Fixed by giving the installation a tenant id of its own —
+`auditdomain.InstallationTenant`, the nil uuid, which uuidv7 cannot produce —
+so it gets a hash chain of its own, which is right for a separate population.
+`anubis:audit:read` joined `installationPermissions` so an operator with no
+tenant selected can read and verify it through the ordinary audit API.
+
+**2. `target_id` is a uuid, and codes were being passed to it.**
+Scope axes and node types are identified by a code, not an id. Four call sites
+in `scope_admin_interactor` passed the code, the insert failed on every one,
+and the auditor logged it and carried on. On the dev database: **0 rows for
+`scope.axis_create`, `scope.node_type_create`, `scope.axis_update`,
+`scope.bulk_upsert`** — i.e. structural authorization changes were never
+recorded. Codes now go in `detail`.
+
+**The lesson worth keeping:** an audit write must never fail the request that
+triggered it, so it can only be dropped — which means the drop has to be
+*loud*. `metrics.IncAuditDropped(action)` now counts every one, alerting.md
+pages on any increase, and `TestAdminActionsLeaveAnAuditTrail` /
+`TestFailedPlatformLoginIsRecorded` fail if either hole reopens. Both were
+verified to fail against the old code before being trusted.
+
+## identities.attributes is sealed for real now (ADR-0013, 2026-08-27)
+
+Migration 0034 had made a non-empty value unstorable, as an honest placeholder
+for "this promise is not kept yet". 0035 replaces it with a constraint that
+admits `{}` or `{"v":1,"sealed":"…"}` and still refuses plaintext.
+
+`SetIdentityAttributes` seals the WHOLE map as one blob — field names included,
+because `diagnosis` in a dumped column is itself the disclosure. AAD is
+`"attributes:"+identityID`, so a ciphertext copied onto another row stops
+opening; that, not breaking AES, is the realistic attack on per-row keys. The
+per-identity key is sealed under the master key with kid `"pii:"+identityID`,
+which lets it be minted in one statement.
+
+Writes replace rather than merge — a partial update cannot express "delete
+this field", and a field outliving an erasure request is the failure the
+column exists to prevent.
+
+**Sharp edge:** `pii_shred` deletes the key row and the FK nulls
+`identities.pii_key_id`, so an erased identity is byte-identical to a fresh
+one except for the orphaned ciphertext still in the column. The first version
+happily minted a new key and resurrected it. `isErased()` — non-empty envelope
+with no key — is the signal, and both the read and write paths use it.
+
+## Scope sync reaches any SQL engine, proven per push (2026-08-27)
+
+`feed.Dialect` holds what differs per engine (quoting, how NULL parents sort,
+DSN translation); `cmd/anubisd/syncengines` is the only place a driver is
+imported. Adding one is two lines there.
+
+CI runs a `mysql:8` service on both pipelines, because without one the
+multi-engine tests skip in silence — which reads exactly like passing. That
+was not hypothetical: the first MySQL probe read a table a person had typed
+into a container by hand months earlier, and failed the moment CI got a server
+of its own. Both MySQL tests now build their own fixture, and each names a
+child whose primary key sorts AHEAD of its parent so ordering is decided by
+the dialect rather than by luck.
