@@ -827,3 +827,37 @@ into a container by hand months earlier, and failed the moment CI got a server
 of its own. Both MySQL tests now build their own fixture, and each names a
 child whose primary key sorts AHEAD of its parent so ordering is decided by
 the dialect rather than by luck.
+
+## Enrol-or-deny shipped as a date, not a flag (2026-08-27)
+
+The last gap docs/roadmap.md admitted to. A realm could list `totp` in
+`required_factors` and still admit a password-only login from someone who
+never enrolled one.
+
+Why it stayed open, and why the fix is shaped this way: closing it with a
+boolean is a lockout event, not a config change. Every unenrolled member loses
+access the instant it flips, and `BeginTOTP`/`ConfirmTOTP` take their
+principal from the session — the exact thing the policy withholds. So:
+
+- `realms.factor_enrolment_deadline` (migration 0036). NULL = not in force,
+  which is every existing realm, so an upgrade changes nothing.
+- Before the date: tokens **and** `enrolment_due` (factors + deadline).
+- On/after: `enrolment_required` with a **grant token** instead of a session.
+- `BeginTotpEnrollment`/`ConfirmTotpEnrollment` accept `grant_token` in place
+  of a session. 15 min, no scopes, no session id, one purpose.
+
+**Sharp edge:** a grant is minted only for a member with NONE of the required
+factors enrolled, and `caller()` refuses it (conflict) if a totp credential
+exists by redemption time. Without that, a leaked grant *replaces* an
+authenticator rather than adding the first — account takeover wearing a
+compliance hat. `TestAGrantCannotReplaceAnEnrolledFactor` holds that line.
+
+Domain rule is `Realm.EnrolmentStanceFor(enrolled, now)`, unit-tested for the
+edges that decide a lockout: `password` is not enrolable, a factor the realm
+no longer *allows* is not demanded (unsatisfiable policy), and the deadline
+instant itself enforces.
+
+**Test-suite lesson:** these passed alone and failed in the suite — the per-IP
+limiter had been spent by earlier tests. `retryLimited`/`signIn` in
+`test/e2e/e2e_test.go` are the fix. A test that reads 429 as a fault teaches
+whoever sees it to weaken the limit.

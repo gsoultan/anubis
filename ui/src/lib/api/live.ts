@@ -51,6 +51,7 @@ export async function realms(): Promise<Realm[]> {
     refresh_token_ttl: r.refreshTokenTtl,
     default_retention: r.defaultRetention || null,
     pii_encryption: r.piiEncryption,
+    factor_enrolment_deadline: Number(r.factorEnrolmentDeadline) || null,
   }))
   return realmCache
 }

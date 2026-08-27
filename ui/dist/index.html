@@ -1,22 +1,13 @@
 <!doctype html>
-<!-- Placeholder. The real console is produced by `scripts/build.sh` (or the
-     Dockerfile), which overwrites this file before the Go binary embeds the
-     directory. Committing a placeholder keeps `go build ./...` working on a
-     fresh clone without a bun toolchain. -->
-<html lang="en">
+<html lang="en" data-mantine-color-scheme="light">
   <head>
-    <meta charset="utf-8" />
-    <title>Anubis console — not built</title>
-    <style>
-      body { font: 16px/1.5 system-ui, sans-serif; max-width: 40rem; margin: 4rem auto; padding: 0 1rem; color: #1a1a2e; }
-      code { background: #f0f0f4; padding: 0.15em 0.4em; border-radius: 4px; }
-    </style>
-  </head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Anubis Console</title>
+  <link rel="stylesheet" crossorigin href="./chunk-apjw4jz5.css"><script type="module" crossorigin src="./chunk-56dnvryq.js"></script></head>
   <body>
-    <h1>Console not built</h1>
-    <p>This binary was compiled without the admin console bundle.</p>
-    <p>Build it with <code>scripts/build.sh</code>, or use the container
-       image, which always carries the console. For development, run
-       <code>scripts/dev.sh</code> and use the Vite server instead.</p>
+    <div id="root"></div>
+    
   </body>
 </html>

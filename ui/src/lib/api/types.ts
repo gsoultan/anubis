@@ -25,6 +25,10 @@ export interface Realm {
   /** null = no statutory retention limit (employees). */
   default_retention: string | null
   pii_encryption: boolean
+  /** Unix seconds when required_factors starts being enforced against members
+      who have not enrolled. null = never, which is the default — and means a
+      required factor is currently decorative. */
+  factor_enrolment_deadline: number | null
 }
 
 /* ---------------------------------------------------------------------------

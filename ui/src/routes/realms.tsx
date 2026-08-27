@@ -117,6 +117,9 @@ function RealmCard({ r }: { r: Realm }) {
             </span>
           ))}
         </Row>
+        <Row label="enforcement">
+          {enforcementNote(r)}
+        </Row>
         <Row label="also allowed">
           {r.allowed_factors.filter((f) => !r.required_factors.includes(f)).length === 0
             ? <span className="t-xs">—</span>
@@ -164,5 +167,36 @@ function Realms() {
         </div>
       </div>
     </Page>
+  )
+}
+
+/* Whether the required factors above actually bite.
+   A realm can list `totp` as required and enforce nothing, which is the
+   default and easy to mistake for protection — so say which it is. */
+function enforcementNote(r: import('@/lib/api/types').Realm) {
+  const secondFactors = r.required_factors.filter((f) => f !== 'password')
+  if (secondFactors.length === 0) {
+    return <span className="t-xs">password only</span>
+  }
+  if (!r.factor_enrolment_deadline) {
+    return (
+      <Tooltip label="Members who have not enrolled still sign in with a password alone. Set realms.factor_enrolment_deadline to start enforcing — read docs/enrolment-rollout.md first, because the date is a lockout for anyone who misses it.">
+        <span className="chip" style={{ color: 'var(--warn)' }}>
+          <IconShieldLock size={9} style={{ marginRight: 4 }} />not enforced
+        </span>
+      </Tooltip>
+    )
+  }
+  const when = new Date(r.factor_enrolment_deadline * 1000)
+  const started = when.getTime() <= Date.now()
+  return (
+    <Tooltip label={started
+      ? 'Members without these factors are refused a session and handed an enrolment challenge instead.'
+      : 'Members without these factors can still sign in, and are told the date.'}>
+      <span className="chip" style={{ color: started ? 'var(--allow)' : 'var(--info)' }}>
+        <IconShieldLock size={9} style={{ marginRight: 4 }} />
+        {started ? 'enforced since ' : 'enforced from '}{when.toLocaleDateString()}
+      </span>
+    </Tooltip>
   )
 }
