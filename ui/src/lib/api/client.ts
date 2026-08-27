@@ -107,6 +107,15 @@ export const api = {
   syncRuns: (sourceId: Uuid) => live.syncRuns(sourceId),
   syncPlan: (sourceId: Uuid) => live.runSync(sourceId, true),
   syncApply: (sourceId: Uuid) => live.runSync(sourceId, false),
-  createSyncSource: (i: { axis_code: string; kind: import('./types').SyncKind
-    target: string; default_node_type: string }) => live.createSyncSource(i),
+  createSyncSource: (i: {
+    axis_code: string; kind: import('./types').SyncKind
+    target: string; default_node_type: string
+    /** Database kinds: the SOURCE system's connection. The scheme picks the
+        engine, so postgres://, mysql:// and mariadb:// all work. */
+    dsn?: string
+    /** db_table: which of its columns mean ref / parent_ref / name / node_type. */
+    columns?: Record<string, string>
+    /** http: optional Authorization header. */
+    auth_header?: string
+  }) => live.createSyncSource(i),
 }

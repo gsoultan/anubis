@@ -868,11 +868,30 @@ export async function syncSources(): Promise<SyncSource[]> {
 
 export async function createSyncSource(i: {
   axis_code: string; kind: SyncSource['kind']; target: string; default_node_type: string
+  /** Database kinds only: the SOURCE system's connection, never Anubis's. */
+  dsn?: string
+  /** db_table only: which of its columns mean ref / parent_ref / name / node_type. */
+  columns?: Record<string, string>
+  /** http only, optional: sent as the Authorization header. */
+  auth_header?: string
 }): Promise<void> {
-  const cfg: Record<string, string> = { default_node_type: i.default_node_type }
-  if (i.kind === 'http') cfg['url'] = i.target
-  else if (i.kind === 'db_query') cfg['query'] = i.target
-  else cfg['table'] = i.target
+  const cfg: Record<string, unknown> = { default_node_type: i.default_node_type }
+  if (i.kind === 'http') {
+    cfg['url'] = i.target
+    if (i.auth_header) cfg['auth_header'] = i.auth_header
+  } else {
+    // Both database kinds need somewhere to connect. Without this the source
+    // saves and then fails on its first run with "needs dsn", which is a
+    // long way from where the mistake was made.
+    cfg['dsn'] = i.dsn ?? ''
+    if (i.kind === 'db_query') cfg['query'] = i.target
+    else {
+      cfg['table'] = i.target
+      cfg['columns'] = Object.fromEntries(
+        Object.entries(i.columns ?? {}).filter(([, v]) => v),
+      )
+    }
+  }
   await rpc.scopeAdmin.createSyncSource({
     source: {
       $typeName: 'anubis.v1.SyncSource',

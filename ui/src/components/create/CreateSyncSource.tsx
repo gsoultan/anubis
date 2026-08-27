@@ -22,8 +22,19 @@ export function CreateSyncSource({ opened }: { opened: boolean }) {
   const [axisCode, setAxisCode] = useState<string | null>(null)
   const [kind, setKind] = useState<SyncKind>('http')
   const [target, setTarget] = useState('')
+  const [dsn, setDsn] = useState('')
+  const [authHeader, setAuthHeader] = useState('')
+  const [cols, setCols] = useState({ ref: '', parent_ref: '', name: '', node_type: '' })
   const [nodeType, setNodeType] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+
+  const isDB = kind === 'db_query' || kind === 'db_table'
+  // db_table builds the statement, so it needs to be told which columns carry
+  // the meaning. db_query returns them already named.
+  const needsColumns = kind === 'db_table'
+  const ready = !!axisCode && !!target.trim() && !!nodeType
+    && (!isDB || !!dsn.trim())
+    && (!needsColumns || (!!cols.ref.trim() && !!cols.name.trim()))
 
   useEffect(() => { if (opened && ctx.axisCode) setAxisCode(ctx.axisCode) }, [opened, ctx.axisCode])
 
@@ -33,14 +44,21 @@ export function CreateSyncSource({ opened }: { opened: boolean }) {
   }, [axisCode, kinds.length])  // eslint-disable-line react-hooks/exhaustive-deps
 
   const save = async () => {
-    if (!axisCode || !target.trim() || !nodeType) return
+    if (!ready || !axisCode || !nodeType) return
     setBusy(true)
     try {
-      await api.createSyncSource({ axis_code: axisCode, kind, target, default_node_type: nodeType })
+      await api.createSyncSource({
+        axis_code: axisCode, kind, target, default_node_type: nodeType,
+        ...(isDB ? { dsn: dsn.trim() } : {}),
+        ...(needsColumns ? { columns: cols } : {}),
+        ...(kind === 'http' && authHeader.trim() ? { auth_header: authHeader.trim() } : {}),
+      })
       notifyCreated('Source connected',
         'Run “Preview changes” to see what a sync would do before applying it.')
       await queryClient.invalidateQueries({ queryKey: qk.syncSources() })
-      setTarget(''); close()
+      setTarget(''); setDsn(''); setAuthHeader('')
+      setCols({ ref: '', parent_ref: '', name: '', node_type: '' })
+      close()
     } catch (e) { notifyRejected(e) }
     setBusy(false)
   }
@@ -52,7 +70,7 @@ export function CreateSyncSource({ opened }: { opened: boolean }) {
         CRM for customers. Rows are matched by a stable reference, vanished rows are
         <b> archived, never deleted</b>, and items created by hand are never touched.</>}
       footer={<CancelSubmit onCancel={close}
-        canSubmit={!!axisCode && !!target.trim() && !!nodeType}
+        canSubmit={ready}
         submitting={busy} label="Connect source" />}
     >
       <div className="flex flex-col gap-4">
@@ -72,6 +90,20 @@ export function CreateSyncSource({ opened }: { opened: boolean }) {
             ))}
           </div>
         </div>
+        {isDB && (
+          <TextInput required label="Connection" value={dsn}
+            onChange={(e) => setDsn(e.currentTarget.value)}
+            placeholder="postgres://reader:secret@erp-db:5432/erp"
+            description={<>The SOURCE system&rsquo;s own database, never this one. The scheme
+              picks the engine — <code>postgres://</code>, <code>mysql://</code>,
+              <code> mariadb://</code>. Use an account that can only read.</>} />
+        )}
+        {kind === 'http' && (
+          <TextInput label="Authorization header" value={authHeader}
+            onChange={(e) => setAuthHeader(e.currentTarget.value)}
+            placeholder="Bearer eyJ…"
+            description="Optional. Sent as Authorization on every fetch." />
+        )}
         {kind === 'db_query' ? (
           <Textarea label="Query" autosize minRows={3}
             placeholder={'SELECT code AS ref, parent_code AS parent_ref, name\nFROM erp.product_lines'}
@@ -85,6 +117,28 @@ export function CreateSyncSource({ opened }: { opened: boolean }) {
               ? 'Must return rows of { ref, parent_ref, name }.'
               : 'Columns ref, parent_ref and name are read.'}
             value={target} onChange={(e) => setTarget(e.currentTarget.value)} />
+        )}
+        {needsColumns && (
+          <div>
+            <div className="t-body mb-1.5" style={{ fontWeight: 500 }}>Which columns mean what</div>
+            <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(2, minmax(0,1fr))' }}>
+              <TextInput required size="xs" label="Reference" value={cols.ref}
+                onChange={(e) => setCols({ ...cols, ref: e.currentTarget.value })}
+                placeholder="id"
+                description="Stable key rows are matched on" />
+              <TextInput required size="xs" label="Name" value={cols.name}
+                onChange={(e) => setCols({ ...cols, name: e.currentTarget.value })}
+                placeholder="display_name" />
+              <TextInput size="xs" label="Parent reference" value={cols.parent_ref}
+                onChange={(e) => setCols({ ...cols, parent_ref: e.currentTarget.value })}
+                placeholder="parent_id"
+                description="Leave empty for a flat list" />
+              <TextInput size="xs" label="Item kind" value={cols.node_type}
+                onChange={(e) => setCols({ ...cols, node_type: e.currentTarget.value })}
+                placeholder="kind"
+                description="Optional; the default below applies otherwise" />
+            </div>
+          </div>
         )}
         <Select label="Default item kind" required
           description="Applied to rows that do not declare one — level rules still apply."
