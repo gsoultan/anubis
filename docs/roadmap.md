@@ -156,3 +156,17 @@ Stated plainly, as the earlier list was.
 | **Envoy `ext_authz`, revocation streaming, JWS codec flag** | Phase 8 tail. Connect already serves gRPC, so these are integrations rather than new mechanisms |
 | **Redis-backed rate limits** | Decided against for now, with trigger conditions: [ADR-0012](adr/0012-rate-limits-across-replicas.md). Limits are per instance and the docs say so |
 | **Bot protection on public registration** | Decided against, with the escape hatch documented: [ADR-0014](adr/0014-bot-protection-on-registration.md) |
+
+Nothing above is an unproven claim. Two are decisions with their reasoning
+written down, and the third is an integration the transport already supports.
+
+## What is left is not code
+
+The engineering gaps are closed. What Anubis has not had is the thing no test
+can supply:
+
+| | |
+| :--- | :--- |
+| **A real deployment** | Every drill — soak, restore, two replicas on one database, package upgrade — ran on a laptop against containers. That is enough to find the bugs it found; it is not the same as a host behind real TLS with real DNS and a real backup schedule. [operations.md](operations.md) is the runbook to do it with. |
+| **An external security review** | The crypto is stdlib, the decisions are written down, and the properties are tested — by the people who wrote them. Somebody who did not write it should read the token paths, the guard and the gate. |
+| **Somebody else's traffic** | The load figures are synthetic and the correctness assertions under them are not. Neither substitutes for a week of a real directory signing in. |
