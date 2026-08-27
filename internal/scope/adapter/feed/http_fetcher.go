@@ -50,6 +50,11 @@ func (f *HTTPFetcher) Fetch(ctx context.Context, source scopedomain.SyncSourceRe
 	if err != nil {
 		return nil, apperr.ErrInvalidArgument.Wrap(err)
 	}
+	// Same egress policy as the database kinds: a URL is a request to connect
+	// somewhere, and a feed has no business at a metadata endpoint.
+	if err := allowExternalHost(req.URL.Hostname()); err != nil {
+		return nil, err
+	}
 	req.Header.Set("Accept", "application/json")
 	if cfg.AuthHeader != "" {
 		req.Header.Set("Authorization", cfg.AuthHeader)

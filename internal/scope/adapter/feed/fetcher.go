@@ -1,17 +1,30 @@
-// Package feed implements scopeport.ScopeFeedFetcher for the three source
-// kinds of migrations/0017: http, db_query, db_table.
+// Package feed implements scopeport.ScopeFeedFetcher: it reads a structure
+// from wherever that organisation keeps it.
 //
-// External-database fetchers open their OWN connection from config.dsn —
-// any Postgres anywhere, never Anubis's pool. The SQL here is either
-// operator-configured (db_query) or assembled from strictly-validated,
-// quoted identifiers (db_table); it targets foreign schemas that cannot be
-// known at build time, which is why this package carries the same explicit
-// exemption from the no-SQL-in-Go gate as the migration runner.
+// Three things are deliberately open here, because the whole point is that
+// the truth lives somewhere else:
+//
+//   - ANY KIND. Kinds are registered, not switched on. Adding one is
+//     Register("ldap", f) and nothing in the sync path changes.
+//   - ANY ENGINE. The database kinds go through database/sql and resolve the
+//     engine from the DSN's scheme, so Postgres, MySQL, SQL Server or
+//     anything else with a driver is a registration, not a code change.
+//     RegisterDialect lives next to the driver's blank import.
+//   - ANY HOST, with one exception that is not negotiable: see egress.go.
+//     A feed at a cloud metadata endpoint is not a feed.
+//
+// External sources open their OWN connection from config.dsn — never
+// Anubis's pool. The SQL is either operator-configured (db_query) or
+// assembled from strictly-validated, engine-quoted identifiers (db_table);
+// it targets foreign schemas that cannot be known at build time, which is
+// why this package carries the same explicit exemption from the
+// no-SQL-in-Go gate as the migration runner.
 package feed
 
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	scopedomain "github.com/gsoultan/anubis/internal/scope/domain"
 	scopeport "github.com/gsoultan/anubis/internal/scope/port"
@@ -24,38 +37,61 @@ const (
 	maxBodyBytes = 10 << 20 // http: 10 MiB
 )
 
-// Fetcher dispatches to the kind-specific implementations.
-type Fetcher struct {
-	http    *HTTPFetcher
-	dbQuery *DBQueryFetcher
-	dbTable *DBTableFetcher
+// KindFetcher reads one kind of source. Everything a kind must do beyond
+// this — validating its own config, bounding its own transfer — belongs to
+// the kind, because only it knows what its config means.
+type KindFetcher interface {
+	Fetch(ctx context.Context, source scopedomain.SyncSourceRecord) ([]scopedomain.SyncFeedRow, error)
 }
 
+// Fetcher routes to the kind named by the source. A map rather than a
+// switch: a switch is a list of everything the world is allowed to be, kept
+// in a file that has no opinion about it.
+type Fetcher struct {
+	kinds map[string]KindFetcher
+}
+
+// NewFetcher returns the kinds Anubis ships with. Register adds more.
 func NewFetcher() *Fetcher {
-	return &Fetcher{
-		http:    NewHTTPFetcher(),
-		dbQuery: NewDBQueryFetcher(),
-		dbTable: NewDBTableFetcher(),
+	f := &Fetcher{kinds: map[string]KindFetcher{}}
+	f.Register("http", NewHTTPFetcher())
+	f.Register("db_query", NewDBQueryFetcher())
+	f.Register("db_table", NewDBTableFetcher())
+	return f
+}
+
+// Register adds or replaces a kind. The name must match
+// scope_sync_sources.kind, which the schema constrains — so a kind is two
+// changes, the CHECK and this, and neither works without the other.
+func (f *Fetcher) Register(kind string, kf KindFetcher) {
+	f.kinds[kind] = kf
+}
+
+// Kinds is what this installation can read, for an error message worth
+// reading.
+func (f *Fetcher) Kinds() []string {
+	out := make([]string, 0, len(f.kinds))
+	for k := range f.kinds {
+		out = append(out, k)
 	}
+	for i := 1; i < len(out); i++ {
+		for j := i; j > 0 && out[j] < out[j-1]; j-- {
+			out[j], out[j-1] = out[j-1], out[j]
+		}
+	}
+	return out
 }
 
 var _ scopeport.ScopeFeedFetcher = (*Fetcher)(nil)
 
 func (f *Fetcher) Fetch(ctx context.Context, source scopedomain.SyncSourceRecord) ([]scopedomain.SyncFeedRow, error) {
-	var (
-		rows []scopedomain.SyncFeedRow
-		err  error
-	)
-	switch source.Kind {
-	case "http":
-		rows, err = f.http.Fetch(ctx, source)
-	case "db_query":
-		rows, err = f.dbQuery.Fetch(ctx, source)
-	case "db_table":
-		rows, err = f.dbTable.Fetch(ctx, source)
-	default:
-		return nil, apperr.ErrInvalidArgument.With("kind", source.Kind)
+	kf, ok := f.kinds[source.Kind]
+	if !ok {
+		return nil, apperr.ErrInvalidArgument.
+			With("kind", source.Kind).
+			With("registered", strings.Join(f.Kinds(), ", "))
 	}
+	rows, err := kf.Fetch(ctx, source)
 	if err != nil {
 		return nil, err
 	}

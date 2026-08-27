@@ -44,7 +44,12 @@ BIN="$(mktemp -d)/anubisd"
 go build -o "$BIN" ./cmd/anubisd
 # The issuer is what page URLs and token `iss` claims are built from; it must
 # point at THIS instance or the suite would probe whatever else is on :7448.
-ANUBIS_LISTEN=":${PORT}" ANUBIS_ISSUER="${ANUBIS_E2E_BASE_URL}" "$BIN" serve &
+# The scope-sync e2e tests serve their feeds from httptest on loopback, which
+# the egress policy refuses by default: in production a feed pointed at
+# 127.0.0.1 is a feed pointed at Anubis itself. The suite opts in the same way
+# a developer with a local source would.
+ANUBIS_SYNC_ALLOW_LOOPBACK=1 \
+  ANUBIS_LISTEN=":${PORT}" ANUBIS_ISSUER="${ANUBIS_E2E_BASE_URL}" "$BIN" serve &
 SERVER=$!
 trap 'kill "$SERVER" 2>/dev/null || true' EXIT
 

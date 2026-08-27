@@ -12,13 +12,14 @@ Everything an on-call engineer needs at 3am, and nothing that duplicates
 5. [Metrics](#metrics)
 6. [TLS and the reverse proxy](#tls-and-the-reverse-proxy)
 7. [Running more than one instance](#running-more-than-one-instance)
-8. [Machine credentials for pipelines](#machine-credentials-for-pipelines)
-9. [Maintenance jobs](#maintenance-jobs)
-10. [Key rotation](#key-rotation)
-11. [Incident: refresh token reuse](#incident-refresh-token-reuse)
-12. [Incident: signing key compromise](#incident-signing-key-compromise)
-13. [Restoring from backup](#restoring-from-backup)
-14. [Performance budgets](#performance-budgets)
+8. [Connecting a structure feed](#connecting-a-structure-feed-to-another-system)
+9. [Machine credentials for pipelines](#machine-credentials-for-pipelines)
+10. [Maintenance jobs](#maintenance-jobs)
+11. [Key rotation](#key-rotation)
+12. [Incident: refresh token reuse](#incident-refresh-token-reuse)
+13. [Incident: signing key compromise](#incident-signing-key-compromise)
+14. [Restoring from backup](#restoring-from-backup)
+15. [Performance budgets](#performance-budgets)
 
 ---
 
@@ -71,6 +72,8 @@ says how to get the real one.
 | `ANUBIS_DEBUG_LISTEN` | *(off)* | pprof/expvar; bind loopback only |
 | `ANUBIS_UI_ORIGIN` | *(off)* | Dev CORS only; production is same-origin |
 | `ANUBIS_TRUSTED_PROXIES` | *(none)* | CIDRs whose `X-Forwarded-For` is believed. **Set this behind a TLS proxy** or every caller shares one rate-limit bucket |
+| `ANUBIS_SYNC_DENY_HOSTS` | *(none)* | CIDRs a structure feed may not reach. Link-local is always refused |
+| `ANUBIS_SYNC_ALLOW_LOOPBACK` | `0` | Let a feed reach 127.0.0.1 — development only |
 
 **Rate limits are per instance.** Counters live in the process
 (`internal/platform/ratelimit`), so N replicas enforce N times the published
@@ -212,6 +215,44 @@ The gate's snapshot is also per-instance, refreshed on a poll and by
 LISTEN/NOTIFY. `/readyz` fails once a snapshot passes
 `ANUBIS_SNAPSHOT_MAX_AGE`, which is what takes a stale instance out of the
 load balancer rather than letting it deny traffic it should allow.
+
+## Connecting a structure feed to another system
+
+A scope axis can be kept in step with wherever that structure actually lives
+— an ERP, a CRM, a warehouse. Three kinds ship: `http`, `db_query` (your SQL)
+and `db_table` (name a table and map its columns).
+
+**Any engine.** The database kinds go through `database/sql` and pick the
+engine from the DSN's scheme. Registered by default:
+
+| Scheme | Engine |
+| :--- | :--- |
+| `postgres://`, `postgresql://` | PostgreSQL |
+| `mysql://`, `mariadb://` | MySQL, MariaDB |
+
+Adding another is two lines in `cmd/anubisd/syncengines` — the driver's blank
+import and a `RegisterDialect`. A dialect only describes what genuinely
+differs: how the engine quotes an identifier, and how it sorts NULL parents
+first. `SQLServerDialect` is written and waiting for its driver.
+
+Write the DSN as a URL whatever the engine; MySQL's driver wants a different
+format and Anubis translates it, so operators do not have to know that.
+
+**Any host, with one exception.** A feed names a host and Anubis connects to
+it, which is the shape of every SSRF. Link-local addresses are refused
+outright — `169.254.0.0/16` carries the cloud metadata service, and no
+structure feed has ever lived there. Loopback is refused unless
+`ANUBIS_SYNC_ALLOW_LOOPBACK=1`, because in production a feed pointed at
+127.0.0.1 is a feed pointed at Anubis itself. `ANUBIS_SYNC_DENY_HOSTS` takes
+CIDRs for an installation that wants its own internal ranges off limits.
+
+The authority to configure a source is already high (`anubis:sync:admin`,
+operators only), so this is defence in depth rather than the only defence.
+
+**What the feed must return**, whatever the kind: columns or JSON fields
+`ref` and `name`, optionally `parent_ref` and `node_type`. Rows are sorted
+parents-first by Anubis after fetching, because no SQL `ORDER BY` expresses a
+topological order and few JSON APIs bother.
 
 ## Machine credentials for pipelines
 

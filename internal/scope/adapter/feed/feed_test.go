@@ -17,6 +17,9 @@ func source(kind, cfg string) scopedomain.SyncSourceRecord {
 }
 
 func TestHTTPFetch(t *testing.T) {
+	// httptest listens on loopback, which the egress policy refuses by
+	// default — a feed pointed at this server is a feed pointed at us.
+	t.Setenv("ANUBIS_SYNC_ALLOW_LOOPBACK", "1")
 	var gotAuth string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotAuth = r.Header.Get("Authorization")
@@ -84,15 +87,17 @@ func TestDBTableRejectsInjection(t *testing.T) {
 }
 
 func TestQuoteTable(t *testing.T) {
-	got, err := quoteTable("public.customers")
+	testDialects(t)
+	pg := dialects["postgres"]
+	got, err := quoteTable(pg, "public.customers")
 	if err != nil || got != `"public"."customers"` {
 		t.Fatalf("quoteTable = %q, %v", got, err)
 	}
-	if got, err := quoteTable("customers"); err != nil || got != `"customers"` {
+	if got, err := quoteTable(pg, "customers"); err != nil || got != `"customers"` {
 		t.Fatalf("quoteTable = %q, %v", got, err)
 	}
 	for _, bad := range []string{"", "a b", "a;b", `a"b`, strings.Repeat("x", 64)} {
-		if _, err := quoteTable(bad); err == nil {
+		if _, err := quoteTable(pg, bad); err == nil {
 			t.Errorf("quoteTable(%q) accepted", bad)
 		}
 	}

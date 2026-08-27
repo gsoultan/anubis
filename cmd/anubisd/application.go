@@ -59,6 +59,7 @@ import (
 	tenancyapp "github.com/gsoultan/anubis/internal/tenancy/app"
 	tenancysvc "github.com/gsoultan/anubis/internal/tenancy/service"
 
+	"github.com/gsoultan/anubis/cmd/anubisd/syncengines"
 	"github.com/gsoultan/anubis/internal/scope/adapter/feed"
 )
 
@@ -183,6 +184,7 @@ func (a *application) registerRPC(rpc *http.ServeMux, opts connect.HandlerOption
 	rpc.Handle(anubisv1connect.NewIdentityAdminServiceHandler(
 		identityrpc.NewIdentityAdminHandler(identitysvc.NewIdentityAdminService(identityAdmin), f), opts))
 
+	syncengines.Register()
 	scopeAdmin := scopeapp.NewScopeAdminInteractor(a.authz, a.control, a.clock.Now,
 		a.scope, a.scope, a.scope,
 		feed.NewFetcher(), a.auth, a.auditor)
