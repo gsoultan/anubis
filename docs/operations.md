@@ -100,6 +100,21 @@ a security boundary.
 The roles are created `NOLOGIN`; the deployment grants LOGIN and a password, so
 no credential ever lands in a migration file.
 
+`migrations/0037` revokes `USAGE ON SCHEMA public` from `PUBLIC`, so those
+grants decide something. Until it, every role in the database reached the
+schema through `PUBLIC` whether or not it had been granted anything — the
+explicit grants in 0023 were describing an access path, not controlling it.
+
+**This means any role you add later needs `GRANT USAGE ON SCHEMA public`
+by name.** A reporting user or an integration that used to work by default
+will now get `relation "…" does not exist`, which is Postgres reporting a
+schema it may not use. That is the intended behaviour and the reason to grant
+deliberately.
+
+It closes access to the data, not knowledge that the tables exist:
+`pg_catalog` stays world-readable, as it does in every Postgres, so an
+ungranted role can still list table names.
+
 ## Health and readiness
 
 | Endpoint | Fails when | Orchestrator should |

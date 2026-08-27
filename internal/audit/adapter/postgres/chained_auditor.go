@@ -18,11 +18,10 @@ import (
 // block when the queue is full (they must not be lost); sampled authorize
 // events drop with a counter (they are a statistical record).
 type ChainedAuditor struct {
-	store   *Repository
-	logger  *slog.Logger
-	queue   chan auditdomain.AuditEvent
-	dropped uint64
-	done    chan struct{}
+	store  *Repository
+	logger *slog.Logger
+	queue  chan auditdomain.AuditEvent
+	done   chan struct{}
 }
 
 func NewChainedAuditor(store *Repository, logger *slog.Logger) *ChainedAuditor {
@@ -53,7 +52,13 @@ func (a *ChainedAuditor) Emit(ctx context.Context, ev auditdomain.AuditEvent) {
 		select {
 		case a.queue <- ev:
 		default:
-			a.dropped++ // sampled events may drop under pressure
+			// authorize is the one action allowed to drop rather than block:
+			// it is emitted on every decision, and back-pressure here would
+			// make a slow database into a slow authorize(). But the drop is
+			// still a hole in the log, so it is counted where every other
+			// dropped event is counted — and by an atomic, because this line
+			// runs on request goroutines and a bare ++ here was a data race.
+			metrics.IncAuditDropped(ev.Action)
 		}
 		return
 	}

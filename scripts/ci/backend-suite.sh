@@ -93,4 +93,29 @@ go test -run '^$' -fuzz '^FuzzNormalizePath$' -fuzztime 30s -parallel "$FUZZ_PAR
 go test -run '^$' -fuzz '^FuzzOpen$' -fuzztime 20s -parallel "$FUZZ_PAR" ./internal/platform/crypto/localtoken
 (cd pkg/anubis && go test -run '^$' -fuzz '^FuzzVerify$' -fuzztime 20s -parallel "$FUZZ_PAR" ./paseto)
 
+# The audit log is written off the request path, so a failed write cannot fail
+# the call — it can only be dropped. That makes a drop invisible unless
+# somebody looks, and nobody greps a passing CI run. So look here, once, for
+# everything the whole suite just did: hundreds of admin calls across every
+# bounded context, and not one of them may have lost its record.
+#
+# This is the general form of two real bugs. The scope axis audit entries were
+# never written (a code passed to a uuid column) and the entire platform plane
+# was never written (no tenant to file under) — both for as long as the code
+# existed, both printing only a log line.
+# `authorize` is excluded, and only `authorize`. It is emitted on every
+# decision and is the one action allowed to drop instead of blocking, because
+# back-pressure there would turn a slow database into a slow authorize(). The
+# load test deliberately pushes hard enough to make that possible, so
+# asserting zero would be asserting the absence of a documented behaviour.
+# Its drops are a capacity signal and belong on the alert, not here.
+DROPPED="$(curl -fsS "${ANUBIS_E2E_BASE_URL}/metrics" 2>/dev/null \
+  | awk '/^anubis_audit_dropped_total\{/ && !/action="authorize"/ { total += $NF } END { print total + 0 }')"
+if [ "${DROPPED}" != "0" ]; then
+  echo "FAIL: the server dropped ${DROPPED} audit events during this suite" >&2
+  curl -fsS "${ANUBIS_E2E_BASE_URL}/metrics" | grep '^anubis_audit_dropped_total' >&2
+  exit 1
+fi
+echo "audit: every event the suite generated was recorded"
+
 echo "backend suite: all green"
