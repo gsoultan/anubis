@@ -72,6 +72,10 @@ says how to get the real one.
 | `ANUBIS_DEBUG_LISTEN` | *(off)* | pprof/expvar; bind loopback only |
 | `ANUBIS_UI_ORIGIN` | *(off)* | Dev CORS only; production is same-origin |
 | `ANUBIS_TRUSTED_PROXIES` | *(none)* | CIDRs whose `X-Forwarded-For` is believed. **Set this behind a TLS proxy** or every caller shares one rate-limit bucket |
+| `ANUBIS_KEY_FILE` | *(none)* | Path to the master key instead of `ANUBIS_MASTER_KEY`. **Prefer it**: an environment variable is readable from `/proc` by anything running as the same user and survives core dumps. The systemd unit points this at a `LoadCredential` mount |
+| `ANUBIS_AUTOKEYS` | `1` outside prod | Provision signing keys at boot when none exist. In `prod` this is **off** unless set to `1` — a key minted automatically is one nobody escrowed |
+| `ANUBIS_SETUP_TOKEN` | *(random per boot)* | Guards the first-run installer. Supply it for an unattended install; otherwise it is printed once and dies with the process |
+| `ANUBIS_DEFAULT_TENANT` | `impack` | The tenant assumed when a request carries none. **Single-tenant installs should set this**; the default is a development fixture name |
 | `ANUBIS_SYNC_DENY_HOSTS` | *(none)* | CIDRs a structure feed may not reach. Link-local is always refused |
 | `ANUBIS_SYNC_ALLOW_LOOPBACK` | `0` | Let a feed reach 127.0.0.1 — development only |
 

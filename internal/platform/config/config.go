@@ -35,6 +35,10 @@ type Config struct {
 	TrustedProxies string
 	// AutoKeys provisions signing keys at startup when none exist (dev).
 	AutoKeys bool
+	// InsecureMasterKey is true when no key was configured and the dev
+	// constant below was substituted. Callers with a logger MUST say so —
+	// see runServe. Nothing sealed under that key is confidential.
+	InsecureMasterKey bool
 	// UIOrigin enables CORS for the console origin in dev
 	// (ANUBIS_UI_ORIGIN, e.g. "http://localhost:7447"). Empty = same-origin only.
 	UIOrigin string
@@ -57,10 +61,13 @@ type Config struct {
 	// ShutdownGrace is how long in-flight requests may finish
 	// (ANUBIS_SHUTDOWN_GRACE, default 20s).
 	ShutdownGrace time.Duration
-	// TrustProxyHeaders makes the transport believe X-Forwarded-For. Only
-	// enable when a proxy you control rewrites it (ANUBIS_TRUST_PROXY=1);
-	// otherwise a client can forge its own rate-limit identity.
-	TrustProxyHeaders bool
+	// StrayTrustProxy is true when the retired ANUBIS_TRUST_PROXY is set.
+	// It never did anything outside this struct — TrustedProxies is and was
+	// the mechanism — but an operator who found it in the source and set it
+	// believes proxy trust is configured when it is not, and then every
+	// caller shares one rate-limit bucket. Warned about at startup rather
+	// than ignored.
+	StrayTrustProxy bool
 	// SnapshotMaxAge is how stale the gate's snapshot may be before it fails
 	// closed and readiness reports unhealthy (ANUBIS_SNAPSHOT_MAX_AGE, 5m).
 	SnapshotMaxAge time.Duration
@@ -80,14 +87,14 @@ func Load() (*Config, error) {
 		Env:         envOr("ANUBIS_ENV", "dev"),
 		UIOrigin:    os.Getenv("ANUBIS_UI_ORIGIN"),
 
-		MaxConns:          int32(envInt("ANUBIS_DB_MAX_CONNS", runtime.GOMAXPROCS(0)*4)),
-		StatementTimeout:  envDuration("ANUBIS_DB_STATEMENT_TIMEOUT", 15*time.Second),
-		RequestTimeout:    envDuration("ANUBIS_REQUEST_TIMEOUT", 30*time.Second),
-		MaxRequestBytes:   int64(envInt("ANUBIS_MAX_REQUEST_BYTES", 1<<20)),
-		ShutdownGrace:     envDuration("ANUBIS_SHUTDOWN_GRACE", 20*time.Second),
-		TrustProxyHeaders: os.Getenv("ANUBIS_TRUST_PROXY") == "1",
-		DefaultTenant:     envOr("ANUBIS_DEFAULT_TENANT", "impack"),
-		SnapshotMaxAge:    envDuration("ANUBIS_SNAPSHOT_MAX_AGE", 5*time.Minute),
+		MaxConns:         int32(envInt("ANUBIS_DB_MAX_CONNS", runtime.GOMAXPROCS(0)*4)),
+		StatementTimeout: envDuration("ANUBIS_DB_STATEMENT_TIMEOUT", 15*time.Second),
+		RequestTimeout:   envDuration("ANUBIS_REQUEST_TIMEOUT", 30*time.Second),
+		MaxRequestBytes:  int64(envInt("ANUBIS_MAX_REQUEST_BYTES", 1<<20)),
+		ShutdownGrace:    envDuration("ANUBIS_SHUTDOWN_GRACE", 20*time.Second),
+		StrayTrustProxy:  os.Getenv("ANUBIS_TRUST_PROXY") != "",
+		DefaultTenant:    envOr("ANUBIS_DEFAULT_TENANT", "impack"),
+		SnapshotMaxAge:   envDuration("ANUBIS_SNAPSHOT_MAX_AGE", 5*time.Minute),
 	}
 	if c.MaxConns < 2 {
 		c.MaxConns = 2
@@ -147,6 +154,7 @@ func Load() (*Config, error) {
 		// Dev-only deterministic key so restarts can unseal what they wrote.
 		// 32 bytes, obviously not secret — never let this reach prod.
 		c.MasterKey = []byte("anubis-dev-master-key-32-bytes!!")
+		c.InsecureMasterKey = true
 	}
 	return c, nil
 
