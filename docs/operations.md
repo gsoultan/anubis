@@ -33,13 +33,30 @@ working when the runner is unavailable.
 ```bash
 anubisd migrate          # schema, as anubis_owner — a separate step, on purpose
 anubisd keys init access # FIRST INSTALL ONLY: mint the signing key
+anubisd bootstrap \
+  --tenant acme --name Acme \
+  --admin-user admin --admin-pass '…'   # FIRST INSTALL ONLY: the first tenant
 anubisd serve            # runtime, as anubis_app
 ```
 
 **A fresh production install has no signing key.** Automatic key generation
 is off outside dev on purpose — nothing mints signing material behind your
 back — so until `keys init` runs, `/readyz` answers 503 and every login
-fails. `keys init` refuses once an active key exists, so it cannot rotate a
+fails.
+
+**It also has no tenant, and readiness waits for one.** The gate loads a
+snapshot per tenant, so with none there is nothing to load and `/readyz`
+answers 503 with `"snapshot": "never loaded"` — which reads like a failure and
+is really "there is nothing here yet". Measured on a fresh install: migrate
+and `keys init` alone leave readiness at 503 with `"signing_key": "ok"`,
+and it flips to 200 the moment a tenant exists.
+
+Under an orchestrator this matters more than it looks. A readiness probe that
+never passes means no traffic is routed, so the console you would have used to
+create that first tenant is unreachable. **Run `anubisd bootstrap` (or
+complete the first-run installer) as a deploy step, not afterwards** — as an
+init container or a Job, before the first replica is expected to report
+ready. `keys init` refuses once an active key exists, so it cannot rotate a
 live installation by accident; rotation is `prepare` then `promote`, below.
 
 Migrations run **forward-only** and take an advisory lock, so several replicas

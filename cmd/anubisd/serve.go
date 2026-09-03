@@ -57,6 +57,30 @@ func runServe(ctx context.Context, logger *slog.Logger) error {
 			"env", cfg.Env, "issuer", cfg.Issuer)
 	}
 
+	// Production does NOT migrate on boot, so an operator who skipped that
+	// deploy step meets the schema as a raw SQLSTATE from whichever query
+	// happens to run first — `relation "signing_keys" does not exist`, which
+	// names neither the cause nor the fix. That is the first thing a new
+	// container deployment sees now that the image defaults to prod, so it is
+	// worth one cheap query to say the useful thing instead.
+	if cfg.Env == "prod" {
+		conn, cerr := pgx.Connect(ctx, cfg.DatabaseURL)
+		if cerr != nil {
+			return cerr
+		}
+		var migrated bool
+		qerr := conn.QueryRow(ctx,
+			`SELECT to_regclass('public.schema_migrations') IS NOT NULL`).Scan(&migrated)
+		conn.Close(context.WithoutCancel(ctx))
+		if qerr != nil {
+			return fmt.Errorf("checking for the schema: %w", qerr)
+		}
+		if !migrated {
+			return errors.New("database has no Anubis schema — run `anubisd migrate` first " +
+				"(production does not migrate on boot, so that it stays a deliberate deploy step)")
+		}
+	}
+
 	// Dev convenience mirrors scripts/dev.sh expectations: schema is applied
 	// on boot. Production runs `anubisd migrate` as its own deploy step.
 	if cfg.Env != "prod" {
