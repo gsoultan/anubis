@@ -231,6 +231,55 @@ LISTEN/NOTIFY. `/readyz` fails once a snapshot passes
 `ANUBIS_SNAPSHOT_MAX_AGE`, which is what takes a stale instance out of the
 load balancer rather than letting it deny traffic it should allow.
 
+**Sizing it.** Every instance holds every tenant's snapshot, so plan memory by
+scope size × tenant count, not by traffic. Measured through the real loader:
+
+| tenant scope size | snapshot resident |
+| :--- | :--- |
+| 32k nodes | ~1.5 MB of scope index (plus grants/identities) |
+| 1M nodes | **~92 MB** |
+
+The poll only *rebuilds* a tenant whose catalog version moved; an unchanged
+tenant costs a single indexed row read. So idle tenants are nearly free, and
+the cost that scales is resident memory rather than poll work. See
+[ADR-0015](adr/0015-scope-hierarchy-at-scale.md).
+
+**Size for the rebuild peak, not the steady state.** A rebuild constructs the
+new snapshot in full *before* swapping the pointer — that is what makes the
+swap atomic and lock-free for readers, and it means both copies are live for
+the duration. Observed on the dev dataset with a server left running:
+
+```
+idle                      21.9 MB RSS
+during a rebuild         396.0 MB RSS
++15s                      91.7 MB
++30s                      21.3 MB   settled
+```
+
+Steady state is small because Go returns pages with `MADV_FREE`, so RSS
+understates the live heap while the process is quiet — and *overstates*
+nothing during the spike. Container limits are enforced against RSS, so an
+instance sized to the idle figure will be OOM-killed on a rebuild. Budget for
+the peak: roughly twice a tenant's snapshot on top of the resident set, and
+remember a fresh instance builds every tenant at once.
+
+This is the other reason the version gate matters. It does not only save CPU —
+it removes most of these spikes, because a snapshot that has not changed is
+never rebuilt. Watch
+`anubis_gate_snapshot_refresh_total{result=~"rebuilt|verify"}` to know how
+often you are actually paying it.
+
+**Cold start.** The version gate only helps a *running* instance; a fresh one
+has nothing to compare against and loads every tenant in full, serially. At
+~340 ms per million-node tenant that is the startup cost to plan a rollout
+around, and `/readyz` correctly fails throughout — the instance is denying
+traffic until its snapshots exist, which is why it must not be in the
+balancer yet. Roll instances one at a time.
+
+If a tenant's snapshot no longer fits comfortably, shard tenants across
+instances before reaching for anything cleverer — the gate is deliberately
+share-nothing, so that is a routing change and no code.
+
 ## Connecting a structure feed to another system
 
 A scope axis can be kept in step with wherever that structure actually lives

@@ -155,6 +155,69 @@ needed before making that change in production.
 
 ---
 
+## The gate snapshot at a million scope nodes
+
+Measured through the real `LoadSnapshot` against a single tenant of
+1,010,101 `scope_nodes` / 4,030,201 `scope_closure` rows.
+
+The SQL engine barely notices the size — the closure probe is a two-column PK
+lookup, so thirty times the data costs thirty percent more time:
+
+| | 32k nodes | 1M nodes |
+| :--- | :--- | :--- |
+| `authorize()` allow | 0.045 ms | **0.059 ms** |
+| `authorize()` deny | — | **0.039 ms** |
+
+The gate's in-memory copy was the real ceiling. It held the whole transitive
+closure as nested string-keyed maps; it now holds parent pointers and walks
+them ([ADR-0015](adr/0015-scope-hierarchy-at-scale.md)):
+
+| | closure map | parent index |
+| :--- | :--- | :--- |
+| snapshot resident | 530.7 MB | **91.9 MB** |
+| per node | 550.9 B | 95.4 B |
+| live heap objects | 1,014,000 | **4,245** |
+| load | 1613 ms | ~340 ms |
+| `Evaluate` (1 grant, allow) | 73.0 ns | 76.7 ns |
+| `Evaluate` (20 grants, allow) | 329.4 ns | 113.7 ns |
+
+Two things are worth reading off that table rather than the headline.
+
+**Memory is now flat in depth** — 75 B/node at depth 3 and at depth 11, where
+the closure form went from 296 to 527 B/node over the same range. The old
+shape grew with the tree; this one does not, which is what makes a deep
+hierarchy safe rather than merely affordable today.
+
+**The object count moved further than the megabytes.** The driver allocates a
+separate string per node id, so a million-node snapshot kept a million extra
+pointers for the GC to trace on every scan — paid in request latency, not RSS.
+Slabbing the ids into one string took 1,014,000 live objects to 4,245 at a
+cost of ~20 ms on a load that happens on refresh and never on the request
+path.
+
+The single-grant `Evaluate` case is ~4 ns slower; the multi-grant cases are
+2–3× faster, because the old shape paid a map probe per grant per axis while
+the walk pays one lookup and then integer loads. Both are far inside the
+sub-microsecond budget ADR-0005 §4 sets for the decision itself.
+
+### Chain depth is quadratic, and that is the real bound
+
+`scope_closure` stores one row per (node, ancestor) pair, so a *chain* costs
+n²/2 rows:
+
+| chain depth | closure rows | cumulative build |
+| :--- | :--- | :--- |
+| 250 | 31,626 | 0.5 s |
+| 500 | 125,751 | 1.8 s |
+| 1,000 | 501,501 | 7.5 s |
+| 2,000 | 2,003,001 | 26 s |
+
+The declared ceiling is the `smallint` bound on `depth`, 32,767 — but that
+would be ~537M closure rows, so the practical limit arrives long before the
+declared one. Migration 0038 raises a named `program_limit_exceeded` instead
+of letting this surface as "smallint out of range". Anything approaching these
+numbers is a self-referencing external feed, not a hierarchy.
+
 ## Benchmark hygiene
 
 Four rules, each learned by getting it wrong first.
