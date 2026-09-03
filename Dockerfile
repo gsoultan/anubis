@@ -32,6 +32,23 @@ FROM gcr.io/distroless/static-debian12:nonroot
 WORKDIR /
 COPY --from=build /out/anubisd /anubisd
 
+# SECURE BY DEFAULT, deliberately louder than convenient.
+#
+# ANUBIS_ENV defaults to `dev` in the binary, and dev substitutes a master key
+# that is a constant in the public source — so an image left at the default
+# would seal every signing key and every PII key under a value anyone can
+# read, and boot successfully while doing it. The systemd packaging has always
+# set this explicitly; the image did not, which made `docker run -e
+# ANUBIS_DB_URL=... anubisd` the one supported path that was unsafe.
+#
+# prod changes three things, and each is the production-correct answer:
+#   * refuses to boot without ANUBIS_MASTER_KEY or ANUBIS_KEY_FILE
+#   * does not auto-run migrations — run `anubisd migrate` as a deploy step
+#   * does not auto-provision signing keys — run `anubisd keys init access`
+#
+# For a development or demo container, opt out explicitly:  -e ANUBIS_ENV=dev
+ENV ANUBIS_ENV=prod
+
 # 7448 is the API. The debug listener (pprof/expvar) binds loopback only and
 # is never published.
 EXPOSE 7448
