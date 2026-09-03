@@ -109,7 +109,7 @@ func (u *dashboardInteractor) GetDashboard(ctx context.Context) (*Dashboard, err
 			Since:  latest,
 		})
 	}
-	if key, kerr := u.ring.Ring().ActiveAccessPresent(); kerr == nil {
+	if key, kerr := u.ring.Ring().ActiveAccess(); kerr == nil {
 		if age := u.now().Sub(key.NotBefore); age > keyRotationPolicy {
 			d.Signals = append(d.Signals, DashboardSignal{
 				Kind: "key_rotation_due", Severity: "alert", Count: 1,
