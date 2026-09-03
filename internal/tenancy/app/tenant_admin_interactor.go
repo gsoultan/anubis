@@ -14,6 +14,7 @@ import (
 	identitydomain "github.com/gsoultan/anubis/internal/identity/domain"
 	identityport "github.com/gsoultan/anubis/internal/identity/port"
 	"github.com/gsoultan/anubis/internal/platform/crypto/secret"
+	"github.com/gsoultan/anubis/internal/platform/metrics"
 	"github.com/gsoultan/anubis/internal/shared/apperr"
 	"github.com/gsoultan/anubis/internal/shared/authctx"
 	"github.com/gsoultan/anubis/internal/shared/jsonx"
@@ -412,14 +413,21 @@ func (u *tenantAdminInteractor) GetCatalogVersion(ctx context.Context) (int64, t
 	return u.tenants.CatalogVersion(ctx, p.TenantID)
 }
 
-// GetSigninPage is the pre-multi-page API: it answers for the tenant's
-// DEFAULT sign-in page so an older console keeps working while it migrates to
-// ListAuthPages.
+// GetSigninPage is DEPRECATED, and the comment that used to sit here claimed
+// it answers for the tenant's default sign-in page. It does not: it reads
+// signin_pages, which migration 0024 replaced with auth_pages and which
+// nothing has rendered from since. Callers get whatever was last written to a
+// table the hosted page never opens.
+//
+// It cannot simply be pointed at the default auth page either, because the
+// two carry different shapes — this one predates pagecfg and its stored value
+// will not parse. Use ListAuthPages / GetAuthPage.
 func (u *tenantAdminInteractor) GetSigninPage(ctx context.Context) ([]byte, time.Time, error) {
 	p, err := u.guard.Require(ctx, "anubis:identity:read")
 	if err != nil {
 		return nil, time.Time{}, err
 	}
+	metrics.IncDeprecated("TenantAdminService/GetSigninPage")
 	cfg, at, err := u.signin.SigninPage(ctx, p.TenantID)
 	if err != nil {
 		return []byte("{}"), time.Time{}, nil // absent config is an empty page
@@ -427,18 +435,30 @@ func (u *tenantAdminInteractor) GetSigninPage(ctx context.Context) ([]byte, time
 	return cfg, at, nil
 }
 
+// PutSigninPage is DEPRECATED and has NO EFFECT on what anybody sees. It
+// validates that the body is JSON — not that it is a valid page — and stores
+// it in signin_pages, which no hosted page reads. Use UpdateAuthPage.
 func (u *tenantAdminInteractor) PutSigninPage(ctx context.Context, config []byte) error {
 	p, err := u.guard.Require(ctx, "anubis:signin:admin")
 	if err != nil {
 		return err
 	}
+	metrics.IncDeprecated("TenantAdminService/PutSigninPage")
 	if !json.Valid(config) {
 		return apperr.ErrInvalidArgument.With("config", "invalid JSON")
 	}
 	if err := u.signin.PutSigninPage(ctx, p.TenantID, config); err != nil {
 		return err
 	}
-	u.emit(ctx, p, "signin.update", p.TenantID, nil)
+	// The audit event has to say what actually happened. Recording a plain
+	// "signin.update" for a write nothing renders is the same failure as
+	// dropping one: the log asserts a change that did not reach the product,
+	// and the operator reading it later has no way to tell.
+	u.emit(ctx, p, "signin.update", p.TenantID, map[string]string{
+		"deprecated": "true",
+		"effect":     "none — stored in signin_pages, which no page renders from since migration 0024",
+		"use":        "UpdateAuthPage",
+	})
 	return nil
 }
 

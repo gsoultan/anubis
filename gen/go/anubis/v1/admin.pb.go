@@ -14101,7 +14101,7 @@ const file_anubis_v1_admin_proto_rawDesc = "" +
 	"\x10AssignMembership\x12\".anubis.v1.AssignMembershipRequest\x1a#.anubis.v1.AssignMembershipResponse\x12a\n" +
 	"\x12UnassignMembership\x12$.anubis.v1.UnassignMembershipRequest\x1a%.anubis.v1.UnassignMembershipResponse\x12[\n" +
 	"\x10ResyncMembership\x12\".anubis.v1.ResyncMembershipRequest\x1a#.anubis.v1.ResyncMembershipResponse\x12R\n" +
-	"\rApplyManifest\x12\x1f.anubis.v1.ApplyManifestRequest\x1a .anubis.v1.ApplyManifestResponse2\xd4\x16\n" +
+	"\rApplyManifest\x12\x1f.anubis.v1.ApplyManifestRequest\x1a .anubis.v1.ApplyManifestResponse2\xde\x16\n" +
 	"\x12TenantAdminService\x12L\n" +
 	"\vListTenants\x12\x1d.anubis.v1.ListTenantsRequest\x1a\x1e.anubis.v1.ListTenantsResponse\x12O\n" +
 	"\fCreateTenant\x12\x1e.anubis.v1.CreateTenantRequest\x1a\x1f.anubis.v1.CreateTenantResponse\x12O\n" +
@@ -14128,9 +14128,9 @@ const file_anubis_v1_admin_proto_rawDesc = "" +
 	"\x10VerifyAuditChain\x12\".anubis.v1.VerifyAuditChainRequest\x1a#.anubis.v1.VerifyAuditChainResponse\x12X\n" +
 	"\x0fListSigningKeys\x12!.anubis.v1.ListSigningKeysRequest\x1a\".anubis.v1.ListSigningKeysResponse\x12[\n" +
 	"\x10RotateSigningKey\x12\".anubis.v1.RotateSigningKeyRequest\x1a#.anubis.v1.RotateSigningKeyResponse\x12^\n" +
-	"\x11GetCatalogVersion\x12#.anubis.v1.GetCatalogVersionRequest\x1a$.anubis.v1.GetCatalogVersionResponse\x12R\n" +
-	"\rGetSigninPage\x12\x1f.anubis.v1.GetSigninPageRequest\x1a .anubis.v1.GetSigninPageResponse\x12R\n" +
-	"\rPutSigninPage\x12\x1f.anubis.v1.PutSigninPageRequest\x1a .anubis.v1.PutSigninPageResponse\x12R\n" +
+	"\x11GetCatalogVersion\x12#.anubis.v1.GetCatalogVersionRequest\x1a$.anubis.v1.GetCatalogVersionResponse\x12W\n" +
+	"\rGetSigninPage\x12\x1f.anubis.v1.GetSigninPageRequest\x1a .anubis.v1.GetSigninPageResponse\"\x03\x88\x02\x01\x12W\n" +
+	"\rPutSigninPage\x12\x1f.anubis.v1.PutSigninPageRequest\x1a .anubis.v1.PutSigninPageResponse\"\x03\x88\x02\x01\x12R\n" +
 	"\rListAuthPages\x12\x1f.anubis.v1.ListAuthPagesRequest\x1a .anubis.v1.ListAuthPagesResponse\x12L\n" +
 	"\vGetAuthPage\x12\x1d.anubis.v1.GetAuthPageRequest\x1a\x1e.anubis.v1.GetAuthPageResponse\x12U\n" +
 	"\x0eCreateAuthPage\x12 .anubis.v1.CreateAuthPageRequest\x1a!.anubis.v1.CreateAuthPageResponse\x12U\n" +

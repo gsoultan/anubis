@@ -36,6 +36,12 @@ IP and restrict it with a NetworkPolicy; the scraper is the only client.
 - `anubis_gate_snapshot_refresh_total{result="unchanged"}` climbing — the
   version gate skipping a rebuild it did not need. That is the optimisation
   working; it should be the overwhelming majority of refreshes.
+- `anubis_deprecated_rpc_total{rpc}` — not an alert, a **removal signal**. A
+  deprecation comment tells whoever reads the schema; it does not tell you
+  whether something in the estate still calls the RPC at three in the morning.
+  Zero across a release cycle is the evidence that removing it is safe.
+  Currently counts `GetSigninPage` and `PutSigninPage`, which write to a table
+  no hosted page has rendered from since migration 0024.
 - `anubis_gate_snapshot_scope_nodes` — not an alert, a **capacity gauge**.
   Every instance holds every tenant's snapshot at roughly 95 bytes per scope
   node, so `sum(anubis_gate_snapshot_scope_nodes) * 95` is the floor on gate

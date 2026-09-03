@@ -18,6 +18,7 @@ func TestExpositionCarriesAllFamilies(t *testing.T) {
 	IncJob("retention", "skipped")
 	SetSnapshotLoaded("impack", time.Unix(1_700_000_000, 0))
 	SetBuildInfo("test-sha")
+	IncDeprecated("TenantAdminService/PutSigninPage")
 	RegisterPoolStats(func() PoolStats {
 		return PoolStats{Acquired: 1, Idle: 2, Total: 3, Max: 4, EmptyAcquireCount: 5}
 	})
@@ -38,6 +39,7 @@ func TestExpositionCarriesAllFamilies(t *testing.T) {
 		`anubis_job_runs_total{job="retention",result="ok"} 1`,
 		`anubis_job_runs_total{job="retention",result="skipped"} 1`,
 		`anubis_gate_snapshot_loaded_timestamp_seconds{tenant="impack"} 1700000000`,
+		`anubis_deprecated_rpc_total{rpc="TenantAdminService/PutSigninPage"} 1`,
 		`anubis_build_info{version="test-sha"} 1`,
 		`anubis_db_pool_empty_acquires_total 5`,
 	} {
