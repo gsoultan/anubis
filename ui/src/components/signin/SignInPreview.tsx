@@ -1,114 +1,168 @@
-import type { SignInConfig } from '@/lib/api/types'
+import type { PageConfig } from '@/lib/api/types'
 
-/* The preview IS the page: one component renders the tenant sign-in from its
-   config — the builder's live pane today, the served page when the Go tier
-   exists. Builder and reality cannot drift because they are the same code. */
+/* The preview mirrors internal/auth/adapter/http/page_template.go field for
+ * field. It used to render a shape of its own — theme/background/language
+ * against a flat config — while the Go template drew brand.logo_url,
+ * copy.subheading and features.* out of auth_pages. The builder therefore
+ * showed something the hosted page would never produce, which is how a
+ * configured logo could be invisible in both places at once: the console had
+ * no input for it and the preview had nowhere to draw it.
+ *
+ * Every value below comes from PageConfig. If the Go template gains a token,
+ * it gains one here too — a preview that is merely plausible is worse than
+ * none, because it is believed.
+ */
 
-const I18N = {
-  en: { username: 'Username', password: 'Password', continue: 'Continue',
-        forgot: 'Forgot password?', pick: 'Sign in as' },
-  id: { username: 'Nama pengguna', password: 'Kata sandi', continue: 'Lanjutkan',
-        forgot: 'Lupa kata sandi?', pick: 'Masuk sebagai' },
+const RADIUS: Record<string, number> = { none: 0, sm: 4, md: 8, lg: 14, full: 999 }
+const FONT: Record<string, string> = {
+  system: 'ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif',
+  serif: 'ui-serif, Georgia, Cambria, Times New Roman, serif',
+  mono: 'ui-monospace, SFMono-Regular, Menlo, monospace',
 }
 
-export function SignInPreview({ cfg, populations }: {
-  cfg: SignInConfig
-  populations: string[]
+export function SignInPreview({ cfg, realms }: {
+  cfg: PageConfig
+  realms: string[]
 }) {
-  const t = I18N[cfg.language]
-  const dark = cfg.theme === 'dark'
-  const ink = dark ? '#edeff4' : '#1c2230'
-  const sub = dark ? '#aab1bf' : '#5a6478'
-  const cardBg = dark ? '#15181f' : '#ffffff'
-  const line = dark ? '#262b34' : '#e3e6ec'
-  const pageBg = cfg.background === 'gradient'
-    ? `linear-gradient(135deg, ${cfg.brand_color}22, ${dark ? '#0b0d11' : '#f5f6f8'} 55%)`
-    : dark ? '#0b0d11' : '#f5f6f8'
+  const b = cfg.brand
+  const c = cfg.copy
+  const f = cfg.features ?? {}
+  const radius = RADIUS[b.corner_radius] ?? 8
+  const font = FONT[b.font] ?? FONT['system']
+
+  const field = (label: string, type: string) => (
+    <label style={{ display: 'block', marginBottom: 12 }}>
+      <span style={{ display: 'block', fontSize: 12.5, color: b.text_color, opacity: 0.75, marginBottom: 5 }}>
+        {label}
+      </span>
+      <input
+        readOnly
+        type={type}
+        style={{
+          width: '100%', padding: '9px 11px', borderRadius: Math.min(radius, 14),
+          border: '1px solid rgb(0 0 0 / .14)', background: '#fff',
+          color: '#111', fontSize: 13.5, fontFamily: font,
+        }}
+      />
+    </label>
+  )
 
   const card = (
-    <div style={{
-      background: cardBg, border: `1px solid ${line}`, borderRadius: 12,
-      padding: '28px 26px', width: 320, boxShadow: '0 10px 30px rgb(10 14 25 / .12)',
-    }}>
-      <div style={{
-        width: 40, height: 40, borderRadius: 10, background: cfg.brand_color,
-        color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontWeight: 700, fontSize: 17, marginBottom: 16,
-      }}>
-        {(cfg.logo_text || '?').slice(0, 1).toUpperCase()}
-      </div>
-      <div style={{ color: ink, fontSize: 19, fontWeight: 650, letterSpacing: '-.02em' }}>
-        {cfg.headline}
-      </div>
-      <div style={{ color: sub, fontSize: 12.5, marginTop: 4, marginBottom: 18 }}>
-        {cfg.subheadline}
-      </div>
-
-      {cfg.show_populations && populations.length > 1 && (
-        <div style={{ marginBottom: 14 }}>
-          <div style={{ color: sub, fontSize: 10, textTransform: 'uppercase',
-            letterSpacing: '.06em', fontWeight: 600, marginBottom: 6 }}>{t.pick}</div>
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            {populations.map((p, i) => (
-              <span key={p} style={{
-                fontSize: 11, padding: '4px 9px', borderRadius: 99,
-                border: `1px solid ${i === 0 ? cfg.brand_color : line}`,
-                color: i === 0 ? cfg.brand_color : sub,
-                background: i === 0 ? `${cfg.brand_color}14` : 'transparent',
-                fontWeight: i === 0 ? 600 : 450,
-              }}>{p}</span>
-            ))}
-          </div>
+    <div
+      style={{
+        background: '#fff', borderRadius: Math.min(radius, 24), padding: '26px 24px',
+        width: 320, boxShadow: '0 10px 30px rgb(10 14 25 / .12)',
+        border: '1px solid rgb(0 0 0 / .07)', fontFamily: font,
+      }}
+    >
+      {/* Matches {{if .Cfg.Brand.LogoURL}} — an image when set, the initial
+          otherwise, exactly as the template falls back. */}
+      {b.logo_url ? (
+        <img
+          src={b.logo_url}
+          alt={b.title}
+          style={{ maxHeight: 40, maxWidth: 180, objectFit: 'contain', marginBottom: 16, display: 'block' }}
+        />
+      ) : (
+        <div
+          style={{
+            width: 40, height: 40, borderRadius: Math.min(radius, 12), background: b.primary_color,
+            color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontWeight: 700, fontSize: 17, marginBottom: 16,
+          }}
+        >
+          {(b.title || '?').slice(0, 1).toUpperCase()}
         </div>
       )}
 
-      {[t.username, t.password].map((label) => (
-        <div key={label} style={{ marginBottom: 10 }}>
-          <div style={{ color: sub, fontSize: 11, fontWeight: 550, marginBottom: 4 }}>{label}</div>
-          <div style={{
-            height: 34, borderRadius: 7, border: `1px solid ${line}`,
-            background: dark ? '#0d1015' : '#f8f9fb',
-          }} />
+      <div style={{ color: b.text_color, fontSize: 19, fontWeight: 650, letterSpacing: '-.02em' }}>
+        {c.heading}
+      </div>
+      {c.subheading && (
+        <div style={{ color: b.text_color, opacity: 0.65, fontSize: 13, marginTop: 4, marginBottom: 14 }}>
+          {c.subheading}
         </div>
-      ))}
+      )}
+      <div style={{ height: 14 }} />
 
-      <div style={{
-        height: 36, borderRadius: 7, background: cfg.brand_color, color: '#fff',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: 13, fontWeight: 620, marginTop: 14,
-      }}>{t.continue}</div>
+      {f.show_realm_picker && realms.length > 0 && (
+        <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
+          {realms.map((r) => (
+            <span
+              key={r}
+              style={{
+                fontSize: 11.5, padding: '4px 9px', borderRadius: Math.min(radius, 999),
+                border: `1px solid ${b.primary_color}55`, color: b.text_color, opacity: 0.85,
+              }}
+            >
+              {r}
+            </span>
+          ))}
+        </div>
+      )}
 
-      <div style={{ color: cfg.brand_color, fontSize: 11.5, fontWeight: 550,
-        marginTop: 12, textAlign: 'center' }}>{t.forgot}</div>
+      {field(c.username_label, 'text')}
+      {field(c.password_label, 'password')}
 
-      <div style={{ borderTop: `1px solid ${line}`, marginTop: 16, paddingTop: 12,
-        color: sub, fontSize: 10.5, textAlign: 'center' }}>{cfg.footer_note}</div>
+      {f.remember_me && (
+        <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12.5, color: b.text_color, opacity: 0.8, marginBottom: 12 }}>
+          <input readOnly type="checkbox" /> Remember me
+        </label>
+      )}
+
+      <button
+        type="button"
+        style={{
+          width: '100%', padding: '10px 12px', borderRadius: Math.min(radius, 14),
+          background: b.primary_color, color: '#fff', border: 'none',
+          fontWeight: 600, fontSize: 13.5, fontFamily: font, cursor: 'default',
+        }}
+      >
+        {c.submit_label}
+      </button>
+
+      {(f.show_forgot_password || f.show_registration) && (
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 12, fontSize: 12.5 }}>
+          {f.show_forgot_password && <span style={{ color: b.primary_color }}>Forgot password?</span>}
+          {f.show_registration && <span style={{ color: b.primary_color }}>Create account</span>}
+        </div>
+      )}
+
+      {(cfg.links ?? []).length > 0 && (
+        <div style={{ display: 'flex', gap: 12, marginTop: 14, fontSize: 12, opacity: 0.7, flexWrap: 'wrap' }}>
+          {(cfg.links ?? []).map((l) => (
+            <span key={l.label} style={{ color: b.text_color }}>{l.label}</span>
+          ))}
+        </div>
+      )}
     </div>
   )
 
-  return (
-    <div style={{
-      background: pageBg, borderRadius: 10, overflow: 'hidden',
-      display: 'flex', minHeight: 480,
-      border: '1px solid var(--line)',
-    }}>
-      {cfg.layout === 'split' && (
-        <div style={{
-          flex: '0 0 42%',
-          background: `linear-gradient(160deg, ${cfg.brand_color}, ${cfg.brand_color}88)`,
-          display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', padding: 26,
-        }}>
-          <div style={{ color: '#fff', fontSize: 21, fontWeight: 680, letterSpacing: '-.02em' }}>
-            {cfg.logo_text || 'Your brand'}
-          </div>
-          <div style={{ color: '#ffffffcc', fontSize: 12, marginTop: 6 }}>
-            Single sign-on for every application.
+  // Matches the template's three layouts.
+  if (cfg.layout === 'split') {
+    return (
+      <div style={{ display: 'flex', minHeight: 420, borderRadius: 10, overflow: 'hidden' }}>
+        <div style={{ flex: 1, background: b.primary_color, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+          <div style={{ color: '#fff', fontFamily: font, fontSize: 22, fontWeight: 650, textAlign: 'center' }}>
+            {b.title}
           </div>
         </div>
-      )}
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-        {card}
+        <div style={{ flex: 1, background: b.background_color, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+          {card}
+        </div>
       </div>
+    )
+  }
+
+  return (
+    <div
+      style={{
+        background: cfg.layout === 'minimal' ? 'transparent' : b.background_color,
+        minHeight: 420, display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: 24, borderRadius: 10,
+      }}
+    >
+      {card}
     </div>
   )
 }

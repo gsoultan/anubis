@@ -292,17 +292,83 @@ export interface TenantStats {
 }
 
 /** Constrained sign-in page config — knobs that cannot break the page. */
-export interface SignInConfig {
-  layout: 'centered' | 'split'
-  theme: 'light' | 'dark'
-  brand_color: string
-  logo_text: string
-  headline: string
-  subheadline: string
-  background: 'solid' | 'gradient'
-  show_populations: boolean
-  footer_note: string
-  language: 'en' | 'id'
+/* Page configuration, mirroring internal/tenancy/domain/pagecfg exactly.
+ *
+ * It has to mirror it exactly. The console previously edited a FLAT shape
+ * (logo_text, brand_color, theme, background) against the legacy
+ * signin_pages table, while the server rendered a NESTED one
+ * (brand.logo_url, brand.primary_color) out of auth_pages. Nothing
+ * translated between them, so half of what the builder wrote was never read
+ * and brand.logo_url — a field the template renders and validates — had no
+ * input at all. Renaming or flattening anything here reopens that gap.
+ */
+export type PageKind = 'signin' | 'signout'
+export type PageLayout = 'centered' | 'split' | 'minimal'
+export type CornerRadius = 'none' | 'sm' | 'md' | 'lg' | 'full'
+export type PageFont = 'system' | 'serif' | 'mono'
+
+export interface PageBrand {
+  title: string
+  /** Rendered as <img src>. The server rejects javascript: and data: URLs. */
+  logo_url?: string
+  primary_color: string
+  background_color: string
+  text_color: string
+  corner_radius: CornerRadius
+  font: PageFont
+}
+
+export interface PageCopy {
+  heading: string
+  subheading?: string
+  username_label: string
+  password_label: string
+  submit_label: string
+  /* sign-out only */
+  confirm_heading?: string
+  confirm_body?: string
+  body?: string
+  return_label?: string
+}
+
+export interface PageFeatures {
+  show_realm_picker?: boolean
+  show_registration?: boolean
+  show_forgot_password?: boolean
+  remember_me?: boolean
+}
+
+export interface PageBehavior {
+  confirm?: boolean
+  auto_redirect_seconds?: number
+  default_return_url?: string
+}
+
+export interface PageLink {
+  label: string
+  url: string
+}
+
+export interface PageConfig {
+  brand: PageBrand
+  layout: PageLayout
+  copy: PageCopy
+  links?: PageLink[]
+  features?: PageFeatures
+  behavior?: PageBehavior
+}
+
+export interface AuthPage {
+  id: string
+  kind: PageKind
+  /** URL segment: /p/{tenant}/{kind}/{slug}. Immutable once published. */
+  slug: string
+  name: string
+  status: 'active' | 'disabled'
+  is_default: boolean
+  application_id: string | null
+  application_slug: string | null
+  config: PageConfig
 }
 
 export interface DashboardStats {

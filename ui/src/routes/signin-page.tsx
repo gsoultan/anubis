@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import {
-  Button, ColorInput, SegmentedControl, Select, Switch, TextInput,
+  Button, ColorInput, SegmentedControl, Select, Switch, TextInput, Textarea,
 } from '@mantine/core'
 import { IconDeviceFloppy, IconRestore } from '@tabler/icons-react'
 import { useEffect, useState } from 'react'
@@ -11,7 +11,7 @@ import { api } from '@/lib/api/client'
 import { qk } from '@/lib/query/keys'
 import { queryClient } from '@/lib/query/client'
 import { notifyCreated, notifyRejected } from '@/components/create/shell'
-import type { SignInConfig } from '@/lib/api/types'
+import type { AuthPage, PageConfig } from '@/lib/api/types'
 
 export const Route = createFileRoute('/signin-page')({
   validateSearch: (s: Record<string, unknown>) => ({
@@ -20,125 +20,231 @@ export const Route = createFileRoute('/signin-page')({
   component: SignInBuilder,
 })
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, hint, children }: {
+  label: string; hint?: string; children: React.ReactNode
+}) {
   return (
     <div>
       <div className="t-body mb-1.5" style={{ fontWeight: 550 }}>{label}</div>
       {children}
+      {hint && <div className="t-xs mt-1" style={{ opacity: 0.7 }}>{hint}</div>}
     </div>
   )
 }
 
 function SignInBuilder() {
-  const { tenant: tenantParam } = Route.useSearch()
-  const { data: tenants } = useQuery({ queryKey: qk.tenants(), queryFn: api.tenants })
-  const [tenantId, setTenantId] = useState<string | null>(tenantParam ?? null)
-  useEffect(() => {
-    if (!tenantId && tenants?.[0]) setTenantId(tenants[0].id)
-  }, [tenants, tenantId])
-
-  const { data: saved } = useQuery({
-    queryKey: qk.signin(tenantId ?? ''),
-    queryFn: () => api.signin(tenantId!),
-    enabled: !!tenantId,
+  /* Pages live in auth_pages, one per application plus a tenant default, in
+     signin and signout kinds. The builder edits the signin pages; the legacy
+     single signin_pages row is no longer read by the hosted page. */
+  const { data: pages } = useQuery({
+    queryKey: qk.authPages('signin'),
+    queryFn: () => api.authPages('signin'),
   })
-  const [cfg, setCfg] = useState<SignInConfig | null>(null)
-  useEffect(() => { if (saved) setCfg({ ...saved }) }, [saved])
+
+  const [pageId, setPageId] = useState<string | null>(null)
+  const selected: AuthPage | undefined =
+    pages?.find((p) => p.id === pageId) ?? pages?.find((p) => p.is_default) ?? pages?.[0]
+
+  const [cfg, setCfg] = useState<PageConfig | null>(null)
+  useEffect(() => {
+    if (selected) {
+      setPageId(selected.id)
+      setCfg(structuredClone(selected.config))
+    }
+  }, [selected?.id])
 
   const [busy, setBusy] = useState(false)
-  const dirty = !!saved && !!cfg && JSON.stringify(saved) !== JSON.stringify(cfg)
+  const dirty =
+    !!selected && !!cfg && JSON.stringify(selected.config) !== JSON.stringify(cfg)
 
-  const save = async () => {
-    if (!tenantId || !cfg) return
+  /* Section-wise setters. The config is nested because the server's is
+     (internal/tenancy/domain/pagecfg) — flattening it here is what produced
+     a builder whose output the hosted page could not read. */
+  const brand = <K extends keyof PageConfig['brand']>(k: K, v: PageConfig['brand'][K]) =>
+    setCfg((c) => (c ? { ...c, brand: { ...c.brand, [k]: v } } : c))
+  const copy = <K extends keyof PageConfig['copy']>(k: K, v: PageConfig['copy'][K]) =>
+    setCfg((c) => (c ? { ...c, copy: { ...c.copy, [k]: v } } : c))
+  const feature = (k: keyof NonNullable<PageConfig['features']>, v: boolean) =>
+    setCfg((c) => (c ? { ...c, features: { ...(c.features ?? {}), [k]: v } } : c))
+
+  async function save() {
+    if (!selected || !cfg) return
     setBusy(true)
     try {
-      await api.saveSignin(tenantId, cfg)
-      notifyCreated('Sign-in page saved', 'The next sign-in on this tenant uses the new design.')
-      await queryClient.invalidateQueries({ queryKey: qk.signin(tenantId) })
-    } catch (e) { notifyRejected(e) }
-    setBusy(false)
+      await api.saveAuthPage({ ...selected, config: cfg })
+      await queryClient.invalidateQueries({ queryKey: qk.authPages('signin') })
+      notifyCreated('Sign-in page saved', 'The hosted page now renders this configuration.')
+    } catch (e) {
+      /* The server validates the whole config and names the first bad field
+         (pagecfg.Validate), so show that rather than "invalid configuration". */
+      notifyRejected(e)
+    } finally {
+      setBusy(false)
+    }
   }
-
-  const set = <K extends keyof SignInConfig>(k: K, v: SignInConfig[K]) =>
-    setCfg((c) => (c ? { ...c, [k]: v } : c))
 
   return (
     <Page
-      title="Sign-in pages"
-      description="Brand each tenant's login. The preview is the real page component — what you see is exactly what signs people in. The knobs are deliberately constrained: nothing here can break the form or its accessibility."
-      wide
+      title="Sign-in page"
       actions={
         <>
-          <Select w={220} data={(tenants ?? []).map((t) => ({ value: t.id, label: t.name }))}
-            value={tenantId} onChange={setTenantId} />
-          <Button size="xs" variant="default" leftSection={<IconRestore size={13} />}
-            disabled={!dirty} onClick={() => saved && setCfg({ ...saved })}>
-            Discard
+          <Button
+            variant="default" size="xs" leftSection={<IconRestore size={15} />}
+            disabled={!dirty || busy}
+            onClick={() => selected && setCfg(structuredClone(selected.config))}
+          >
+            Revert
           </Button>
-          <Button size="xs" leftSection={<IconDeviceFloppy size={13} />}
-            disabled={!dirty} loading={busy} onClick={() => void save()}>
+          <Button
+            size="xs" leftSection={<IconDeviceFloppy size={15} />}
+            disabled={!dirty || busy} loading={busy} onClick={save}
+          >
             Save
           </Button>
         </>
       }
     >
       {cfg && (
-        <div className="grid gap-5" style={{ gridTemplateColumns: 'minmax(300px, 360px) minmax(0, 1fr)' }}>
+        <div className="grid gap-5" style={{ gridTemplateColumns: 'minmax(300px, 380px) minmax(0, 1fr)' }}>
           <div className="flex flex-col gap-4">
+            {(pages?.length ?? 0) > 1 && (
+              <div className="panel flex flex-col gap-3.5 p-4">
+                <div className="t-label">Page</div>
+                <Field label="Editing" hint="Each application may have its own page; one is the tenant default.">
+                  <Select
+                    size="xs"
+                    value={pageId}
+                    onChange={(v) => setPageId(v)}
+                    data={(pages ?? []).map((p) => ({
+                      value: p.id,
+                      label: p.application_slug ? `${p.name} — ${p.application_slug}` : `${p.name}${p.is_default ? ' (default)' : ''}`,
+                    }))}
+                  />
+                </Field>
+              </div>
+            )}
+
             <div className="panel flex flex-col gap-3.5 p-4">
               <div className="t-label">Brand</div>
-              <Field label="Logo text">
-                <TextInput value={cfg.logo_text} placeholder="Impack"
-                  onChange={(e) => set('logo_text', e.currentTarget.value)} />
+              <Field label="Company name">
+                <TextInput
+                  value={cfg.brand.title} placeholder="Impack"
+                  onChange={(e) => brand('title', e.currentTarget.value)}
+                />
+              </Field>
+              {/* The field whose absence started this: the template renders
+                  brand.logo_url and the builder had no input for it. */}
+              <Field
+                label="Logo URL"
+                hint="https:// image shown above the heading. Falls back to the first letter of the company name."
+              >
+                <TextInput
+                  value={cfg.brand.logo_url ?? ''} placeholder="https://cdn.example.com/logo.svg"
+                  onChange={(e) => brand('logo_url', e.currentTarget.value)}
+                />
               </Field>
               <Field label="Brand colour">
-                <ColorInput value={cfg.brand_color} format="hex" withEyeDropper={false}
-                  onChange={(v) => set('brand_color', v)} />
-              </Field>
-              <Field label="Theme">
-                <SegmentedControl fullWidth size="xs" value={cfg.theme}
-                  onChange={(v) => set('theme', v as SignInConfig['theme'])}
-                  data={[{ value: 'light', label: 'Light' }, { value: 'dark', label: 'Dark' }]} />
+                <ColorInput
+                  value={cfg.brand.primary_color} format="hex" withEyeDropper={false}
+                  onChange={(v) => brand('primary_color', v)}
+                />
               </Field>
               <Field label="Background">
-                <SegmentedControl fullWidth size="xs" value={cfg.background}
-                  onChange={(v) => set('background', v as SignInConfig['background'])}
-                  data={[{ value: 'solid', label: 'Solid' }, { value: 'gradient', label: 'Brand gradient' }]} />
+                <ColorInput
+                  value={cfg.brand.background_color} format="hex" withEyeDropper={false}
+                  onChange={(v) => brand('background_color', v)}
+                />
+              </Field>
+              <Field label="Text colour">
+                <ColorInput
+                  value={cfg.brand.text_color} format="hex" withEyeDropper={false}
+                  onChange={(v) => brand('text_color', v)}
+                />
+              </Field>
+              <Field label="Corners">
+                <SegmentedControl
+                  fullWidth size="xs" value={cfg.brand.corner_radius}
+                  onChange={(v) => brand('corner_radius', v as PageConfig['brand']['corner_radius'])}
+                  data={[
+                    { value: 'none', label: 'None' }, { value: 'sm', label: 'S' },
+                    { value: 'md', label: 'M' }, { value: 'lg', label: 'L' },
+                    { value: 'full', label: 'Full' },
+                  ]}
+                />
+              </Field>
+              <Field label="Typeface">
+                <SegmentedControl
+                  fullWidth size="xs" value={cfg.brand.font}
+                  onChange={(v) => brand('font', v as PageConfig['brand']['font'])}
+                  data={[
+                    { value: 'system', label: 'System' },
+                    { value: 'serif', label: 'Serif' },
+                    { value: 'mono', label: 'Mono' },
+                  ]}
+                />
               </Field>
             </div>
 
             <div className="panel flex flex-col gap-3.5 p-4">
-              <div className="t-label">Layout & content</div>
+              <div className="t-label">Layout &amp; copy</div>
               <Field label="Layout">
-                <SegmentedControl fullWidth size="xs" value={cfg.layout}
-                  onChange={(v) => set('layout', v as SignInConfig['layout'])}
-                  data={[{ value: 'centered', label: 'Centered card' }, { value: 'split', label: 'Brand panel' }]} />
+                <SegmentedControl
+                  fullWidth size="xs" value={cfg.layout}
+                  onChange={(v) => setCfg((c) => (c ? { ...c, layout: v as PageConfig['layout'] } : c))}
+                  data={[
+                    { value: 'centered', label: 'Centered' },
+                    { value: 'split', label: 'Split' },
+                    { value: 'minimal', label: 'Minimal' },
+                  ]}
+                />
               </Field>
               <Field label="Headline">
-                <TextInput value={cfg.headline}
-                  onChange={(e) => set('headline', e.currentTarget.value)} />
+                <TextInput value={cfg.copy.heading}
+                  onChange={(e) => copy('heading', e.currentTarget.value)} />
               </Field>
-              <Field label="Subheadline">
-                <TextInput value={cfg.subheadline}
-                  onChange={(e) => set('subheadline', e.currentTarget.value)} />
+              <Field label="Description" hint="Shown under the headline. Describe the brand or who this page is for.">
+                <Textarea
+                  autosize minRows={2} value={cfg.copy.subheading ?? ''}
+                  onChange={(e) => copy('subheading', e.currentTarget.value)}
+                />
               </Field>
-              <Field label="Footer help text">
-                <TextInput value={cfg.footer_note}
-                  onChange={(e) => set('footer_note', e.currentTarget.value)} />
+              <Field label="Username label">
+                <TextInput value={cfg.copy.username_label}
+                  onChange={(e) => copy('username_label', e.currentTarget.value)} />
               </Field>
-              <Field label="Language">
-                <SegmentedControl fullWidth size="xs" value={cfg.language}
-                  onChange={(v) => set('language', v as SignInConfig['language'])}
-                  data={[{ value: 'en', label: 'English' }, { value: 'id', label: 'Bahasa Indonesia' }]} />
+              <Field label="Password label">
+                <TextInput value={cfg.copy.password_label}
+                  onChange={(e) => copy('password_label', e.currentTarget.value)} />
               </Field>
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="t-body" style={{ fontWeight: 550 }}>Population picker</div>
-                  <div className="t-xs">Let people choose internal / partner / public</div>
-                </div>
-                <Switch checked={cfg.show_populations}
-                  onChange={(e) => set('show_populations', e.currentTarget.checked)} />
-              </div>
+              <Field label="Submit button">
+                <TextInput value={cfg.copy.submit_label}
+                  onChange={(e) => copy('submit_label', e.currentTarget.value)} />
+              </Field>
+            </div>
+
+            <div className="panel flex flex-col gap-3.5 p-4">
+              <div className="t-label">Features</div>
+              <Switch
+                size="xs" label="Population picker"
+                description="Let people choose internal, partner or public before signing in."
+                checked={!!cfg.features?.show_realm_picker}
+                onChange={(e) => feature('show_realm_picker', e.currentTarget.checked)}
+              />
+              <Switch
+                size="xs" label="Registration link"
+                checked={!!cfg.features?.show_registration}
+                onChange={(e) => feature('show_registration', e.currentTarget.checked)}
+              />
+              <Switch
+                size="xs" label="Forgot password link"
+                checked={!!cfg.features?.show_forgot_password}
+                onChange={(e) => feature('show_forgot_password', e.currentTarget.checked)}
+              />
+              <Switch
+                size="xs" label="Remember me"
+                checked={!!cfg.features?.remember_me}
+                onChange={(e) => feature('remember_me', e.currentTarget.checked)}
+              />
             </div>
           </div>
 
@@ -147,7 +253,7 @@ function SignInBuilder() {
               <span className="t-label">Live preview</span>
               <span className="t-xs">{dirty ? 'unsaved changes' : 'saved'}</span>
             </div>
-            <SignInPreview cfg={cfg} populations={['Internal', 'Partners', 'Public']} />
+            <SignInPreview cfg={cfg} realms={['Internal', 'Partners', 'Public']} />
           </div>
         </div>
       )}

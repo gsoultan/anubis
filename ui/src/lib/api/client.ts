@@ -36,8 +36,11 @@ export const api = {
   /* The tenant being edited comes from the header picker, not an argument:
      the server scopes it from the caller's session, so passing an id here
      would let a screen ask about a tenant the caller cannot reach. */
-  signin: (_tenantId: Uuid) => live.signin(),
-  saveSignin: (_tenantId: Uuid, cfg: import('./types').SignInConfig) => live.saveSignin(cfg),
+  /* auth_pages, not the legacy signin_pages pair — the hosted page renders
+     from the former. See live.ts. */
+  authPages: (kind?: import('./types').PageKind) => live.authPages(kind),
+  authPage: (id: string) => live.authPage(id),
+  saveAuthPage: (page: import('./types').AuthPage) => live.saveAuthPage(page),
 
   realms: () => live.realms(),
   realmCategories: (realmId?: Uuid) => live.realmCategories(realmId),

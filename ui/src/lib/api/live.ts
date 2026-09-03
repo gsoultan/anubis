@@ -15,8 +15,8 @@ import type {
   Identity, Membership, MembershipEntry, NewAxisInput, NewGrantInput,
   NewIdentityInput, NewNodeInput, NewRoleInput, Permission, Realm,
   RealmCategory, RealmKind, Role, ScopeAxis, ScopeNode, ScopeNodeType,
-  SecuritySignal, SignInConfig, StrictDryRun, SyncPlan, SyncRun, SyncSource, Tenant,
-  Ial, Risk, Uuid,
+  SecuritySignal,  StrictDryRun, SyncPlan, SyncRun, SyncSource, Tenant,
+  Ial, Risk, Uuid, AuthPage, PageConfig, PageKind
 } from './types'
 
 /** Unix seconds to ISO, with the protobuf zero meaning "never". */
@@ -518,33 +518,99 @@ export async function ancestorPath(id: Uuid): Promise<ScopeNode[]> {
     .map((a) => toNode(a.node!))
 }
 
-/* The sign-in page builder edits what a TENANT's own people see when they
-   log in — not the platform console's door, which is a different population
-   entirely and has no branding to configure. */
-export async function signin(): Promise<SignInConfig> {
-  const resp = await rpc.tenantAdmin.getSigninPage({})
-  /* The server stores this as a constrained token set, never markup, and a
-     tenant that has not configured one yet gets an empty object — so the
-     console's defaults have to survive a partial config rather than assume
-     every field is present. */
-  return { ...defaultSignIn, ...(safeJSON(resp.configJson) as Partial<SignInConfig>) }
-}
+/* The page builder edits what a TENANT's own people see when they sign in —
+   not the platform console's door, which is a different population entirely
+   and has no branding to configure.
 
-const defaultSignIn: SignInConfig = {
+   These go through the auth_pages RPCs, NOT the legacy getSigninPage /
+   putSigninPage pair. Migration 0024 moved pages into auth_pages (per
+   application, signin and signout kinds) and the console was never moved
+   across, so it edited a flat shape in the old table while
+   internal/auth/adapter/http/page_template.go rendered a nested one out of
+   the new table. Anything written through the legacy pair is still readable,
+   but it is not what the hosted page draws. */
+
+/** Server defaults, mirroring pagecfg applyDefaults so a page that has never
+    been configured previews the way it will actually render. */
+export const defaultPageConfig = (kind: PageKind): PageConfig => ({
+  brand: {
+    title: 'Anubis',
+    primary_color: '#4f46e5',
+    background_color: '#f6f6f7',
+    text_color: '#111827',
+    corner_radius: 'md',
+    font: 'system',
+  },
   layout: 'centered',
-  theme: 'light',
-  brand_color: '#b6801d',
-  logo_text: '',
-  headline: '',
-  subheadline: '',
-  background: 'solid',
-  show_populations: false,
-  footer_note: '',
-  language: 'en',
+  copy:
+    kind === 'signout'
+      ? { heading: '', username_label: '', password_label: '', submit_label: '',
+          confirm_heading: 'Sign out?' }
+      : { heading: 'Sign in', username_label: 'Username', password_label: 'Password',
+          submit_label: 'Sign in' },
+  links: [],
+  features: {},
+  ...(kind === 'signout' ? { behavior: { confirm: true } } : {}),
+})
+
+function toAuthPage(p: {
+  id: string; kind: string; slug: string; name: string; status: string
+  isDefault: boolean; applicationId: string; applicationSlug: string; configJson: string
+}): AuthPage {
+  const kind = (p.kind === 'signout' ? 'signout' : 'signin') as PageKind
+  /* A page that has never been configured comes back as an empty object, so
+     the defaults have to survive a PARTIAL config rather than assume every
+     field is present — and they have to merge per-section, since a config
+     carrying only `brand` would otherwise wipe copy. */
+  const stored = safeJSON(p.configJson) as Partial<PageConfig> | null
+  const base = defaultPageConfig(kind)
+  return {
+    id: p.id,
+    kind,
+    slug: p.slug,
+    name: p.name,
+    status: p.status === 'disabled' ? 'disabled' : 'active',
+    is_default: p.isDefault,
+    application_id: p.applicationId || null,
+    application_slug: p.applicationSlug || null,
+    config: {
+      ...base,
+      ...stored,
+      brand: { ...base.brand, ...(stored?.brand ?? {}) },
+      copy: { ...base.copy, ...(stored?.copy ?? {}) },
+      features: { ...base.features, ...(stored?.features ?? {}) },
+      behavior: { ...base.behavior, ...(stored?.behavior ?? {}) },
+      links: stored?.links ?? [],
+    },
+  }
 }
 
-export async function saveSignin(cfg: unknown): Promise<void> {
-  await rpc.tenantAdmin.putSigninPage({ configJson: JSON.stringify(cfg) })
+export async function authPages(kind?: PageKind): Promise<AuthPage[]> {
+  const resp = await rpc.tenantAdmin.listAuthPages({ kind: kind ?? '' })
+  return resp.pages.map(toAuthPage)
+}
+
+export async function authPage(id: string): Promise<AuthPage | null> {
+  const resp = await rpc.tenantAdmin.getAuthPage({ id })
+  return resp.page ? toAuthPage(resp.page) : null
+}
+
+/** kind and slug are immutable server-side: the URL is published. */
+export async function saveAuthPage(page: AuthPage): Promise<AuthPage | null> {
+  const resp = await rpc.tenantAdmin.updateAuthPage({
+    page: {
+      id: page.id,
+      kind: page.kind,
+      slug: page.slug,
+      name: page.name,
+      status: page.status,
+      isDefault: page.is_default,
+      applicationId: page.application_id ?? '',
+      applicationSlug: page.application_slug ?? '',
+      configJson: JSON.stringify(page.config),
+    },
+  })
+  return resp.page ? toAuthPage(resp.page) : null
 }
 
 /** Flat list for pickers — the permission form needs choices, not a page. */
