@@ -38,6 +38,21 @@ button{width:100%;margin-top:1.25rem;padding:.75rem;border:0;
      background:#fdecec;color:#b00020;font-size:.87rem}
 .check{display:flex;align-items:center;gap:.5rem;margin-top:.85rem;font-size:.88rem}
 .check input{width:auto}
+{{if .Cfg.Motion.Animated}}
+/* Only for people who have not asked for less motion — and only ever opacity
+   and transform, so it composites rather than causing layout. The card stays
+   interactive throughout: this is decoration, and it must never be the reason
+   somebody cannot start typing. */
+@media (prefers-reduced-motion: no-preference){
+  .card{animation:enter .2s ease-out both}
+  {{if eq .Cfg.Motion.Entrance "fade"}}
+  @keyframes enter{from{opacity:0}to{opacity:1}}
+  {{end}}
+  {{if eq .Cfg.Motion.Entrance "rise"}}
+  @keyframes enter{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  {{end}}
+}
+{{end}}
 {{if eq .Cfg.Layout "split"}}
 body{place-items:stretch}
 .wrap{width:100%;max-width:none;display:grid;grid-template-columns:1fr 1fr}

@@ -26,6 +26,7 @@ func Handler() http.Handler {
 		writeSnapshots(&b)
 		writeSnapshotRefreshes(&b)
 		writeSnapshotNodes(&b)
+		writeDeprecated(&b)
 		writePool(&b)
 		if v := buildInfo.Load(); v != nil {
 			fmt.Fprintf(&b, "# TYPE anubis_build_info gauge\nanubis_build_info{version=%q} 1\n", *v)
@@ -102,6 +103,16 @@ func writeJobFamily(b *strings.Builder) {
 		v, _ := counters.Load(k)
 		fmt.Fprintf(b, "anubis_job_runs_total{job=%q,result=%q} %d\n",
 			labelOf(k, 0), labelOf(k, 1), v.(interface{ Load() uint64 }).Load())
+	}
+}
+
+func writeDeprecated(b *strings.Builder) {
+	fmt.Fprint(b, "# HELP anubis_deprecated_rpc_total Calls to RPCs scheduled for removal. Not an alert: the evidence for whether removing one is safe.\n")
+	fmt.Fprint(b, "# TYPE anubis_deprecated_rpc_total counter\n")
+	for _, k := range familyKeys(&counters, "deprecated") {
+		v, _ := counters.Load(k)
+		fmt.Fprintf(b, "anubis_deprecated_rpc_total{rpc=%q} %d\n",
+			labelOf(k, 0), v.(interface{ Load() uint64 }).Load())
 	}
 }
 

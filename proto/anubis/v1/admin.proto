@@ -759,8 +759,20 @@ service TenantAdminService {
   rpc GetCatalogVersion(GetCatalogVersionRequest) returns (GetCatalogVersionResponse);
   // Deprecated: operate on the tenant's DEFAULT sign-in page. Kept so the
   // console keeps working while it moves to the multi-page API below.
-  rpc GetSigninPage(GetSigninPageRequest) returns (GetSigninPageResponse);
-  rpc PutSigninPage(PutSigninPageRequest) returns (PutSigninPageResponse);
+  // DEPRECATED. Superseded by the AuthPage RPCs below.
+  //
+  // These read and write signin_pages, which migration 0024 replaced with
+  // auth_pages and which nothing renders from any more: a config written here
+  // is stored, audited, and never shown to anybody. They also take a shape
+  // pagecfg cannot parse, so the value cannot simply be forwarded.
+  //
+  // Use ListAuthPages / GetAuthPage / UpdateAuthPage.
+  rpc GetSigninPage(GetSigninPageRequest) returns (GetSigninPageResponse) {
+    option deprecated = true;
+  }
+  rpc PutSigninPage(PutSigninPageRequest) returns (PutSigninPageResponse) {
+    option deprecated = true;
+  }
 
   // --- sign-in / sign-out page builder ------------------------------------
   // A tenant may publish many of each. Every page has its own URL
@@ -788,6 +800,12 @@ message AuthPage {
   // flow for that application instead of rendering a form with nowhere to post.
   string application_id = 7;
   string application_slug = 8;
+  // Bound to an application OR a realm, never both — the database refuses a
+  // row carrying both (auth_pages_one_binding). A realm binding is the door
+  // that population sees: resolution is slug -> application -> realm ->
+  // tenant default.
+  string realm_id = 14;
+  string realm_code = 15;
   // The constrained token set (brand, layout, copy, links, features,
   // behavior) — never markup. Validated server-side before it is stored.
   string config_json = 9;

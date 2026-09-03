@@ -57,7 +57,7 @@ const GROUPS: { title: string | null; items: Item[] }[] = [
       { to: '/identities', label: 'People', icon: <IconUsers size={15} /> },
       { to: '/realms', label: 'Populations', icon: <IconWorld size={15} />,
         hint: 'Internal, partners and public — and their sign-in rules' },
-      { to: '/signin-page', label: 'Sign-in pages', icon: <IconBrush size={15} />,
+      { to: '/signin-page', label: 'Sign-in & sign-out', icon: <IconBrush size={15} />,
         hint: 'Brand the login page this tenant’s people see' },
       { to: '/import', label: 'Import', icon: <IconTableImport size={15} />,
         hint: 'Bring people and their access in from a spreadsheet' },
@@ -410,7 +410,7 @@ const TITLES: Record<string, string> = {
   '/realms': 'Populations', '/scope': 'Structure', '/grants': 'Access',
   '/roles': 'Roles & permissions', '/memberships': 'Memberships',
   '/audit': 'Audit', '/keys': 'Signing keys',
-  '/tenants': 'Tenants', '/signin-page': 'Sign-in pages',
+  '/tenants': 'Tenants', '/signin-page': 'Sign-in & sign-out',
   '/import': 'Import', '/signin': 'Sign in', '/operators': 'Platform users',
   '/setup': 'Set up Anubis', '/applications': 'Applications',
 }

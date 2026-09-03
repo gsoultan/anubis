@@ -21,7 +21,23 @@ import (
 //
 // A disabled or missing page falls through rather than 404ing mid-flow:
 // losing a page's branding must never cost a user the ability to sign in.
+// resolvePage picks the page to render, most specific first:
+//
+//	explicit slug -> application -> realm -> tenant default
+//
+// The realm step is between application and default deliberately. An
+// application that configured its own door keeps it, exactly as before this
+// existed; realm pages fill the gap that used to fall straight through to the
+// default, which is the case tenants actually brand — an employee portal and
+// a supplier portal look nothing alike even when they are one application.
+//
+// realmCode is empty for sign-out, where the population no longer decides
+// anything, and for callers that have not resolved one.
 func (h *OIDCHandler) resolvePage(r *http.Request, tenantID, kind, slug, applicationID string) *pagecfg.Config {
+	return h.resolvePageForRealm(r, tenantID, kind, slug, applicationID, "")
+}
+
+func (h *OIDCHandler) resolvePageForRealm(r *http.Request, tenantID, kind, slug, applicationID, realmCode string) *pagecfg.Config {
 	ctx := r.Context()
 	var page *tenancydomain.AuthPage
 
@@ -33,6 +49,16 @@ func (h *OIDCHandler) resolvePage(r *http.Request, tenantID, kind, slug, applica
 	if page == nil && applicationID != "" {
 		if p, err := h.pages.AuthPageForApplication(ctx, tenantID, kind, applicationID); err == nil {
 			page = p
+		}
+	}
+	if page == nil && realmCode != "" {
+		// One extra lookup to turn the code from ?realm= into the id the
+		// binding uses. Only reached when neither a slug nor an application
+		// already decided, so it costs nothing on the common paths.
+		if realm, err := h.realms.RealmByCode(ctx, tenantID, realmCode); err == nil && realm != nil {
+			if p, perr := h.pages.AuthPageForRealm(ctx, tenantID, kind, realm.ID); perr == nil {
+				page = p
+			}
 		}
 	}
 	if page == nil {

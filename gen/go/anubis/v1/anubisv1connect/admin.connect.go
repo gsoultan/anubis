@@ -1941,7 +1941,18 @@ type TenantAdminServiceClient interface {
 	GetCatalogVersion(context.Context, *connect.Request[v1.GetCatalogVersionRequest]) (*connect.Response[v1.GetCatalogVersionResponse], error)
 	// Deprecated: operate on the tenant's DEFAULT sign-in page. Kept so the
 	// console keeps working while it moves to the multi-page API below.
+	// DEPRECATED. Superseded by the AuthPage RPCs below.
+	//
+	// These read and write signin_pages, which migration 0024 replaced with
+	// auth_pages and which nothing renders from any more: a config written here
+	// is stored, audited, and never shown to anybody. They also take a shape
+	// pagecfg cannot parse, so the value cannot simply be forwarded.
+	//
+	// Use ListAuthPages / GetAuthPage / UpdateAuthPage.
+	//
+	// Deprecated: do not use.
 	GetSigninPage(context.Context, *connect.Request[v1.GetSigninPageRequest]) (*connect.Response[v1.GetSigninPageResponse], error)
+	// Deprecated: do not use.
 	PutSigninPage(context.Context, *connect.Request[v1.PutSigninPageRequest]) (*connect.Response[v1.PutSigninPageResponse], error)
 	// --- sign-in / sign-out page builder ------------------------------------
 	// A tenant may publish many of each. Every page has its own URL
@@ -2328,11 +2339,15 @@ func (c *tenantAdminServiceClient) GetCatalogVersion(ctx context.Context, req *c
 }
 
 // GetSigninPage calls anubis.v1.TenantAdminService.GetSigninPage.
+//
+// Deprecated: do not use.
 func (c *tenantAdminServiceClient) GetSigninPage(ctx context.Context, req *connect.Request[v1.GetSigninPageRequest]) (*connect.Response[v1.GetSigninPageResponse], error) {
 	return c.getSigninPage.CallUnary(ctx, req)
 }
 
 // PutSigninPage calls anubis.v1.TenantAdminService.PutSigninPage.
+//
+// Deprecated: do not use.
 func (c *tenantAdminServiceClient) PutSigninPage(ctx context.Context, req *connect.Request[v1.PutSigninPageRequest]) (*connect.Response[v1.PutSigninPageResponse], error) {
 	return c.putSigninPage.CallUnary(ctx, req)
 }
@@ -2414,7 +2429,18 @@ type TenantAdminServiceHandler interface {
 	GetCatalogVersion(context.Context, *connect.Request[v1.GetCatalogVersionRequest]) (*connect.Response[v1.GetCatalogVersionResponse], error)
 	// Deprecated: operate on the tenant's DEFAULT sign-in page. Kept so the
 	// console keeps working while it moves to the multi-page API below.
+	// DEPRECATED. Superseded by the AuthPage RPCs below.
+	//
+	// These read and write signin_pages, which migration 0024 replaced with
+	// auth_pages and which nothing renders from any more: a config written here
+	// is stored, audited, and never shown to anybody. They also take a shape
+	// pagecfg cannot parse, so the value cannot simply be forwarded.
+	//
+	// Use ListAuthPages / GetAuthPage / UpdateAuthPage.
+	//
+	// Deprecated: do not use.
 	GetSigninPage(context.Context, *connect.Request[v1.GetSigninPageRequest]) (*connect.Response[v1.GetSigninPageResponse], error)
+	// Deprecated: do not use.
 	PutSigninPage(context.Context, *connect.Request[v1.PutSigninPageRequest]) (*connect.Response[v1.PutSigninPageResponse], error)
 	// --- sign-in / sign-out page builder ------------------------------------
 	// A tenant may publish many of each. Every page has its own URL

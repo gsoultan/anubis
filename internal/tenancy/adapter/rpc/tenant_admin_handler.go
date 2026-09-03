@@ -436,8 +436,10 @@ func (h *TenantAdminHandler) pageProto(p tenancydomain.AuthPage) *anubisv1.AuthP
 	out := &anubisv1.AuthPage{
 		Id: p.ID, Kind: p.Kind, Slug: p.Slug, Name: p.Name, Status: p.Status,
 		IsDefault: p.IsDefault, ApplicationId: p.ApplicationID,
-		ApplicationSlug: p.ApplicationSlug, ConfigJson: string(p.Config),
-		Url: h.pageURL(p),
+		ApplicationSlug: p.ApplicationSlug,
+		RealmId:         p.RealmID, RealmCode: p.RealmCode,
+		ConfigJson: string(p.Config),
+		Url:        h.pageURL(p),
 	}
 	if !p.CreatedAt.IsZero() {
 		out.CreatedAt = p.CreatedAt.Unix()
@@ -549,7 +551,8 @@ func pageInput(p *anubisv1.AuthPage) tenancydomain.AuthPageInput {
 	return tenancydomain.AuthPageInput{
 		ID: p.Id, Kind: p.Kind, Slug: p.Slug, Name: p.Name,
 		Status: p.Status, ApplicationID: p.ApplicationId,
-		Config: []byte(p.ConfigJson),
+		RealmID: p.RealmId,
+		Config:  []byte(p.ConfigJson),
 	}
 }
 

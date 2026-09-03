@@ -149,6 +149,17 @@ func SetSnapshotNodes(tenant string, n int) {
 	v.(*atomic.Int64).Store(int64(n))
 }
 
+// IncDeprecated counts a call to an RPC that is on its way out.
+//
+// This is not an alert, it is the number you need to decide whether removal
+// is safe. A deprecation comment tells a reader; it does not tell you whether
+// anything in your estate still calls the thing at three in the morning. Zero
+// for a release cycle is the evidence; anything else names the caller's
+// endpoint so you can go and find it.
+func IncDeprecated(rpc string) {
+	counter(key("deprecated", rpc)).Add(1)
+}
+
 // PoolStats is the subset of pgxpool.Stat worth alerting on.
 type PoolStats struct {
 	Acquired, Idle, Total, Max int64

@@ -5,6 +5,7 @@ export const qk = {
   tenants: () => ['tenants'] as const,
   tenantStats: (id: string) => ['tenant-stats', id] as const,
   signin: (tenantId: string) => ['signin', tenantId] as const,
+  authPages: (kind: string) => ['auth-pages', kind] as const,
   realmCategories: (realmId?: string) => ['realm-categories', realmId ?? 'all'] as const,
   axes: () => ['axes'] as const,
   nodeTypes: () => ['node-types'] as const,

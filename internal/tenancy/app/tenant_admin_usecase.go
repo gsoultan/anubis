@@ -60,6 +60,11 @@ type KeyAdminUsecase interface {
 
 type SiteAdminUsecase interface {
 	GetCatalogVersion(ctx context.Context) (int64, time.Time, error)
+	// DEPRECATED both. They read and write signin_pages, which migration 0024
+	// replaced with auth_pages; nothing renders from it, so a config written
+	// here is stored, audited, and shown to nobody. Their shape predates
+	// pagecfg and will not parse, which is why they cannot simply be
+	// forwarded to the default page. Use the AuthPage usecases.
 	GetSigninPage(ctx context.Context) ([]byte, time.Time, error)
 	PutSigninPage(ctx context.Context, config []byte) error
 }

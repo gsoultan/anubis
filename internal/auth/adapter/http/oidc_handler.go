@@ -392,7 +392,7 @@ func (h *OIDCHandler) renderLogin(w http.ResponseWriter, r *http.Request, tenant
 	if data.Error != "" {
 		status = http.StatusUnauthorized
 	}
-	cfg := h.resolvePage(r, tenantID, "signin", data.Page, data.ApplicationID)
+	cfg := h.resolvePageForRealm(r, tenantID, "signin", data.Page, data.ApplicationID, data.Realm)
 
 	view := PageView{
 		Cfg: cfg, Kind: "signin",
