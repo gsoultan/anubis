@@ -6123,6 +6123,12 @@ type AuthPage struct {
 	// flow for that application instead of rendering a form with nowhere to post.
 	ApplicationId   string `protobuf:"bytes,7,opt,name=application_id,json=applicationId,proto3" json:"application_id,omitempty"`
 	ApplicationSlug string `protobuf:"bytes,8,opt,name=application_slug,json=applicationSlug,proto3" json:"application_slug,omitempty"`
+	// Bound to an application OR a realm, never both — the database refuses a
+	// row carrying both (auth_pages_one_binding). A realm binding is the door
+	// that population sees: resolution is slug -> application -> realm ->
+	// tenant default.
+	RealmId   string `protobuf:"bytes,14,opt,name=realm_id,json=realmId,proto3" json:"realm_id,omitempty"`
+	RealmCode string `protobuf:"bytes,15,opt,name=realm_code,json=realmCode,proto3" json:"realm_code,omitempty"`
 	// The constrained token set (brand, layout, copy, links, features,
 	// behavior) — never markup. Validated server-side before it is stored.
 	ConfigJson string `protobuf:"bytes,9,opt,name=config_json,json=configJson,proto3" json:"config_json,omitempty"`
@@ -6216,6 +6222,20 @@ func (x *AuthPage) GetApplicationId() string {
 func (x *AuthPage) GetApplicationSlug() string {
 	if x != nil {
 		return x.ApplicationSlug
+	}
+	return ""
+}
+
+func (x *AuthPage) GetRealmId() string {
+	if x != nil {
+		return x.RealmId
+	}
+	return ""
+}
+
+func (x *AuthPage) GetRealmCode() string {
+	if x != nil {
+		return x.RealmCode
 	}
 	return ""
 }
@@ -13533,7 +13553,7 @@ const file_anubis_v1_admin_proto_rawDesc = "" +
 	"\x15ApplyManifestResponse\x12\x1f\n" +
 	"\vreport_json\x18\x01 \x01(\tR\n" +
 	"reportJson\x12)\n" +
-	"\x10manifest_version\x18\x02 \x01(\x05R\x0fmanifestVersion\"\xd0\x02\n" +
+	"\x10manifest_version\x18\x02 \x01(\x05R\x0fmanifestVersion\"\x8a\x03\n" +
 	"\bAuthPage\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04kind\x18\x02 \x01(\tR\x04kind\x12\x12\n" +
@@ -13543,7 +13563,10 @@ const file_anubis_v1_admin_proto_rawDesc = "" +
 	"\n" +
 	"is_default\x18\x06 \x01(\bR\tisDefault\x12%\n" +
 	"\x0eapplication_id\x18\a \x01(\tR\rapplicationId\x12)\n" +
-	"\x10application_slug\x18\b \x01(\tR\x0fapplicationSlug\x12\x1f\n" +
+	"\x10application_slug\x18\b \x01(\tR\x0fapplicationSlug\x12\x19\n" +
+	"\brealm_id\x18\x0e \x01(\tR\arealmId\x12\x1d\n" +
+	"\n" +
+	"realm_code\x18\x0f \x01(\tR\trealmCode\x12\x1f\n" +
 	"\vconfig_json\x18\t \x01(\tR\n" +
 	"configJson\x12\x1d\n" +
 	"\n" +

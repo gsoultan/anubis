@@ -366,8 +366,13 @@ export interface AuthPage {
   name: string
   status: 'active' | 'disabled'
   is_default: boolean
+  /* Bound to an application OR a realm, never both — the server refuses a
+     row carrying both. Resolution is slug -> application -> realm -> default,
+     so a realm binding is the door that population sees. */
   application_id: string | null
   application_slug: string | null
+  realm_id: string | null
+  realm_code: string | null
   config: PageConfig
 }
 

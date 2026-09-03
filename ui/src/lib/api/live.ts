@@ -555,7 +555,8 @@ export const defaultPageConfig = (kind: PageKind): PageConfig => ({
 
 function toAuthPage(p: {
   id: string; kind: string; slug: string; name: string; status: string
-  isDefault: boolean; applicationId: string; applicationSlug: string; configJson: string
+  isDefault: boolean; applicationId: string; applicationSlug: string
+  realmId: string; realmCode: string; configJson: string
 }): AuthPage {
   const kind = (p.kind === 'signout' ? 'signout' : 'signin') as PageKind
   /* A page that has never been configured comes back as an empty object, so
@@ -573,6 +574,8 @@ function toAuthPage(p: {
     is_default: p.isDefault,
     application_id: p.applicationId || null,
     application_slug: p.applicationSlug || null,
+    realm_id: p.realmId || null,
+    realm_code: p.realmCode || null,
     config: {
       ...base,
       ...stored,
@@ -607,6 +610,8 @@ export async function saveAuthPage(page: AuthPage): Promise<AuthPage | null> {
       isDefault: page.is_default,
       applicationId: page.application_id ?? '',
       applicationSlug: page.application_slug ?? '',
+      realmId: page.realm_id ?? '',
+      realmCode: page.realm_code ?? '',
       configJson: JSON.stringify(page.config),
     },
   })

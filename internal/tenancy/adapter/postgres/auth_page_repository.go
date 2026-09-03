@@ -53,7 +53,9 @@ func (s *Repository) AuthPageBySlug(ctx context.Context, tenantID, kind, slug st
 		ID: r.ID, TenantID: r.TenantID, Kind: r.Kind, Slug: r.Slug, Name: r.Name,
 		Status: r.Status, IsDefault: r.IsDefault,
 		ApplicationID:   database.Deref(r.ApplicationID),
-		ApplicationSlug: database.Deref(r.ApplicationSlug), Config: r.Config,
+		ApplicationSlug: database.Deref(r.ApplicationSlug),
+		RealmID:         database.Deref(r.RealmID),
+		RealmCode:       database.Deref(r.RealmCode), Config: r.Config,
 	}, nil
 }
 
@@ -68,7 +70,9 @@ func (s *Repository) DefaultAuthPage(ctx context.Context, tenantID, kind string)
 		ID: r.ID, TenantID: r.TenantID, Kind: r.Kind, Slug: r.Slug, Name: r.Name,
 		Status: r.Status, IsDefault: r.IsDefault,
 		ApplicationID:   database.Deref(r.ApplicationID),
-		ApplicationSlug: database.Deref(r.ApplicationSlug), Config: r.Config,
+		ApplicationSlug: database.Deref(r.ApplicationSlug),
+		RealmID:         database.Deref(r.RealmID),
+		RealmCode:       database.Deref(r.RealmCode), Config: r.Config,
 	}, nil
 }
 
@@ -82,7 +86,26 @@ func (s *Repository) AuthPageForApplication(ctx context.Context, tenantID, kind,
 	return &tenancydomain.AuthPage{
 		ID: r.ID, TenantID: r.TenantID, Kind: r.Kind, Slug: r.Slug, Name: r.Name,
 		Status: r.Status, IsDefault: r.IsDefault,
-		ApplicationID: database.Deref(r.ApplicationID), Config: r.Config,
+		ApplicationID: database.Deref(r.ApplicationID),
+		RealmID:       database.Deref(r.RealmID), Config: r.Config,
+	}, nil
+}
+
+// AuthPageForRealm is the population's own door. resolvePage tries it after
+// the application binding and before the tenant default, so an application
+// that configured its own page keeps it.
+func (s *Repository) AuthPageForRealm(ctx context.Context, tenantID, kind, realmID string) (*tenancydomain.AuthPage, error) {
+	r, err := s.q(ctx).GetAuthPageForRealm(ctx, gen.GetAuthPageForRealmParams{
+		TenantID: tenantID, Kind: kind, RealmID: database.OptStr(realmID),
+	})
+	if err != nil {
+		return nil, database.MapErr(err)
+	}
+	return &tenancydomain.AuthPage{
+		ID: r.ID, TenantID: r.TenantID, Kind: r.Kind, Slug: r.Slug, Name: r.Name,
+		Status: r.Status, IsDefault: r.IsDefault,
+		ApplicationID: database.Deref(r.ApplicationID),
+		RealmID:       database.Deref(r.RealmID), Config: r.Config,
 	}, nil
 }
 
@@ -91,6 +114,7 @@ func (s *Repository) CreateAuthPage(ctx context.Context, tenantID string, in ten
 		TenantID: tenantID, Kind: in.Kind, Slug: in.Slug, Name: in.Name,
 		Status:        database.OrDefaultStr(in.Status, "active"),
 		ApplicationID: database.OptStr(in.ApplicationID),
+		RealmID:       database.OptStr(in.RealmID),
 		Config:        database.OrEmptyJSON(in.Config),
 	})
 	return id, database.MapErr(err)
@@ -101,6 +125,7 @@ func (s *Repository) UpdateAuthPage(ctx context.Context, tenantID string, in ten
 		ID: in.ID, TenantID: tenantID, Name: in.Name,
 		Status:        database.OrDefaultStr(in.Status, "active"),
 		ApplicationID: database.OptStr(in.ApplicationID),
+		RealmID:       database.OptStr(in.RealmID),
 		Config:        database.OrEmptyJSON(in.Config),
 	})
 	if err != nil {

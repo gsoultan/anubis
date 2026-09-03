@@ -89,6 +89,8 @@ type AuthPage struct {
 	Slug          string
 	Name          string
 	Config        []byte
+	// Optional realm binding. Resolution: slug -> application -> realm -> default.
+	RealmID pgtype.UUID
 }
 
 type CatalogVersion struct {

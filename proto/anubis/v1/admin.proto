@@ -788,6 +788,12 @@ message AuthPage {
   // flow for that application instead of rendering a form with nowhere to post.
   string application_id = 7;
   string application_slug = 8;
+  // Bound to an application OR a realm, never both — the database refuses a
+  // row carrying both (auth_pages_one_binding). A realm binding is the door
+  // that population sees: resolution is slug -> application -> realm ->
+  // tenant default.
+  string realm_id = 14;
+  string realm_code = 15;
   // The constrained token set (brand, layout, copy, links, features,
   // behavior) — never markup. Validated server-side before it is stored.
   string config_json = 9;

@@ -90,6 +90,8 @@ type AuthPage struct {
 	Slug          string
 	Name          string
 	Config        []byte
+	// Optional realm binding. Resolution: slug -> application -> realm -> default.
+	RealmID *string
 }
 
 type CatalogVersion struct {

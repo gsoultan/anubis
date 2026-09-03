@@ -20,6 +20,16 @@ export const Route = createFileRoute('/signin-page')({
   component: SignInBuilder,
 })
 
+/* Which door this page is. Resolution is slug -> application -> realm ->
+   tenant default, so the binding is the single most useful thing to see when
+   choosing which page to edit: a realm page is what that population sees
+   UNLESS their application has its own. */
+function pageLabel(p: AuthPage): string {
+  if (p.application_slug) return `${p.name} — app: ${p.application_slug}`
+  if (p.realm_code) return `${p.name} — population: ${p.realm_code}`
+  return `${p.name}${p.is_default ? ' (tenant default)' : ''}`
+}
+
 function Field({ label, hint, children }: {
   label: string; hint?: string; children: React.ReactNode
 }) {
@@ -117,10 +127,21 @@ function SignInBuilder() {
                     onChange={(v) => setPageId(v)}
                     data={(pages ?? []).map((p) => ({
                       value: p.id,
-                      label: p.application_slug ? `${p.name} — ${p.application_slug}` : `${p.name}${p.is_default ? ' (default)' : ''}`,
+                      label: pageLabel(p),
                     }))}
                   />
                 </Field>
+              </div>
+            )}
+
+            {selected && (selected.realm_code || selected.application_slug) && (
+              <div className="panel p-4">
+                <div className="t-label mb-1.5">Who sees this</div>
+                <div className="t-body" style={{ opacity: 0.8 }}>
+                  {selected.application_slug
+                    ? `Anyone signing in through ${selected.application_slug}, whichever population they belong to.`
+                    : `The ${selected.realm_code} population — unless the application they arrive through has its own page.`}
+                </div>
               </div>
             )}
 

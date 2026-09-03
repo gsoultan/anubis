@@ -26,9 +26,11 @@ func (q *Queries) ClearDefaultAuthPage(ctx context.Context, arg ClearDefaultAuth
 }
 
 const createAuthPage = `-- name: CreateAuthPage :one
-INSERT INTO auth_pages (tenant_id, kind, slug, name, status, application_id, config)
+INSERT INTO auth_pages (tenant_id, kind, slug, name, status, application_id,
+                        realm_id, config)
 VALUES ($1, $2, $3, $4,
-        $5, $6, $7::jsonb)
+        $5, $6, $7,
+        $8::jsonb)
 RETURNING id
 `
 
@@ -39,6 +41,7 @@ type CreateAuthPageParams struct {
 	Name          string
 	Status        string
 	ApplicationID *string
+	RealmID       *string
 	Config        []byte
 }
 
@@ -50,6 +53,7 @@ func (q *Queries) CreateAuthPage(ctx context.Context, arg CreateAuthPageParams) 
 		arg.Name,
 		arg.Status,
 		arg.ApplicationID,
+		arg.RealmID,
 		arg.Config,
 	)
 	var id string
@@ -79,10 +83,11 @@ func (q *Queries) DeleteAuthPage(ctx context.Context, arg DeleteAuthPageParams) 
 
 const getAuthPage = `-- name: GetAuthPage :one
 SELECT p.id, p.tenant_id, p.kind, p.slug, p.name, p.status, p.is_default,
-       p.application_id, a.slug AS application_slug, p.config,
+       p.application_id, a.slug AS application_slug, p.realm_id, r.code AS realm_code, p.config,
        p.created_at, p.updated_at
 FROM auth_pages p
 LEFT JOIN applications a ON a.id = p.application_id
+LEFT JOIN realms r ON r.id = p.realm_id
 WHERE p.id = $1 AND p.tenant_id = $2
 `
 
@@ -101,6 +106,8 @@ type GetAuthPageRow struct {
 	IsDefault       bool
 	ApplicationID   *string
 	ApplicationSlug *string
+	RealmID         *string
+	RealmCode       *string
 	Config          []byte
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
@@ -119,6 +126,8 @@ func (q *Queries) GetAuthPage(ctx context.Context, arg GetAuthPageParams) (GetAu
 		&i.IsDefault,
 		&i.ApplicationID,
 		&i.ApplicationSlug,
+		&i.RealmID,
+		&i.RealmCode,
 		&i.Config,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -128,9 +137,10 @@ func (q *Queries) GetAuthPage(ctx context.Context, arg GetAuthPageParams) (GetAu
 
 const getAuthPageBySlug = `-- name: GetAuthPageBySlug :one
 SELECT p.id, p.tenant_id, p.kind, p.slug, p.name, p.status, p.is_default,
-       p.application_id, a.slug AS application_slug, p.config
+       p.application_id, a.slug AS application_slug, p.realm_id, r.code AS realm_code, p.config
 FROM auth_pages p
 LEFT JOIN applications a ON a.id = p.application_id
+LEFT JOIN realms r ON r.id = p.realm_id
 WHERE p.tenant_id = $1 AND p.kind = $2
   AND p.slug = $3 AND p.status = 'active'
 `
@@ -151,6 +161,8 @@ type GetAuthPageBySlugRow struct {
 	IsDefault       bool
 	ApplicationID   *string
 	ApplicationSlug *string
+	RealmID         *string
+	RealmCode       *string
 	Config          []byte
 }
 
@@ -170,6 +182,8 @@ func (q *Queries) GetAuthPageBySlug(ctx context.Context, arg GetAuthPageBySlugPa
 		&i.IsDefault,
 		&i.ApplicationID,
 		&i.ApplicationSlug,
+		&i.RealmID,
+		&i.RealmCode,
 		&i.Config,
 	)
 	return i, err
@@ -177,7 +191,7 @@ func (q *Queries) GetAuthPageBySlug(ctx context.Context, arg GetAuthPageBySlugPa
 
 const getAuthPageForApplication = `-- name: GetAuthPageForApplication :one
 SELECT p.id, p.tenant_id, p.kind, p.slug, p.name, p.status, p.is_default,
-       p.application_id, p.config
+       p.application_id, p.realm_id, p.config
 FROM auth_pages p
 WHERE p.tenant_id = $1 AND p.kind = $2
   AND p.application_id = $3 AND p.status = 'active'
@@ -198,6 +212,7 @@ type GetAuthPageForApplicationRow struct {
 	Status        string
 	IsDefault     bool
 	ApplicationID *string
+	RealmID       *string
 	Config        []byte
 }
 
@@ -214,6 +229,55 @@ func (q *Queries) GetAuthPageForApplication(ctx context.Context, arg GetAuthPage
 		&i.Status,
 		&i.IsDefault,
 		&i.ApplicationID,
+		&i.RealmID,
+		&i.Config,
+	)
+	return i, err
+}
+
+const getAuthPageForRealm = `-- name: GetAuthPageForRealm :one
+SELECT p.id, p.tenant_id, p.kind, p.slug, p.name, p.status, p.is_default,
+       p.application_id, p.realm_id, p.config
+FROM auth_pages p
+WHERE p.tenant_id = $1 AND p.kind = $2
+  AND p.realm_id = $3 AND p.status = 'active'
+`
+
+type GetAuthPageForRealmParams struct {
+	TenantID string
+	Kind     string
+	RealmID  *string
+}
+
+type GetAuthPageForRealmRow struct {
+	ID            string
+	TenantID      string
+	Kind          string
+	Slug          string
+	Name          string
+	Status        string
+	IsDefault     bool
+	ApplicationID *string
+	RealmID       *string
+	Config        []byte
+}
+
+// The population's own door. Tried AFTER the application binding and BEFORE
+// the tenant default, so an application that configured its own page keeps
+// it; this fills the gap that used to fall straight through to the default.
+func (q *Queries) GetAuthPageForRealm(ctx context.Context, arg GetAuthPageForRealmParams) (GetAuthPageForRealmRow, error) {
+	row := q.db.QueryRow(ctx, getAuthPageForRealm, arg.TenantID, arg.Kind, arg.RealmID)
+	var i GetAuthPageForRealmRow
+	err := row.Scan(
+		&i.ID,
+		&i.TenantID,
+		&i.Kind,
+		&i.Slug,
+		&i.Name,
+		&i.Status,
+		&i.IsDefault,
+		&i.ApplicationID,
+		&i.RealmID,
 		&i.Config,
 	)
 	return i, err
@@ -221,9 +285,10 @@ func (q *Queries) GetAuthPageForApplication(ctx context.Context, arg GetAuthPage
 
 const getDefaultAuthPage = `-- name: GetDefaultAuthPage :one
 SELECT p.id, p.tenant_id, p.kind, p.slug, p.name, p.status, p.is_default,
-       p.application_id, a.slug AS application_slug, p.config
+       p.application_id, a.slug AS application_slug, p.realm_id, r.code AS realm_code, p.config
 FROM auth_pages p
 LEFT JOIN applications a ON a.id = p.application_id
+LEFT JOIN realms r ON r.id = p.realm_id
 WHERE p.tenant_id = $1 AND p.kind = $2
   AND p.is_default AND p.status = 'active'
 `
@@ -243,6 +308,8 @@ type GetDefaultAuthPageRow struct {
 	IsDefault       bool
 	ApplicationID   *string
 	ApplicationSlug *string
+	RealmID         *string
+	RealmCode       *string
 	Config          []byte
 }
 
@@ -259,6 +326,8 @@ func (q *Queries) GetDefaultAuthPage(ctx context.Context, arg GetDefaultAuthPage
 		&i.IsDefault,
 		&i.ApplicationID,
 		&i.ApplicationSlug,
+		&i.RealmID,
+		&i.RealmCode,
 		&i.Config,
 	)
 	return i, err
@@ -267,10 +336,11 @@ func (q *Queries) GetDefaultAuthPage(ctx context.Context, arg GetDefaultAuthPage
 const listAuthPages = `-- name: ListAuthPages :many
 
 SELECT p.id, p.tenant_id, p.kind, p.slug, p.name, p.status, p.is_default,
-       p.application_id, a.slug AS application_slug, p.config,
+       p.application_id, a.slug AS application_slug, p.realm_id, r.code AS realm_code, p.config,
        p.created_at, p.updated_at
 FROM auth_pages p
 LEFT JOIN applications a ON a.id = p.application_id
+LEFT JOIN realms r ON r.id = p.realm_id
 WHERE p.tenant_id = $1
   AND ($2::text IS NULL OR p.kind = $2)
 ORDER BY p.kind, p.is_default DESC, p.slug
@@ -291,6 +361,8 @@ type ListAuthPagesRow struct {
 	IsDefault       bool
 	ApplicationID   *string
 	ApplicationSlug *string
+	RealmID         *string
+	RealmCode       *string
 	Config          []byte
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
@@ -318,6 +390,8 @@ func (q *Queries) ListAuthPages(ctx context.Context, arg ListAuthPagesParams) ([
 			&i.IsDefault,
 			&i.ApplicationID,
 			&i.ApplicationSlug,
+			&i.RealmID,
+			&i.RealmCode,
 			&i.Config,
 			&i.CreatedAt,
 			&i.UpdatedAt,
@@ -355,15 +429,17 @@ UPDATE auth_pages
 SET name = $1,
     status = $2,
     application_id = $3,
-    config = $4::jsonb,
+    realm_id = $4,
+    config = $5::jsonb,
     updated_at = now()
-WHERE id = $5 AND tenant_id = $6
+WHERE id = $6 AND tenant_id = $7
 `
 
 type UpdateAuthPageParams struct {
 	Name          string
 	Status        string
 	ApplicationID *string
+	RealmID       *string
 	Config        []byte
 	ID            string
 	TenantID      string
@@ -374,6 +450,7 @@ func (q *Queries) UpdateAuthPage(ctx context.Context, arg UpdateAuthPageParams) 
 		arg.Name,
 		arg.Status,
 		arg.ApplicationID,
+		arg.RealmID,
 		arg.Config,
 		arg.ID,
 		arg.TenantID,
