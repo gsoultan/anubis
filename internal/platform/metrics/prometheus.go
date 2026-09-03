@@ -24,6 +24,8 @@ func Handler() http.Handler {
 			"audit_dropped", "action")
 		writeJobFamily(&b)
 		writeSnapshots(&b)
+		writeSnapshotRefreshes(&b)
+		writeSnapshotNodes(&b)
 		writePool(&b)
 		if v := buildInfo.Load(); v != nil {
 			fmt.Fprintf(&b, "# TYPE anubis_build_info gauge\nanubis_build_info{version=%q} 1\n", *v)
@@ -100,6 +102,26 @@ func writeJobFamily(b *strings.Builder) {
 		v, _ := counters.Load(k)
 		fmt.Fprintf(b, "anubis_job_runs_total{job=%q,result=%q} %d\n",
 			labelOf(k, 0), labelOf(k, 1), v.(interface{ Load() uint64 }).Load())
+	}
+}
+
+func writeSnapshotRefreshes(b *strings.Builder) {
+	fmt.Fprint(b, "# HELP anubis_gate_snapshot_refresh_total Gate snapshot refreshes by outcome (unchanged = version gate skipped the rebuild).\n")
+	fmt.Fprint(b, "# TYPE anubis_gate_snapshot_refresh_total counter\n")
+	for _, k := range familyKeys(&counters, "snaprefresh") {
+		v, _ := counters.Load(k)
+		fmt.Fprintf(b, "anubis_gate_snapshot_refresh_total{tenant=%q,result=%q} %d\n",
+			labelOf(k, 0), labelOf(k, 1), v.(interface{ Load() uint64 }).Load())
+	}
+}
+
+func writeSnapshotNodes(b *strings.Builder) {
+	fmt.Fprint(b, "# HELP anubis_gate_snapshot_scope_nodes Scope nodes held in each tenant's snapshot. Size memory against this: ~95 bytes per node.\n")
+	fmt.Fprint(b, "# TYPE anubis_gate_snapshot_scope_nodes gauge\n")
+	for _, k := range familyKeys(&gauges, "snapnodes") {
+		v, _ := gauges.Load(k)
+		fmt.Fprintf(b, "anubis_gate_snapshot_scope_nodes{tenant=%q} %d\n",
+			labelOf(k, 0), v.(interface{ Load() int64 }).Load())
 	}
 }
 

@@ -6,9 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"sort"
 	"testing"
-	"time"
 
 	authzpg "github.com/gsoultan/anubis/internal/authz/adapter/postgres"
 	authzdomain "github.com/gsoultan/anubis/internal/authz/domain"
@@ -180,30 +178,10 @@ func TestStormSlice_AuthorizeLatencyBudget(t *testing.T) {
 	raw, _ := json.Marshal(targets)
 	repo := sliceRepo()
 
-	const (
-		warmup  = 50
-		samples = 500
-		budget  = 2 * time.Millisecond
-	)
-	for i := 0; i < warmup; i++ {
-		if _, err := repo.Authorize(ctx, identity, tenant, permission, raw); err != nil {
-			t.Fatal(err)
-		}
-	}
-	lat := make([]time.Duration, 0, samples)
-	for i := 0; i < samples; i++ {
-		start := time.Now()
-		if _, err := repo.Authorize(ctx, identity, tenant, permission, raw); err != nil {
-			t.Fatal(err)
-		}
-		lat = append(lat, time.Since(start))
-	}
-	sort.Slice(lat, func(i, j int) bool { return lat[i] < lat[j] })
-	p50, p95, p99 := lat[len(lat)/2], lat[(len(lat)*95)/100], lat[(len(lat)*99)/100]
-	t.Logf("authorize over storm repository: p50=%v p95=%v p99=%v (n=%d)", p50, p95, p99, samples)
-	if p95 > budget {
-		t.Fatalf("p95 %v exceeds the %v budget — the migrated path regressed", p95, budget)
-	}
+	assertLatencyBudget(t, "authorize over storm repository", func() error {
+		_, err := repo.Authorize(ctx, identity, tenant, permission, raw)
+		return err
+	}, "the migrated path regressed")
 }
 
 func roleRecord(name string) authzdomain.RoleRecord {

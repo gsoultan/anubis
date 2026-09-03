@@ -26,11 +26,20 @@ IP and restrict it with a NetworkPolicy; the scraper is the only client.
 | **Authorize latency budget** | `histogram_quantile(0.95, rate(anubis_endpoint_duration_seconds_bucket{endpoint="authz.authorize"}[15m])) > 0.002` | The enforced budget is p95 < 2 ms. A breach here degrades every consuming application at once. |
 | **Pool saturation** | `rate(anubis_db_pool_empty_acquires_total[5m]) > 0` | Callers are waiting for connections. Check `anubis_db_pool_*` gauges against `ANUBIS_DB_MAX_CONNS`; size to the database, not the app. |
 | **Version skew** | `count(count by (version) (anubis_build_info)) > 1` for > 1h | A rollout that never finished: two versions serving side by side long after a deploy window should have closed. |
+| **Snapshot never rebuilds** | `rate(anubis_gate_snapshot_refresh_total{result=~"rebuilt\|verify"}[30m]) == 0` while `result="unchanged"` is climbing | The gate skips rebuilding a snapshot whose catalog version has not moved ([ADR-0015](adr/0015-scope-hierarchy-at-scale.md)). If a tenant is *never* rebuilt, either it is genuinely idle, or an invalidation trigger was lost and the version stopped moving — which looks identical from the outside and means stale authorization. The periodic `verify` rebuild bounds this to one max-age window, so its absence is the signal. |
+| **Snapshot load failing** | `rate(anubis_gate_snapshot_refresh_total{result="failed"}[15m]) > 0` | The instance is serving the previous snapshot (fail-static) and will fail closed once it passes max age. This fires *before* the staleness page and names the tenant. |
 
 ## Deliberately not alerted
 
 - `anubis_job_runs_total{result="skipped"}` — another replica held the
   advisory lock. That is the coordination mechanism working, not a failure.
+- `anubis_gate_snapshot_refresh_total{result="unchanged"}` climbing — the
+  version gate skipping a rebuild it did not need. That is the optimisation
+  working; it should be the overwhelming majority of refreshes.
+- `anubis_gate_snapshot_scope_nodes` — not an alert, a **capacity gauge**.
+  Every instance holds every tenant's snapshot at roughly 95 bytes per scope
+  node, so `sum(anubis_gate_snapshot_scope_nodes) * 95` is the floor on gate
+  memory. Watch it grow; do not page on it.
 - `code="permission_denied"` / `code="invalid_argument"` rates — caller
   mistakes are the caller's dashboard, not the operator's pager. They become
   interesting only as a sudden delta, which the internal-error and

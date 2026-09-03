@@ -42,27 +42,30 @@ func benchSnapshot() (*Data, string, string, map[string]string) {
 	const identity, role, perm = "usr", "role", "billing:invoice:approve"
 	d := &Data{
 		StrictAxes:      map[string]bool{},
-		Up:              map[string]map[string]int16{},
 		RolePermissions: map[string]map[string]bool{role: {perm: true}},
 		Permissions:     map[string]Permission{perm: {Key: perm, MinAssurance: 1}},
 		Identities:      map[string]Identity{identity: {TokenEpoch: 1, AssuranceLevel: 3}},
 		RevokedSessions: map[string]bool{},
 	}
 	// A 6-deep chain under the granted node, plus 500 unrelated nodes so the
-	// map is realistically sized.
-	target := "node-5"
-	up := map[string]int16{}
+	// index is realistically sized.
+	nodes := make([]ScopeNode, 0, 512)
 	for i := 0; i <= 5; i++ {
-		up[fmt.Sprintf("node-%d", i)] = int16(5 - i)
+		n := ScopeNode{ID: fmt.Sprintf("node-%d", i)}
+		if i > 0 {
+			n.Parent = fmt.Sprintf("node-%d", i-1)
+		}
+		nodes = append(nodes, n)
 	}
-	d.Up[target] = up
 	for i := 0; i < 500; i++ {
-		d.Up[fmt.Sprintf("other-%d", i)] = map[string]int16{fmt.Sprintf("other-%d", i): 0}
+		nodes = append(nodes, ScopeNode{ID: fmt.Sprintf("other-%d", i)})
 	}
-	d.Up["node-elsewhere"] = map[string]int16{"node-elsewhere": 0}
+	nodes = append(nodes, ScopeNode{ID: "node-elsewhere"})
+	d.Scope = NewScopeIndex(nodes)
 	d.GrantsByIdentity = map[string][]Grant{identity: {{
 		ID: "g1", RoleID: role, ValidFrom: time.Now().Add(-time.Hour),
 		Scopes: map[string][]ScopeConstraint{"org": {{NodeID: "node-0", Inherit: true}}},
 	}}}
-	return d, identity, perm, map[string]string{"org": target}
+	d.InternGrantScopes()
+	return d, identity, perm, map[string]string{"org": "node-5"}
 }

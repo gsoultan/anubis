@@ -121,6 +121,34 @@ func SetSnapshotLoaded(tenant string, t time.Time) {
 	v.(*atomic.Int64).Store(t.Unix())
 }
 
+// IncSnapshotRefresh counts gate snapshot refreshes by outcome:
+//
+//	rebuilt    the catalog version moved, so the snapshot was reloaded
+//	unchanged  the version matched, so the ~92 MB rebuild was skipped
+//	verify     a periodic rebuild done regardless of the version
+//	failed     the load errored; the previous snapshot is still being served
+//
+// Without this an operator cannot tell a working version gate from one that
+// silently rebuilds every poll — or, worse, one that skips forever because an
+// invalidation trigger went missing. Expect mostly "unchanged", a "verify"
+// per tenant per max-age window, and "rebuilt" to track real catalog edits.
+func IncSnapshotRefresh(tenant, result string) {
+	counter(key("snaprefresh", tenant, result)).Add(1)
+}
+
+// SetSnapshotNodes records how many scope nodes a tenant's snapshot holds.
+// Every instance holds every tenant's snapshot, so this is the number to size
+// memory against: roughly 95 bytes per node (ADR-0015).
+func SetSnapshotNodes(tenant string, n int) {
+	k := key("snapnodes", tenant)
+	if v, ok := gauges.Load(k); ok {
+		v.(*atomic.Int64).Store(int64(n))
+		return
+	}
+	v, _ := gauges.LoadOrStore(k, new(atomic.Int64))
+	v.(*atomic.Int64).Store(int64(n))
+}
+
 // PoolStats is the subset of pgxpool.Stat worth alerting on.
 type PoolStats struct {
 	Acquired, Idle, Total, Max int64

@@ -164,12 +164,49 @@ func (u *scopeAdminInteractor) CreateScopeNodeType(ctx context.Context, t scoped
 	return nil
 }
 
-func (u *scopeAdminInteractor) ListScopeNodes(ctx context.Context, axis, parentID, query string, includeArchived bool) ([]scopedomain.ScopeNodeRecord, error) {
+func (u *scopeAdminInteractor) ListScopeNodes(ctx context.Context, f scopedomain.ScopeNodeFilter) ([]scopedomain.ScopeNodeRecord, string, error) {
 	p, err := u.guard.Require(ctx, "anubis:identity:read")
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
-	return u.nodes.ListScopeNodes(ctx, p.TenantID, axis, parentID, query, includeArchived)
+	f = f.Normalise()
+	page, err := u.nodes.ListScopeNodes(ctx, p.TenantID, f)
+	if err != nil {
+		return nil, "", err
+	}
+	// A full page MAY have more behind it; the client gets one empty final
+	// page rather than us spending a second query to prove otherwise.
+	var next string
+	if int32(len(page)) == f.Limit && len(page) > 0 {
+		next = page[len(page)-1].PageToken()
+	}
+	return page, next, nil
+}
+
+// eachScopeNode walks EVERY node matching f, one keyset page at a time.
+//
+// The archive pass below depends on seeing all of them: it archives
+// sync-owned nodes the feed no longer contains, so a truncated walk silently
+// keeps deleted nodes — and the grants hanging off them — alive. That is what
+// the old hard LIMIT 2000 did on any axis larger than that.
+func (u *scopeAdminInteractor) eachScopeNode(ctx context.Context, tenantID string,
+	f scopedomain.ScopeNodeFilter, fn func(scopedomain.ScopeNodeRecord) error) error {
+	f = f.Normalise()
+	for {
+		page, err := u.nodes.ListScopeNodes(ctx, tenantID, f)
+		if err != nil {
+			return err
+		}
+		for _, n := range page {
+			if err := fn(n); err != nil {
+				return err
+			}
+		}
+		if int32(len(page)) < f.Limit {
+			return nil // short page = last page
+		}
+		f = f.After(page[len(page)-1])
+	}
 }
 
 func (u *scopeAdminInteractor) CreateScopeNode(ctx context.Context, axis, nodeType, parentID, slug, name, externalRef string) (*scopedomain.ScopeNodeRecord, error) {
@@ -301,17 +338,19 @@ func (u *scopeAdminInteractor) UpsertScopeNodes(ctx context.Context, axis, defau
 				unchanged++
 			}
 		}
-		// Archive sync-owned nodes absent from the feed.
-		all, lerr := u.nodes.ListScopeNodes(ctx, p.TenantID, axis, "", "", false)
-		if lerr != nil {
-			return lerr
-		}
-		for _, n := range all {
-			if n.ExternalRef != "" && !seen[n.ExternalRef] && !n.IsAxisRoot {
-				if aerr := u.nodes.ArchiveScopeNode(ctx, p.TenantID, n.ID); aerr == nil {
-					archived++
+		// Archive sync-owned nodes absent from the feed. Every page, not the
+		// first one: an axis here already holds ~20k nodes.
+		if lerr := u.eachScopeNode(ctx, p.TenantID,
+			scopedomain.ScopeNodeFilter{Axis: axis},
+			func(n scopedomain.ScopeNodeRecord) error {
+				if n.ExternalRef != "" && !seen[n.ExternalRef] && !n.IsAxisRoot {
+					if aerr := u.nodes.ArchiveScopeNode(ctx, p.TenantID, n.ID); aerr == nil {
+						archived++
+					}
 				}
-			}
+				return nil
+			}); lerr != nil {
+			return lerr
 		}
 		return nil
 	}

@@ -16,6 +16,8 @@ OUT="docs/soak-storm.md"
 STAMP="$(date -u '+%Y-%m-%d %H:%M UTC')"
 
 # 1+2. Latency through pgx and through the storm repository, plus the shape
+# counts. The budget tests report best-of-N rounds (see assertLatencyBudget),
+# so the p95 recorded here is the best round, not a single sample.
 # counts, all from the integration suite that already measures them.
 LOG="$(mktemp)"
 trap 'rm -f "$LOG"' EXIT
@@ -23,8 +25,22 @@ go test -count=1 -tags integration ./test/integration/ -v \
   -run 'TestAuthorizeLatencyBudget|TestStormSlice_AuthorizeLatencyBudget|TestStormFull_VaryingValuesDoNotMintShapes' \
   > "$LOG" 2>&1 || { echo "FAIL: the budget/shape tests did not pass — that IS the finding" >&2; tail -20 "$LOG" >&2; exit 1; }
 
-pgx_p95="$(grep -o 'authorize over pgx: .*p95=[^ ]*' "$LOG" | grep -o 'p95=[^ ]*' | cut -d= -f2 || true)"
-storm_p95="$(grep -o 'authorize over storm repository: .*p95=[^ ]*' "$LOG" | grep -o 'p95=[^ ]*' | cut -d= -f2 || true)"
+# The budget tests report best-of-N rounds and log every round, so the line
+# holds several "p95=" values. Take "best p95=" when present — that is the one
+# the assertion judges — and fall back to the first p95 for the older
+# single-round format. One value, or the empty string; never a column of them.
+p95_of() {
+  local line
+  line="$(grep -m1 -- "$1" "$LOG" || true)"
+  [ -n "$line" ] || return 0
+  local v
+  v="$(printf '%s\n' "$line" | grep -o 'best p95=[^ ]*' | head -1 | cut -d= -f2)"
+  [ -n "$v" ] || v="$(printf '%s\n' "$line" | grep -o 'p95=[^ ]*' | head -1 | cut -d= -f2)"
+  printf '%s' "$v"
+}
+
+pgx_p95="$(p95_of 'authorize over pgx')"
+storm_p95="$(p95_of 'authorize over storm repository')"
 shapes="$(grep -o 'shapes [0-9]* → [0-9]*' "$LOG" | tail -1 || true)"
 flushes="$(grep -o 'flushes [0-9]* → [0-9]*' "$LOG" | tail -1 || true)"
 

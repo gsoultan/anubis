@@ -41,8 +41,8 @@ func (s *Repository) LoadSnapshot(ctx context.Context, tenantID, tenantSlug stri
 		TenantID:         tenantID,
 		TenantSlug:       tenantSlug,
 		LoadedAt:         time.Now(),
+		BuiltAt:          time.Now(),
 		StrictAxes:       map[string]bool{},
-		Up:               map[string]map[string]int16{},
 		GrantsByIdentity: map[string][]snapshot.Grant{},
 		RolePermissions:  map[string]map[string]bool{},
 		Permissions:      map[string]snapshot.Permission{},
@@ -64,18 +64,21 @@ func (s *Repository) LoadSnapshot(ctx context.Context, tenantID, tenantSlug stri
 		}
 	}
 
-	closure, err := q.SnapshotClosure(ctx, tenantID)
+	// Parent pointers, not the closure: one row per node instead of one per
+	// (node, ancestor) pair. ScopeIndex walks them to answer the same
+	// question the closure answered by lookup.
+	nodes, err := q.SnapshotNodes(ctx, tenantID)
 	if err != nil {
 		return nil, database.MapErr(err)
 	}
-	for _, c := range closure {
-		up, ok := d.Up[c.DescendantID]
-		if !ok {
-			up = map[string]int16{}
-			d.Up[c.DescendantID] = up
+	hierarchy := make([]snapshot.ScopeNode, len(nodes))
+	for i, n := range nodes {
+		hierarchy[i] = snapshot.ScopeNode{ID: n.ID}
+		if n.ParentID != nil {
+			hierarchy[i].Parent = *n.ParentID
 		}
-		up[c.AncestorID] = c.Depth
 	}
+	d.Scope = snapshot.NewScopeIndex(hierarchy)
 
 	grants, err := q.SnapshotGrants(ctx, tenantID)
 	if err != nil {
@@ -109,6 +112,10 @@ func (s *Repository) LoadSnapshot(ctx context.Context, tenantID, tenantSlug stri
 		ident := order[id]
 		d.GrantsByIdentity[ident] = append(d.GrantsByIdentity[ident], *g)
 	}
+	// Both the index and the grants exist now, so the constraints can be
+	// resolved to dense indices. Skipping this denies everything (by design —
+	// see ScopeConstraint.node), so it must not move above either load.
+	d.InternGrantScopes()
 
 	rps, err := q.SnapshotRolePermissions(ctx, tenantID)
 	if err != nil {
@@ -184,6 +191,19 @@ type errIsolation string
 
 func (e errIsolation) Error() string {
 	return "snapshot loaded under isolation " + string(e) + ", need repeatable read"
+}
+
+// CatalogVersion reads just the invalidation counter — one indexed row.
+// The Manager asks this before rebuilding, so an unchanged tenant costs a
+// single lookup instead of a full snapshot load. Sound only because every
+// table carrying authorization state bumps the counter (migrations 0005/0006
+// and 0040); TestSnapshotTablesAreClassifiedPushOrPoll pins that.
+func (s *Repository) CatalogVersion(ctx context.Context, tenantID string) (int64, error) {
+	v, err := gen.New(s.Pool()).SnapshotCatalogVersion(ctx, tenantID)
+	if err != nil {
+		return 0, database.MapErr(err)
+	}
+	return v.Version, nil
 }
 
 // WatchCatalog LISTENs on anubis_catalog and invokes onBump per notification

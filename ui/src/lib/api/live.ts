@@ -463,10 +463,23 @@ function toNode(n: {
     design: a production customer axis holds tens of thousands of nodes and
     must never be fetched whole. */
 export async function scopeChildren(axisCode: string, parentId: string | null): Promise<ScopeNode[]> {
-  const resp = await rpc.scopeAdmin.listScopeNodes({
-    axis: axisCode, parentId: parentId ?? '', query: '', includeArchived: false,
-  })
-  return resp.nodes.map(toNode).filter((n) => (parentId === null ? n.parent_id === null : n.parent_id === parentId))
+  // With a parent, page to the end: one node's children are a bounded set and
+  // the caller renders all of them, so stopping at the server's page size
+  // would silently drop siblings from a tree level.
+  //
+  // WITHOUT a parent the server has no "roots only" filter — parentId '' means
+  // the WHOLE axis — so this stays a single page and filters client-side, as
+  // it always has. Paging here would walk a million rows to find one root.
+  const out: ScopeNode[] = []
+  let pageToken = ''
+  do {
+    const resp = await rpc.scopeAdmin.listScopeNodes({
+      axis: axisCode, parentId: parentId ?? '', query: '', includeArchived: false, pageToken,
+    })
+    out.push(...resp.nodes.map(toNode))
+    pageToken = parentId === null ? '' : resp.nextPageToken
+  } while (pageToken)
+  return out.filter((n) => (parentId === null ? n.parent_id === null : n.parent_id === parentId))
 }
 
 export async function scopeSearch(axisCode: string, q: string): Promise<ScopeNode[]> {

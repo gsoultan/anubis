@@ -70,33 +70,6 @@ func (q *Queries) SnapshotCatalogVersion(ctx context.Context, tenantID string) (
 	return i, err
 }
 
-const snapshotClosure = `-- name: SnapshotClosure :many
-SELECT c.ancestor_id, c.descendant_id, c.depth
-FROM scope_closure c
-JOIN scope_nodes d ON d.id = c.descendant_id
-WHERE d.tenant_id = $1
-`
-
-func (q *Queries) SnapshotClosure(ctx context.Context, tenantID string) ([]ScopeClosure, error) {
-	rows, err := q.db.Query(ctx, snapshotClosure, tenantID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []ScopeClosure
-	for rows.Next() {
-		var i ScopeClosure
-		if err := rows.Scan(&i.AncestorID, &i.DescendantID, &i.Depth); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const snapshotGrantScopes = `-- name: SnapshotGrantScopes :many
 SELECT gs.grant_id, gs.axis_code, gs.scope_node_id, gs.inherit
 FROM grant_scopes gs
@@ -219,16 +192,27 @@ func (q *Queries) SnapshotIdentities(ctx context.Context, tenantID string) ([]Sn
 }
 
 const snapshotNodes = `-- name: SnapshotNodes :many
-SELECT id, parent_id, axis_code FROM scope_nodes
-WHERE tenant_id = $1 AND status = 'active'
+SELECT id, parent_id FROM scope_nodes
+WHERE tenant_id = $1
 `
 
 type SnapshotNodesRow struct {
 	ID       string
 	ParentID *string
-	AxisCode string
 }
 
+// The scope hierarchy as PARENT POINTERS, not as a materialised closure.
+// The gate only ever asks "is granted node A an ancestor-or-self of target
+// B", which a walk up parent_id answers exactly -- and one row per node
+// instead of one per (node, ancestor) pair. At 1M nodes that is 1M rows
+// rather than 4M, and the in-memory form stops growing with tree depth.
+//
+// NO status FILTER, DELIBERATELY. authorize() (migration 0013) probes
+// scope_closure without looking at scope_nodes.status, so an archived node
+// still carries grants and still resolves its ancestors. Filtering to
+// 'active' here would make the gate deny what the SQL engine allows, and
+// would break the chain under any archived intermediate node.
+// snapshot_parity_test.go is what catches this.
 func (q *Queries) SnapshotNodes(ctx context.Context, tenantID string) ([]SnapshotNodesRow, error) {
 	rows, err := q.db.Query(ctx, snapshotNodes, tenantID)
 	if err != nil {
@@ -238,7 +222,7 @@ func (q *Queries) SnapshotNodes(ctx context.Context, tenantID string) ([]Snapsho
 	var items []SnapshotNodesRow
 	for rows.Next() {
 		var i SnapshotNodesRow
-		if err := rows.Scan(&i.ID, &i.ParentID, &i.AxisCode); err != nil {
+		if err := rows.Scan(&i.ID, &i.ParentID); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

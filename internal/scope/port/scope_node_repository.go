@@ -9,7 +9,10 @@ import (
 type ScopeNodeRepository interface {
 	ListScopeNodeTypes(ctx context.Context, axis string) ([]scopedomain.ScopeNodeTypeRecord, error)
 	CreateScopeNodeType(ctx context.Context, t scopedomain.ScopeNodeTypeRecord) error
-	ListScopeNodes(ctx context.Context, tenantID, axis, parentID, query string, includeArchived bool) ([]scopedomain.ScopeNodeRecord, error)
+	// ListScopeNodes returns ONE KEYSET PAGE, at most f.Limit rows. Callers
+	// that need the whole axis must page with ScopeNodeFilter.After until a
+	// short page comes back — see EachScopeNode.
+	ListScopeNodes(ctx context.Context, tenantID string, f scopedomain.ScopeNodeFilter) ([]scopedomain.ScopeNodeRecord, error)
 	ScopeNode(ctx context.Context, tenantID, id string) (*scopedomain.ScopeNodeRecord, error)
 	// ScopeNodesByIDs resolves a bounded set in one round trip — the names
 	// beside one screenful of grants, not the whole axis.

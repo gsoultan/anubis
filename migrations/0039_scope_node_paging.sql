@@ -1,0 +1,43 @@
+-- ---------------------------------------------------------------------------
+-- Keyset paging support for ListScopeNodes.
+--
+-- The listing was capped at LIMIT 2000 with no way to ask for the next page,
+-- which was not only a console limitation: the scope-sync archive pass reads
+-- "every active node in this axis" through the same query to decide what the
+-- feed no longer contains. Past 2000 nodes it was deciding that from a
+-- 2000-row prefix ordered by name, so nodes beyond the cut were never
+-- archived even when the source had dropped them. A seeded axis here already
+-- holds ~20k.
+--
+-- Paging is keyset — ORDER BY (name, id), resume strictly after the last row —
+-- not OFFSET. At a million rows OFFSET re-scans everything it skips, and it
+-- drops or repeats rows when a concurrent sync inserts ahead of the cursor.
+-- name is not unique, so id is the tiebreaker and both belong in the index.
+--
+-- Not CONCURRENTLY: the migration runner wraps each file in a transaction
+-- (internal/platform/migrate/runner.go) and CREATE INDEX CONCURRENTLY cannot
+-- run inside one. This build takes a SHARE lock, blocking writes to
+-- scope_nodes until it finishes — seconds on a large table.
+--
+-- Two things make that safe to run against a live system:
+--
+--   lock_timeout      the build waits at most 5 s to ACQUIRE the lock. Without
+--                     it, a single long-running transaction holding a
+--                     conflicting lock makes this migration queue — and a
+--                     queued DDL request blocks every writer behind it. Better
+--                     to fail the migration and retry in a quiet window than
+--                     to stall writes indefinitely.
+--   IF NOT EXISTS     an operator with a very large scope_nodes can build the
+--                     index out of band first:
+--
+--                         CREATE INDEX CONCURRENTLY scope_nodes_paging
+--                             ON scope_nodes (tenant_id, axis_code, name, id);
+--
+--                     after which this migration is a no-op. Note that a
+--                     CONCURRENTLY build which fails leaves an INVALID index
+--                     that must be dropped before retrying.
+-- ---------------------------------------------------------------------------
+
+SET LOCAL lock_timeout = '5s';
+
+CREATE INDEX IF NOT EXISTS scope_nodes_paging ON scope_nodes (tenant_id, axis_code, name, id);

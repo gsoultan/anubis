@@ -414,8 +414,11 @@ WHERE tenant_id = $1
   AND ($3::uuid IS NULL OR parent_id = $3)
   AND ($4::text IS NULL OR name ILIKE '%' || $4 || '%')
   AND ($5::boolean OR status = 'active')
-ORDER BY name
-LIMIT 2000
+  AND ($6::text IS NULL
+       OR name > $6::text
+       OR (name = $6::text AND id > $7::uuid))
+ORDER BY name, id
+LIMIT $8
 `
 
 type ListScopeNodesParams struct {
@@ -424,6 +427,9 @@ type ListScopeNodesParams struct {
 	ParentID        *string
 	Query           *string
 	IncludeArchived bool
+	AfterName       *string
+	AfterID         *string
+	Lim             int32
 }
 
 type ListScopeNodesRow struct {
@@ -439,6 +445,12 @@ type ListScopeNodesRow struct {
 	ExternalRef *string
 }
 
+// KEYSET paging, ordered by (name, id). Resume by passing the last row's
+// name and id as after_name/after_id; NULL after_name starts at the
+// beginning. Not OFFSET: at a million nodes OFFSET re-scans everything it
+// skips, and it drops or repeats rows when a sync inserts ahead of the
+// cursor. name is not unique, which is why id is in both the ORDER BY and
+// the comparison. Index: scope_nodes_paging (migration 0039).
 func (q *Queries) ListScopeNodes(ctx context.Context, arg ListScopeNodesParams) ([]ListScopeNodesRow, error) {
 	rows, err := q.db.Query(ctx, listScopeNodes,
 		arg.TenantID,
@@ -446,6 +458,9 @@ func (q *Queries) ListScopeNodes(ctx context.Context, arg ListScopeNodesParams) 
 		arg.ParentID,
 		arg.Query,
 		arg.IncludeArchived,
+		arg.AfterName,
+		arg.AfterID,
+		arg.Lim,
 	)
 	if err != nil {
 		return nil, err

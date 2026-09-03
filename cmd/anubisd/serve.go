@@ -41,6 +41,22 @@ func runServe(ctx context.Context, logger *slog.Logger) error {
 		return err
 	}
 
+	// ANUBIS_ENV defaults to dev, and dev substitutes a master key that is a
+	// constant in the public source. Every signing key and every PII key
+	// sealed under it is readable by anyone with the repository — so an
+	// install that meant to be production and forgot one variable is not
+	// merely weaker, it is unsealed. The systemd packaging sets ANUBIS_ENV
+	// explicitly; a container started with just ANUBIS_DB_URL does not, which
+	// is the case this exists for. config.go promised this was said loudly
+	// and nothing said it.
+	if cfg.InsecureMasterKey {
+		logger.Warn("INSECURE: no master key configured, using the built-in DEV key — "+
+			"it is a constant in the public source, so nothing sealed under it is confidential. "+
+			"Set ANUBIS_ENV=prod (which refuses to boot without a key) and provide "+
+			"ANUBIS_MASTER_KEY or ANUBIS_KEY_FILE.",
+			"env", cfg.Env, "issuer", cfg.Issuer)
+	}
+
 	// Dev convenience mirrors scripts/dev.sh expectations: schema is applied
 	// on boot. Production runs `anubisd migrate` as its own deploy step.
 	if cfg.Env != "prod" {
@@ -108,6 +124,15 @@ func runServe(ctx context.Context, logger *slog.Logger) error {
 	}
 	if cfg.TrustedProxies != "" {
 		logger.Info("trusting X-Forwarded-For from proxies", "cidrs", cfg.TrustedProxies)
+	}
+	// ANUBIS_TRUST_PROXY was parsed into a field nothing read. Setting it
+	// configures nothing, and the operator who set it is expecting the
+	// opposite — so say so instead of ignoring it.
+	if cfg.StrayTrustProxy {
+		logger.Warn("ANUBIS_TRUST_PROXY does nothing and has been retired — " +
+			"set ANUBIS_TRUSTED_PROXIES to the CIDRs whose X-Forwarded-For you believe. " +
+			"Until then the client IP is your proxy's on every request, so per-IP rate " +
+			"limits bound the whole installation rather than one caller.")
 	}
 
 	limiter := ratelimit.New()

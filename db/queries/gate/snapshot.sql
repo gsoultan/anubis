@@ -9,14 +9,20 @@ SELECT code, default_effect, status, sort_order FROM scope_axes
 WHERE status = 'active';
 
 -- name: SnapshotNodes :many
-SELECT id, parent_id, axis_code FROM scope_nodes
-WHERE tenant_id = sqlc.arg(tenant_id) AND status = 'active';
-
--- name: SnapshotClosure :many
-SELECT c.ancestor_id, c.descendant_id, c.depth
-FROM scope_closure c
-JOIN scope_nodes d ON d.id = c.descendant_id
-WHERE d.tenant_id = sqlc.arg(tenant_id);
+-- The scope hierarchy as PARENT POINTERS, not as a materialised closure.
+-- The gate only ever asks "is granted node A an ancestor-or-self of target
+-- B", which a walk up parent_id answers exactly -- and one row per node
+-- instead of one per (node, ancestor) pair. At 1M nodes that is 1M rows
+-- rather than 4M, and the in-memory form stops growing with tree depth.
+--
+-- NO status FILTER, DELIBERATELY. authorize() (migration 0013) probes
+-- scope_closure without looking at scope_nodes.status, so an archived node
+-- still carries grants and still resolves its ancestors. Filtering to
+-- 'active' here would make the gate deny what the SQL engine allows, and
+-- would break the chain under any archived intermediate node.
+-- snapshot_parity_test.go is what catches this.
+SELECT id, parent_id FROM scope_nodes
+WHERE tenant_id = sqlc.arg(tenant_id);
 
 -- name: SnapshotGrants :many
 SELECT g.id, g.identity_id, g.role_id, g.self_scoped, g.valid_from, g.valid_until
