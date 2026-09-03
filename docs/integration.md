@@ -395,6 +395,57 @@ balancer before it starts denying).
 
 ---
 
+## Branding the hosted pages
+
+The sign-in and sign-out pages are served by Anubis at
+`/p/{tenant}/{kind}/{slug}` and configured per tenant. **The config is a closed
+token set, never markup or CSS.** A tenant cannot inject a script or a
+stylesheet because there is nowhere to write one down — which is also why
+adding a capability means adding a token, not opening a field.
+
+| Section | Fields |
+| :--- | :--- |
+| `brand` | `title`, `logo_url`, `primary_color`, `background_color`, `text_color`, `corner_radius` (`none`/`sm`/`md`/`lg`/`full`), `font` (`system`/`serif`/`mono`) |
+| `layout` | `centered`, `split`, `minimal` |
+| `copy` (sign-in) | `heading`, `subheading`, `username_label`, `password_label`, `submit_label` |
+| `copy` (sign-out) | `confirm_heading`, `confirm_body` — asking; `heading`, `body`, `return_label` — afterwards |
+| `features` (sign-in) | `show_realm_picker`, `show_registration`, `show_forgot_password`, `remember_me` |
+| `behavior` (sign-out) | `confirm`, `auto_redirect_seconds` (0–30), `default_return_url` |
+| `motion` | `entrance`: `none`, `fade`, `rise` |
+| `links` | up to 5 `{label, url}` |
+
+`logo_url` is rendered as an `<img src>`; `javascript:` and `data:` URLs are
+rejected. Every field is validated server-side and the error names the field,
+so a console can point at the input rather than saying "invalid
+configuration".
+
+**Sign-out is two pages in one.** The confirm step asks before ending the
+session; the signed-out step is what remains after. They draw from different
+copy fields, which is why the console previews both.
+
+**Motion respects the visitor, not the tenant.** The entrance is emitted only
+inside `@media (prefers-reduced-motion: no-preference)`, so somebody who asked
+their system for less motion sees none — and so does anyone whose browser does
+not answer. It animates opacity and transform only, over 200 ms, and never
+delays the form becoming usable.
+
+### Which page a visitor gets
+
+```
+explicit slug  ->  application  ->  realm  ->  tenant default
+```
+
+A page may be bound to an application or to a realm, never both. The realm is
+the population — internal, partner, public — and comes from `?realm=`, so
+`/v1/authorize?...&realm=partner` reaches the partner door. An application
+that has its own page keeps it regardless of who is signing in.
+
+That order is worth knowing before you need it: when the wrong brand appears
+in front of the wrong population, it is almost always a binding higher in this
+list than the one you were looking at.
+
+---
+
 ## Choosing the flow
 
 | Your application is… | Sign in via | Verify via | Authorize via |

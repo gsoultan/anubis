@@ -340,6 +340,57 @@ still cannot attach an employee-only role to a public self-registered account.
 
 ---
 
+## Hosted pages
+
+### `auth_pages`
+The sign-in and sign-out pages a tenant's own people see. One row per page;
+served at `/p/{tenant}/{kind}/{slug}`.
+
+```sql
+id             uuid PRIMARY KEY
+tenant_id      uuid NOT NULL
+kind           text NOT NULL   -- signin | signout
+slug           text NOT NULL   -- URL segment; published, so immutable
+name           text NOT NULL   -- admin-facing label
+status         text NOT NULL   -- active | disabled
+is_default     boolean         -- the tenant fallback for this kind
+application_id uuid            -- optional binding
+realm_id       uuid            -- optional binding (migration 0041)
+config         jsonb NOT NULL  -- a token set, never markup
+```
+
+**A page binds to an application OR a realm, never both**
+(`auth_pages_one_binding`). Resolution would otherwise have to pick one, and
+whichever it picked would surprise somebody; refusing the row is cheaper than
+documenting a precedence nobody remembers. Both bindings are UNIQUE per kind
+(`auth_pages_one_per_app`, `auth_pages_one_per_realm`), and `realm_id` carries
+a composite foreign key on `(realm_id, tenant_id)` so a page bound to another
+tenant's realm is unrepresentable.
+
+**Resolution, most specific first:**
+
+```
+explicit slug  ->  application  ->  realm  ->  tenant default
+```
+
+The realm sits between application and default deliberately: an application
+that configured its own door keeps it, so adding realm pages changed nothing
+that already resolved. The realm comes from `?realm=` (default `internal`),
+which is also what the population picker posts.
+
+`config` is validated by `internal/tenancy/domain/pagecfg` on write **and** on
+read. A stored config that no longer parses — a downgrade, a hand-edited row —
+logs an error and renders defaults rather than taking sign-in down.
+
+### `signin_pages` — superseded
+Migration 0024 replaced this with `auth_pages` and copied the rows across.
+**Nothing renders from it.** The `GetSigninPage`/`PutSigninPage` RPCs still
+read and write it and are deprecated; they take a shape `pagecfg` cannot
+parse, so they cannot be forwarded to the real page. `anubis_deprecated_rpc_total`
+counts callers, which is the evidence for when the table can go.
+
+---
+
 ## Route policies
 
 `route_policies` translates URL paths to permissions.
