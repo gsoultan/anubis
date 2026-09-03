@@ -118,7 +118,12 @@ cmd_migrate() {
       [ "$seen" = "$sum" ] || warn "$version was modified after being applied (checksum drift)"
       skipped=$((skipped+1)); continue
     fi
-    psql_db -v ON_ERROR_STOP=1 -q < "$f" >/dev/null || die "failed: $version"
+    # --single-transaction matches the production runner
+    # (internal/platform/migrate/runner.go wraps each file in one tx). Without
+    # it a migration that fails halfway left dev databases in a state
+    # production could never reach, and SET LOCAL — which migrations use to
+    # bound DDL lock waits — silently did nothing.
+    psql_db -v ON_ERROR_STOP=1 --single-transaction -q < "$f" >/dev/null || die "failed: $version"
     psql_db -q -c \
       "INSERT INTO schema_migrations (version, checksum) VALUES ('$version','$sum')
        ON CONFLICT (version) DO NOTHING" >/dev/null 2>&1 || true
