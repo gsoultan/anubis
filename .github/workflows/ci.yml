@@ -24,8 +24,8 @@ jobs:
     name: enforcement gates
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
       - name: install buf + sqlc + protoc plugins (pinned)
@@ -51,8 +51,8 @@ jobs:
     name: build + unit (race)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
       - run: go vet ./...
@@ -96,8 +96,8 @@ jobs:
       ANUBIS_DB_URL: postgres://anubis:anubis@localhost:5432/anubis_ci?sslmode=disable
       ANUBIS_TEST_MYSQL_DSN: mysql://root:anubis@127.0.0.1:3306/anubis_src
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
       - run: bash scripts/ci/backend-suite.sh
@@ -114,7 +114,7 @@ jobs:
     name: console typecheck + build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ env.BUN_VERSION }}
@@ -127,9 +127,9 @@ jobs:
     name: release build (snapshot)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with: { fetch-depth: 0 }
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
       - uses: oven-sh/setup-bun@v2
@@ -140,7 +140,7 @@ jobs:
       - uses: anchore/sbom-action/download-syft@v0
       # Proves the packaging works BEFORE a tag depends on it — including
       # that the console really got embedded rather than the placeholder.
-      - uses: goreleaser/goreleaser-action@v6
+      - uses: goreleaser/goreleaser-action@v7
         with:
           version: "~> v2"
           # Signing is skipped here and only here: keyless signing needs the
@@ -158,7 +158,7 @@ jobs:
           consoles=$(strings "$bin" | grep -c "Anubis Console" || true)
           [ "$placeholders" -eq 0 ] || { echo "FATAL: release binary embeds the placeholder console"; exit 1; }
           [ "$consoles" -gt 0 ] || { echo "FATAL: no console in binary"; exit 1; }
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: snapshot-packages
           path: |
@@ -177,7 +177,7 @@ jobs:
     # repositories bill Actions minutes, and this job spends them last.
     if: github.ref == 'refs/heads/main'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: build image
         run: docker build --build-arg VERSION=${GITHUB_SHA::12} -t anubisd:${GITHUB_SHA::12} .
       # Publishing waits on a registry decision (GHCR vs private); the build
