@@ -59,16 +59,11 @@ func (d *Data) grantScopesSatisfied(g Grant, targets map[string]string) bool {
 		if !supplied {
 			return false // fail-closed: constrained axis without a target
 		}
-		up := d.Up[target]
-		satisfied := false
-		for _, c := range constraints {
-			depth, covered := up[c.NodeID]
-			if covered && (c.Inherit || depth == 0) {
-				satisfied = true
-				break
-			}
+		node, known := d.Scope.Resolve(target)
+		if !known {
+			return false // fail-closed: a target this snapshot has never seen
 		}
-		if !satisfied {
+		if !d.Scope.CoveredBy(node, constraints) {
 			return false
 		}
 	}

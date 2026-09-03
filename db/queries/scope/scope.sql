@@ -40,6 +40,12 @@ VALUES (sqlc.arg(code), sqlc.arg(axis_code), sqlc.arg(display_name),
 RETURNING code;
 
 -- name: ListScopeNodes :many
+-- KEYSET paging, ordered by (name, id). Resume by passing the last row's
+-- name and id as after_name/after_id; NULL after_name starts at the
+-- beginning. Not OFFSET: at a million nodes OFFSET re-scans everything it
+-- skips, and it drops or repeats rows when a sync inserts ahead of the
+-- cursor. name is not unique, which is why id is in both the ORDER BY and
+-- the comparison. Index: scope_nodes_paging (migration 0039).
 SELECT id, tenant_id, parent_id, is_axis_root, status, axis_code, node_type,
        slug, name, external_ref
 FROM scope_nodes
@@ -48,8 +54,11 @@ WHERE tenant_id = sqlc.arg(tenant_id)
   AND (sqlc.narg(parent_id)::uuid IS NULL OR parent_id = sqlc.narg(parent_id))
   AND (sqlc.narg(query)::text IS NULL OR name ILIKE '%' || sqlc.narg(query) || '%')
   AND (sqlc.arg(include_archived)::boolean OR status = 'active')
-ORDER BY name
-LIMIT 2000;
+  AND (sqlc.narg(after_name)::text IS NULL
+       OR name > sqlc.narg(after_name)::text
+       OR (name = sqlc.narg(after_name)::text AND id > sqlc.narg(after_id)::uuid))
+ORDER BY name, id
+LIMIT sqlc.arg(lim);
 
 -- name: GetScopeNode :one
 SELECT id, tenant_id, parent_id, is_axis_root, status, axis_code, node_type,

@@ -12,6 +12,7 @@ import (
 	scopeapp "github.com/gsoultan/anubis/internal/scope/app"
 	scopedomain "github.com/gsoultan/anubis/internal/scope/domain"
 	scopesvc "github.com/gsoultan/anubis/internal/scope/service"
+	"github.com/gsoultan/anubis/internal/shared/apperr"
 )
 
 // ScopeAdminHandler implements anubisv1connect.ScopeAdminServiceHandler.
@@ -144,16 +145,30 @@ func (h *ScopeAdminHandler) CreateScopeNodeType(ctx context.Context, req *connec
 
 func (h *ScopeAdminHandler) ListScopeNodes(ctx context.Context, req *connect.Request[anubisv1.ListScopeNodesRequest]) (*connect.Response[anubisv1.ListScopeNodesResponse], error) {
 	out, err := h.f.Do(ctx, "admin.scope.nodes", func(ctx context.Context) (any, error) {
-		return h.svc.ListScopeNodes(ctx, req.Msg.Axis, req.Msg.ParentId, req.Msg.Query, req.Msg.IncludeArchived)
+		afterName, afterID, terr := scopedomain.ParsePageToken(req.Msg.PageToken)
+		if terr != nil {
+			return nil, apperr.E(apperr.KindInvalidArgument, "bad_page_token",
+				"page_token is not a cursor this API issued")
+		}
+		list, next, lerr := h.svc.ListScopeNodes(ctx, scopedomain.ScopeNodeFilter{
+			Axis: req.Msg.Axis, ParentID: req.Msg.ParentId, Query: req.Msg.Query,
+			IncludeArchived: req.Msg.IncludeArchived,
+			AfterName:       afterName, AfterID: afterID,
+			Limit: req.Msg.PageSize,
+		})
+		if lerr != nil {
+			return nil, lerr
+		}
+		resp := &anubisv1.ListScopeNodesResponse{NextPageToken: next}
+		for _, n := range list {
+			resp.Nodes = append(resp.Nodes, nodeProto(n))
+		}
+		return resp, nil
 	})
 	if err != nil {
 		return nil, apiconnect.Err(ctx, err)
 	}
-	resp := &anubisv1.ListScopeNodesResponse{}
-	for _, n := range out.([]scopedomain.ScopeNodeRecord) {
-		resp.Nodes = append(resp.Nodes, nodeProto(n))
-	}
-	return connect.NewResponse(resp), nil
+	return connect.NewResponse(out.(*anubisv1.ListScopeNodesResponse)), nil
 }
 
 func (h *ScopeAdminHandler) CreateScopeNode(ctx context.Context, req *connect.Request[anubisv1.CreateScopeNodeRequest]) (*connect.Response[anubisv1.CreateScopeNodeResponse], error) {

@@ -347,10 +347,17 @@ message ListScopeNodesRequest {
   string parent_id = 2;  // empty = whole axis
   string query = 3;
   bool include_archived = 4;
+  // Keyset paging. page_size is clamped server-side; page_token is opaque and
+  // comes from the previous response. An axis can hold hundreds of thousands
+  // of nodes, so an unpaged listing was never returning all of them.
+  int32 page_size = 5;
+  string page_token = 6;
 }
 
 message ListScopeNodesResponse {
   repeated ScopeNode nodes = 1;
+  // Empty when this was the last page.
+  string next_page_token = 2;
 }
 
 message CreateScopeNodeRequest {

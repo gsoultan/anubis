@@ -31,11 +31,15 @@ func (s *Repository) CreateScopeNodeType(ctx context.Context, t scopedomain.Scop
 	return database.MapErr(err)
 }
 
-func (s *Repository) ListScopeNodes(ctx context.Context, tenantID, axis, parentID, query string, includeArchived bool) ([]scopedomain.ScopeNodeRecord, error) {
+func (s *Repository) ListScopeNodes(ctx context.Context, tenantID string, f scopedomain.ScopeNodeFilter) ([]scopedomain.ScopeNodeRecord, error) {
+	f = f.Normalise()
 	rows, err := s.q(ctx).ListScopeNodes(ctx, gen.ListScopeNodesParams{
-		TenantID: tenantID, AxisCode: axis,
-		ParentID: database.OptStr(parentID), Query: database.OptStr(query),
-		IncludeArchived: includeArchived,
+		TenantID: tenantID, AxisCode: f.Axis,
+		ParentID: database.OptStr(f.ParentID), Query: database.OptStr(f.Query),
+		IncludeArchived: f.IncludeArchived,
+		AfterName:       database.OptStr(f.AfterName),
+		AfterID:         database.OptStr(f.AfterID),
+		Lim:             f.Limit,
 	})
 	if err != nil {
 		return nil, database.MapErr(err)

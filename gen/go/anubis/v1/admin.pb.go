@@ -2698,8 +2698,13 @@ type ListScopeNodesRequest struct {
 	ParentId        string                 `protobuf:"bytes,2,opt,name=parent_id,json=parentId,proto3" json:"parent_id,omitempty"` // empty = whole axis
 	Query           string                 `protobuf:"bytes,3,opt,name=query,proto3" json:"query,omitempty"`
 	IncludeArchived bool                   `protobuf:"varint,4,opt,name=include_archived,json=includeArchived,proto3" json:"include_archived,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// Keyset paging. page_size is clamped server-side; page_token is opaque and
+	// comes from the previous response. An axis can hold hundreds of thousands
+	// of nodes, so an unpaged listing was never returning all of them.
+	PageSize      int32  `protobuf:"varint,5,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty"`
+	PageToken     string `protobuf:"bytes,6,opt,name=page_token,json=pageToken,proto3" json:"page_token,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ListScopeNodesRequest) Reset() {
@@ -2760,9 +2765,25 @@ func (x *ListScopeNodesRequest) GetIncludeArchived() bool {
 	return false
 }
 
+func (x *ListScopeNodesRequest) GetPageSize() int32 {
+	if x != nil {
+		return x.PageSize
+	}
+	return 0
+}
+
+func (x *ListScopeNodesRequest) GetPageToken() string {
+	if x != nil {
+		return x.PageToken
+	}
+	return ""
+}
+
 type ListScopeNodesResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Nodes         []*ScopeNode           `protobuf:"bytes,1,rep,name=nodes,proto3" json:"nodes,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Nodes []*ScopeNode           `protobuf:"bytes,1,rep,name=nodes,proto3" json:"nodes,omitempty"`
+	// Empty when this was the last page.
+	NextPageToken string `protobuf:"bytes,2,opt,name=next_page_token,json=nextPageToken,proto3" json:"next_page_token,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2802,6 +2823,13 @@ func (x *ListScopeNodesResponse) GetNodes() []*ScopeNode {
 		return x.Nodes
 	}
 	return nil
+}
+
+func (x *ListScopeNodesResponse) GetNextPageToken() string {
+	if x != nil {
+		return x.NextPageToken
+	}
+	return ""
 }
 
 type CreateScopeNodeRequest struct {
@@ -13262,14 +13290,18 @@ const file_anubis_v1_admin_proto_rawDesc = "" +
 	"\fexternal_ref\x18\a \x01(\tR\vexternalRef\x12\x16\n" +
 	"\x06status\x18\b \x01(\tR\x06status\x12 \n" +
 	"\fis_axis_root\x18\t \x01(\bR\n" +
-	"isAxisRoot\"\x89\x01\n" +
+	"isAxisRoot\"\xc5\x01\n" +
 	"\x15ListScopeNodesRequest\x12\x12\n" +
 	"\x04axis\x18\x01 \x01(\tR\x04axis\x12\x1b\n" +
 	"\tparent_id\x18\x02 \x01(\tR\bparentId\x12\x14\n" +
 	"\x05query\x18\x03 \x01(\tR\x05query\x12)\n" +
-	"\x10include_archived\x18\x04 \x01(\bR\x0fincludeArchived\"D\n" +
+	"\x10include_archived\x18\x04 \x01(\bR\x0fincludeArchived\x12\x1b\n" +
+	"\tpage_size\x18\x05 \x01(\x05R\bpageSize\x12\x1d\n" +
+	"\n" +
+	"page_token\x18\x06 \x01(\tR\tpageToken\"l\n" +
 	"\x16ListScopeNodesResponse\x12*\n" +
-	"\x05nodes\x18\x01 \x03(\v2\x14.anubis.v1.ScopeNodeR\x05nodes\"\xb1\x01\n" +
+	"\x05nodes\x18\x01 \x03(\v2\x14.anubis.v1.ScopeNodeR\x05nodes\x12&\n" +
+	"\x0fnext_page_token\x18\x02 \x01(\tR\rnextPageToken\"\xb1\x01\n" +
 	"\x16CreateScopeNodeRequest\x12\x12\n" +
 	"\x04axis\x18\x01 \x01(\tR\x04axis\x12\x1b\n" +
 	"\tnode_type\x18\x02 \x01(\tR\bnodeType\x12\x1b\n" +
