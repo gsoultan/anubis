@@ -170,6 +170,15 @@ func (u *pageAdminInteractor) normalise(ctx context.Context, tenantID string, in
 	if in.Status != "active" && in.Status != "disabled" {
 		return nil, apperr.ErrInvalidArgument.With("status", in.Status)
 	}
+	// A page answers for an application OR a population, never both:
+	// resolution would have to pick one, and whichever it picked would
+	// surprise somebody. auth_pages_one_binding (migration 0041) refuses the
+	// row, but a CHECK violation names a constraint rather than a field, and
+	// the console needs to point at the input the operator got wrong.
+	if in.ApplicationID != "" && in.RealmID != "" {
+		return nil, apperr.ErrInvalidArgument.
+			With("realm_id", "a page answers for an application or a population, not both")
+	}
 	if in.ApplicationID != "" {
 		if _, err := u.apps.ApplicationByID(ctx, tenantID, in.ApplicationID); err != nil {
 			return nil, apperr.ErrInvalidArgument.With("application_id", "unknown application")

@@ -1,13 +1,17 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import {
-  Button, ColorInput, NumberInput, SegmentedControl, Select, Switch, TextInput, Textarea,
+  ActionIcon, Button, ColorInput, Menu, Modal, NumberInput, SegmentedControl,
+  Select, Switch, TextInput, Textarea,
 } from '@mantine/core'
-import { IconDeviceFloppy, IconRestore } from '@tabler/icons-react'
+import {
+  IconDeviceFloppy, IconDots, IconPlus, IconRestore, IconStar, IconTrash,
+} from '@tabler/icons-react'
 import { useEffect, useState } from 'react'
 import { Page } from '@/components/shell/Page'
 import { PagePreview } from '@/components/page/PagePreview'
 import { api } from '@/lib/api/client'
+import { defaultPageConfig } from '@/lib/api/live'
 import { qk } from '@/lib/query/keys'
 import { queryClient } from '@/lib/query/client'
 import { notifyCreated, notifyRejected } from '@/components/create/shell'
@@ -41,6 +45,14 @@ function pageLabel(p: AuthPage): string {
   return `${p.name}${p.is_default ? ' (tenant default)' : ''}`
 }
 
+/* What this page answers for, in the words the resolution order uses. */
+function bindingOf(p: AuthPage): string {
+  if (p.application_slug) return `application: ${p.application_slug}`
+  if (p.realm_code) return `population: ${p.realm_code}`
+  if (p.is_default) return 'everything else'
+  return 'reachable by its link only'
+}
+
 function PageBuilder() {
   /* Both kinds live in auth_pages and share brand, layout and motion; only the
      copy and the last panel differ. Editing them in one place is what keeps a
@@ -51,6 +63,12 @@ function PageBuilder() {
     queryFn: () => api.authPages(kind),
   })
 
+  /* Bindings need something to bind to. */
+  const { data: realmList } = useQuery({ queryKey: qk.realms(), queryFn: () => api.realms() })
+  const { data: appList } = useQuery({ queryKey: ['app-choices'], queryFn: () => api.applications() })
+
+  const [creating, setCreating] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState<AuthPage | null>(null)
   const [pageId, setPageId] = useState<string | null>(null)
   const selected: AuthPage | undefined =
     pages?.find((p) => p.id === pageId) ?? pages?.find((p) => p.is_default) ?? pages?.[0]
@@ -83,6 +101,29 @@ function PageBuilder() {
   const behavior = <K extends keyof NonNullable<PageConfig['behavior']>>(
     k: K, v: NonNullable<PageConfig['behavior']>[K],
   ) => setCfg((c) => (c ? { ...c, behavior: { ...(c.behavior ?? {}), [k]: v } } : c))
+
+  async function refresh() {
+    await queryClient.invalidateQueries({ queryKey: qk.authPages(kind) })
+  }
+
+  async function promote(p: AuthPage) {
+    try {
+      await api.setDefaultAuthPage(p.id)
+      await refresh()
+      notifyCreated(`"${p.name}" is now the default`,
+        'Anything without a more specific match renders it.')
+    } catch (e) { notifyRejected(e) }
+  }
+
+  async function remove(p: AuthPage) {
+    try {
+      await api.deleteAuthPage(p.id)
+      setConfirmDelete(null)
+      if (pageId === p.id) setPageId(null)
+      await refresh()
+      notifyCreated(`"${p.name}" deleted`, 'Requests it answered now fall through.')
+    } catch (e) { notifyRejected(e) }
+  }
 
   async function save() {
     if (!selected || !cfg) return
@@ -124,11 +165,35 @@ function PageBuilder() {
         </>
       }
     >
+      <NewPageModal
+        opened={creating} kind={kind}
+        realms={realmList ?? []} apps={appList ?? []}
+        onClose={() => setCreating(false)}
+        onCreated={async (p) => { setCreating(false); setPageId(p.id); await refresh() }}
+      />
+
+      <Modal
+        opened={!!confirmDelete} onClose={() => setConfirmDelete(null)}
+        title={`Delete "${confirmDelete?.name ?? ''}"?`} centered size="sm"
+      >
+        <div className="t-body mb-4" style={{ opacity: 0.8 }}>
+          Anyone this page answered for falls through to the next match —
+          {' '}{confirmDelete ? bindingOf(confirmDelete) : ''} becomes whatever
+          the default renders. Its URL stops resolving.
+        </div>
+        <div className="flex justify-end gap-2">
+          <Button variant="default" size="xs" onClick={() => setConfirmDelete(null)}>Cancel</Button>
+          <Button color="red" size="xs" onClick={() => confirmDelete && remove(confirmDelete)}>
+            Delete
+          </Button>
+        </div>
+      </Modal>
+
       {cfg && (
         <div className="grid gap-5" style={{ gridTemplateColumns: 'minmax(300px, 380px) minmax(0, 1fr)' }}>
           <div className="flex flex-col gap-4">
-            <div className="panel flex flex-col gap-3.5 p-4">
-              <div className="t-label">Page kind</div>
+            <div className="panel flex flex-col gap-3 p-4">
+              <div className="t-label">Pages</div>
               <SegmentedControl
                 fullWidth size="xs" value={kind}
                 onChange={(v) => setKind(v as PageKind)}
@@ -137,14 +202,65 @@ function PageBuilder() {
                   { value: 'signout', label: 'Sign-out' },
                 ]}
               />
-              {(pages?.length ?? 0) > 1 && (
-                <Field label="Editing" hint="A page may be bound to an application or a population.">
-                  <Select
-                    size="xs" value={pageId} onChange={(v) => setPageId(v)}
-                    data={(pages ?? []).map((p) => ({ value: p.id, label: pageLabel(p) }))}
-                  />
-                </Field>
-              )}
+
+              {/* A tenant has as many pages of each kind as it wants. The
+                  concept is invisible while only one exists, which is exactly
+                  when somebody needs it explained. */}
+              <div className="t-xs" style={{ opacity: 0.7 }}>
+                One page is the tenant default. Add more to give an application
+                or a population its own — the most specific match wins:
+                {' '}<strong>link → application → population → default</strong>.
+              </div>
+
+              <div className="flex flex-col gap-1">
+                {(pages ?? []).map((p) => (
+                  <div
+                    key={p.id}
+                    className="flex items-center gap-2 rounded px-2 py-1.5"
+                    style={{
+                      cursor: 'pointer',
+                      background: p.id === selected?.id ? 'rgb(120 120 160 / .12)' : undefined,
+                    }}
+                    onClick={() => setPageId(p.id)}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="t-body truncate" style={{ fontWeight: 550 }}>{p.name}</div>
+                      <div className="t-xs truncate" style={{ opacity: 0.65 }}>{bindingOf(p)}</div>
+                    </div>
+                    {p.is_default && <span className="t-xs" style={{ opacity: 0.7 }}>default</span>}
+                    <Menu position="bottom-end" withinPortal>
+                      <Menu.Target>
+                        <ActionIcon variant="subtle" size="sm" onClick={(e) => e.stopPropagation()}>
+                          <IconDots size={14} />
+                        </ActionIcon>
+                      </Menu.Target>
+                      <Menu.Dropdown>
+                        <Menu.Item
+                          leftSection={<IconStar size={14} />}
+                          disabled={p.is_default}
+                          onClick={() => promote(p)}
+                        >
+                          Make default
+                        </Menu.Item>
+                        <Menu.Item
+                          color="red" leftSection={<IconTrash size={14} />}
+                          disabled={p.is_default}
+                          onClick={() => setConfirmDelete(p)}
+                        >
+                          Delete
+                        </Menu.Item>
+                      </Menu.Dropdown>
+                    </Menu>
+                  </div>
+                ))}
+              </div>
+
+              <Button
+                variant="default" size="xs" leftSection={<IconPlus size={14} />}
+                onClick={() => setCreating(true)}
+              >
+                New {kind === 'signout' ? 'sign-out' : 'sign-in'} page
+              </Button>
             </div>
 
             {selected && (selected.realm_code || selected.application_slug) && (
@@ -364,4 +480,121 @@ function PageBuilder() {
       )}
     </Page>
   )
+}
+
+/* Creating a page is where the concept becomes concrete, so the form is built
+   around the question that decides everything else: who is this page for?
+   kind and slug are fixed at creation because the URL they form is published
+   and changing it silently breaks every link pointing at it. */
+function NewPageModal({ opened, kind, realms, apps, onClose, onCreated }: {
+  opened: boolean
+  kind: PageKind
+  realms: { id: string; code: string; display_name: string }[]
+  apps: { id: string; slug: string; name: string }[]
+  onClose: () => void
+  onCreated: (p: AuthPage) => void | Promise<void>
+}) {
+  const [name, setName] = useState('')
+  const [slug, setSlug] = useState('')
+  const [bind, setBind] = useState<'none' | 'application' | 'realm'>('none')
+  const [target, setTarget] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    if (opened) { setName(''); setSlug(''); setBind('none'); setTarget(null) }
+  }, [opened])
+
+  async function create() {
+    setBusy(true)
+    try {
+      const p = await api.createAuthPage({
+        kind, name, slug,
+        ...(bind === 'application' && target ? { applicationId: target } : {}),
+        ...(bind === 'realm' && target ? { realmId: target } : {}),
+        config: defaultPageConfig(kind),
+      })
+      if (p) {
+        notifyCreated(`"${p.name}" created`, `Served at /p/{tenant}/${kind}/${p.slug}`)
+        await onCreated(p)
+      }
+    } catch (e) {
+      notifyRejected(e)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Modal opened={opened} onClose={onClose} centered title={
+      kind === 'signout' ? 'New sign-out page' : 'New sign-in page'
+    }>
+      <div className="flex flex-col gap-3.5">
+        <Field label="Name" hint="For you, in this list. Not shown to anyone signing in.">
+          <TextInput
+            value={name} placeholder="Partner portal"
+            onChange={(e) => {
+              setName(e.currentTarget.value)
+              /* Suggest a slug until the operator edits one themselves. */
+              if (!slug || slug === slugify(name)) setSlug(slugify(e.currentTarget.value))
+            }}
+          />
+        </Field>
+        <Field
+          label="URL segment"
+          hint={`Served at /p/{tenant}/${kind}/${slug || '…'} — at least two characters, and fixed once created because the link is published.`}
+        >
+          <TextInput value={slug} placeholder="partners"
+            onChange={(e) => setSlug(slugify(e.currentTarget.value))} />
+        </Field>
+        <Field label="Who is this page for?">
+          <SegmentedControl
+            fullWidth size="xs" value={bind}
+            onChange={(v) => { setBind(v as typeof bind); setTarget(null) }}
+            data={[
+              { value: 'none', label: 'Link only' },
+              { value: 'application', label: 'Application' },
+              { value: 'realm', label: 'Population' },
+            ]}
+          />
+        </Field>
+        {bind === 'application' && (
+          <Field label="Application" hint="Anyone arriving through it sees this page.">
+            <Select
+              searchable value={target} onChange={setTarget}
+              data={apps.map((a) => ({ value: a.id, label: `${a.name} (${a.slug})` }))}
+            />
+          </Field>
+        )}
+        {bind === 'realm' && (
+          <Field label="Population" hint="Unless the application they arrive through has its own page.">
+            <Select
+              value={target} onChange={setTarget}
+              data={realms.map((r) => ({ value: r.id, label: `${r.display_name} (${r.code})` }))}
+            />
+          </Field>
+        )}
+        {bind === 'none' && (
+          <div className="t-xs" style={{ opacity: 0.7 }}>
+            Reachable only at its own URL. Useful for a campaign page, or for
+            drafting a design before binding it to anything.
+          </div>
+        )}
+        <div className="mt-1 flex justify-end gap-2">
+          <Button variant="default" size="xs" onClick={onClose}>Cancel</Button>
+          <Button
+            size="xs" loading={busy}
+            disabled={!name || slug.length < 2 || (bind !== 'none' && !target)}
+            onClick={create}
+          >
+            Create
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+/** Mirrors the server's slug rule: lowercase letters, digits, - and _. */
+function slugify(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 63)
 }
