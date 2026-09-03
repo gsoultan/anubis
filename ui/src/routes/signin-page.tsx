@@ -11,7 +11,7 @@ import { api } from '@/lib/api/client'
 import { qk } from '@/lib/query/keys'
 import { queryClient } from '@/lib/query/client'
 import { notifyCreated, notifyRejected } from '@/components/create/shell'
-import type { AuthPage, PageConfig } from '@/lib/api/types'
+import type { AuthPage, PageConfig, PageEntrance } from '@/lib/api/types'
 
 export const Route = createFileRoute('/signin-page')({
   validateSearch: (s: Record<string, unknown>) => ({
@@ -190,6 +190,21 @@ function SignInBuilder() {
                     { value: 'none', label: 'None' }, { value: 'sm', label: 'S' },
                     { value: 'md', label: 'M' }, { value: 'lg', label: 'L' },
                     { value: 'full', label: 'Full' },
+                  ]}
+                />
+              </Field>
+              <Field
+                label="Entrance"
+                hint="Respects the visitor's reduced-motion setting; they see none regardless."
+              >
+                <SegmentedControl
+                  fullWidth size="xs" value={cfg.motion?.entrance ?? 'none'}
+                  onChange={(v) =>
+                    setCfg((c) => (c ? { ...c, motion: { entrance: v as PageEntrance } } : c))}
+                  data={[
+                    { value: 'none', label: 'None' },
+                    { value: 'fade', label: 'Fade' },
+                    { value: 'rise', label: 'Rise' },
                   ]}
                 />
               </Field>

@@ -550,6 +550,7 @@ export const defaultPageConfig = (kind: PageKind): PageConfig => ({
           submit_label: 'Sign in' },
   links: [],
   features: {},
+  motion: { entrance: 'none' },
   ...(kind === 'signout' ? { behavior: { confirm: true } } : {}),
 })
 
@@ -583,6 +584,7 @@ function toAuthPage(p: {
       copy: { ...base.copy, ...(stored?.copy ?? {}) },
       features: { ...base.features, ...(stored?.features ?? {}) },
       behavior: { ...base.behavior, ...(stored?.behavior ?? {}) },
+      motion: { ...base.motion, ...(stored?.motion ?? {}) },
       links: stored?.links ?? [],
     },
   }

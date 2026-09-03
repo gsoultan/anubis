@@ -344,6 +344,14 @@ export interface PageBehavior {
   default_return_url?: string
 }
 
+/* One field, three values — see internal/tenancy/domain/pagecfg/motion.go.
+   The template emits it only inside prefers-reduced-motion: no-preference. */
+export type PageEntrance = 'none' | 'fade' | 'rise'
+
+export interface PageMotion {
+  entrance?: PageEntrance
+}
+
 export interface PageLink {
   label: string
   url: string
@@ -356,6 +364,7 @@ export interface PageConfig {
   links?: PageLink[]
   features?: PageFeatures
   behavior?: PageBehavior
+  motion?: PageMotion
 }
 
 export interface AuthPage {

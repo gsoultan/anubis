@@ -149,3 +149,47 @@ func TestRoundTrip(t *testing.T) {
 		t.Fatalf("round trip lost data: %+v", again)
 	}
 }
+
+// Motion is a closed set for the same reason Layout is: the config is a token
+// set the server renders, never CSS it is handed. If this ever accepts a free
+// string, a tenant can express a two-second bounce on a credential page — or
+// worse, something that is not an animation at all.
+func TestOnlyKnownEntrancesAreAccepted(t *testing.T) {
+	for _, ok := range []string{"none", "fade", "rise"} {
+		c := &Config{Motion: Motion{Entrance: ok}}
+		c.applyDefaults(KindSignin)
+		if err := c.Motion.validate(); err != nil {
+			t.Errorf("%q rejected: %v", ok, err)
+		}
+	}
+	for _, bad := range []string{
+		"bounce", "spin", "FADE", "fade;",
+		"1s infinite", "none:hover", "</style><script>",
+	} {
+		if err := (&Motion{Entrance: bad}).validate(); err == nil {
+			t.Errorf("%q was accepted as an entrance", bad)
+		}
+	}
+}
+
+// The default must be none, so no existing installation starts animating
+// because it upgraded.
+func TestMotionDefaultsToNone(t *testing.T) {
+	c := &Config{}
+	c.applyDefaults(KindSignin)
+	if c.Motion.Entrance != EntranceNone {
+		t.Errorf("default entrance = %q, want none", c.Motion.Entrance)
+	}
+	if c.Motion.Animated() {
+		t.Error("the default config reports itself as animated")
+	}
+}
+
+// The error names the field, so the console can point at the input rather
+// than saying "invalid configuration".
+func TestABadEntranceNamesItsField(t *testing.T) {
+	err := (&Motion{Entrance: "bounce"}).validate()
+	if err == nil || !strings.Contains(err.Error(), "motion.entrance") {
+		t.Fatalf("error does not name the field: %v", err)
+	}
+}

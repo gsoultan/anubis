@@ -10,6 +10,7 @@ type Config struct {
 
 	Features Features `json:"features,omitempty"`
 	Behavior Behavior `json:"behavior,omitempty"`
+	Motion   Motion   `json:"motion,omitempty"`
 }
 
 // Layout choices. Adding one means adding a template, which is why this is a
@@ -28,6 +29,7 @@ func (c *Config) applyDefaults(kind Kind) {
 		c.Layout = LayoutCentered
 	}
 	c.Copy.applyDefaults(kind)
+	c.Motion.applyDefaults()
 	if kind == KindSignout {
 		c.Behavior.applyDefaults()
 	}
@@ -44,6 +46,9 @@ func (c *Config) Validate(kind Kind) error {
 		return err
 	}
 	if err := c.Copy.validate(); err != nil {
+		return err
+	}
+	if err := c.Motion.validate(); err != nil {
 		return err
 	}
 	if len(c.Links) > maxLinks {

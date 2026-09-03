@@ -24,6 +24,12 @@ export function SignInPreview({ cfg, realms }: {
   cfg: PageConfig
   realms: string[]
 }) {
+  /* Replay the entrance whenever it changes, so picking one in the builder
+     shows what it does rather than only what it is called. The hosted page
+     runs it once on load; here the key forces a remount. Both honour
+     prefers-reduced-motion — the CSS below is inside the same media query the
+     Go template uses. */
+  const entrance = cfg.motion?.entrance ?? 'none'
   const b = cfg.brand
   const c = cfg.copy
   const f = cfg.features ?? {}
@@ -49,6 +55,8 @@ export function SignInPreview({ cfg, realms }: {
 
   const card = (
     <div
+      key={entrance}
+      className={entrance === 'none' ? undefined : `pv-enter pv-${entrance}`}
       style={{
         background: '#fff', borderRadius: Math.min(radius, 24), padding: '26px 24px',
         width: 320, boxShadow: '0 10px 30px rgb(10 14 25 / .12)',
@@ -138,10 +146,21 @@ export function SignInPreview({ cfg, realms }: {
     </div>
   )
 
+  const motionCSS = (
+    <style>{`
+      @media (prefers-reduced-motion: no-preference) {
+        .pv-enter { animation: pv-enter .2s ease-out both }
+        @keyframes pv-enter { from { opacity: 0; transform: var(--pv-shift, none) } to { opacity: 1; transform: none } }
+        .pv-rise { --pv-shift: translateY(8px) }
+      }
+    `}</style>
+  )
+
   // Matches the template's three layouts.
   if (cfg.layout === 'split') {
     return (
       <div style={{ display: 'flex', minHeight: 420, borderRadius: 10, overflow: 'hidden' }}>
+        {motionCSS}
         <div style={{ flex: 1, background: b.primary_color, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
           <div style={{ color: '#fff', fontFamily: font, fontSize: 22, fontWeight: 650, textAlign: 'center' }}>
             {b.title}
@@ -162,6 +181,7 @@ export function SignInPreview({ cfg, realms }: {
         padding: 24, borderRadius: 10,
       }}
     >
+      {motionCSS}
       {card}
     </div>
   )
