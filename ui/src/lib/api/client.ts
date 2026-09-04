@@ -41,6 +41,11 @@ export const api = {
   authPages: (kind?: import('./types').PageKind) => live.authPages(kind),
   authPage: (id: string) => live.authPage(id),
   saveAuthPage: (page: import('./types').AuthPage) => live.saveAuthPage(page),
+  createAuthPage: (input: Parameters<typeof live.createAuthPage>[0]) => live.createAuthPage(input),
+  deleteAuthPage: (id: string) => live.deleteAuthPage(id),
+  setDefaultAuthPage: (id: string) => live.setDefaultAuthPage(id),
+  validatePageConfig: (kind: import('./types').PageKind, cfg: import('./types').PageConfig) =>
+    live.validatePageConfig(kind, cfg),
 
   realms: () => live.realms(),
   realmCategories: (realmId?: Uuid) => live.realmCategories(realmId),

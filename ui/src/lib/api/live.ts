@@ -620,6 +620,50 @@ export async function saveAuthPage(page: AuthPage): Promise<AuthPage | null> {
   return resp.page ? toAuthPage(resp.page) : null
 }
 
+/** A tenant may have MANY pages of each kind. Creating one is how you give an
+    application or a population its own door; the tenant default is the one
+    everything else falls through to. kind and slug are immutable afterwards —
+    the URL /p/{tenant}/{kind}/{slug} is published. */
+export async function createAuthPage(input: {
+  kind: PageKind
+  slug: string
+  name: string
+  applicationId?: string
+  realmId?: string
+  config: PageConfig
+}): Promise<AuthPage | null> {
+  const resp = await rpc.tenantAdmin.createAuthPage({
+    page: {
+      kind: input.kind, slug: input.slug, name: input.name, status: 'active',
+      applicationId: input.applicationId ?? '',
+      realmId: input.realmId ?? '',
+      configJson: JSON.stringify(input.config),
+    },
+  })
+  return resp.page ? toAuthPage(resp.page) : null
+}
+
+/** The default cannot be deleted — promote another first. */
+export async function deleteAuthPage(id: string): Promise<void> {
+  await rpc.tenantAdmin.deleteAuthPage({ id })
+}
+
+/** Promotes one page and demotes the previous default, in one statement. */
+export async function setDefaultAuthPage(id: string): Promise<void> {
+  await rpc.tenantAdmin.setDefaultAuthPage({ id })
+}
+
+/** Validates a config WITHOUT storing it, answering with the offending field.
+    Lets the builder say what is wrong before the operator presses save. */
+export async function validatePageConfig(
+  kind: PageKind, config: PageConfig,
+): Promise<string | null> {
+  const resp = await rpc.tenantAdmin.previewAuthPage({
+    kind, configJson: JSON.stringify(config),
+  })
+  return resp.valid ? null : (resp.error || 'invalid configuration')
+}
+
 /** Flat list for pickers — the permission form needs choices, not a page. */
 export async function applicationChoices(): Promise<AppRecord[]> {
   return (await applications({ pageSize: 200 })).rows
