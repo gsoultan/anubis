@@ -16,7 +16,7 @@ import type {
   NewIdentityInput, NewNodeInput, NewRoleInput, Permission, Realm,
   RealmCategory, RealmKind, Role, ScopeAxis, ScopeNode, ScopeNodeType,
   SecuritySignal,  StrictDryRun, SyncPlan, SyncRun, SyncSource, Tenant,
-  Ial, Risk, Uuid, AuthPage, PageConfig, PageKind
+  Ial, Risk, Uuid, AuthPage, PageConfig, PageKind, SigningKeyRecord
 } from './types'
 
 /** Unix seconds to ISO, with the protobuf zero meaning "never". */
@@ -395,6 +395,33 @@ export async function createApplication(input: {
   })
   // Server and service clients get a secret, shown exactly once.
   return { clientSecret: resp.clientSecret }
+}
+
+/** The real key set. The console used to render three invented keys and a
+    hardcoded rotation checklist — fiction about the material every token in
+    the system is verified against. */
+export async function signingKeys(): Promise<SigningKeyRecord[]> {
+  const resp = await rpc.tenantAdmin.listSigningKeys({})
+  return resp.keys.map((k): SigningKeyRecord => ({
+    kid: k.kid,
+    alg: k.alg,
+    status: (k.status || 'pending') as SigningKeyRecord['status'],
+    purpose: (k.purpose || 'access') as SigningKeyRecord['purpose'],
+    /* A zero time means unbounded, and the server sends it through .Unix(),
+       so it arrives as a large negative number rather than 0. at() maps
+       anything non-positive to null, which is what "no constraint" is. */
+    not_before: at(k.notBefore),
+    not_after: at(k.notAfter),
+  }))
+}
+
+/** PREPARES a key; it does not promote one. The new key is `pending` until
+    `anubisd keys promote` activates it, which is deliberate — publishing has
+    to precede activation by at least the discovery cache TTL or verifiers
+    reject tokens signed by a key they have not seen yet. */
+export async function prepareSigningKey(purpose: 'access' | 'local'): Promise<string> {
+  const resp = await rpc.tenantAdmin.rotateSigningKey({ purpose })
+  return resp.newKey?.kid ?? ''
 }
 
 export async function rotateClientSecret(id: string): Promise<string> {

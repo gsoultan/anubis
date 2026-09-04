@@ -385,6 +385,19 @@ export interface AuthPage {
   config: PageConfig
 }
 
+/* A signing key as the server reports it. not_before/not_after are the
+   PUBLISHED validity window: verifiers reject a token signed outside it, so a
+   key can be `active` and still unusable — which is the state worth surfacing
+   and the one a hardcoded table could never show. */
+export interface SigningKeyRecord {
+  kid: string
+  alg: string
+  status: 'pending' | 'active' | 'retiring' | 'retired'
+  purpose: 'access' | 'local'
+  not_before: string | null
+  not_after: string | null
+}
+
 export interface DashboardStats {
   identities_by_realm: { realm: string; kind: RealmKind; count: number }[]
   grants_total: number
