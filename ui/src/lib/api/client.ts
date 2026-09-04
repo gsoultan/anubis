@@ -48,6 +48,7 @@ export const api = {
     live.validatePageConfig(kind, cfg),
 
   realms: () => live.realms(),
+  updateRealm: (r: import('./types').Realm) => live.updateRealm(r),
   realmCategories: (realmId?: Uuid) => live.realmCategories(realmId),
   axes: () => live.axes(),
   nodeTypes: () => live.nodeTypes(),
