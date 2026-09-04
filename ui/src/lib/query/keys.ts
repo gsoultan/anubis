@@ -3,6 +3,7 @@
 export const qk = {
   realms: () => ['realms'] as const,
   signingKeys: () => ['signing-keys'] as const,
+  credentials: (id: string) => ['credentials', id] as const,
   tenants: () => ['tenants'] as const,
   tenantStats: (id: string) => ['tenant-stats', id] as const,
   signin: (tenantId: string) => ['signin', tenantId] as const,

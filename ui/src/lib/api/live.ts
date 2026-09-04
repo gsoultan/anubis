@@ -17,6 +17,7 @@ import type {
   RealmCategory, RealmKind, Role, ScopeAxis, ScopeNode, ScopeNodeType,
   SecuritySignal,  StrictDryRun, SyncPlan, SyncRun, SyncSource, Tenant,
   Ial, Risk, Uuid, AuthPage, PageConfig, PageKind, SigningKeyRecord
+  Ial, Risk, Uuid, AuthPage, PageConfig, PageKind, CredentialInfo
 } from './types'
 
 /** Unix seconds to ISO, with the protobuf zero meaning "never". */
@@ -168,6 +169,37 @@ export async function identities(realmId?: string, q?: string): Promise<Identity
     cursor = page.next
   } while (cursor && out.length < cap)
   return out.slice(0, cap)
+}
+
+export async function credentials(identityId: Uuid): Promise<CredentialInfo[]> {
+  const resp = await rpc.identityAdmin.listCredentials({ identityId })
+  return resp.credentials.map((c): CredentialInfo => ({
+    id: c.id, kind: c.kind, label: c.label, lookup_key: c.lookupKey,
+    created_at: at(c.createdAt), last_used_at: at(c.lastUsedAt),
+    expires_at: at(c.expiresAt), revoked_at: at(c.revokedAt),
+  }))
+}
+
+export async function revokeCredential(credentialId: Uuid): Promise<void> {
+  await rpc.identityAdmin.revokeCredential({ credentialId })
+}
+
+/** Checked against the realm's password policy server-side, so a rejection
+    names the rule rather than saying "invalid". */
+export async function setPassword(id: Uuid, password: string): Promise<void> {
+  await rpc.identityAdmin.setPassword({ id, password })
+}
+
+/** Invalidates every access token ALREADY ISSUED to this identity: the gate
+    compares the epoch in the token against the one on the identity.
+    It does NOT end sessions, and it does not revoke refresh tokens — a held
+    refresh mints a new access token stamped with the new epoch, which the
+    gate accepts. Ending access completely is three operations
+    (RevokeAllSessions, RevokeRefreshBySessions, BumpTokenEpoch), which is
+    what disabling the identity does. */
+export async function bumpTokenEpoch(id: Uuid): Promise<number> {
+  const resp = await rpc.identityAdmin.bumpTokenEpoch({ id })
+  return resp.tokenEpoch
 }
 
 export async function identity(id: Uuid): Promise<Identity | null> {
