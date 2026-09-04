@@ -56,6 +56,48 @@ export async function realms(): Promise<Realm[]> {
   return realmCache
 }
 
+/** UpdateRealm takes the WHOLE realm, so this sends every field back and the
+    caller edits the few it exposes. Sending a partial would silently zero
+    session TTLs and retention — fields the console does not show and
+    therefore cannot be trusted to reconstruct.
+
+    code and kind are correctable ONLY while the realm has no members: kind
+    decides which roles those members may hold (migration 0010), so changing
+    it afterwards would retroactively re-decide access already granted. The
+    server refuses with a reason rather than ignoring it. */
+export async function updateRealm(r: Realm): Promise<Realm | null> {
+  const resp = await rpc.tenantAdmin.updateRealm({
+    realm: {
+      id: r.id, code: r.code, kind: r.kind, displayName: r.display_name,
+      minAssurance: r.min_assurance,
+      selfRegistration: r.self_registration,
+      emailVerificationRequired: r.email_verification_required,
+      piiEncryption: r.pii_encryption,
+      allowedFactors: r.allowed_factors,
+      requiredFactors: r.required_factors,
+      sessionTtl: r.session_ttl,
+      accessTokenTtl: r.access_token_ttl,
+      refreshTokenTtl: r.refresh_token_ttl,
+      defaultRetention: r.default_retention ?? '',
+      factorEnrolmentDeadline: BigInt(r.factor_enrolment_deadline ?? 0),
+    },
+  })
+  realmCache = null
+  const u = resp.realm
+  return u ? {
+    id: u.id, code: u.code, kind: u.kind as RealmKind, display_name: u.displayName,
+    min_assurance: u.minAssurance as Ial,
+    self_registration: u.selfRegistration,
+    email_verification_required: u.emailVerificationRequired,
+    allowed_factors: u.allowedFactors, required_factors: u.requiredFactors,
+    session_ttl: u.sessionTtl, access_token_ttl: u.accessTokenTtl,
+    refresh_token_ttl: u.refreshTokenTtl,
+    default_retention: u.defaultRetention || null,
+    pii_encryption: u.piiEncryption,
+    factor_enrolment_deadline: Number(u.factorEnrolmentDeadline) || null,
+  } : null
+}
+
 async function realmIdByCode(code: string): Promise<Uuid> {
   if (!realmCache) await realms()
   return realmCache?.find((r) => r.code === code)?.id ?? ''

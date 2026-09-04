@@ -50,6 +50,7 @@ export const api = {
   realms: () => live.realms(),
   signingKeys: () => live.signingKeys(),
   prepareSigningKey: (purpose: 'access' | 'local') => live.prepareSigningKey(purpose),
+  updateRealm: (r: import('./types').Realm) => live.updateRealm(r),
   realmCategories: (realmId?: Uuid) => live.realmCategories(realmId),
   axes: () => live.axes(),
   nodeTypes: () => live.nodeTypes(),
