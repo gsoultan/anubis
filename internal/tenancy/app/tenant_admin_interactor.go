@@ -314,11 +314,40 @@ func (u *tenantAdminInteractor) UpdateApplication(ctx context.Context, a tenancy
 	if err != nil {
 		return nil, err
 	}
+	// slug and kind are not columns UpdateApplication writes, and until now a
+	// caller that changed either got 200 OK and no change — the same failure
+	// realms had, where an operator was told a correction worked and it had
+	// not. slug IS the client_id, so changing it would break every configured
+	// client; kind decides the auth model a client may use. Both are fixed at
+	// registration, and saying so is the difference between a refusal and a
+	// lie.
+	current, err := u.apps.ApplicationByID(ctx, p.TenantID, a.ID)
+	if err != nil {
+		return nil, apperr.ErrNotFound
+	}
+	if err := checkAppIdentity(a, *current); err != nil {
+		return nil, err
+	}
 	if err := u.apps.UpdateApplication(ctx, p.TenantID, a); err != nil {
 		return nil, err
 	}
 	u.emit(ctx, p, "application.update", a.ID, map[string]string{"slug": a.Slug})
 	return u.apps.ApplicationByID(ctx, p.TenantID, a.ID)
+}
+
+// checkAppIdentity refuses a change to the two fields UpdateApplication does
+// not write, rather than accepting it and doing nothing.
+func checkAppIdentity(in, current tenancydomain.ApplicationRecord) error {
+	if in.Slug == current.Slug && in.Kind == current.Kind {
+		return nil
+	}
+	field := "slug"
+	if in.Kind != current.Kind {
+		field = "kind"
+	}
+	return apperr.ErrInvalidArgument.
+		With("field", field).
+		With("reason", "an application's slug is its client_id and its kind decides the auth model; both are fixed at registration — register a new application")
 }
 
 func (u *tenantAdminInteractor) RotateClientSecret(ctx context.Context, applicationID string) (string, error) {

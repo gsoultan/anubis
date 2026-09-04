@@ -48,6 +48,8 @@ export const api = {
     live.validatePageConfig(kind, cfg),
 
   realms: () => live.realms(),
+  updateApplication: (a: Parameters<typeof live.updateApplication>[0]) => live.updateApplication(a),
+  verifyAuditChain: () => live.verifyAuditChain(),
   realmCategories: (realmId?: Uuid) => live.realmCategories(realmId),
   axes: () => live.axes(),
   nodeTypes: () => live.nodeTypes(),

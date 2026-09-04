@@ -251,7 +251,10 @@ func (h *TenantAdminHandler) UpdateApplication(ctx context.Context, req *connect
 	out, err := h.f.Do(ctx, "admin.application.update", func(ctx context.Context) (any, error) {
 		a := req.Msg.Application
 		return h.svc.UpdateApplication(ctx, tenancydomain.ApplicationRecord{
-			ID: a.Id, Slug: a.Slug, Name: a.Name, Status: a.Status,
+			// Kind was not carried at all, so the interactor could not tell a
+			// changed one from an absent one — and the SQL does not write it
+			// either, which made a kind change doubly silent.
+			ID: a.Id, Slug: a.Slug, Name: a.Name, Kind: a.Kind, Status: a.Status,
 			RedirectURIs: a.RedirectUris, PostLogoutRedirectURIs: a.PostLogoutRedirectUris,
 			BackchannelLogoutURI: a.BackchannelLogoutUri,
 			TokenFormat:          a.TokenFormat, AccessTokenTTL: a.AccessTokenTtl,
