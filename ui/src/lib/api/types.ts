@@ -396,6 +396,8 @@ export interface SigningKeyRecord {
   purpose: 'access' | 'local'
   not_before: string | null
   not_after: string | null
+}
+
 /* A credential as the admin API reports it. The secret is never in here —
    `lookup_key` is an API key's public prefix, and everything else is metadata. */
 export interface CredentialInfo {

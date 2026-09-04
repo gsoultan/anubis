@@ -16,8 +16,8 @@ import type {
   NewIdentityInput, NewNodeInput, NewRoleInput, Permission, Realm,
   RealmCategory, RealmKind, Role, ScopeAxis, ScopeNode, ScopeNodeType,
   SecuritySignal,  StrictDryRun, SyncPlan, SyncRun, SyncSource, Tenant,
-  Ial, Risk, Uuid, AuthPage, PageConfig, PageKind, SigningKeyRecord
-  Ial, Risk, Uuid, AuthPage, PageConfig, PageKind, CredentialInfo
+  Ial, Risk, Uuid, AuthPage, PageConfig, PageKind, SigningKeyRecord,
+  CredentialInfo,
 } from './types'
 
 /** Unix seconds to ISO, with the protobuf zero meaning "never". */
@@ -496,6 +496,8 @@ export async function signingKeys(): Promise<SigningKeyRecord[]> {
 export async function prepareSigningKey(purpose: 'access' | 'local'): Promise<string> {
   const resp = await rpc.tenantAdmin.rotateSigningKey({ purpose })
   return resp.newKey?.kid ?? ''
+}
+
 /** Sends the whole application back and edits the few fields the console
     exposes; a partial would zero the TTLs and URI lists.
 
