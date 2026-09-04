@@ -48,6 +48,10 @@ export const api = {
     live.validatePageConfig(kind, cfg),
 
   realms: () => live.realms(),
+  credentials: (id: string) => live.credentials(id),
+  revokeCredential: (id: string) => live.revokeCredential(id),
+  setPassword: (id: string, pw: string) => live.setPassword(id, pw),
+  bumpTokenEpoch: (id: string) => live.bumpTokenEpoch(id),
   realmCategories: (realmId?: Uuid) => live.realmCategories(realmId),
   axes: () => live.axes(),
   nodeTypes: () => live.nodeTypes(),

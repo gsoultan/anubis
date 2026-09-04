@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { ActionIcon, Button, Menu, TextInput, Tooltip } from '@mantine/core'
 import {
   IconSearch, IconInfoCircle, IconDots, IconUserPlus, IconCirclePlus,
-  IconUserOff, IconUserCheck, IconCopy, IconLock,
+  IconUserOff, IconUserCheck, IconCopy, IconKey, IconLock,
 } from '@tabler/icons-react'
 import { notifications } from '@mantine/notifications'
 import { queryClient } from '@/lib/query/client'
@@ -12,6 +12,7 @@ import { useState } from 'react'
 import { Page } from '@/components/shell/Page'
 import { DataTable, Cell, type Column } from '@/components/ui/DataTable'
 import { AttributesModal } from '@/components/ui/AttributesModal'
+import { CredentialsModal } from '@/components/ui/CredentialsModal'
 import { api } from '@/lib/api/client'
 import * as live from '@/lib/api/live'
 import { qk } from '@/lib/query/keys'
@@ -48,6 +49,7 @@ function Identities() {
   /* Held here rather than in a route param: these are the encrypted fields,
      and an id in the URL is an id in someone's browser history. */
   const [attrsFor, setAttrsFor] = useState<Identity | null>(null)
+  const [credsFor, setCredsFor] = useState<Identity | null>(null)
   const { data: realms } = useQuery({ queryKey: qk.realms(), queryFn: api.realms })
   /* Keyset paging, and it is not optional here: a realm in this installation
      holds fifty thousand people. The screen used to ask for all of them and
@@ -123,6 +125,10 @@ function Identities() {
             <Menu.Item leftSection={<IconCopy size={14} />}
               onClick={() => { void navigator.clipboard.writeText(i.id) }}>
               Copy ID
+            </Menu.Item>
+            <Menu.Item leftSection={<IconKey size={14} />}
+              onClick={() => setCredsFor(i)}>
+              Credentials…
             </Menu.Item>
             <Menu.Item leftSection={<IconLock size={14} />}
               onClick={() => setAttrsFor(i)}>
@@ -216,6 +222,8 @@ function Identities() {
 
       <AttributesModal id={attrsFor?.id ?? null}
         label={attrsFor?.username ?? ''} onClose={() => setAttrsFor(null)} />
+      <CredentialsModal id={credsFor?.id ?? null}
+        label={credsFor?.username ?? ''} onClose={() => setCredsFor(null)} />
     </Page>
   )
 }
