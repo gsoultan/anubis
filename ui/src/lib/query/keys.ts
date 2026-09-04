@@ -2,6 +2,7 @@
    under scope" must be one call, not a grep for string literals. */
 export const qk = {
   realms: () => ['realms'] as const,
+  signingKeys: () => ['signing-keys'] as const,
   tenants: () => ['tenants'] as const,
   tenantStats: (id: string) => ['tenant-stats', id] as const,
   signin: (tenantId: string) => ['signin', tenantId] as const,

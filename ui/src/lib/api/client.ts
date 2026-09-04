@@ -48,6 +48,8 @@ export const api = {
     live.validatePageConfig(kind, cfg),
 
   realms: () => live.realms(),
+  signingKeys: () => live.signingKeys(),
+  prepareSigningKey: (purpose: 'access' | 'local') => live.prepareSigningKey(purpose),
   realmCategories: (realmId?: Uuid) => live.realmCategories(realmId),
   axes: () => live.axes(),
   nodeTypes: () => live.nodeTypes(),
