@@ -496,6 +496,34 @@ export async function signingKeys(): Promise<SigningKeyRecord[]> {
 export async function prepareSigningKey(purpose: 'access' | 'local'): Promise<string> {
   const resp = await rpc.tenantAdmin.rotateSigningKey({ purpose })
   return resp.newKey?.kid ?? ''
+/** Sends the whole application back and edits the few fields the console
+    exposes; a partial would zero the TTLs and URI lists.
+
+    slug and kind are absent on purpose. UpdateApplication does not write them
+    — slug IS the client_id and kind decides the auth model — and the server
+    now refuses a change rather than accepting it and doing nothing. */
+export async function updateApplication(a: AppRecord): Promise<void> {
+  await rpc.tenantAdmin.updateApplication({
+    application: {
+      id: a.id, slug: a.slug, name: a.name, kind: a.kind, status: a.status,
+      redirectUris: a.redirect_uris,
+      postLogoutRedirectUris: a.post_logout_redirect_uris,
+      backchannelLogoutUri: a.backchannel_logout_uri,
+      manifestVersion: a.manifest_version,
+    },
+  })
+}
+
+/** Recomputes the audit log's hash chain over a range and reports where it
+    breaks. The chain is what makes the log tamper-EVIDENT rather than merely
+    append-only, and evidence nobody checks is not evidence. */
+export async function verifyAuditChain(): Promise<{ ok: boolean; checked: number; brokenAtSeq: number }> {
+  const resp = await rpc.tenantAdmin.verifyAuditChain({})
+  return {
+    ok: resp.ok,
+    checked: Number(resp.checked),
+    brokenAtSeq: Number(resp.brokenAtSeq),
+  }
 }
 
 export async function rotateClientSecret(id: string): Promise<string> {

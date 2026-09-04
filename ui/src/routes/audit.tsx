@@ -1,11 +1,12 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
-import { SegmentedControl, TextInput, Tooltip } from '@mantine/core'
+import { Button, SegmentedControl, TextInput, Tooltip } from '@mantine/core'
 import { useState } from 'react'
-import { IconLink, IconLinkOff, IconSearch } from '@tabler/icons-react'
+import { IconLink, IconLinkOff, IconSearch, IconShieldCheck } from '@tabler/icons-react'
 import { Page } from '@/components/shell/Page'
 import { DataTable, Cell, type Column } from '@/components/ui/DataTable'
 import { api } from '@/lib/api/client'
+import { notifyCreated, notifyRejected } from '@/components/create/shell'
 import { qk } from '@/lib/query/keys'
 import type { AuditEntry } from '@/lib/api/types'
 
@@ -13,6 +14,26 @@ export const Route = createFileRoute('/audit')({ component: Audit })
 
 function Audit() {
   const { data: rows } = useQuery({ queryKey: qk.audit(), queryFn: api.audit })
+  /* The description above promises the log is tamper-evident. Evidence
+     nobody can check is not evidence, so the check is on the page that makes
+     the claim. */
+  const [verifying, setVerifying] = useState(false)
+
+  async function verify() {
+    setVerifying(true)
+    try {
+      const r = await api.verifyAuditChain()
+      if (r.ok) {
+        notifyCreated('Chain intact',
+          `${r.checked.toLocaleString()} entries recomputed; each one hashes to the next.`)
+      } else {
+        notifyRejected(new Error(
+          `Chain broken at sequence ${r.brokenAtSeq} after ${r.checked.toLocaleString()} entries. ` +
+          'An entry was altered or removed after it was written.'))
+      }
+    } catch (e) { notifyRejected(e) } finally { setVerifying(false) }
+  }
+
   const [q, setQ] = useState('')
   const [result, setResult] = useState('all')
   const needle = q.trim().toLowerCase()
@@ -73,6 +94,12 @@ function Audit() {
           <SegmentedControl size="xs" value={result} onChange={setResult}
             data={[{ value: 'all', label: 'All' }, { value: 'allow', label: 'Allow' },
                    { value: 'deny', label: 'Deny' }, { value: 'error', label: 'Error' }]} />
+          <Tooltip label="Recomputes the hash chain and reports the first entry where it breaks.">
+            <Button variant="default" size="xs" loading={verifying}
+              leftSection={<IconShieldCheck size={14} />} onClick={verify}>
+              Verify chain
+            </Button>
+          </Tooltip>
         </>
       }
     >
