@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import { Button, Code, Modal, Select, TextInput, Textarea, Tooltip } from '@mantine/core'
-import { IconFileCode, IconPlus, IconRefresh } from '@tabler/icons-react'
+import { IconFileCode, IconPlus, IconRefresh, IconPencil } from '@tabler/icons-react'
 import { useState } from 'react'
 import { Page } from '@/components/shell/Page'
 import { DataTable, type Column } from '@/components/ui/DataTable'
@@ -31,6 +31,88 @@ function SecretOnce({ secret, onDone }: { secret: string; onDone: () => void }) 
       <Code block>{secret}</Code>
       <Button className="mt-3" onClick={onDone}>I have copied it</Button>
     </Modal>
+  )
+}
+
+/* slug and kind are absent on purpose: UpdateApplication does not write them
+   — slug IS the client_id, so changing it breaks every configured client, and
+   kind decides the auth model. The server refuses a change now rather than
+   accepting it and doing nothing, and an input that always fails is worse
+   than none.
+
+   The redirect lists are separate for a reason worth repeating where they are
+   edited: a login callback is not a safe place to land after signing out, and
+   an open redirect on the logout side is a phishing primitive. */
+function EditDialog({ a, onDone }: { a: live.AppRecord; onDone: () => void }) {
+  const [open, setOpen] = useState(false)
+  const [name, setName] = useState(a.name)
+  const [status, setStatus] = useState(a.status)
+  const [redirects, setRedirects] = useState(a.redirect_uris.join('\n'))
+  const [logouts, setLogouts] = useState(a.post_logout_redirect_uris.join('\n'))
+  const [backchannel, setBackchannel] = useState(a.backchannel_logout_uri)
+  const [busy, setBusy] = useState(false)
+
+  function reset() {
+    setName(a.name); setStatus(a.status)
+    setRedirects(a.redirect_uris.join('\n'))
+    setLogouts(a.post_logout_redirect_uris.join('\n'))
+    setBackchannel(a.backchannel_logout_uri)
+  }
+
+  const lines = (v: string) => v.split('\n').map((l) => l.trim()).filter(Boolean)
+
+  async function save() {
+    setBusy(true)
+    try {
+      await live.updateApplication({
+        ...a, name, status,
+        redirect_uris: lines(redirects),
+        post_logout_redirect_uris: lines(logouts),
+        backchannel_logout_uri: backchannel.trim(),
+      })
+      notifyCreated(`${a.slug} updated`, 'Applies to the next authorization request.')
+      setOpen(false); onDone()
+    } catch (e) { notifyRejected(e) } finally { setBusy(false) }
+  }
+
+  return (
+    <>
+      <Button variant="default" size="compact-xs" leftSection={<IconPencil size={13} />}
+        onClick={() => { reset(); setOpen(true) }}>
+        Edit
+      </Button>
+      <Modal opened={open} onClose={() => setOpen(false)} centered size="lg"
+        title={`Edit ${a.slug}`}>
+        <div className="flex flex-col gap-3.5">
+          <TextInput label="Name" value={name} onChange={(e) => setName(e.currentTarget.value)} />
+          <Select label="Status" value={status} onChange={(v) => setStatus(v ?? 'active')}
+            data={[{ value: 'active', label: 'active' }, { value: 'disabled', label: 'disabled' }]} />
+          <Textarea
+            label="Redirect URIs" autosize minRows={2} value={redirects}
+            description="One per line. Exact match — where the authorization code is delivered."
+            onChange={(e) => setRedirects(e.currentTarget.value)}
+          />
+          <Textarea
+            label="Post-logout redirect URIs" autosize minRows={2} value={logouts}
+            description="One per line, and deliberately a separate list: a login callback is not a safe place to land after signing out, and an open redirect here is a phishing primitive."
+            onChange={(e) => setLogouts(e.currentTarget.value)}
+          />
+          <TextInput
+            label="Back-channel logout URI" value={backchannel}
+            description="Called server-to-server when a session ends. Empty disables it."
+            onChange={(e) => setBackchannel(e.currentTarget.value)}
+          />
+          <div className="t-xs" style={{ opacity: 0.7 }}>
+            The slug ({a.slug}) is this application's client_id and its kind ({a.kind}) decides
+            the auth model — both are fixed at registration.
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="default" size="xs" onClick={() => setOpen(false)}>Cancel</Button>
+            <Button size="xs" loading={busy} onClick={save}>Save</Button>
+          </div>
+        </div>
+      </Modal>
+    </>
   )
 }
 
@@ -289,6 +371,7 @@ function Applications() {
       key: 'actions', header: '', width: 210, align: 'right',
       render: (a) => (
         <div className="flex items-center justify-end gap-1">
+          <EditDialog a={a} onDone={() => void refetch()} />
           <ManifestDialog slug={a.slug} onDone={() => void refetch()} />
           {(a.kind === 'server' || a.kind === 'service') && (
             <Tooltip label="The old secret stops working immediately">

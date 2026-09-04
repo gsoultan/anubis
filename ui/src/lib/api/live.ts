@@ -16,7 +16,8 @@ import type {
   NewIdentityInput, NewNodeInput, NewRoleInput, Permission, Realm,
   RealmCategory, RealmKind, Role, ScopeAxis, ScopeNode, ScopeNodeType,
   SecuritySignal,  StrictDryRun, SyncPlan, SyncRun, SyncSource, Tenant,
-  Ial, Risk, Uuid, AuthPage, PageConfig, PageKind, SigningKeyRecord
+  Ial, Risk, Uuid, AuthPage, PageConfig, PageKind, SigningKeyRecord,
+  CredentialInfo,
 } from './types'
 
 /** Unix seconds to ISO, with the protobuf zero meaning "never". */
@@ -54,6 +55,48 @@ export async function realms(): Promise<Realm[]> {
     factor_enrolment_deadline: Number(r.factorEnrolmentDeadline) || null,
   }))
   return realmCache
+}
+
+/** UpdateRealm takes the WHOLE realm, so this sends every field back and the
+    caller edits the few it exposes. Sending a partial would silently zero
+    session TTLs and retention — fields the console does not show and
+    therefore cannot be trusted to reconstruct.
+
+    code and kind are correctable ONLY while the realm has no members: kind
+    decides which roles those members may hold (migration 0010), so changing
+    it afterwards would retroactively re-decide access already granted. The
+    server refuses with a reason rather than ignoring it. */
+export async function updateRealm(r: Realm): Promise<Realm | null> {
+  const resp = await rpc.tenantAdmin.updateRealm({
+    realm: {
+      id: r.id, code: r.code, kind: r.kind, displayName: r.display_name,
+      minAssurance: r.min_assurance,
+      selfRegistration: r.self_registration,
+      emailVerificationRequired: r.email_verification_required,
+      piiEncryption: r.pii_encryption,
+      allowedFactors: r.allowed_factors,
+      requiredFactors: r.required_factors,
+      sessionTtl: r.session_ttl,
+      accessTokenTtl: r.access_token_ttl,
+      refreshTokenTtl: r.refresh_token_ttl,
+      defaultRetention: r.default_retention ?? '',
+      factorEnrolmentDeadline: BigInt(r.factor_enrolment_deadline ?? 0),
+    },
+  })
+  realmCache = null
+  const u = resp.realm
+  return u ? {
+    id: u.id, code: u.code, kind: u.kind as RealmKind, display_name: u.displayName,
+    min_assurance: u.minAssurance as Ial,
+    self_registration: u.selfRegistration,
+    email_verification_required: u.emailVerificationRequired,
+    allowed_factors: u.allowedFactors, required_factors: u.requiredFactors,
+    session_ttl: u.sessionTtl, access_token_ttl: u.accessTokenTtl,
+    refresh_token_ttl: u.refreshTokenTtl,
+    default_retention: u.defaultRetention || null,
+    pii_encryption: u.piiEncryption,
+    factor_enrolment_deadline: Number(u.factorEnrolmentDeadline) || null,
+  } : null
 }
 
 async function realmIdByCode(code: string): Promise<Uuid> {
@@ -126,6 +169,37 @@ export async function identities(realmId?: string, q?: string): Promise<Identity
     cursor = page.next
   } while (cursor && out.length < cap)
   return out.slice(0, cap)
+}
+
+export async function credentials(identityId: Uuid): Promise<CredentialInfo[]> {
+  const resp = await rpc.identityAdmin.listCredentials({ identityId })
+  return resp.credentials.map((c): CredentialInfo => ({
+    id: c.id, kind: c.kind, label: c.label, lookup_key: c.lookupKey,
+    created_at: at(c.createdAt), last_used_at: at(c.lastUsedAt),
+    expires_at: at(c.expiresAt), revoked_at: at(c.revokedAt),
+  }))
+}
+
+export async function revokeCredential(credentialId: Uuid): Promise<void> {
+  await rpc.identityAdmin.revokeCredential({ credentialId })
+}
+
+/** Checked against the realm's password policy server-side, so a rejection
+    names the rule rather than saying "invalid". */
+export async function setPassword(id: Uuid, password: string): Promise<void> {
+  await rpc.identityAdmin.setPassword({ id, password })
+}
+
+/** Invalidates every access token ALREADY ISSUED to this identity: the gate
+    compares the epoch in the token against the one on the identity.
+    It does NOT end sessions, and it does not revoke refresh tokens — a held
+    refresh mints a new access token stamped with the new epoch, which the
+    gate accepts. Ending access completely is three operations
+    (RevokeAllSessions, RevokeRefreshBySessions, BumpTokenEpoch), which is
+    what disabling the identity does. */
+export async function bumpTokenEpoch(id: Uuid): Promise<number> {
+  const resp = await rpc.identityAdmin.bumpTokenEpoch({ id })
+  return resp.tokenEpoch
 }
 
 export async function identity(id: Uuid): Promise<Identity | null> {
@@ -422,6 +496,36 @@ export async function signingKeys(): Promise<SigningKeyRecord[]> {
 export async function prepareSigningKey(purpose: 'access' | 'local'): Promise<string> {
   const resp = await rpc.tenantAdmin.rotateSigningKey({ purpose })
   return resp.newKey?.kid ?? ''
+}
+
+/** Sends the whole application back and edits the few fields the console
+    exposes; a partial would zero the TTLs and URI lists.
+
+    slug and kind are absent on purpose. UpdateApplication does not write them
+    — slug IS the client_id and kind decides the auth model — and the server
+    now refuses a change rather than accepting it and doing nothing. */
+export async function updateApplication(a: AppRecord): Promise<void> {
+  await rpc.tenantAdmin.updateApplication({
+    application: {
+      id: a.id, slug: a.slug, name: a.name, kind: a.kind, status: a.status,
+      redirectUris: a.redirect_uris,
+      postLogoutRedirectUris: a.post_logout_redirect_uris,
+      backchannelLogoutUri: a.backchannel_logout_uri,
+      manifestVersion: a.manifest_version,
+    },
+  })
+}
+
+/** Recomputes the audit log's hash chain over a range and reports where it
+    breaks. The chain is what makes the log tamper-EVIDENT rather than merely
+    append-only, and evidence nobody checks is not evidence. */
+export async function verifyAuditChain(): Promise<{ ok: boolean; checked: number; brokenAtSeq: number }> {
+  const resp = await rpc.tenantAdmin.verifyAuditChain({})
+  return {
+    ok: resp.ok,
+    checked: Number(resp.checked),
+    brokenAtSeq: Number(resp.brokenAtSeq),
+  }
 }
 
 export async function rotateClientSecret(id: string): Promise<string> {

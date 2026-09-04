@@ -78,3 +78,45 @@ func TestTheSlugIsValidatedBeforeStoring(t *testing.T) {
 		}
 	}
 }
+
+/*
+UpdateApplication writes name, status, the redirect URI lists, the
+
+	backchannel URI, token format and the TTLs. It does NOT write slug or kind,
+	so a caller that changed either used to get 200 OK and no change — the same
+	failure realms had, where an operator was told a correction had worked and
+	it had not.
+
+	slug IS the client_id, so changing it would break every configured client,
+	and kind decides which auth model a client may use. Both being fixed is
+	right; being fixed SILENTLY is not.
+*/
+func TestAnApplicationSlugAndKindAreRefusedNotIgnored(t *testing.T) {
+	for _, tc := range []struct {
+		name, field string
+		mutate      func(*tenancydomain.ApplicationRecord)
+	}{
+		{"slug", "slug", func(a *tenancydomain.ApplicationRecord) { a.Slug = "renamed" }},
+		{"kind", "kind", func(a *tenancydomain.ApplicationRecord) { a.Kind = "native" }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cur := tenancydomain.ApplicationRecord{ID: "app-1", Slug: "console", Kind: "spa"}
+			in := cur
+			tc.mutate(&in)
+			err := checkAppIdentity(in, cur)
+			if err == nil {
+				t.Fatalf("a changed %s was accepted, which is the silent no-op", tc.name)
+			}
+			if !strings.Contains(err.Error(), tc.field) {
+				t.Errorf("error does not name %s: %v", tc.field, err)
+			}
+		})
+	}
+}
+
+func TestAnUnchangedApplicationIdentityPasses(t *testing.T) {
+	cur := tenancydomain.ApplicationRecord{ID: "app-1", Slug: "console", Kind: "spa"}
+	if err := checkAppIdentity(cur, cur); err != nil {
+		t.Errorf("an unchanged slug and kind were refused: %v", err)
+	}
+}

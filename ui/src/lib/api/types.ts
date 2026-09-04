@@ -398,6 +398,19 @@ export interface SigningKeyRecord {
   not_after: string | null
 }
 
+/* A credential as the admin API reports it. The secret is never in here —
+   `lookup_key` is an API key's public prefix, and everything else is metadata. */
+export interface CredentialInfo {
+  id: Uuid
+  kind: string
+  label: string
+  lookup_key: string
+  created_at: string | null
+  last_used_at: string | null
+  expires_at: string | null
+  revoked_at: string | null
+}
+
 export interface DashboardStats {
   identities_by_realm: { realm: string; kind: RealmKind; count: number }[]
   grants_total: number
