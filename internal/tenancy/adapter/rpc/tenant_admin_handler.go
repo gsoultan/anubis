@@ -15,6 +15,7 @@ import (
 	identitydomain "github.com/gsoultan/anubis/internal/identity/domain"
 	"github.com/gsoultan/anubis/internal/platform/mw"
 	"github.com/gsoultan/anubis/internal/shared/apperr"
+	"github.com/gsoultan/anubis/internal/shared/authctx"
 	tenancyapp "github.com/gsoultan/anubis/internal/tenancy/app"
 	tenancydomain "github.com/gsoultan/anubis/internal/tenancy/domain"
 	tenancysvc "github.com/gsoultan/anubis/internal/tenancy/service"
@@ -435,14 +436,14 @@ func (h *TenantAdminHandler) PutSigninPage(ctx context.Context, req *connect.Req
 
 // pageProto renders a page for the console, including the URL it is served
 // at — the console should not have to know how to build that string.
-func (h *TenantAdminHandler) pageProto(p tenancydomain.AuthPage) *anubisv1.AuthPage {
+func (h *TenantAdminHandler) pageProto(ctx context.Context, p tenancydomain.AuthPage) *anubisv1.AuthPage {
 	out := &anubisv1.AuthPage{
 		Id: p.ID, Kind: p.Kind, Slug: p.Slug, Name: p.Name, Status: p.Status,
 		IsDefault: p.IsDefault, ApplicationId: p.ApplicationID,
 		ApplicationSlug: p.ApplicationSlug,
 		RealmId:         p.RealmID, RealmCode: p.RealmCode,
 		ConfigJson: string(p.Config),
-		Url:        h.pageURL(p),
+		Url:        h.pageURL(ctx, p),
 	}
 	if !p.CreatedAt.IsZero() {
 		out.CreatedAt = p.CreatedAt.Unix()
@@ -453,11 +454,26 @@ func (h *TenantAdminHandler) pageProto(p tenancydomain.AuthPage) *anubisv1.AuthP
 	return out
 }
 
-func (h *TenantAdminHandler) pageURL(p tenancydomain.AuthPage) string {
-	if h.issuer == "" || h.tenantSlug == "" {
+// pageURL builds the address the page is served at, for the console to show
+// and copy.
+//
+// It has to be the tenant the CALLER is administering, not the configured
+// default: a platform operator picks a tenant per request (X-Anubis-Tenant),
+// the interceptor resolves it onto the principal, and every other answer in
+// the response is scoped to it. Building this one URL from cfg.DefaultTenant
+// instead would name a different tenant than the page being edited — and
+// ServePage resolves the tenant from the path, so the copied link would 404
+// against a page that exists. The configured default remains the fallback for
+// a caller with no tenant on the principal.
+func (h *TenantAdminHandler) pageURL(ctx context.Context, p tenancydomain.AuthPage) string {
+	slug := h.tenantSlug
+	if pr, ok := authctx.From(ctx); ok && pr.TenantSlug != "" {
+		slug = pr.TenantSlug
+	}
+	if h.issuer == "" || slug == "" {
 		return ""
 	}
-	return h.issuer + "/p/" + h.tenantSlug + "/" + p.Kind + "/" + p.Slug
+	return h.issuer + "/p/" + slug + "/" + p.Kind + "/" + p.Slug
 }
 
 func (h *TenantAdminHandler) ListAuthPages(ctx context.Context, req *connect.Request[anubisv1.ListAuthPagesRequest]) (*connect.Response[anubisv1.ListAuthPagesResponse], error) {
@@ -469,7 +485,7 @@ func (h *TenantAdminHandler) ListAuthPages(ctx context.Context, req *connect.Req
 	}
 	resp := &anubisv1.ListAuthPagesResponse{}
 	for _, p := range out.([]tenancydomain.AuthPage) {
-		resp.Pages = append(resp.Pages, h.pageProto(p))
+		resp.Pages = append(resp.Pages, h.pageProto(ctx, p))
 	}
 	return connect.NewResponse(resp), nil
 }
@@ -482,7 +498,7 @@ func (h *TenantAdminHandler) GetAuthPage(ctx context.Context, req *connect.Reque
 		return nil, apiconnect.Err(ctx, err)
 	}
 	return connect.NewResponse(&anubisv1.GetAuthPageResponse{
-		Page: h.pageProto(*out.(*tenancydomain.AuthPage)),
+		Page: h.pageProto(ctx, *out.(*tenancydomain.AuthPage)),
 	}), nil
 }
 
@@ -494,7 +510,7 @@ func (h *TenantAdminHandler) CreateAuthPage(ctx context.Context, req *connect.Re
 		return nil, apiconnect.Err(ctx, err)
 	}
 	return connect.NewResponse(&anubisv1.CreateAuthPageResponse{
-		Page: h.pageProto(*out.(*tenancydomain.AuthPage)),
+		Page: h.pageProto(ctx, *out.(*tenancydomain.AuthPage)),
 	}), nil
 }
 
@@ -506,7 +522,7 @@ func (h *TenantAdminHandler) UpdateAuthPage(ctx context.Context, req *connect.Re
 		return nil, apiconnect.Err(ctx, err)
 	}
 	return connect.NewResponse(&anubisv1.UpdateAuthPageResponse{
-		Page: h.pageProto(*out.(*tenancydomain.AuthPage)),
+		Page: h.pageProto(ctx, *out.(*tenancydomain.AuthPage)),
 	}), nil
 }
 
