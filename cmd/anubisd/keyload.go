@@ -21,7 +21,7 @@ func loadRing(ctx context.Context, logger *slog.Logger, keys authport.KeyReposit
 	if err != nil {
 		return nil, err
 	}
-	if _, aerr := ring.ActiveAccess(); aerr != nil && autoProvision {
+	if _, aerr := ring.ActiveAccessPresent(); aerr != nil && autoProvision {
 		logger.Warn("no active signing keys — provisioning (dev auto-keys)")
 		if err := provisionKeys(ctx, keys, master); err != nil {
 			return nil, err

@@ -2,6 +2,7 @@ package apihttp
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"time"
 
@@ -54,8 +55,15 @@ func (h *HealthHandler) Readyz(w http.ResponseWriter, r *http.Request) {
 			"idle": stat.IdleConns(), "max": stat.MaxConns(),
 		}
 	}
+	// An expired-but-present key is not a lesser problem than a missing one:
+	// issuance now refuses it, so every token this instance would mint is one
+	// no verifier accepts. Readiness has to say so, and say which.
 	if _, err := h.ring.Ring().ActiveAccess(); err != nil {
-		checks["signing_key"] = "missing"
+		if errors.Is(err, keyring.ErrKeyOutOfWindow) {
+			checks["signing_key"] = "outside its validity window — run `anubisd keys promote`"
+		} else {
+			checks["signing_key"] = "missing"
+		}
 		ok = false
 	} else {
 		checks["signing_key"] = "ok"

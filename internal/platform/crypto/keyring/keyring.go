@@ -25,4 +25,7 @@ var (
 	ErrNoActiveKey = errors.New("keyring: no active key for purpose")
 	ErrUnknownKid  = errors.New("keyring: unknown kid")
 	ErrTooManyKeys = errors.New("keyring: too many keys")
+	// ErrKeyOutOfWindow: the active key is outside its published
+	// not_before/not_after. Promote a prepared key; do not sign with it.
+	ErrKeyOutOfWindow = errors.New("keyring: active key is outside its validity window")
 )

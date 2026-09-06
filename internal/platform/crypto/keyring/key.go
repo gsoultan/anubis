@@ -18,3 +18,20 @@ type Key struct {
 	NotBefore time.Time
 	NotAfter  time.Time
 }
+
+// InWindow reports whether now falls inside the key's published validity
+// window. A zero bound is unbounded, matching the keys document, where an
+// omitted not_before/not_after means "no constraint".
+//
+// not_after is when verifiers stop *trusting* the key, so it is also the last
+// moment it may sign: a token minted just before it is rejected the moment it
+// passes.
+func (k *Key) InWindow(now time.Time) bool {
+	if !k.NotBefore.IsZero() && now.Before(k.NotBefore) {
+		return false
+	}
+	if !k.NotAfter.IsZero() && !now.Before(k.NotAfter) {
+		return false
+	}
+	return true
+}

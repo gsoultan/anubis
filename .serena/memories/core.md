@@ -928,3 +928,32 @@ that misreports which dependencies are direct cannot be used to review them.
 Two false positives to remember if editing it: the `require (` line parses as
 a dependency named `require`, and the crypto regex matches Anubis's OWN
 `pkg/anubis/paseto` — the stdlib implementation the rule exists to require.
+
+## Signing fails closed outside the key's window (2026-09-01)
+
+`Ring.ActiveAccess` now refuses a key outside its published
+`not_before`/`not_after` and returns `ErrKeyOutOfWindow`. Nothing checked that
+before: `activeAccess` was chosen on `Status == StatusActive` alone, rotation is
+a manual `anubisd keys prepare/promote`, and the `signing_key_expiry` job only
+logged `ACTIVE SIGNING KEY HAS EXPIRED` while issuance carried on.
+
+That was survivable only because no verifier enforced the window either. The
+anubis-sdk bindings now do, so an expired-but-active key would have meant the
+server minting tokens every SDK rejects — a total auth outage arriving on a
+calendar date rather than a deploy.
+
+Three callers deliberately keep the old presence-only semantics via
+`ActiveAccessPresent`, and the reasons are not obvious:
+
+- `cmd/anubisd/keyload.go` — dev auto-provisioning. If an expired key read as
+  absent, startup would mint a fresh signing key unattended: a silent rotation,
+  which is exactly what "rotation stays a human decision" rules out.
+- `internal/tenancy/app/dashboard_interactor.go` — the `key_rotation_due` signal
+  must keep showing the key precisely when it has expired.
+- `Ring.Lookup` is untouched: refusing to *sign* with an expired key must not
+  stop us *verifying* tokens it already signed. Those stay valid until their exp.
+
+`/readyz` distinguishes "missing" from "outside its validity window" so the
+operator is told which, and to run `anubisd keys promote`.
+
+Tests: `internal/platform/crypto/keyring/ring_test.go` (the package had none).

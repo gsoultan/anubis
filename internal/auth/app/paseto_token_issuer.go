@@ -109,7 +109,7 @@ func (t *pasetoTokenIssuer) Issue(ctx context.Context, in IssueInput) (*TokenPai
 		return nil, apperr.ErrInternal.Wrap(err)
 	}
 
-	key, err := t.ring.Ring().ActiveAccess()
+	key, err := t.ring.Ring().ActiveAccessAt(now)
 	if err != nil {
 		return nil, apperr.ErrInternal.Wrap(err)
 	}
