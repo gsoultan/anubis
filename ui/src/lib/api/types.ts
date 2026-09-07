@@ -382,6 +382,10 @@ export interface AuthPage {
   application_slug: string | null
   realm_id: string | null
   realm_code: string | null
+  /** Where this page is served: {issuer}/p/{tenant}/{kind}/{slug}. Computed by
+      the server, which is the only side that knows the issuer. Empty when the
+      console is not scoped to a tenant (the platform console). */
+  url: string
   config: PageConfig
 }
 

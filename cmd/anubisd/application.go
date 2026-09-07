@@ -74,8 +74,10 @@ type application struct {
 	issuer    authapp.TokenIssuer
 	issuerURL string
 	masterKey []byte
-	// bootstrapTenantSlug is only used to render example page URLs for the
-	// console; page lookup itself always resolves the tenant from the request.
+	// bootstrapTenantSlug is the FALLBACK tenant for the page URLs the console
+	// shows: a caller carrying a tenant on its principal gets that one instead,
+	// because it is the tenant they are administering. Page lookup itself
+	// always resolves the tenant from the request path.
 	bootstrapTenantSlug string
 
 	control  *controlpg.Repository

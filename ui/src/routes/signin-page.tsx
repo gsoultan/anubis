@@ -1,11 +1,12 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import {
-  ActionIcon, Button, ColorInput, Menu, Modal, NumberInput, SegmentedControl,
-  Select, Switch, TextInput, Textarea,
+  ActionIcon, Button, ColorInput, CopyButton, Menu, Modal, NumberInput,
+  SegmentedControl, Select, Switch, TextInput, Textarea, Tooltip,
 } from '@mantine/core'
 import {
-  IconDeviceFloppy, IconDots, IconPlus, IconRestore, IconStar, IconTrash,
+  IconCheck, IconCopy, IconDeviceFloppy, IconDots, IconExternalLink, IconPlus,
+  IconRestore, IconStar, IconTrash,
 } from '@tabler/icons-react'
 import { useEffect, useState } from 'react'
 import { Page } from '@/components/shell/Page'
@@ -262,6 +263,8 @@ function PageBuilder() {
                 New {kind === 'signout' ? 'sign-out' : 'sign-in'} page
               </Button>
             </div>
+
+            {selected && <PageURL page={selected} />}
 
             {selected && (selected.realm_code || selected.application_slug) && (
               <div className="panel p-4">
@@ -597,4 +600,92 @@ function NewPageModal({ opened, kind, realms, apps, onClose, onCreated }: {
 /** Mirrors the server's slug rule: lowercase letters, digits, - and _. */
 function slugify(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 63)
+}
+
+/* The address the page is served at.
+
+   The server has been sending this all along — AuthPage.url, whose proto
+   comment reads "for the console to show and copy" — and nothing rendered it.
+   So the builder could style a page in detail and still not answer the first
+   question anyone asks after building one: what do I link to?
+
+   A sign-in page is a launcher, not a form in a vacuum. ServePage hands the
+   flow to /v1/authorize so PKCE, redirect validation and the existing SSO
+   session behave as they do everywhere else — and that needs an application to
+   sign in TO. A sign-in page bound to a population, or serving as the tenant
+   default, renders "This page is not linked to an application yet" instead.
+   Showing the link without saying so would hand somebody an address that looks
+   live and is not, which is the failure this console keeps having. */
+function PageURL({ page }: { page: AuthPage }) {
+  /* pageURL() returns "" when the server has no issuer or tenant slug to build
+     from — the platform console, where an operator belongs to no tenant. */
+  if (!page.url) {
+    return (
+      <div className="panel p-4">
+        <div className="t-label mb-1.5">Address</div>
+        <div className="t-xs" style={{ opacity: 0.7 }}>
+          Shown when the console is scoped to a tenant. The address is{' '}
+          <code>{'{issuer}'}/p/{'{tenant}'}/{page.kind}/{page.slug}</code>.
+        </div>
+      </div>
+    )
+  }
+
+  // Sign-out always renders; sign-in only launches with an application bound.
+  const launches = page.kind === 'signout' || !!page.application_id
+
+  return (
+    <div className="panel p-4">
+      <div className="t-label mb-1.5">Address</div>
+      <div className="flex items-center gap-2">
+        <code
+          className="min-w-0 flex-1 truncate"
+          style={{
+            background: 'var(--s-sunken)', padding: '6px 9px', borderRadius: 6,
+            fontSize: 12.5,
+          }}
+        >
+          {page.url}
+        </code>
+        <CopyButton value={page.url}>
+          {({ copied, copy }) => (
+            <Tooltip label={copied ? 'Copied' : 'Copy address'}>
+              <ActionIcon variant="default" size="md" onClick={copy}>
+                {copied ? <IconCheck size={14} /> : <IconCopy size={14} />}
+              </ActionIcon>
+            </Tooltip>
+          )}
+        </CopyButton>
+        <Tooltip label="Open in a new tab">
+          <ActionIcon
+            variant="default" size="md" component="a"
+            href={page.url} target="_blank" rel="noreferrer"
+          >
+            <IconExternalLink size={14} />
+          </ActionIcon>
+        </Tooltip>
+      </div>
+
+      {page.kind === 'signout' ? (
+        <div className="t-xs mt-2" style={{ opacity: 0.7 }}>
+          Ends the session and shows the signed-out page. With confirmation on,
+          it asks first.
+        </div>
+      ) : launches ? (
+        <div className="t-xs mt-2" style={{ opacity: 0.7 }}>
+          Starts a real sign-in for{' '}
+          <span className="chip">{page.application_slug}</span> — the same
+          authorization-code flow as everywhere else.
+        </div>
+      ) : (
+        <div className="t-xs mt-2" style={{ color: 'var(--warn)' }}>
+          No application is bound, so opening this shows “This page is not linked
+          to an application yet.” It still serves as the{' '}
+          {page.realm_code ? `page for ${page.realm_code}` : 'tenant default'}{' '}
+          when a flow resolves to it — bind an application to make the address
+          itself a working entry point.
+        </div>
+      )}
+    </div>
+  )
 }
