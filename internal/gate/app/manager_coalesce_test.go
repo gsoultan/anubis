@@ -239,7 +239,13 @@ var errProbe = errors.New("probe failed")
 // max-age window — the same window operators already watch.
 func TestTheSnapshotIsRebuiltFromScratchPeriodically(t *testing.T) {
 	m, l := startManager(t, 20*time.Millisecond, time.Second)
-	m.rebuildEvery = 60 * time.Millisecond
+	// A 60ms window made the first half of this test a race against the
+	// machine rather than a test of the version gate: three refreshes under
+	// -race on a contended runner can themselves outlast 60ms, at which point
+	// the periodic branch fires and the assertion below reports a rebuild that
+	// is entirely correct. It failed exactly that way on CI. An hour keeps
+	// elapsed time out of it, matching the sibling test.
+	m.rebuildEvery = time.Hour
 	before := l.count()
 
 	// Nothing has changed, so these must all take the cheap path.
@@ -250,7 +256,12 @@ func TestTheSnapshotIsRebuiltFromScratchPeriodically(t *testing.T) {
 		t.Fatalf("rebuilt %d times inside the window with an unchanged version", got-before)
 	}
 
-	time.Sleep(80 * time.Millisecond) // BuiltAt now older than rebuildEvery
+	// Cross the window by ageing the snapshot instead of sleeping through it.
+	// The manager compares time.Since(BuiltAt), so moving BuiltAt into the
+	// past is precisely what elapsed time would do — deterministically, and
+	// without spending 80ms of every run proving it.
+	ageSnapshots(m, 2*m.rebuildEvery)
+
 	m.refreshAll(context.Background())
 	if got := l.count(); got != before+1 {
 		t.Errorf("no rebuild after %v with an unchanged version — a lost trigger "+
@@ -332,5 +343,19 @@ func TestRebuildIntervalDoesNotExceedMaxAge(t *testing.T) {
 			t.Errorf("maxAge=%v: rebuildEvery=%v exceeds it, so a snapshot could be "+
 				"reported fresh without having been rebuilt in that window", maxAge, m.rebuildEvery)
 		}
+	}
+}
+
+// ageSnapshots backdates every loaded snapshot's BuiltAt, so a test can cross
+// the periodic-rebuild window without waiting for it. Taken under the same
+// lock the manager uses, and it replaces the pointer rather than mutating in
+// place because readers hold the *Data they were handed.
+func ageSnapshots(m *Manager, by time.Duration) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for slug, d := range m.data {
+		aged := *d
+		aged.BuiltAt = aged.BuiltAt.Add(-by)
+		m.data[slug] = &aged
 	}
 }
