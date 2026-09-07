@@ -27,6 +27,10 @@ type stubPages struct {
 	tenancyport.AuthPageRepository
 	bySlug, byApp, byRealm, byDefault string // page name, empty = not found
 	asked                             []string
+	// The IDs each lookup was handed. applicationID and realmCode are both
+	// strings, so a wiring mistake that swaps them still compiles and still
+	// resolves a page — just the wrong one, for the wrong reason.
+	appAsked, realmAsked string
 }
 
 func page(name string) *tenancydomain.AuthPage {
@@ -41,8 +45,9 @@ func (s *stubPages) AuthPageBySlug(_ context.Context, _, _, _ string) (*tenancyd
 	return page(s.bySlug), nil
 }
 
-func (s *stubPages) AuthPageForApplication(_ context.Context, _, _, _ string) (*tenancydomain.AuthPage, error) {
+func (s *stubPages) AuthPageForApplication(_ context.Context, _, _, applicationID string) (*tenancydomain.AuthPage, error) {
 	s.asked = append(s.asked, "application")
+	s.appAsked = applicationID
 	if s.byApp == "" {
 		return nil, errNoPage
 	}
@@ -67,10 +72,12 @@ func (s *stubPages) DefaultAuthPage(_ context.Context, _, _ string) (*tenancydom
 
 type stubRealms struct {
 	identityport.RealmRepository
-	id string
+	id        string
+	codeAsked string
 }
 
 func (s *stubRealms) RealmByCode(_ context.Context, _, code string) (*identitydomain.Realm, error) {
+	s.codeAsked = code
 	if s.id == "" {
 		return nil, errNoPage
 	}
