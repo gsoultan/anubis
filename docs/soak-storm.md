@@ -11,3 +11,4 @@ the gate; these are.
 | when | p95 via pgx | p95 via storm | shapes | flushes | anubisd RSS | rgen |
 |---|---|---|---|---|---|---|
 | 2026-09-01 03:20 UTC | 296.917µs | 181.041µs | shapes 1 → 1 | flushes 0 → 0 | 213.8 MB | clean |
+| 2026-09-06 08:45 UTC | 241.334µs | 161µs | shapes 1 → 1 | flushes 0 → 0 | 309.5 MB | clean |
