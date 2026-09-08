@@ -7,7 +7,7 @@ require (
 	github.com/go-kit/kit v0.13.0
 	github.com/go-sql-driver/mysql v1.10.0
 	github.com/gsoultan/anubis/pkg/anubis v0.0.0-20260827032154-73c29f38f061
-	github.com/gsoultan/storm v0.7.0
+	github.com/gsoultan/storm v0.10.0
 	github.com/jackc/pgx/v5 v5.10.0
 	google.golang.org/protobuf v1.36.12
 )
