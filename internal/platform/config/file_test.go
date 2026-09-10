@@ -158,6 +158,13 @@ func TestConfiguredFollowsTheFile(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.yaml")
 	t.Setenv("ANUBIS_CONFIG", path)
+	// Configured() answers true for ANUBIS_DB_URL before it ever looks at the
+	// file, so a developer with one exported — which is what running any
+	// database-backed test locally takes — fails this test and learns nothing
+	// about the installer gate it is actually checking. CI passes because its
+	// unit stage happens not to set it, which makes this the worst shape of
+	// flake: green where it is watched, red where it is read.
+	t.Setenv("ANUBIS_DB_URL", "")
 
 	if Configured() {
 		t.Fatal("no file, yet reported configured")
