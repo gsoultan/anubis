@@ -3,6 +3,19 @@
 Multi-tenant IAM/SSO backend. Postgres 18 schema is the validated engine
 (`authorize()` in SQL, 0.045 ms/decision); Go application layer wraps it.
 
+## Topic memories
+
+This file had grown to 60 KB, which defeats "read core first, then only what it
+references". New topics live in their own file from 2026-09-11 on:
+
+- [[page-resolution]] — which sign-in/sign-out page a person sees, the four
+  `auth_pages` indexes, and the address a page is served at.
+- [[storm-upgrades]] — the stormgen procedure, the verify baseline (stale
+  clean / pending 1 / drift 59), and the soft-delete traps.
+- [[releasing]] — tags, drafts, cosign verification, superseding a draft.
+- [[test-timing-and-tooling]] — why short timing budgets flake on CI, and why
+  graphify needs the SQL extra here.
+
 ## Load-bearing decisions (see docs/adr/)
 - ADR-0002: no third-party libs except infra drivers. Crypto = stdlib only.
   PASETO/TOTP/migration runner hand-written. `internal/domain` imports stdlib only.
