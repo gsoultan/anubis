@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { ActionIcon, Button, Menu, TextInput, Tooltip } from '@mantine/core'
 import {
   IconSearch, IconInfoCircle, IconDots, IconUserPlus, IconCirclePlus,
-  IconUserOff, IconUserCheck, IconCopy, IconKey, IconLock,
+  IconUserOff, IconUserCheck, IconCopy, IconKey, IconLock, IconUser,
 } from '@tabler/icons-react'
 import { notifications } from '@mantine/notifications'
 import { queryClient } from '@/lib/query/client'
@@ -13,6 +13,7 @@ import { Page } from '@/components/shell/Page'
 import { DataTable, Cell, type Column } from '@/components/ui/DataTable'
 import { AttributesModal } from '@/components/ui/AttributesModal'
 import { CredentialsModal } from '@/components/ui/CredentialsModal'
+import { PersonDetail } from '@/components/ui/PersonDetail'
 import { api } from '@/lib/api/client'
 import * as live from '@/lib/api/live'
 import { qk } from '@/lib/query/keys'
@@ -50,6 +51,9 @@ function Identities() {
      and an id in the URL is an id in someone's browser history. */
   const [attrsFor, setAttrsFor] = useState<Identity | null>(null)
   const [credsFor, setCredsFor] = useState<Identity | null>(null)
+  /* Same reasoning as the two above: the drawer is opened by holding the
+     person, not by putting their id in the address bar. */
+  const [detailFor, setDetailFor] = useState<Identity | null>(null)
   const { data: realms } = useQuery({ queryKey: qk.realms(), queryFn: api.realms })
   /* Keyset paging, and it is not optional here: a realm in this installation
      holds fifty thousand people. The screen used to ask for all of them and
@@ -74,7 +78,17 @@ function Identities() {
     kind === 'internal' ? 'var(--gold)' : kind === 'partner' ? 'var(--info)' : 'var(--grape)'
 
   const columns: Column<Identity>[] = [
-    { key: 'user', header: 'Identity', render: (i) => <Cell top={i.username} bottom={i.email} /> },
+    { key: 'user', header: 'Identity', render: (i) => (
+        <button
+          type="button"
+          onClick={() => setDetailFor(i)}
+          title={`Open ${i.username}`}
+          style={{ background: 'none', border: 'none', padding: 0, textAlign: 'left', cursor: 'pointer', width: '100%' }}
+        >
+          <Cell top={<span style={{ borderBottom: '1px dotted var(--line)' }}>{i.username}</span>}
+            bottom={i.email} />
+        </button>
+      ) },
     { key: 'realm', header: 'Realm', width: 150, render: (i) => {
         const r = realmOf(i.realm_id)
         return (
@@ -118,6 +132,10 @@ function Identities() {
             </ActionIcon>
           </Menu.Target>
           <Menu.Dropdown>
+            <Menu.Item leftSection={<IconUser size={14} />}
+              onClick={() => setDetailFor(i)}>
+              Open details…
+            </Menu.Item>
             <Menu.Item leftSection={<IconCirclePlus size={14} />}
               onClick={() => openCreate('grant', { identityId: i.id })}>
               Give access…
@@ -224,6 +242,12 @@ function Identities() {
         label={attrsFor?.username ?? ''} onClose={() => setAttrsFor(null)} />
       <CredentialsModal id={credsFor?.id ?? null}
         label={credsFor?.username ?? ''} onClose={() => setCredsFor(null)} />
+      <PersonDetail
+        person={detailFor}
+        onClose={() => setDetailFor(null)}
+        onAttributes={() => { setAttrsFor(detailFor); setDetailFor(null) }}
+        onCredentials={() => { setCredsFor(detailFor); setDetailFor(null) }}
+      />
     </Page>
   )
 }
