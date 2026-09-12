@@ -8,6 +8,7 @@ import { queryClient } from '@/lib/query/client'
 import { useCreate } from '@/stores/create'
 import { Page } from '@/components/shell/Page'
 import { DataTable, Cell, type Column } from '@/components/ui/DataTable'
+import { GrantRole, GrantScopes } from '@/components/ui/GrantAccess'
 import { api } from '@/lib/api/client'
 import { qk } from '@/lib/query/keys'
 import type { Grant } from '@/lib/api/types'
@@ -68,66 +69,10 @@ function Grants() {
         <Cell top={g.username || '—'}
           bottom={<span className="chip">{g.identity_id}</span>} />
       ) },
-    { key: 'role', header: 'Role', width: 190, render: (g) => (
-        <div className="flex flex-col gap-1">
-          <span className="t-body" style={{ fontWeight: 550 }}>{g.role_name}</span>
-          {g.via_membership_id && (
-            <Tooltip label="Derived from a membership — manage it there, not here.">
-              <span className="chip w-fit" style={{ color: 'var(--gold)', borderColor: 'var(--gold-chip-line)', background: 'var(--gold-chip-bg)' }}>
-                via {memberships?.find((x) => x.id === g.via_membership_id)?.name ?? 'membership'}
-              </span>
-            </Tooltip>
-          )}
-          {g.self_scoped && (
-            <Tooltip label="Applies only to records this identity owns. The caller must supply _owner or the decision is denied.">
-              <span className="chip w-fit" style={{ color: 'var(--info)', borderColor: 'color-mix(in srgb, var(--info) 20%, transparent)' }}>
-                <IconLock size={9} style={{ marginRight: 4 }} />self-scoped
-              </span>
-            </Tooltip>
-          )}
-        </div>
-      ) },
-    { key: 'scopes', header: 'Where', render: (g) => {
-        const silent = (axes ?? []).filter((a) => !g.scopes.some((s) => s.axis_code === a.code))
-        const byAxis = new Map<string, typeof g.scopes>()
-        for (const s of g.scopes) {
-          const list = byAxis.get(s.axis_code) ?? []
-          list.push(s); byAxis.set(s.axis_code, list)
-        }
-        return (
-          <div className="flex flex-col gap-1.5">
-            {g.scopes.length === 0 && !g.self_scoped && (
-              <span className="t-xs">everywhere — no limits</span>
-            )}
-            {[...byAxis].map(([axisCode, list]) => (
-              <div key={axisCode} className="flex items-start gap-2">
-                <span className="chip" style={{ minWidth: 62, justifyContent: 'center', marginTop: 1 }}>
-                  {axisCode}
-                </span>
-                <span className="t-body min-w-0">
-                  {list.map((s, i) => (
-                    <span key={s.scope_node_id}>
-                      {i > 0 && <span className="t-xs" style={{ margin: '0 5px', fontStyle: 'italic' }}>or</span>}
-                      {nodeName(s.scope_node_id)}
-                      {!s.inherit && (
-                        <Tooltip label="Exactly this place — nothing inside it.">
-                          <span className="chip" style={{ marginLeft: 4, color: 'var(--warn)',
-                            borderColor: 'color-mix(in srgb, var(--warn) 20%, transparent)' }}>exact</span>
-                        </Tooltip>
-                      )}
-                    </span>
-                  ))}
-                </span>
-              </div>
-            ))}
-            {silent.length > 0 && g.scopes.length > 0 && (
-              <span className="t-xs" style={{ fontSize: 10 }}>
-                no limit on {silent.map((a) => a.code).join(', ')}
-              </span>
-            )}
-          </div>
-        )
-      } },
+    { key: 'role', header: 'Role', width: 190,
+      render: (g) => <GrantRole grant={g} memberships={memberships} /> },
+    { key: 'scopes', header: 'Where',
+      render: (g) => <GrantScopes grant={g} axes={axes} nodeName={nodeName} /> },
     { key: 'validity', header: 'Validity', width: 130, render: (g) => (
         <Cell top={<span className="tnum">{g.valid_from.slice(0, 10)}</span>}
           bottom={g.valid_until ? `until ${g.valid_until.slice(0, 10)}` : 'no expiry'} />
