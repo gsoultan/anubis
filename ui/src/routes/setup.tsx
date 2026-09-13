@@ -73,8 +73,12 @@ function Setup() {
   const err = (k: string) => fields[k]
 
   return (
-    <div className="flex h-full items-center justify-center" style={{ background: 'var(--s-base)' }}>
-      <div className="fade" style={{ width: 460 }}>
+    /* min-h-dvh, not h-full: on mobile the browser chrome is inside 100vh, so a
+       centred card sits partly under it. The padding is what stops a 360px card
+       from touching both edges of a 360px phone. */
+    <div className="flex min-h-dvh items-center justify-center p-4"
+      style={{ background: 'var(--s-base)' }}>
+      <div className="fade" style={{ width: 'min(460px, 100%)' }}>
         <div className="mb-5">
           <div style={{ fontSize: 19, fontWeight: 650, letterSpacing: '-.02em' }}>Set up Anubis</div>
           <div className="t-sm mt-1">

@@ -347,7 +347,9 @@ export interface PageCopy {
 export interface PageFeatures {
   show_realm_picker?: boolean
   show_registration?: boolean
-  show_forgot_password?: boolean
+  /* No show_forgot_password: it rendered nowhere on the hosted page, and the
+     builder's switch and preview were both promising a link nobody got. A
+     tenant with its own reset flow adds it to `links`. */
   remember_me?: boolean
 }
 

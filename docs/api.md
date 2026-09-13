@@ -482,9 +482,12 @@ Sign-out pages use the same brand/layout/copy plus:
 | `PreviewAuthPage` | Validate a draft without saving, so the builder shows the same errors the save would |
 
 **Which page renders.** Most specific first: `?page=<slug>` → the application's
-own page → the tenant default. A missing or disabled page falls through rather
-than failing the flow: losing branding must never cost a user the ability to
-sign in.
+own page → the **population's** page → the tenant default. A missing or
+disabled page falls through rather than failing the flow: losing branding must
+never cost a user the ability to sign in.
+
+The full token set, what Anubis derives rather than asks for, and what the
+pages do on a phone: **[sign-in-pages.md](sign-in-pages.md)**.
 
 > **Configuration, never markup.** Every field is an enum, a bounded string, a
 > validated `#rrggbb` colour or an `http(s)` URL. There is no `custom_html` or

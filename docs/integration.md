@@ -130,9 +130,11 @@ Details that are enforcement, not convention:
   An open redirect here is full account takeover, so there is no fuzz in the
   match.
 - **Which sign-in page renders**, most specific first: `?page=<slug>` → the
-  page bound to your application → the tenant default. A missing or disabled
-  page falls through rather than failing the flow — losing branding must
-  never cost a user the ability to sign in.
+  page bound to your application → the page bound to the population → the
+  tenant default. A missing or disabled page falls through rather than failing
+  the flow — losing branding must never cost a user the ability to sign in.
+  What a page can be configured to say and look like:
+  [sign-in-pages.md](sign-in-pages.md).
 - An enrolled second factor is **always demanded**; your app does nothing to
   trigger or handle it beyond following the redirects.
 - The SSO cookie lives on Anubis's origin. The second application a user

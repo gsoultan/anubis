@@ -63,4 +63,13 @@ naming the configured default 404s while the page it names works. Wrong in the
 worst direction: it looks correct. The configured default remains the fallback
 for a caller with no tenant on its principal.
 
+Rendering the page it resolves to — the token set, derived colours and the
+traps in the template — is [[page-rendering]].
+
+A GOTCHA THAT LOOKS LIKE THIS FILE'S OPPOSITE: `behavior.confirm=false` makes
+`GET /v1/logout` end the session without asking, but `/p/{tenant}/signout/
+{slug}` still renders the asking step, because a GET on the page's own URL
+must never end a session. Both steps are reachable in production; the builder
+previews both.
+
 See [[core]].

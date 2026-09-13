@@ -764,13 +764,22 @@ export const defaultPageConfig = (kind: PageKind): PageConfig => ({
     font: 'system',
   },
   layout: 'centered',
+  /* Every one of these, verbatim from pagecfg.Copy.applyDefaults. The
+     sign-out half used to carry only confirm_heading, so the builder previewed
+     a page with no body text and an empty headline on the signed-out step —
+     while the hosted page rendered the server's defaults for both. */
   copy:
     kind === 'signout'
-      ? { heading: '', username_label: '', password_label: '', submit_label: '',
-          confirm_heading: 'Sign out?' }
+      ? { heading: 'You have been signed out',
+          username_label: '', password_label: '', submit_label: '',
+          confirm_heading: 'Sign out?',
+          confirm_body: 'You will need to sign in again to continue.',
+          body: 'Your session on this device has ended.',
+          return_label: 'Return to the application' }
       : { heading: 'Sign in', username_label: 'Username', password_label: 'Password',
           submit_label: 'Sign in' },
   links: [],
+  sections: ['logo', 'heading', 'subheading', 'form', 'links'],
   features: {},
   motion: { entrance: 'none' },
   ...(kind === 'signout' ? { behavior: { confirm: true } } : {}),

@@ -166,6 +166,7 @@ Reporting a vulnerability: [SECURITY.md](SECURITY.md).
 | [schema.md](docs/schema.md) | Every table, column, index and constraint |
 | [api.md](docs/api.md) | Complete endpoint reference |
 | [integration.md](docs/integration.md) | How an application uses Anubis for authentication and authorization — the seven workflows, with diagrams |
+| [sign-in-pages.md](docs/sign-in-pages.md) | The hosted sign-in and sign-out pages: the token set, what Anubis derives, and what they do on a phone |
 | [security.md](docs/security.md) | Threat model and the controls answering each threat |
 | [operations.md](docs/operations.md) | Deployment, monitoring, runbooks, incident response |
 | [development.md](docs/development.md) | Local environment, migrations, testing |
