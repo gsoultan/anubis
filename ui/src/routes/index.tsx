@@ -12,6 +12,7 @@ import { useSession } from '@/stores/session'
 import { Stat } from '@/components/ui/Stat'
 import { api } from '@/lib/api/client'
 import { qk } from '@/lib/query/keys'
+import { realmKindColor } from '@/lib/realmKind'
 import type { SecuritySignal } from '@/lib/api/types'
 
 export const Route = createFileRoute('/')({ component: Overview })
@@ -181,8 +182,7 @@ function Overview() {
             <div className="flex flex-col gap-3.5">
               {data.identities_by_realm.map((r, i) => {
                 const pct = (r.count / total) * 100
-                const colour = r.kind === 'internal' ? 'var(--gold)'
-                  : r.kind === 'partner' ? 'var(--info)' : 'var(--grape)'
+                const colour = realmKindColor(r.kind)
                 return (
                   <div key={r.realm}>
                     <div className="mb-1.5 flex items-baseline justify-between gap-3">

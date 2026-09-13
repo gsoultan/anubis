@@ -27,6 +27,9 @@
   --ease: cubic-bezier(.32, .72, 0, 1);
   --t-fast: 120ms var(--ease);
   --t-mid:  180ms var(--ease);
+  /* Height of a toolbar/footer rail inside a table panel. The sticky column
+     header offsets by exactly this, so the two cannot drift apart. */
+  --rail: 48px;
 }
 
 :root[data-mantine-color-scheme='dark'] {
@@ -260,6 +263,57 @@
   .tbl tbody tr:hover { background: var(--s-overlay); }
   .tbl tbody tr:last-child td { border-bottom: none; }
   .tbl .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .tbl tbody tr[data-clickable] { cursor: pointer; }
+  .tbl tbody tr[data-clickable]:focus-visible {
+    outline: 2px solid var(--gold); outline-offset: -2px;
+  }
+
+  /* Toolbar / footer rails attached to a table panel. A rail is exactly --rail
+     tall so the sticky column header can offset past it by the same amount. */
+  .tbl-rail {
+    display: flex; align-items: center; gap: 10px;
+    height: var(--rail); padding: 0 14px;
+    background: var(--s-raised);
+  }
+  .tbl-rail-top { position: sticky; top: 0; z-index: 2; border-bottom: 1px solid var(--line); }
+  .tbl-rail-bottom { border-top: 1px solid var(--line); }
+  .tbl-offset thead th { top: var(--rail); }
+
+  /* Keyset paging keeps the previous page on screen while the next one loads.
+     Fading it is the difference between "still working" and "nothing happened". */
+  .tbl-body { transition: opacity var(--t-mid); }
+  .tbl-body[data-stale] { opacity: .45; }
+
+  /* ---- avatar ---------------------------------------------------------- */
+  .avatar {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 28px; height: 28px; flex-shrink: 0;
+    border-radius: var(--r-sm); border: 1px solid transparent;
+    font-size: 11.5px; font-weight: 650; letter-spacing: -.01em; line-height: 1;
+    text-transform: uppercase; user-select: none;
+  }
+
+  /* ---- sortable rows ---------------------------------------------------- */
+  /* Used by the page builder to order the blocks of a sign-in page and the
+     links under it. The drop target is the row; the grab handle is a button,
+     so the same reorder works from the keyboard. */
+  .sort-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 5px 8px; border-radius: var(--r-sm);
+    border: 1px solid transparent; background: var(--s-raised);
+    transition: opacity var(--t-fast), border-color var(--t-fast);
+  }
+  .sort-row[data-dragging] { opacity: .4; }
+  .sort-row[data-over] { border-color: var(--gold); }
+  .sort-handle {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 22px; height: 28px; flex: none; cursor: grab;
+    border: 0; background: none; color: var(--ink-3); border-radius: var(--r-sm);
+  }
+  .sort-handle:hover:not(:disabled) { color: var(--ink); background: var(--s-overlay); }
+  .sort-handle:active:not(:disabled) { cursor: grabbing; }
+  .sort-handle:focus-visible { outline: 2px solid var(--gold); outline-offset: -2px; }
+  .sort-handle:disabled { opacity: .3; cursor: default; }
 
   /* ---- motion ---------------------------------------------------------- */
   .rise { animation: rise 240ms var(--ease) both; }
