@@ -268,6 +268,16 @@
     outline: 2px solid var(--gold); outline-offset: -2px;
   }
 
+  /* A row that leads somewhere says so. Kept invisible until the row is
+     hovered or focused: fifty rows each carrying a permanent arrow is a column
+     of chevrons, which is the noise the ULID column was dropped to avoid. */
+  .row-go {
+    opacity: 0; color: var(--ink-3); flex-shrink: 0;
+    transition: opacity var(--t-fast), translate var(--t-fast);
+  }
+  .tbl tbody tr:hover .row-go { opacity: 1; translate: 1px 0; }
+  .tbl tbody tr[data-clickable]:focus-visible .row-go { opacity: 1; }
+
   /* Toolbar / footer rails attached to a table panel. A rail is exactly --rail
      tall so the sticky column header can offset past it by the same amount. */
   .tbl-rail {

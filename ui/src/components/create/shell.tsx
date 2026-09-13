@@ -44,10 +44,19 @@ export function CreateShell({
   )
 }
 
+/* `onSubmit` is required, and the button is a plain button rather than a
+   submit one. It used to be `type="submit"` — but CreateShell renders the
+   footer as a SIBLING of the drawer body, so the button sat outside the
+   <form> it was meant to submit, and half the drawers have no <form> at all.
+   Every create drawer's primary action therefore did nothing when clicked;
+   the forms could only be sent by pressing Enter inside a field, and the four
+   drawers without a <form> could not be sent at all. Requiring the handler is
+   what stops the next drawer from shipping with an inert button. */
 export function CancelSubmit({
-  onCancel, canSubmit, submitting, label,
+  onCancel, onSubmit, canSubmit, submitting, label,
 }: {
   onCancel: () => void
+  onSubmit: () => void
   canSubmit: boolean
   submitting: boolean
   label: string
@@ -55,7 +64,9 @@ export function CancelSubmit({
   return (
     <>
       <Button variant="default" size="sm" onClick={onCancel}>Cancel</Button>
-      <Button type="submit" size="sm" disabled={!canSubmit} loading={submitting}>{label}</Button>
+      <Button size="sm" onClick={onSubmit} disabled={!canSubmit} loading={submitting}>
+        {label}
+      </Button>
     </>
   )
 }

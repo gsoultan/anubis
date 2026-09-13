@@ -97,8 +97,9 @@ export interface Identity {
   tenant_id: Uuid
   realm_id: Uuid
   /** Directory classification within the realm (supplier, applicant, …).
-      Never an authorization input. */
-  category_id: Uuid | null
+      Never an authorization input. The admin API names it by CODE, and codes
+      are unique per realm — resolve a display name with realm_id AND this. */
+  category: string | null
   username: string
   email: string | null
   status: IdentityStatus

@@ -235,9 +235,22 @@ func (u *tenantAdminInteractor) ListRealmCategories(ctx context.Context, realmID
 	if err != nil {
 		return nil, err
 	}
-	cats, err := u.realms.ListRealmCategories(ctx, realmID)
+	// p.TenantID, not just realmID: the guard proves WHICH tenant is asking,
+	// and that answer has to reach the query or a realm id from another
+	// tenant reads that tenant's categories.
+	cats, err := u.realms.ListRealmCategories(ctx, p.TenantID, realmID)
 	if err != nil {
 		return nil, err
+	}
+	// Counts belong to a population, and only a caller that named one is
+	// asking for them. Without a realm this is "name these codes for me" --
+	// the People screen resolving labels across every population -- and
+	// answering it with a grouped scan of the tenant's whole directory cost
+	// 338ms over 14k buffers on a 57k-identity tenant to compute a number
+	// that screen does not display. It scales with the directory, so the
+	// bigger the tenant the worse the screen they open most.
+	if realmID == "" {
+		return cats, nil
 	}
 	// One grouped count rather than a per-category query, and certainly not
 	// a directory download for the console to tally.

@@ -75,7 +75,7 @@ export function EditRole({ opened }: { opened: boolean }) {
       opened={opened} onClose={close} title={`Edit ${role?.name ?? 'role'}`}
       description={<>Add or remove permissions and change who may hold it. Edits apply to
         <b> every holder immediately</b> — there is no per-person copy to drift.</>}
-      footer={<CancelSubmit onCancel={close}
+      footer={<CancelSubmit onCancel={close} onSubmit={() => void save()}
         canSubmit={keys.length > 0 && kinds.length > 0 && !!role && !role.is_system}
         submitting={busy} label="Save changes" />}
     >

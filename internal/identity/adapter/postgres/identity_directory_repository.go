@@ -30,7 +30,7 @@ func (s *Repository) ListIdentities(ctx context.Context, tenantID string, f iden
 			r.ID, r.Username, database.Deref(r.Email), database.Deref(r.RealmCode), database.Deref(r.RealmKind),
 			r.Status, database.Deref(r.CategoryCode), database.Deref(r.ExternalRef),
 			int(r.AssuranceLevel), int(r.TokenEpoch), r.CreatedAt,
-			r.LastLoginAt, r.DisabledAt, r.AnonymizedAt))
+			r.LastLoginAt, r.DisabledAt, r.AnonymizedAt, r.RetentionUntil))
 	}
 	return out, nil
 }
@@ -44,6 +44,6 @@ func (s *Repository) IdentityRecordByID(ctx context.Context, tenantID, id string
 		r.ID, r.Username, database.Deref(r.Email), database.Deref(r.RealmCode), database.Deref(r.RealmKind),
 		r.Status, database.Deref(r.CategoryCode), database.Deref(r.ExternalRef),
 		int(r.AssuranceLevel), int(r.TokenEpoch), r.CreatedAt,
-		r.LastLoginAt, r.DisabledAt, r.AnonymizedAt)
+		r.LastLoginAt, r.DisabledAt, r.AnonymizedAt, r.RetentionUntil)
 	return &rec, nil
 }

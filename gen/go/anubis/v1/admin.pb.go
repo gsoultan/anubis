@@ -37,6 +37,12 @@ type Identity struct {
 	LastLoginAt    int64                  `protobuf:"varint,12,opt,name=last_login_at,json=lastLoginAt,proto3" json:"last_login_at,omitempty"`
 	DisabledAt     int64                  `protobuf:"varint,13,opt,name=disabled_at,json=disabledAt,proto3" json:"disabled_at,omitempty"`
 	AnonymizedAt   int64                  `protobuf:"varint,14,opt,name=anonymized_at,json=anonymizedAt,proto3" json:"anonymized_at,omitempty"`
+	// When the realm sets a statutory retention limit, the deadline the
+	// sweeper will anonymise this identity at. 0 = no limit (employees).
+	// The column and its index have existed since migrations/0008; nothing
+	// read them, so the console's Retention column could only ever print a
+	// dash -- including for the identities that really do have a deadline.
+	RetentionUntil int64 `protobuf:"varint,15,opt,name=retention_until,json=retentionUntil,proto3" json:"retention_until,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -165,6 +171,13 @@ func (x *Identity) GetDisabledAt() int64 {
 func (x *Identity) GetAnonymizedAt() int64 {
 	if x != nil {
 		return x.AnonymizedAt
+	}
+	return 0
+}
+
+func (x *Identity) GetRetentionUntil() int64 {
+	if x != nil {
+		return x.RetentionUntil
 	}
 	return 0
 }
@@ -8546,8 +8559,14 @@ func (x *RealmCategory) GetIdentityCount() int64 {
 }
 
 type ListRealmCategoriesRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	RealmId       string                 `protobuf:"bytes,1,opt,name=realm_id,json=realmId,proto3" json:"realm_id,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Empty = every category the tenant has defined, across all its
+	// populations. The answer is tenant-scoped either way.
+	//
+	// identity_count is populated ONLY when a realm is named: counting belongs
+	// to a population, and doing it tenant-wide is a grouped scan of the whole
+	// directory. A caller that reads the count must ask about one realm.
+	RealmId       string `protobuf:"bytes,1,opt,name=realm_id,json=realmId,proto3" json:"realm_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -14011,7 +14030,7 @@ var File_anubis_v1_admin_proto protoreflect.FileDescriptor
 
 const file_anubis_v1_admin_proto_rawDesc = "" +
 	"\n" +
-	"\x15anubis/v1/admin.proto\x12\tanubis.v1\"\xab\x03\n" +
+	"\x15anubis/v1/admin.proto\x12\tanubis.v1\"\xd4\x03\n" +
 	"\bIdentity\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1a\n" +
 	"\busername\x18\x02 \x01(\tR\busername\x12\x14\n" +
@@ -14031,7 +14050,8 @@ const file_anubis_v1_admin_proto_rawDesc = "" +
 	"\rlast_login_at\x18\f \x01(\x03R\vlastLoginAt\x12\x1f\n" +
 	"\vdisabled_at\x18\r \x01(\x03R\n" +
 	"disabledAt\x12#\n" +
-	"\ranonymized_at\x18\x0e \x01(\x03R\fanonymizedAt\"\x97\x01\n" +
+	"\ranonymized_at\x18\x0e \x01(\x03R\fanonymizedAt\x12'\n" +
+	"\x0fretention_until\x18\x0f \x01(\x03R\x0eretentionUntil\"\x97\x01\n" +
 	"\x15ListIdentitiesRequest\x12\x14\n" +
 	"\x05realm\x18\x01 \x01(\tR\x05realm\x12\x14\n" +
 	"\x05query\x18\x02 \x01(\tR\x05query\x12\x16\n" +

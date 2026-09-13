@@ -418,13 +418,37 @@ const TITLES: Record<string, string> = {
   '/setup': 'Set up Anubis', '/applications': 'Applications',
 }
 
+/* A detail page is two crumbs, not one. TITLES is keyed on the exact
+   pathname, so `/identities/01J…` resolved to "Not found" in the header of a
+   page that had loaded perfectly well. The name comes out of the query cache
+   the page itself fills, which means no second request and no store to keep
+   in sync — and it is still right on a cold reload, because the crumb waits
+   for the same fetch the page is waiting for. */
+function PersonCrumb({ id }: { id: string }) {
+  const { data } = useQuery({ queryKey: qk.identity(id), queryFn: () => api.identity(id) })
+  return (
+    <>
+      <Link to="/identities" className="t-xs no-underline">People</Link>
+      <span style={{ color: 'var(--ink-4)' }}>/</span>
+      <span className="t-body truncate" style={{ fontWeight: 550, maxWidth: 260 }}>
+        {data?.username ?? '…'}
+      </span>
+    </>
+  )
+}
+
 function Breadcrumb() {
   const pathname = useRouterState({ select: (s) => s.location.pathname })
+  const personId = pathname.startsWith('/identities/')
+    ? pathname.slice('/identities/'.length)
+    : ''
   return (
     <div className="flex items-center gap-2">
       <span className="t-xs">Anubis</span>
       <span style={{ color: 'var(--ink-4)' }}>/</span>
-      <span className="t-body" style={{ fontWeight: 550 }}>{TITLES[pathname] ?? 'Not found'}</span>
+      {personId
+        ? <PersonCrumb id={personId} />
+        : <span className="t-body" style={{ fontWeight: 550 }}>{TITLES[pathname] ?? 'Not found'}</span>}
     </div>
   )
 }

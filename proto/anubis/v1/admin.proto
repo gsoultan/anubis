@@ -57,6 +57,12 @@ message Identity {
   int64 last_login_at = 12;
   int64 disabled_at = 13;
   int64 anonymized_at = 14;
+  // When the realm sets a statutory retention limit, the deadline the
+  // sweeper will anonymise this identity at. 0 = no limit (employees).
+  // The column and its index have existed since migrations/0008; nothing
+  // read them, so the console's Retention column could only ever print a
+  // dash -- including for the identities that really do have a deadline.
+  int64 retention_until = 15;
 }
 
 message ListIdentitiesRequest {
@@ -1081,6 +1087,12 @@ message RealmCategory {
 }
 
 message ListRealmCategoriesRequest {
+  // Empty = every category the tenant has defined, across all its
+  // populations. The answer is tenant-scoped either way.
+  //
+  // identity_count is populated ONLY when a realm is named: counting belongs
+  // to a population, and doing it tenant-wide is a grouped scan of the whole
+  // directory. A caller that reads the count must ask about one realm.
   string realm_id = 1;
 }
 

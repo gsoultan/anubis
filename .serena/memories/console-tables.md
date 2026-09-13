@@ -58,4 +58,11 @@ server deliberately returned and makes the count lie. `grants.tsx` says the
 same. That is why People has no status filter: `identitiesPage` takes realm,
 query, cursor and limit, and nothing else.
 
+The category sub-label and the Retention column carry real values now; both
+were structurally incapable of it, see [[identity-directory-reads]].
+
+The row click opens the person's page ([[console-person-page]]), not a
+drawer; `.row-go` is the chevron affordance, hidden until the row is hovered
+or focused so fifty rows do not each carry a permanent arrow.
+
 Related: [[page-resolution]] for what a person sees when signing in.

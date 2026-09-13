@@ -80,10 +80,19 @@ WHERE id = sqlc.arg(id)
 RETURNING id;
 
 -- name: ListRealmCategories :many
+-- Tenant-scoped ALWAYS, realm optional.
+--
+-- The tenant filter is not decoration. This used to key on realm_id alone,
+-- so an operator who learned another tenant's realm id read that tenant's
+-- categories: the caller's tenant was checked by the guard and then never
+-- used. realm_id nullable because the People screen spans populations and
+-- has no single realm to ask about -- it used to send '' for "all", which
+-- Postgres rejects as an invalid uuid, and the whole call 500'd.
 SELECT id, realm_id, code, display_name, sort_order
 FROM realm_categories
-WHERE realm_id = sqlc.arg(realm_id)
-ORDER BY sort_order, code;
+WHERE tenant_id = sqlc.arg(tenant_id)
+  AND (sqlc.narg(realm_id)::uuid IS NULL OR realm_id = sqlc.narg(realm_id))
+ORDER BY realm_id, sort_order, code;
 
 -- name: GetRealmCategoryByCode :one
 SELECT id, realm_id, code, display_name, sort_order

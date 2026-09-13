@@ -66,7 +66,9 @@ func (q *Queries) BumpTokenEpoch(ctx context.Context, arg BumpTokenEpochParams) 
 const countIdentitiesByCategory = `-- name: CountIdentitiesByCategory :many
 SELECT category_id, count(*) AS n
 FROM identities
-WHERE tenant_id = $1 AND realm_id = $2 AND category_id IS NOT NULL
+WHERE tenant_id = $1
+  AND ($2::uuid IS NULL OR realm_id = $2)
+  AND category_id IS NOT NULL
 GROUP BY category_id
 `
 
@@ -83,6 +85,9 @@ type CountIdentitiesByCategoryRow struct {
 // Populations screen: how many people sit in each category of a realm.
 // Counted in the database because the console used to count rows it had
 // fetched — capped at 2,000 of 57,000, so every figure was wrong.
+// realm_id nullable, matching ListRealmCategories: a tenant-wide category
+// listing has no realm to count within, and the two have to agree or the
+// counts belong to a different set of categories than the names.
 func (q *Queries) CountIdentitiesByCategory(ctx context.Context, arg CountIdentitiesByCategoryParams) ([]CountIdentitiesByCategoryRow, error) {
 	rows, err := q.db.Query(ctx, countIdentitiesByCategory, arg.TenantID, arg.RealmID)
 	if err != nil {
@@ -280,7 +285,8 @@ func (q *Queries) ExpireRetainedIdentities(ctx context.Context) ([]ExpireRetaine
 const getIdentity = `-- name: GetIdentity :one
 SELECT i.id, i.tenant_id, i.token_epoch, i.status, i.username, i.email,
        i.external_ref, i.assurance_level, i.disabled_at, i.anonymized_at,
-       i.created_at, i.last_login_at, i.realm_id, i.category_id,
+       i.created_at, i.last_login_at, i.retention_until,
+       i.realm_id, i.category_id,
        r.code AS realm_code, r.kind AS realm_kind,
        c.code AS category_code
 FROM identities i
@@ -307,6 +313,7 @@ type GetIdentityRow struct {
 	AnonymizedAt   *time.Time
 	CreatedAt      time.Time
 	LastLoginAt    *time.Time
+	RetentionUntil *time.Time
 	RealmID        *string
 	CategoryID     *string
 	RealmCode      *string
@@ -330,6 +337,7 @@ func (q *Queries) GetIdentity(ctx context.Context, arg GetIdentityParams) (GetId
 		&i.AnonymizedAt,
 		&i.CreatedAt,
 		&i.LastLoginAt,
+		&i.RetentionUntil,
 		&i.RealmID,
 		&i.CategoryID,
 		&i.RealmCode,
@@ -454,7 +462,8 @@ func (q *Queries) LinkIdentities(ctx context.Context, arg LinkIdentitiesParams) 
 const listIdentities = `-- name: ListIdentities :many
 SELECT i.id, i.tenant_id, i.token_epoch, i.status, i.username, i.email,
        i.external_ref, i.assurance_level, i.disabled_at, i.anonymized_at,
-       i.created_at, i.last_login_at, i.realm_id, i.category_id,
+       i.created_at, i.last_login_at, i.retention_until,
+       i.realm_id, i.category_id,
        r.code AS realm_code, r.kind AS realm_kind,
        c.code AS category_code
 FROM identities i
@@ -493,6 +502,7 @@ type ListIdentitiesRow struct {
 	AnonymizedAt   *time.Time
 	CreatedAt      time.Time
 	LastLoginAt    *time.Time
+	RetentionUntil *time.Time
 	RealmID        *string
 	CategoryID     *string
 	RealmCode      *string
@@ -531,6 +541,7 @@ func (q *Queries) ListIdentities(ctx context.Context, arg ListIdentitiesParams) 
 			&i.AnonymizedAt,
 			&i.CreatedAt,
 			&i.LastLoginAt,
+			&i.RetentionUntil,
 			&i.RealmID,
 			&i.CategoryID,
 			&i.RealmCode,

@@ -17,4 +17,7 @@ type IdentityRecord struct {
 	LastLoginAt    *time.Time
 	DisabledAt     *time.Time
 	AnonymizedAt   *time.Time
+	// RetentionUntil is when the retention sweeper may anonymise this
+	// identity. nil = no statutory limit, which is nearly every employee.
+	RetentionUntil *time.Time
 }

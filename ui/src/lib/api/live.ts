@@ -134,13 +134,19 @@ async function realmCodeFor(realmId?: string): Promise<string> {
 async function toIdentity(i: {
   id: string; username: string; email: string; realm: string; status: string
   assuranceLevel: number; tokenEpoch: number; externalRef: string
+  category: string
   createdAt: bigint; lastLoginAt: bigint; disabledAt: bigint; anonymizedAt: bigint
+  retentionUntil: bigint
 }): Promise<Identity> {
   return {
     id: i.id,
     tenant_id: '',
     realm_id: await realmIdByCode(i.realm),
-    category_id: null,
+    /* The admin API names a category by CODE, and always has — this was
+       hardcoded null, so every screen looking a category up by id found
+       nothing and the label silently never rendered. Codes are unique per
+       REALM, not per tenant, so a consumer matches code AND realm. */
+    category: i.category || null,
     username: i.username,
     email: i.email || null,
     status: i.status as Identity['status'],
@@ -151,7 +157,7 @@ async function toIdentity(i: {
     last_login_at: at(i.lastLoginAt),
     disabled_at: at(i.disabledAt),
     anonymized_at: at(i.anonymizedAt),
-    retention_until: null,
+    retention_until: at(i.retentionUntil),
   }
 }
 
@@ -206,23 +212,10 @@ export async function identity(id: Uuid): Promise<Identity | null> {
   const resp = await rpc.identityAdmin.getIdentity({ id })
   const i = resp.identity
   if (!i) return null
-  return {
-    id: i.id,
-    tenant_id: '',
-    realm_id: await realmIdByCode(i.realm),
-    category_id: null,
-    username: i.username,
-    email: i.email || null,
-    status: i.status as Identity['status'],
-    assurance_level: i.assuranceLevel as Ial,
-    token_epoch: i.tokenEpoch,
-    external_ref: i.externalRef || null,
-    created_at: atRequired(i.createdAt),
-    last_login_at: at(i.lastLoginAt),
-    disabled_at: at(i.disabledAt),
-    anonymized_at: at(i.anonymizedAt),
-    retention_until: null,
-  }
+  /* One mapper, not a hand-built copy of it. The copy is how a person's own
+     page came to report no category and no retention while the list reported
+     both: two places to add a field, and only one of them got it. */
+  return await toIdentity(i)
 }
 
 export async function roles(): Promise<Role[]> {

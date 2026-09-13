@@ -7,7 +7,7 @@ import { qk } from '@/lib/query/keys'
 import { queryClient } from '@/lib/query/client'
 import { useCreate } from '@/stores/create'
 import { AxisIcon } from '@/components/scope/AxisIcon'
-import { AxisConstraintRow, type NodeSel } from './CreateGrant'
+import { AxisConstraintRow, type NodeSel } from './GrantFields'
 import { CreateShell, CancelSubmit, notifyCreated, notifyRejected } from './shell'
 import type { GrantScope } from '@/lib/api/types'
 
@@ -54,7 +54,8 @@ export function CreateMembership({ opened }: { opened: boolean }) {
       description={<>A bundle of roles assigned as one unit. Each role can be pinned to any
         mix of structures — an office <i>and</i> a product line <i>and</i> a customer
         segment. “New finance hire in Jakarta” becomes a single action.</>}
-      footer={<CancelSubmit onCancel={close} canSubmit={name.trim().length >= 2 && entries.length > 0}
+      footer={<CancelSubmit onCancel={close} onSubmit={() => void submit()}
+        canSubmit={name.trim().length >= 2 && entries.length > 0}
         submitting={busy} label="Create membership" />}
     >
       <div className="flex flex-col gap-4">

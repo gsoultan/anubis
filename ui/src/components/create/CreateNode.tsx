@@ -96,7 +96,7 @@ export function CreateNode({ opened }: { opened: boolean }) {
       opened={opened} onClose={close} title="Add a structure item"
       description={<>An office, a product line, a customer — the things access gets limited to. In production these usually arrive by ERP/CRM sync keyed on <b>external_ref</b>; this is the manual path.</>}
       footer={
-        <CancelSubmit onCancel={close}
+        <CancelSubmit onCancel={close} onSubmit={() => void submit()}
           canSubmit={!!axisCode && !!parentId && !!nodeType && !!name}
           submitting={submitting} label="Add item" />
       }

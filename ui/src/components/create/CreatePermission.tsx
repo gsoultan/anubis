@@ -50,7 +50,8 @@ export function CreatePermission({ opened }: { opened: boolean }) {
       footer={
         <form.Subscribe selector={(s) => [s.canSubmit, s.isSubmitting] as const}>
           {([canSubmit, isSubmitting]) => (
-            <CancelSubmit onCancel={close} canSubmit={!!canSubmit && !!preview}
+            <CancelSubmit onCancel={close} onSubmit={() => void form.handleSubmit()}
+              canSubmit={!!canSubmit && !!preview}
               submitting={!!isSubmitting} label="Add permission" />
           )}
         </form.Subscribe>

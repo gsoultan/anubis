@@ -295,3 +295,242 @@ func TestARealmKindIsCorrectableOnlyWhileEmpty(t *testing.T) {
 		t.Fatal("the rename did not take")
 	}
 }
+
+// The People screen spans populations, so it asks for every category the
+// tenant has defined and sends no realm id. `realm_id` is a uuid column, so
+// the empty string was not an empty filter — it was `invalid input syntax for
+// type uuid: ""`, and the whole call 500'd on every visit to the screen. The
+// category label under each name had therefore never once rendered.
+func TestRealmCategoriesListWithoutARealm(t *testing.T) {
+	requireServer(t)
+	ctx := context.Background()
+	token := platformLogin(t)
+	tenantAdmin := anubisv1connect.NewTenantAdminServiceClient(http.DefaultClient, baseURL)
+
+	all, err := tenantAdmin.ListRealmCategories(ctx, operatorBearer(connect.NewRequest(
+		&anubisv1.ListRealmCategoriesRequest{RealmId: ""}), token))
+	if err != nil {
+		t.Fatalf("list categories across all populations: %v", err)
+	}
+	if len(all.Msg.GetCategories()) == 0 {
+		t.Fatal("no categories at all — the seeded tenant defines several, " +
+			"so an empty answer means the filter matched nothing rather than everything")
+	}
+
+	// Every category must name the realm it belongs to, because a code is
+	// unique per realm and a consumer resolving a name needs both.
+	realms, err := tenantAdmin.ListRealms(ctx, operatorBearer(connect.NewRequest(
+		&anubisv1.ListRealmsRequest{}), token))
+	if err != nil {
+		t.Fatalf("list realms: %v", err)
+	}
+	known := map[string]bool{}
+	for _, r := range realms.Msg.GetRealms() {
+		known[r.GetId()] = true
+	}
+	for _, c := range all.Msg.GetCategories() {
+		if c.GetRealmId() == "" {
+			t.Fatalf("category %q carries no realm id", c.GetCode())
+		}
+		if !known[c.GetRealmId()] {
+			t.Fatalf("category %q belongs to realm %s, which is not this tenant's",
+				c.GetCode(), c.GetRealmId())
+		}
+	}
+
+	// Narrowing to one realm must return a subset of the same answer, or the
+	// two code paths disagree about what a category is.
+	first := all.Msg.GetCategories()[0]
+	one, err := tenantAdmin.ListRealmCategories(ctx, operatorBearer(connect.NewRequest(
+		&anubisv1.ListRealmCategoriesRequest{RealmId: first.GetRealmId()}), token))
+	if err != nil {
+		t.Fatalf("list categories for one population: %v", err)
+	}
+	if len(one.Msg.GetCategories()) == 0 {
+		t.Fatalf("realm %s reported no categories, but %q is in it",
+			first.GetRealmId(), first.GetCode())
+	}
+	for _, c := range one.Msg.GetCategories() {
+		if c.GetRealmId() != first.GetRealmId() {
+			t.Fatalf("asked for realm %s, got a category from %s",
+				first.GetRealmId(), c.GetRealmId())
+		}
+	}
+
+	// identity_count is the population's figure, and computing it tenant-wide
+	// is a grouped scan of the entire directory — 338ms on this database, for
+	// a number the screen making the tenant-wide call never displays. Naming a
+	// realm is what asks for it; the two answers must differ, or the scan
+	// crept back in.
+	var counted bool
+	for _, c := range one.Msg.GetCategories() {
+		if c.GetIdentityCount() > 0 {
+			counted = true
+		}
+	}
+	if !counted {
+		t.Fatal("a realm-scoped listing reported no member counts at all — " +
+			"the seeded populations are not empty")
+	}
+	for _, c := range all.Msg.GetCategories() {
+		if c.GetIdentityCount() != 0 {
+			t.Fatalf("category %q carries a count on the tenant-wide listing (%d): "+
+				"counting every realm is a scan of the whole directory, and no "+
+				"caller of this shape reads the number",
+				c.GetCode(), c.GetIdentityCount())
+		}
+	}
+}
+
+// The guard proved WHICH tenant was asking and the query then ignored the
+// answer: it keyed on realm_id alone. An operator who learned another
+// tenant's realm id read that tenant's categories — the directory
+// classification of people they have no relationship with.
+func TestRealmCategoriesRefuseAnotherTenantsRealm(t *testing.T) {
+	requireServer(t)
+	dbURL := os.Getenv("ANUBIS_DB_URL")
+	if dbURL == "" {
+		t.Skip("ANUBIS_DB_URL not set")
+	}
+	ctx := context.Background()
+	token := platformLogin(t)
+
+	db, err := sql.Open("pgx", dbURL)
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	// Registered BEFORE the row cleanup, and NOT deferred: t.Cleanup runs
+	// after the function returns, so a `defer db.Close()` would shut the pool
+	// before the delete below could use it — which is how the first run of
+	// this test left its planted tenant in the dev database. Cleanup is LIFO,
+	// so the delete goes last-registered and therefore runs first.
+	t.Cleanup(func() { _ = db.Close() })
+
+	// A realm and a category belonging to a tenant this operator does not
+	// administer. Planted directly, because the API has no way to reach
+	// another tenant — which is the whole point.
+	suffix := time.Now().UnixNano()
+	var otherTenant string
+	if err := db.QueryRowContext(ctx,
+		`INSERT INTO tenants (name, slug) VALUES ($1, $2) RETURNING id`,
+		fmt.Sprintf("Neighbour %d", suffix),
+		fmt.Sprintf("neighbour-%d", suffix),
+	).Scan(&otherTenant); err != nil {
+		t.Fatalf("plant tenant: %v", err)
+	}
+	t.Cleanup(func() {
+		// Reported, not swallowed: a planted tenant left behind is a probe
+		// realm that every later snapshot rebuild will load forever.
+		if _, err := db.ExecContext(context.Background(),
+			`DELETE FROM tenants WHERE id = $1`, otherTenant); err != nil {
+			t.Errorf("planted tenant %s not removed: %v", otherTenant, err)
+		}
+	})
+
+	var otherRealm string
+	if err := db.QueryRowContext(ctx,
+		`INSERT INTO realms (tenant_id, code, kind, display_name)
+		 VALUES ($1, 'internal', 'internal', 'Neighbour staff') RETURNING id`,
+		otherTenant,
+	).Scan(&otherRealm); err != nil {
+		t.Fatalf("plant realm: %v", err)
+	}
+	const secretCode = "board_member"
+	if _, err := db.ExecContext(ctx,
+		`INSERT INTO realm_categories (tenant_id, realm_id, code, display_name, sort_order)
+		 VALUES ($1, $2, $3, 'Board member', 0)`,
+		otherTenant, otherRealm, secretCode,
+	); err != nil {
+		t.Fatalf("plant category: %v", err)
+	}
+
+	tenantAdmin := anubisv1connect.NewTenantAdminServiceClient(http.DefaultClient, baseURL)
+	resp, err := tenantAdmin.ListRealmCategories(ctx, operatorBearer(connect.NewRequest(
+		&anubisv1.ListRealmCategoriesRequest{RealmId: otherRealm}), token))
+	// Empty or refused are both acceptable; handing the rows over is not.
+	if err != nil {
+		return
+	}
+	for _, c := range resp.Msg.GetCategories() {
+		if c.GetCode() == secretCode || c.GetRealmId() == otherRealm {
+			t.Fatalf("read another tenant's category %q by supplying their realm id",
+				c.GetCode())
+		}
+	}
+	if n := len(resp.Msg.GetCategories()); n != 0 {
+		t.Fatalf("another tenant's realm returned %d categories", n)
+	}
+}
+
+// `identities.retention_until` and its partial index have existed since
+// migrations/0008, and the retention sweeper writes it — but no read path ever
+// selected the column, so the proto could not carry it and the console's
+// Retention column printed a dash for every person, including the ones with a
+// real statutory deadline.
+func TestIdentityCarriesItsRetentionDeadline(t *testing.T) {
+	requireServer(t)
+	dbURL := os.Getenv("ANUBIS_DB_URL")
+	if dbURL == "" {
+		t.Skip("ANUBIS_DB_URL not set")
+	}
+	ctx := context.Background()
+	token := platformLogin(t)
+	idAdmin := anubisv1connect.NewIdentityAdminServiceClient(http.DefaultClient, baseURL)
+
+	username := fmt.Sprintf("retention-probe-%d", time.Now().UnixNano())
+	created, err := idAdmin.CreateIdentity(ctx, operatorBearer(connect.NewRequest(
+		&anubisv1.CreateIdentityRequest{
+			Realm: "internal", Username: username, Password: "retention-probe-password-1234",
+		}), token))
+	if err != nil {
+		t.Fatalf("create probe identity: %v", err)
+	}
+	id := created.Msg.GetIdentity().GetId()
+
+	// An internal realm has no statutory limit, so the probe starts with none
+	// — which is exactly the value the broken column was indistinguishable
+	// from.
+	if got := created.Msg.GetIdentity().GetRetentionUntil(); got != 0 {
+		t.Fatalf("fresh internal identity already carries a retention deadline: %d", got)
+	}
+
+	db, err := sql.Open("pgx", dbURL)
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	defer db.Close()
+	deadline := time.Now().Add(72 * time.Hour).UTC().Truncate(time.Second)
+	if _, err := db.ExecContext(ctx,
+		`UPDATE identities SET retention_until = $1 WHERE id = $2`, deadline, id); err != nil {
+		t.Fatalf("set retention deadline: %v", err)
+	}
+
+	one, err := idAdmin.GetIdentity(ctx, operatorBearer(connect.NewRequest(
+		&anubisv1.GetIdentityRequest{Id: id}), token))
+	if err != nil {
+		t.Fatalf("get identity: %v", err)
+	}
+	if got := one.Msg.GetIdentity().GetRetentionUntil(); got != deadline.Unix() {
+		t.Fatalf("GetIdentity retention_until = %d, want %d", got, deadline.Unix())
+	}
+
+	// The list path selects its own columns, so it can be wrong separately.
+	list, err := idAdmin.ListIdentities(ctx, operatorBearer(connect.NewRequest(
+		&anubisv1.ListIdentitiesRequest{Realm: "internal", Query: username, PageSize: 10}), token))
+	if err != nil {
+		t.Fatalf("list identities: %v", err)
+	}
+	var seen bool
+	for _, i := range list.Msg.GetIdentities() {
+		if i.GetId() != id {
+			continue
+		}
+		seen = true
+		if got := i.GetRetentionUntil(); got != deadline.Unix() {
+			t.Fatalf("ListIdentities retention_until = %d, want %d", got, deadline.Unix())
+		}
+	}
+	if !seen {
+		t.Fatalf("probe identity %s absent from its own realm listing", username)
+	}
+}

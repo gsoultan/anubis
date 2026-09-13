@@ -20,6 +20,12 @@ references". New topics live in their own file from 2026-09-11 on:
   role catalog arrives, and why absent is not empty.
 - [[console-tables]] — the one table primitive in `ui/`, why `.panel` must
   use `overflow: clip`, and the column rules the People screen follows.
+- [[console-person-page]] — why a record you can act on is a page, the
+  trailing-underscore route, and the query-key prefix rule.
+- [[console-create-drawers]] — every create drawer's submit button was inert,
+  and where the grant form lives now.
+- [[identity-directory-reads]] — the empty-uuid 500, the tenant filter the
+  category query ignored, and the columns nothing ever selected.
   graphify needs the SQL extra here.
 
 ## Load-bearing decisions (see docs/adr/)

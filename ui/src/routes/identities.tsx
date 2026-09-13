@@ -1,4 +1,4 @@
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import {
   ActionIcon, Button, Menu, Popover, Select, TextInput, Tooltip, UnstyledButton,
@@ -6,6 +6,7 @@ import {
 import {
   IconSearch, IconInfoCircle, IconDots, IconUserPlus, IconCirclePlus,
   IconUserOff, IconUserCheck, IconCopy, IconKey, IconLock, IconUser, IconX,
+  IconChevronRight,
 } from '@tabler/icons-react'
 import { notifications } from '@mantine/notifications'
 import { queryClient } from '@/lib/query/client'
@@ -15,12 +16,12 @@ import { Page } from '@/components/shell/Page'
 import { DataTable, Cell, type Column } from '@/components/ui/DataTable'
 import { AttributesModal } from '@/components/ui/AttributesModal'
 import { CredentialsModal } from '@/components/ui/CredentialsModal'
-import { PersonDetail } from '@/components/ui/PersonDetail'
+import { Initial } from '@/components/ui/Initial'
 import { api } from '@/lib/api/client'
 import * as live from '@/lib/api/live'
 import { realmKindColor } from '@/lib/realmKind'
 import { qk } from '@/lib/query/keys'
-import { useSession } from '@/stores/session'
+import { usePeopleList, useSession } from '@/stores/session'
 import type { Ial, Identity, IdentityStatus } from '@/lib/api/types'
 
 export const Route = createFileRoute('/identities')({ component: Identities })
@@ -37,22 +38,9 @@ const IAL_COLOR: Record<Ial, string> = {
 /* The leftmost thing in a row is what the eye lands on, so it carries two
    facts at once: who (the initial) and which population (the tint). That is
    also why the population column no longer needs a coloured dot of its own —
-   the same information was being drawn twice, six columns apart. */
-function Initial({ name, colour }: { name: string; colour: string }) {
-  return (
-    <span
-      aria-hidden
-      className="avatar"
-      style={{
-        color: colour,
-        background: `color-mix(in srgb, ${colour} 13%, transparent)`,
-        borderColor: `color-mix(in srgb, ${colour} 26%, transparent)`,
-      }}
-    >
-      {name.slice(0, 1)}
-    </span>
-  )
-}
+   the same information was being drawn twice, six columns apart.
+   `Initial` itself lives in components/ui now: a person's own page draws the
+   same avatar, and two copies is two colour rules. */
 
 /* Active is what 99 rows in 100 are, so active is the quiet one. The pill is
    spent on the exception, which is the only row anyone is scanning for. The
@@ -104,6 +92,13 @@ function SameNameNote() {
 function Identities() {
   const { realmFilter, setRealmFilter } = useSession()
   const { openCreate } = useCreate()
+  const navigate = useNavigate()
+
+  /** A row is a person, and a person has a page. */
+  const openPerson = (i: Identity, give = false) =>
+    void navigate({
+      to: '/identities/$id', params: { id: i.id }, search: give ? { give: true } : {},
+    })
 
   async function toggleStatus(id: string, current: string) {
     await api.setIdentityStatus(id, current === 'active' ? 'disabled' : 'active')
@@ -116,25 +111,30 @@ function Identities() {
     })
     await queryClient.invalidateQueries({ queryKey: ['identities'] })
   }
-  const [q, setQ] = useState('')
   /* Held here rather than in a route param: these are the encrypted fields,
-     and an id in the URL is an id in someone's browser history. */
+     and an id in the URL is an id in someone's browser history. The person's
+     own page carries their id and is the better place for everything else —
+     but not for these two. */
   const [attrsFor, setAttrsFor] = useState<Identity | null>(null)
   const [credsFor, setCredsFor] = useState<Identity | null>(null)
-  /* Same reasoning as the two above: the drawer is opened by holding the
-     person, not by putting their id in the address bar. */
-  const [detailFor, setDetailFor] = useState<Identity | null>(null)
   const { data: realms } = useQuery({ queryKey: qk.realms(), queryFn: api.realms })
+  /* Search and paging live in a store, not in this component: every row leads
+     off this screen now, and losing the search that found somebody the moment
+     you open them is not paging, it is starting again. */
+  const { query: q, setQuery: setQ, trail, setTrail, resetPaging } = usePeopleList()
   /* Keyset paging, and it is not optional here: a realm in this installation
      holds fifty thousand people. The screen used to ask for all of them and
      render whatever came back, which is a wrong answer dressed as a slow one.
 
      A stack of cursors rather than a page number, because keyset paging can
      step forward and back but cannot jump to page 40. */
-  const [trail, setTrail] = useState<string[]>([''])
   const cursor = trail[trail.length - 1] ?? ''
   const { data: page, isFetching } = useQuery({
-    queryKey: ['identities-page', realmFilter, q, cursor],
+    /* Under the 'identities' prefix on purpose: disabling somebody invalidates
+       ['identities'], and this list used to be keyed 'identities-page', which
+       that prefix does not match — so the row kept saying "active" until the
+       operator reloaded. */
+    queryKey: ['identities', 'page', realmFilter, q, cursor],
     queryFn: () => live.identitiesPage(realmFilter ?? undefined, q || undefined, cursor, 50),
     placeholderData: (prev) => prev,
   })
@@ -148,7 +148,7 @@ function Identities() {
   function clearFilters() {
     setQ('')
     setRealmFilter(null)
-    setTrail([''])
+    resetPaging()
   }
 
   /* Display names are not unique — this installation runs three populations
@@ -182,8 +182,11 @@ function Identities() {
        pooled into a single gap between the email and the next column. */
     { key: 'person', header: 'Person', width: 380, render: (i) => {
         const r = realmOf(i.realm_id)
-        const c = categories?.find((x) => x.id === i.category_id)
-        const sub = [i.email, c?.display_name].filter(Boolean).join(' · ')
+        /* Code AND realm: a category code is unique inside a realm, not
+           across the tenant, so "supplier" in Partners and "supplier" in
+           Public are two different categories with two different names. */
+        const c = categories?.find((x) => x.code === i.category && x.realm_id === i.realm_id)
+        const sub = [i.email, c?.display_name ?? i.category].filter(Boolean).join(' · ')
         return (
           <div className="flex min-w-0 items-center gap-2.5">
             <Initial name={i.username} colour={realmKindColor(r?.kind)} />
@@ -221,10 +224,11 @@ function Identities() {
         i.retention_until
           ? <span className="tnum t-body">{i.retention_until.slice(0, 10)}</span>
           : <span className="t-xs" style={{ opacity: 0.45 }}>—</span> },
-    { key: 'actions', header: '', width: 52, render: (i) => (
-        /* The row itself opens the drawer now, so the menu has to keep its
-           clicks to itself or every pick would also open the drawer behind it. */
-        <div onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+    { key: 'actions', header: '', width: 74, render: (i) => (
+        /* The row itself navigates now, so the menu has to keep its clicks to
+           itself or every pick would also leave the page behind it. */
+        <div className="flex items-center justify-end gap-0.5">
+          <div onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
           <Menu position="bottom-end" width={230} shadow="xl">
             <Menu.Target>
               <ActionIcon variant="subtle" color="gray" aria-label={`Actions for ${i.username}`}>
@@ -233,11 +237,11 @@ function Identities() {
             </Menu.Target>
             <Menu.Dropdown>
               <Menu.Item leftSection={<IconUser size={14} />}
-                onClick={() => setDetailFor(i)}>
-                Open details…
+                onClick={() => openPerson(i)}>
+                Open their page
               </Menu.Item>
               <Menu.Item leftSection={<IconCirclePlus size={14} />}
-                onClick={() => openCreate('grant', { identityId: i.id })}>
+                onClick={() => openPerson(i, true)}>
                 Give access…
               </Menu.Item>
               <Menu.Item leftSection={<IconCopy size={14} />}
@@ -266,6 +270,10 @@ function Identities() {
               )}
             </Menu.Dropdown>
           </Menu>
+          </div>
+          {/* The affordance for the row click. Hidden until the row is hovered
+              or focused, so fifty rows do not each carry a permanent arrow. */}
+          <IconChevronRight className="row-go" size={14} aria-hidden />
         </div>
       ) },
   ]
@@ -281,7 +289,7 @@ function Identities() {
         placeholder="Search username or email"
         leftSection={<IconSearch size={14} />}
         value={q}
-        onChange={(e) => { setQ(e.currentTarget.value); setTrail(['']) }}
+        onChange={(e) => setQ(e.currentTarget.value)}
       />
       <Select
         size="xs"
@@ -290,7 +298,7 @@ function Identities() {
         allowDeselect={false}
         data={realmOptions}
         value={realmFilter ?? ''}
-        onChange={(v) => { setRealmFilter(v || null); setTrail(['']) }}
+        onChange={(v) => { setRealmFilter(v || null); resetPaging() }}
         comboboxProps={{ width: 280, position: 'bottom-start' }}
         renderOption={({ option }) => {
           const r = realms?.find((x) => x.id === option.value)
@@ -361,7 +369,7 @@ function Identities() {
         toolbar={toolbar}
         footer={footer}
         stale={isFetching && rows !== undefined}
-        onRowClick={setDetailFor}
+        onRowClick={(i) => openPerson(i)}
         empty={{
           title: filtered ? 'No people match' : 'No people yet',
           hint: filtered
@@ -377,12 +385,6 @@ function Identities() {
         label={attrsFor?.username ?? ''} onClose={() => setAttrsFor(null)} />
       <CredentialsModal id={credsFor?.id ?? null}
         label={credsFor?.username ?? ''} onClose={() => setCredsFor(null)} />
-      <PersonDetail
-        person={detailFor}
-        onClose={() => setDetailFor(null)}
-        onAttributes={() => { setAttrsFor(detailFor); setDetailFor(null) }}
-        onCredentials={() => { setCredsFor(detailFor); setDetailFor(null) }}
-      />
     </Page>
   )
 }

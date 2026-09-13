@@ -45,7 +45,7 @@ export function CreateAxis({ opened }: { opened: boolean }) {
       footer={
         <form.Subscribe selector={(s) => [s.canSubmit, s.isSubmitting] as const}>
           {([canSubmit, isSubmitting]) => (
-            <CancelSubmit onCancel={close}
+            <CancelSubmit onCancel={close} onSubmit={() => void form.handleSubmit()}
               canSubmit={!!canSubmit && !!form.state.values.code && !!form.state.values.display_name}
               submitting={!!isSubmitting} label="Add structure" />
           )}

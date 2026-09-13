@@ -54,7 +54,8 @@ export function CreateIdentity({ opened }: { opened: boolean }) {
       footer={
         <form.Subscribe selector={(s) => [s.canSubmit, s.isSubmitting] as const}>
           {([canSubmit, isSubmitting]) => (
-            <CancelSubmit onCancel={close} canSubmit={!!canSubmit && !!form.state.values.realm_id}
+            <CancelSubmit onCancel={close} onSubmit={() => void form.handleSubmit()}
+              canSubmit={!!canSubmit && !!form.state.values.realm_id}
               submitting={!!isSubmitting} label="Add person" />
           )}
         </form.Subscribe>

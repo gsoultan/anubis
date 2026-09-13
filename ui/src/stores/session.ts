@@ -81,3 +81,31 @@ export const usePlayground = create<PlaygroundState>((set) => ({
   clearTargets: () => set({ targets: {} }),
   reset: () => set({ subject: null, permission: null, targets: {} }),
 }))
+
+/* ---------------------------------------------------------------------------
+   Where the operator was standing in the People list.
+
+   Not persisted and not in Query. A person's page is now one click off every
+   row, so leaving the list is the common case rather than the exception —
+   and coming back to page 1 of an unfiltered list, having lost the search
+   that found the person in the first place, is the price of turning a drawer
+   into a page. This is what stops it being paid. It dies with the tab, which
+   is right: yesterday's search is not where you were standing.
+   --------------------------------------------------------------------------- */
+interface PeopleListState {
+  query: string
+  /** Keyset cursors, one per page stepped forward. Index 0 is always ''. */
+  trail: string[]
+  setQuery: (q: string) => void
+  setTrail: (t: string[] | ((prev: string[]) => string[])) => void
+  resetPaging: () => void
+}
+
+export const usePeopleList = create<PeopleListState>((set) => ({
+  query: '',
+  trail: [''],
+  // Narrowing the list invalidates every cursor already stepped through.
+  setQuery: (query) => set({ query, trail: [''] }),
+  setTrail: (t) => set((s) => ({ trail: typeof t === 'function' ? t(s.trail) : t })),
+  resetPaging: () => set({ trail: [''] }),
+}))
