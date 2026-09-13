@@ -136,6 +136,10 @@ export interface Role {
   allowed_realm_kinds: RealmKind[]
   assignable_at: string[]
   permission_count: number
+  /** Retired from the catalog: it cannot be granted to anybody new, and every
+      grant that already names it keeps working. Set when a manifest stops
+      naming a role it owns. */
+  deprecated: boolean
 }
 
 /** One axis constraint on a grant. `inherit` is per-axis, not per-grant. */
@@ -304,6 +308,15 @@ export interface TenantStats {
  */
 export type PageKind = 'signin' | 'signout'
 export type PageLayout = 'centered' | 'split' | 'minimal'
+
+/* The blocks a page is made of, in the order they render. A list of names and
+   nothing else: the renderer knows these five and draws each at most once, so
+   the builder can offer drag-and-drop without the config ever becoming markup
+   (internal/tenancy/domain/pagecfg — no HTML on the password screen, ever).
+   Leaving a name out hides that block; 'form' cannot be left out. */
+export type PageSection = 'logo' | 'heading' | 'subheading' | 'form' | 'links'
+
+export const PAGE_SECTIONS: PageSection[] = ['logo', 'heading', 'subheading', 'form', 'links']
 export type CornerRadius = 'none' | 'sm' | 'md' | 'lg' | 'full'
 export type PageFont = 'system' | 'serif' | 'mono'
 
@@ -362,6 +375,8 @@ export interface PageConfig {
   layout: PageLayout
   copy: PageCopy
   links?: PageLink[]
+  /** Block order. Absent means the order the page has always rendered in. */
+  sections?: PageSection[]
   features?: PageFeatures
   behavior?: PageBehavior
   motion?: PageMotion
@@ -536,4 +551,55 @@ export interface NewAxisInput {
   resolution_key: string | null
   picker: 'tree' | 'select' | 'search'
   icon: string
+}
+
+/* --- catalog sync ---------------------------------------------------------
+   Where an application's permissions and roles come from when nobody is
+   pushing them. A source is pinned to one application at creation and cannot
+   be repointed: the document it fetches is applied under that application's
+   id and slug, so a compromised feed makes a mess inside exactly one
+   application. docs/api.md#catalog-sources. */
+
+export type CatalogFormat = 'json' | 'csv'
+
+export interface CatalogSource {
+  id: Uuid
+  application_slug: string
+  name: string
+  /** Only 'http' today; the server keeps it a registry rather than a switch. */
+  kind: string
+  format: CatalogFormat
+  status: 'active' | 'disabled'
+  /** The kind's own settings. http: {"url": "...", "auth_header": "..."} */
+  config_json: string
+  /** 0 is a source that only runs when asked. The floor is 300. */
+  interval_seconds: number
+  /** ISO, or null when it has never run / is not scheduled. */
+  last_run_at: string | null
+  next_run_at: string | null
+  /** How the most recent attempt ended, '' when it has never run. Carried on
+      the source so a list can show a broken feed without a request per row. */
+  last_status: CatalogRunStatus | ''
+}
+
+/* 'skipped' is not a failure and not an apply: the document was byte-identical
+   to the one already installed, so nothing was written and no manifest version
+   was burned. */
+export type CatalogRunStatus = 'running' | 'ok' | 'failed' | 'dry_run' | 'skipped'
+
+export interface CatalogRun {
+  id: Uuid
+  source_id: Uuid
+  started_at: string
+  /** null while a run is in flight, or if the process died mid-run — a row
+      stuck like that is itself the diagnosis. */
+  finished_at: string | null
+  dry: boolean
+  status: CatalogRunStatus
+  /** 'system' for a scheduled run, the operator's id when somebody pressed
+      the button. */
+  actor: string
+  document_sha: string
+  report_json: string
+  error: string
 }

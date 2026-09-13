@@ -87,7 +87,13 @@ export function CreateMembership({ opened }: { opened: boolean }) {
 
         <div className="panel-inset flex flex-col gap-2.5 px-3 py-3">
           <div className="t-label">Add a role to the bundle</div>
-          <Select size="sm" searchable placeholder="Pick a role" data={(roles ?? []).map((r) => ({ value: r.id, label: r.name }))}
+          <Select size="sm" searchable placeholder="Pick a role" /* An entry becomes a grant the moment somebody is assigned, so a retired
+                 role would fail at assignment rather than here. */
+            data={(roles ?? []).map((r) => ({
+              value: r.id,
+              label: r.deprecated ? `${r.name} — retired from the catalog` : r.name,
+              disabled: r.deprecated,
+            }))}
             value={roleId} onChange={setRoleId} />
           {roleId && (axes ?? []).map((a) => (
             <AxisConstraintRow key={a.code} axisCode={a.code} displayName={a.display_name}

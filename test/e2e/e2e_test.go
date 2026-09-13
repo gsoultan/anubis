@@ -257,6 +257,88 @@ func TestAuthorizeThroughEngine(t *testing.T) {
 	if err != nil || !exp.Msg.Allow || exp.Msg.DetailJson == "" {
 		t.Fatalf("explain: %v %+v", err, exp)
 	}
+
+	// --- retiring a role -----------------------------------------------------
+	//
+	// The identity above holds a grant of e2e-authz.reader, which is exactly
+	// the state that makes this worth asserting: a manifest that stops naming
+	// a role must retire it WITHOUT taking access away from anybody who
+	// already has it. Deprecated is not revoked, and the two are one word
+	// apart (migration 0044).
+	applyManifest := func(t *testing.T, manifest string) error {
+		t.Helper()
+		_, err := aza.ApplyManifest(ctx, operatorBearer(connect.NewRequest(&anubisv1.ApplyManifestRequest{
+			ApplicationSlug: "e2e-authz", ManifestJson: manifest,
+		}), opToken))
+		return err
+	}
+	readerState := func(t *testing.T) *anubisv1.Role {
+		t.Helper()
+		resp, lerr := aza.ListRoles(ctx, operatorBearer(connect.NewRequest(&anubisv1.ListRolesRequest{
+			Query: "e2e-authz.reader",
+		}), opToken))
+		if lerr != nil {
+			t.Fatalf("list roles: %v", lerr)
+		}
+		for _, r := range resp.Msg.Roles {
+			if r.Name == "e2e-authz.reader" {
+				return r
+			}
+		}
+		t.Fatal("e2e-authz.reader vanished — retiring a role must never delete it")
+		return nil
+	}
+
+	// A roles section that is present and empty would retire the lot. Refused
+	// for the same reason an empty permissions section is: that is what a
+	// broken export looks like, not a decision.
+	if err := applyManifest(t, `{"permissions":[{"resource":"probe","action":"read"}],"roles":[]}`); err == nil {
+		t.Fatal("an empty roles section wiped the catalog instead of being refused")
+	}
+	if readerState(t).Deprecated {
+		t.Fatal("the refused apply retired a role anyway — the transaction did not roll back")
+	}
+
+	// Now a document that legitimately stops naming it.
+	if err := applyManifest(t, `{"permissions":[{"resource":"probe","action":"read","description":"e2e probe"}],
+	                             "roles":[{"name":"writer","description":"e2e writer","permissions":["probe:read"]}]}`); err != nil {
+		t.Fatalf("apply manifest without reader: %v", err)
+	}
+	if !readerState(t).Deprecated {
+		t.Fatal("a role the manifest stopped naming is still live")
+	}
+
+	// The whole point: the grant made before the retirement still decides.
+	still, err := az.Authorize(ctx, bearer(connect.NewRequest(&anubisv1.AuthorizeRequest{
+		Subject: me.Msg.IdentityId, Permission: "e2e-authz:probe:read",
+	}), tokens.AccessToken))
+	if err != nil || !still.Msg.Allow {
+		t.Fatalf("retiring a role revoked an existing grant: %v %+v", err, still)
+	}
+
+	// What does stop is granting it to anybody new — enforced by a constraint
+	// trigger, so it holds for every writer, not just this one.
+	_, err = aza.CreateGrant(ctx, operatorBearer(connect.NewRequest(&anubisv1.CreateGrantRequest{
+		IdentityId: me.Msg.IdentityId, RoleId: roleID, Reason: "should be refused",
+	}), opToken))
+	if err == nil {
+		t.Fatal("a retired role was granted anew")
+	}
+
+	// Re-declaring it brings it back, or a manifest could only ever lose roles.
+	if err := applyManifest(t, `{"permissions":[{"resource":"probe","action":"read","description":"e2e probe"}],
+	                             "roles":[{"name":"reader","description":"e2e reader, revived","permissions":["probe:read"]}]}`); err != nil {
+		t.Fatalf("re-apply with reader: %v", err)
+	}
+	revived := readerState(t)
+	if revived.Deprecated {
+		t.Fatal("re-declaring a role did not revive it")
+	}
+	// The same upsert has to carry the document's words through, or a synced
+	// description would be silently ignored.
+	if revived.Description != "e2e reader, revived" {
+		t.Fatalf("description = %q, want the manifest's", revived.Description)
+	}
 }
 
 func TestLogoutRevokesSession(t *testing.T) {

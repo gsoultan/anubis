@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApplicationsRouteImport } from './routes/applications'
 import { Route as AuditRouteImport } from './routes/audit'
+import { Route as CatalogRouteImport } from './routes/catalog'
 import { Route as GrantsRouteImport } from './routes/grants'
 import { Route as IdentitiesRouteImport } from './routes/identities'
 import { Route as ImportRouteImport } from './routes/import'
@@ -40,6 +41,11 @@ const ApplicationsRoute = ApplicationsRouteImport.update({
 const AuditRoute = AuditRouteImport.update({
   id: '/audit',
   path: '/audit',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CatalogRoute = CatalogRouteImport.update({
+  id: '/catalog',
+  path: '/catalog',
   getParentRoute: () => rootRouteImport,
 } as any)
 const GrantsRoute = GrantsRouteImport.update({
@@ -117,6 +123,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/applications': typeof ApplicationsRoute
   '/audit': typeof AuditRoute
+  '/catalog': typeof CatalogRoute
   '/grants': typeof GrantsRoute
   '/identities': typeof IdentitiesRoute
   '/import': typeof ImportRoute
@@ -136,6 +143,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/applications': typeof ApplicationsRoute
   '/audit': typeof AuditRoute
+  '/catalog': typeof CatalogRoute
   '/grants': typeof GrantsRoute
   '/identities': typeof IdentitiesRoute
   '/import': typeof ImportRoute
@@ -156,6 +164,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/applications': typeof ApplicationsRoute
   '/audit': typeof AuditRoute
+  '/catalog': typeof CatalogRoute
   '/grants': typeof GrantsRoute
   '/identities': typeof IdentitiesRoute
   '/import': typeof ImportRoute
@@ -177,6 +186,7 @@ export interface FileRouteTypes {
     | '/'
     | '/applications'
     | '/audit'
+    | '/catalog'
     | '/grants'
     | '/identities'
     | '/import'
@@ -196,6 +206,7 @@ export interface FileRouteTypes {
     | '/'
     | '/applications'
     | '/audit'
+    | '/catalog'
     | '/grants'
     | '/identities'
     | '/import'
@@ -215,6 +226,7 @@ export interface FileRouteTypes {
     | '/'
     | '/applications'
     | '/audit'
+    | '/catalog'
     | '/grants'
     | '/identities'
     | '/import'
@@ -235,6 +247,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ApplicationsRoute: typeof ApplicationsRoute
   AuditRoute: typeof AuditRoute
+  CatalogRoute: typeof CatalogRoute
   GrantsRoute: typeof GrantsRoute
   IdentitiesRoute: typeof IdentitiesRoute
   ImportRoute: typeof ImportRoute
@@ -272,6 +285,13 @@ declare module '@tanstack/react-router' {
       path: '/audit'
       fullPath: '/audit'
       preLoaderRoute: typeof AuditRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/catalog': {
+      id: '/catalog'
+      path: '/catalog'
+      fullPath: '/catalog'
+      preLoaderRoute: typeof CatalogRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/grants': {
@@ -379,6 +399,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ApplicationsRoute: ApplicationsRoute,
   AuditRoute: AuditRoute,
+  CatalogRoute: CatalogRoute,
   GrantsRoute: GrantsRoute,
   IdentitiesRoute: IdentitiesRoute,
   ImportRoute: ImportRoute,

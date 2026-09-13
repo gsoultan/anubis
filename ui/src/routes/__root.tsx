@@ -9,7 +9,7 @@ import { ActionIcon, Button, Menu, useComputedColorScheme, useMantineColorScheme
 import {
   IconPlus, IconUserPlus, IconLicense, IconShieldPlus, IconCirclePlus,
   IconSitemapFilled, IconAxisY, IconSun, IconMoon, IconUsersGroup, IconTableImport,
-  IconLogout, IconUserCircle, IconShieldCog, IconAppWindow,
+  IconLogout, IconUserCircle, IconShieldCog, IconAppWindow, IconRefreshDot,
 } from '@tabler/icons-react'
 import type { ReactNode } from 'react'
 import { CommandPalette } from '@/components/shell/CommandPalette'
@@ -73,6 +73,8 @@ const GROUPS: { title: string | null; items: Item[] }[] = [
       { to: '/roles', label: 'Roles & permissions', icon: <IconShieldCheck size={15} /> },
       { to: '/applications', label: 'Applications', icon: <IconAppWindow size={15} />,
         hint: 'The relying parties that own permissions' },
+      { to: '/catalog', label: 'Catalog sync', icon: <IconRefreshDot size={15} />,
+        hint: 'Read an application’s permissions and roles from where they are maintained' },
     ],
   },
   {
@@ -412,6 +414,7 @@ const TITLES: Record<string, string> = {
   '/audit': 'Audit', '/keys': 'Signing keys',
   '/tenants': 'Tenants', '/signin-page': 'Sign-in & sign-out',
   '/import': 'Import', '/signin': 'Sign in', '/operators': 'Platform users',
+  '/catalog': 'Catalog sync',
   '/setup': 'Set up Anubis', '/applications': 'Applications',
 }
 

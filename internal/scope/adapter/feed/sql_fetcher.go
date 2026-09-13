@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gsoultan/anubis/internal/platform/egress"
 	scopedomain "github.com/gsoultan/anubis/internal/scope/domain"
 	"github.com/gsoultan/anubis/internal/shared/apperr"
 )
@@ -137,7 +138,7 @@ func fetchExternal(ctx context.Context, dsn, query string) ([]scopedomain.SyncFe
 	if err != nil {
 		return nil, err
 	}
-	if err := allowExternalHost(u.Hostname()); err != nil {
+	if err := egress.AllowHost(u.Hostname()); err != nil {
 		return nil, err
 	}
 	driverDSN, err := dialect.TranslateDSN(u)
@@ -145,7 +146,7 @@ func fetchExternal(ctx context.Context, dsn, query string) ([]scopedomain.SyncFe
 		return nil, err
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, externalTimeout)
+	ctx, cancel := context.WithTimeout(ctx, egress.Timeout)
 	defer cancel()
 
 	db, err := sql.Open(dialect.Driver, driverDSN)
@@ -156,7 +157,7 @@ func fetchExternal(ctx context.Context, dsn, query string) ([]scopedomain.SyncFe
 	// One run, one connection: this is a batch read of somebody else's
 	// database, not a pool we should be holding open between syncs.
 	db.SetMaxOpenConns(1)
-	db.SetConnMaxLifetime(externalTimeout)
+	db.SetConnMaxLifetime(egress.Timeout)
 
 	if err := db.PingContext(ctx); err != nil {
 		return nil, apperr.ErrUnavailableFeed.Wrap(err)

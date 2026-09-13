@@ -71,7 +71,11 @@ UPDATE permissions
 SET deprecated_at = now()
 WHERE application_id = $1
   AND deprecated_at IS NULL
-  AND NOT (id = ANY($2::uuid[]))
+  -- COALESCE: an empty keep-list arrives as NULL, and NOT (id = ANY(NULL))
+  -- is NULL, so every row is excluded and nothing is deprecated. The apply
+  -- path refuses an empty permissions section before reaching here, which is
+  -- the only reason this has never bitten.
+  AND NOT (id = ANY(COALESCE($2::uuid[], '{}')))
 RETURNING key`)
 
 // PermissionIDRow is one permission's id.

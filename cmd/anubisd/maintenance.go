@@ -7,6 +7,7 @@ import (
 
 	auditport "github.com/gsoultan/anubis/internal/audit/port"
 	authport "github.com/gsoultan/anubis/internal/auth/port"
+	authzcatalog "github.com/gsoultan/anubis/internal/authz/app/catalog"
 	controlport "github.com/gsoultan/anubis/internal/control/port"
 	identityapp "github.com/gsoultan/anubis/internal/identity/app"
 	"github.com/gsoultan/anubis/internal/platform/crypto/keyring"
@@ -21,6 +22,7 @@ const (
 	lockRetention    = 0x616e7562_0003
 	lockKeyCheck     = 0x616e7562_0004
 	lockSweepRefresh = 0x616e7562_0005
+	lockCatalogSync  = 0x616e7562_0006
 )
 
 // maintenanceJobs is everything that must keep running for the database to
@@ -31,9 +33,29 @@ func maintenanceJobs(
 	retention identityapp.RetentionUsecase,
 	keys authport.KeyRepository,
 	refresh controlport.PlatformRefreshStore,
+	catalog authzcatalog.CatalogSyncUsecase,
 	logger *slog.Logger,
 ) []jobs.Job {
 	return []jobs.Job{
+		{
+			// Catalog sources that have come due. A minute is the TICK, not
+			// the interval — each source carries its own, with a five-minute
+			// floor — and a tick that finds nothing is one indexed query
+			// against a partial index of the scheduled sources alone.
+			//
+			// The advisory lock is doing real work here, unlike in a sweep:
+			// two replicas applying the same catalog at the same moment would
+			// both bump the manifest version and both rebuild every gate.
+			Name: "catalog_sync", Every: time.Minute, LockID: lockCatalogSync,
+			Timeout: 10 * time.Minute,
+			Run: func(ctx context.Context) error {
+				n, err := catalog.RunDue(ctx, time.Now(), 0)
+				if err == nil && n > 0 {
+					logger.Info("catalog sources run", "sources", n)
+				}
+				return err
+			},
+		},
 		{
 			// Partitions must exist BEFORE the insert that needs them. The
 			// DEFAULT partition catches a missed run, but rows landing there

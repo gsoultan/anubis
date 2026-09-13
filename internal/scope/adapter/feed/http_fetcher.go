@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gsoultan/anubis/internal/platform/egress"
 	scopedomain "github.com/gsoultan/anubis/internal/scope/domain"
 	"github.com/gsoultan/anubis/internal/shared/apperr"
 )
@@ -52,7 +53,7 @@ func (f *HTTPFetcher) Fetch(ctx context.Context, source scopedomain.SyncSourceRe
 	}
 	// Same egress policy as the database kinds: a URL is a request to connect
 	// somewhere, and a feed has no business at a metadata endpoint.
-	if err := allowExternalHost(req.URL.Hostname()); err != nil {
+	if err := egress.AllowHost(req.URL.Hostname()); err != nil {
 		return nil, err
 	}
 	req.Header.Set("Accept", "application/json")

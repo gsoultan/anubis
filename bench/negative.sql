@@ -91,3 +91,12 @@ SELECT i.id, i.tenant_id, 'api_key', 'deadbeef', 'anb_live_negtest'
 \echo '--- 11. plaintext in identities.attributes (must FAIL — ADR-0013, 0034) ---'
 UPDATE identities SET attributes = '{"date_of_birth":"1985-03-02"}'::jsonb
  WHERE id = (SELECT id FROM identities LIMIT 1);
+
+\echo '--- 12. granting a RETIRED role (must FAIL — 0044; existing grants keep working) ---'
+BEGIN;
+UPDATE roles SET deprecated_at = now()
+ WHERE id = (SELECT role_id FROM grants WHERE revoked_at IS NULL LIMIT 1);
+INSERT INTO grants (tenant_id, identity_id, role_id, granted_by)
+SELECT g.tenant_id, g.identity_id, g.role_id, g.granted_by
+  FROM grants g WHERE g.revoked_at IS NULL LIMIT 1;
+ROLLBACK;

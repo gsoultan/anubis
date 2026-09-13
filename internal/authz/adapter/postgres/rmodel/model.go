@@ -7,7 +7,11 @@
 // Columns and defaults here must match `\d` on the table exactly.
 package authzrmodel
 
-import "github.com/gsoultan/storm"
+import (
+	"time"
+
+	"github.com/gsoultan/storm"
+)
 
 // Role is public.roles. The id default is uuidv7() in the migration; storm's
 // Model declares gen_random_uuid(), which is irrelevant here because storm
@@ -23,6 +27,10 @@ type Role struct {
 	Description       string
 	AssignableAt      []string
 	AllowedRealmKinds []string
+	// Retired from the catalog (0044). Nullable, and authorize() never reads
+	// it: a deprecated role keeps working for every grant that already names
+	// it, it simply cannot be granted anew.
+	DeprecatedAt *time.Time
 }
 
 func (r *Role) Schema(t *storm.Table) {

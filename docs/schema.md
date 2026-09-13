@@ -289,6 +289,14 @@ definition of "sensitive"; every application gets step-up for free.
 Concrete grants and wildcard patterns are **separate tables** — different
 lifecycles, and the combined version had an illegal expression primary key.
 
+`roles.deprecated_at` retires a role without taking access away (0044).
+`authorize()` never reads it, so every grant already naming the role decides
+exactly as it did; what stops is granting it to anybody new, refused by the
+`grants_role_live` constraint trigger. Only `is_system` roles — the ones a
+manifest owns — are ever retired automatically: a role an operator created by
+hand inside the same application is theirs, and a document that does not
+mention it is not evidence they wanted it gone.
+
 ### `role_permissions_effective`
 Fully flattened closure of the role graph × (concrete + expanded patterns).
 Read path is a pure index join. `via_role_id` carries provenance, so "why does
@@ -374,6 +382,45 @@ One monotonic counter per tenant. The single invalidation signal, bumped by
 **statement-level** triggers on every table feeding the hot-path snapshot, with
 `pg_notify` for push. `fillfactor = 70` — updated constantly.
 
+### `catalog_sync_sources` and `catalog_sync_runs`
+
+Where an application's permission/role catalog comes from when nobody is
+pushing it, and what happened the last time Anubis went and read it
+([api.md](api.md#catalog-sources)).
+
+A source is **pinned to one application** by composite foreign key
+`(application_id, tenant_id)` and cannot be repointed: the document it fetches
+is applied under that application's id and slug, so a compromised feed makes a
+mess inside exactly one application and reaches nothing else.
+`interval_seconds` is `0` for manual-only or `>= 300`; the partial index
+`catalog_sync_sources_due` covers the scheduler's only query
+(`status = 'active' AND next_run_at IS NOT NULL`), so manual sources are never
+scanned.
+
+A run records `document_sha` — the digest of what was fetched. An identical
+digest is recorded as `skipped` and nothing is written, because applying bumps
+`applications.manifest_version`, and that is what tells every gate its snapshot
+is stale. A five-minute poll of an unchanged file would otherwise rebuild them
+288 times a day. `actor` is `system` for a scheduled run and the operator's id
+when somebody pressed the button.
+
+### `scope_sync_sources` and `scope_sync_runs`
+
+The same shape, one layer down: where a tenant's *structure* comes from
+(`http`, `db_query`, `db_table`), one source per axis. `scope_sync_apply()`
+reconciles by `external_ref`, archiving nodes the feed stopped mentioning — and
+refuses a feed that returned zero rows, because that is what a broken export
+looks like, not an empty organisation.
+
+### `auth_pages`
+
+The hosted sign-in and sign-out screens, many per tenant per kind, with `slug`
+as the URL segment. Exactly one default per kind, enforced by a partial unique
+index; optional binding to an application or a realm drives resolution
+(slug → application → population → default). `config jsonb` is a **constrained
+token set**, never markup — validated by `pagecfg.Parse` on the way in and on
+the way out. Full reference: [sign-in-pages.md](sign-in-pages.md).
+
 ### `schema_migrations`
 `version`, `checksum`, `applied_at`.
 
@@ -397,7 +444,7 @@ One monotonic counter per tenant. The single invalidation signal, bumped by
 
 ## Enforced invariants
 
-Nine security-critical invariants live in the schema, not in application code.
+Ten security-critical invariants live in the schema, not in application code.
 All are tested — [7/7](../bench/negative.sql) plus
 [2/2](../bench/realms.sql) rejected.
 
@@ -412,6 +459,7 @@ All are tested — [7/7](../bench/negative.sql) plus
 | 7 | Cycle in the scope tree | `scope_move_node` raise |
 | 8 | Employee-only role granted to a public account | `grants_realm_guard` trigger |
 | 9 | Axis constraints attached to a self-scoped grant | `grant_scopes_self_guard` trigger |
+| 10 | Granting a role retired from the catalog | `grants_role_live` trigger |
 
 Guards 8 and 9 caught a real bug during development: the seed script was granting
 employee roles to partner identities.

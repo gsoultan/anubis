@@ -4,11 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
 	auditdomain "github.com/gsoultan/anubis/internal/audit/domain"
 	auditport "github.com/gsoultan/anubis/internal/audit/port"
+	authzcatalog "github.com/gsoultan/anubis/internal/authz/app/catalog"
 	authzdomain "github.com/gsoultan/anubis/internal/authz/domain"
 	"github.com/gsoultan/anubis/internal/authz/domain/grant"
 	"github.com/gsoultan/anubis/internal/authz/domain/membership"
@@ -24,15 +26,16 @@ import (
 
 // authzAdminInteractor implements AuthzAdminUsecase.
 type authzAdminInteractor struct {
-	guard   *guard.Guard
-	roles   authzport.RoleRepository
-	perms   authzport.PermissionCatalogRepository
-	grants  authzport.GrantRepository
-	members authzport.MembershipRepository
-	apps    tenancyport.ApplicationRepository
-	routes  tenancyport.RouteRepository
-	tx      txm.TxManager
-	audit   auditport.Auditor
+	guard       *guard.Guard
+	roles       authzport.RoleRepository
+	roleCatalog authzport.RoleCatalogRepository
+	perms       authzport.PermissionCatalogRepository
+	grants      authzport.GrantRepository
+	members     authzport.MembershipRepository
+	apps        tenancyport.ApplicationRepository
+	routes      tenancyport.RouteRepository
+	tx          txm.TxManager
+	audit       auditport.Auditor
 }
 
 func NewAuthzAdminInteractor(
@@ -41,6 +44,7 @@ func NewAuthzAdminInteractor(
 	ops guard.OperatorAuthority,
 	clockNow func() time.Time,
 	roles authzport.RoleRepository,
+	roleCatalog authzport.RoleCatalogRepository,
 	perms authzport.PermissionCatalogRepository,
 	grants authzport.GrantRepository,
 	members authzport.MembershipRepository,
@@ -50,16 +54,25 @@ func NewAuthzAdminInteractor(
 	audit auditport.Auditor,
 ) AuthzAdminUsecase {
 	return &authzAdminInteractor{
-		guard: guard.New().WithOperators(ops, clockNow), roles: roles, perms: perms,
+		guard: guard.New().WithOperators(ops, clockNow), roles: roles,
+		roleCatalog: roleCatalog, perms: perms,
 		grants: grants, members: members, apps: apps, routes: routes,
 		tx: tx, audit: audit,
 	}
 }
 
 func (u *authzAdminInteractor) emit(ctx context.Context, p *authctx.Principal, action, target string, detail map[string]string) {
+	u.emitAs(ctx, applyActor{
+		TenantID: p.TenantID, IdentityID: p.IdentityID,
+		SessionID: p.SessionID, Kind: "identity",
+	}, action, target, detail)
+}
+
+// emitAs records an event for an actor who may not be a person.
+func (u *authzAdminInteractor) emitAs(ctx context.Context, a applyActor, action, target string, detail map[string]string) {
 	u.audit.Emit(ctx, auditdomain.AuditEvent{
-		TenantID: p.TenantID, ActorID: p.IdentityID, ActorKind: "identity",
-		SessionID: p.SessionID, TargetID: target, Action: action, Result: "allow",
+		TenantID: a.TenantID, ActorID: a.IdentityID, ActorKind: a.Kind,
+		SessionID: a.SessionID, TargetID: target, Action: action, Result: "allow",
 		IP: authctx.ClientIP(ctx), Detail: jsonx.Must(detail),
 	})
 }
@@ -353,122 +366,216 @@ func (u *authzAdminInteractor) ResyncMembership(ctx context.Context, membershipI
 }
 
 // ApplyManifest is registration-by-manifest: validate, diff, apply.
-func (u *authzAdminInteractor) ApplyManifest(ctx context.Context, applicationSlug, manifestJSON string, dry bool) (string, int, error) {
+// applyActor is who a catalog apply is on behalf of. A scheduled run has no
+// operator, and the audit trail has to say so rather than borrow the last
+// human who touched the source.
+type applyActor struct {
+	TenantID   string
+	IdentityID string
+	SessionID  string
+	Kind       string // identity | system
+}
+
+// ApplyManifest is the operator-facing apply: authority is checked, then the
+// document is applied as that operator.
+func (u *authzAdminInteractor) ApplyManifest(ctx context.Context, applicationSlug, document, format string, dry bool) (string, int, error) {
 	p, err := u.guard.Require(ctx, "anubis:manifest:apply")
 	if err != nil {
 		return "", 0, err
 	}
-	app, err := u.apps.ApplicationBySlug(ctx, p.TenantID, applicationSlug)
+	return u.applyCatalog(ctx, applyActor{
+		TenantID: p.TenantID, IdentityID: p.IdentityID,
+		SessionID: p.SessionID, Kind: "identity",
+	}, applicationSlug, document, format, dry)
+}
+
+// ApplyDocumentAsSystem is the SAME apply with NO operator check, for the one
+// caller that has no operator to check: the catalog scheduler, running a
+// source an operator configured earlier.
+//
+// It must never be reachable from a transport — a caller that supplies its
+// own tenant id is a caller that has not proved it may touch that tenant —
+// and scripts/check/import-boundary.sh fails the build if an adapter names
+// it. The authority for a scheduled run was established when the source was
+// created; the run is audited as 'system' so nobody mistakes it for a person.
+func (u *authzAdminInteractor) ApplyDocumentAsSystem(ctx context.Context, tenantID, applicationSlug, document, format string, dry bool) (string, int, error) {
+	return u.applyCatalog(ctx, applyActor{
+		TenantID: tenantID, Kind: "system",
+	}, applicationSlug, document, format, dry)
+}
+
+func (u *authzAdminInteractor) applyCatalog(ctx context.Context, actor applyActor, applicationSlug, document, format string, dry bool) (string, int, error) {
+	var err error
+	app, err := u.apps.ApplicationBySlug(ctx, actor.TenantID, applicationSlug)
 	if err != nil {
 		return "", 0, apperr.ErrNotFound.With("application", applicationSlug)
 	}
-	var m Manifest
-	if err := json.Unmarshal([]byte(manifestJSON), &m); err != nil {
-		return "", 0, apperr.ErrInvalidArgument.With("manifest", "invalid JSON").Wrap(err)
-	}
-	if err := validateManifest(&m); err != nil {
+	m, err := authzcatalog.Parse(document, format)
+	if err != nil {
 		return "", 0, err
 	}
-	report := map[string]any{"dry": dry}
+	if err := m.Validate(); err != nil {
+		return "", 0, err
+	}
+	if len(m.Sections()) == 0 {
+		return "", 0, apperr.ErrInvalidArgument.
+			With("document", "declares no permissions, roles or routes").
+			With("hint", "an empty document changes nothing; there is nothing to apply")
+	}
+	report := map[string]any{"dry": dry, "sections": m.Sections()}
 	version := app.ManifestVersion
 
 	apply := func(ctx context.Context) error {
+		// Roles and routes name permissions by resource:action, and a
+		// roles-only document names ones that are already in the catalog.
+		// Resolving from storage first is what lets a CSV of roles reference
+		// the permissions a previous manifest installed.
+		existing, lerr := u.perms.ListPermissions(ctx, actor.TenantID, app.ID, false)
+		if lerr != nil {
+			return lerr
+		}
+		keyByRA := make(map[string]string, len(existing)+len(m.Permissions))
+		for _, e := range existing {
+			keyByRA[e.Resource+":"+e.Action] = e.ID
+		}
+
 		// Permissions: upsert everything named; deprecate the rest.
-		keepIDs := make([]string, 0, len(m.Permissions))
-		keyByRA := make(map[string]string, len(m.Permissions))
-		added, updated := 0, 0
-		for _, mp := range m.Permissions {
-			id, key, uerr := u.perms.UpsertPermission(ctx, p.TenantID, app.ID, app.Slug,
-				authzdomain.PermissionRecord{
-					Resource: mp.Resource, Action: mp.Action, Description: mp.Description,
-					Risk: mp.Risk, MinAssurance: mp.MinAssurance,
-					RequiresAMR: mp.RequiresAMR, MaxAuthAge: mp.MaxAuthAge,
-				})
-			if uerr != nil {
-				return uerr
+		if m.HasPermissions {
+			// An empty permissions section on an application that HAS
+			// permissions is the shape of a broken export, not of an
+			// operator retiring a catalog one afternoon. Scope sync refuses
+			// the same thing for the same reason: a feed that returns
+			// nothing must not be able to archive everything.
+			if len(m.Permissions) == 0 && len(existing) > 0 {
+				return apperr.ErrInvalidArgument.
+					With("permissions", "section is present but empty").
+					With("catalog", strconv.Itoa(len(existing))+" live permissions").
+					With("hint", "refusing to deprecate an entire catalog in one apply")
 			}
-			keepIDs = append(keepIDs, id)
-			keyByRA[mp.Resource+":"+mp.Action] = id
-			_ = key
-			updated++
-		}
-		deprecated, derr := u.perms.DeprecatePermissionsExcept(ctx, app.ID, keepIDs)
-		if derr != nil {
-			return derr
-		}
-		report["permissions"] = map[string]any{
-			"applied": updated, "added_or_updated": added + updated, "deprecated": deprecated,
+			keepIDs := make([]string, 0, len(m.Permissions))
+			added, updated := 0, 0
+			for _, mp := range m.Permissions {
+				id, key, uerr := u.perms.UpsertPermission(ctx, actor.TenantID, app.ID, app.Slug,
+					authzdomain.PermissionRecord{
+						Resource: mp.Resource, Action: mp.Action, Description: mp.Description,
+						Risk: mp.Risk, MinAssurance: mp.MinAssurance,
+						RequiresAMR: mp.RequiresAMR, MaxAuthAge: mp.MaxAuthAge,
+					})
+				if uerr != nil {
+					return uerr
+				}
+				keepIDs = append(keepIDs, id)
+				keyByRA[mp.Resource+":"+mp.Action] = id
+				_ = key
+				updated++
+			}
+			deprecated, derr := u.perms.DeprecatePermissionsExcept(ctx, app.ID, keepIDs)
+			if derr != nil {
+				return derr
+			}
+			report["permissions"] = map[string]any{
+				"applied": updated, "added_or_updated": added + updated, "deprecated": deprecated,
+			}
 		}
 
 		// Roles: manifest roles are system roles named app.role.
-		rolesApplied := 0
-		for _, mr := range m.Roles {
-			name := app.Slug + "." + mr.Name
-			role, rerr := u.roles.RoleByName(ctx, p.TenantID, name)
-			var roleID string
-			if rerr != nil {
-				roleID, rerr = u.roles.CreateRole(ctx, p.TenantID, authzdomain.RoleRecord{
-					Name: name, Description: mr.Description, IsSystem: true,
-					AllowedRealmKinds: mr.AllowedRealmKinds,
-				}, app.ID)
+		if m.HasRoles {
+			keepRoles := make([]string, 0, len(m.Roles))
+			rolesApplied := 0
+			for _, mr := range m.Roles {
+				name := app.Slug + "." + mr.Name
+				// Upsert rather than find-or-create: the old path looked the
+				// role up and, if it was there, changed nothing about it. A
+				// document that revised a description, widened the realm kinds
+				// or re-declared a retired role therefore did nothing at all —
+				// sync that can only add is not sync.
+				roleID, rerr := u.roleCatalog.UpsertSystemRole(ctx, actor.TenantID, app.ID,
+					authzdomain.RoleRecord{
+						Name: name, Description: mr.Description,
+						AllowedRealmKinds: mr.AllowedRealmKinds,
+					})
 				if rerr != nil {
 					return rerr
 				}
-			} else {
-				roleID = role.ID
-			}
-			permIDs := make([]string, 0, len(mr.Permissions))
-			for _, ra := range mr.Permissions {
-				id, ok := keyByRA[ra]
-				if !ok {
-					// Naming the expected form matters: the obvious guess is
-					// the full permission key, and "invalid argument" against
-					// a value that looks right is a long afternoon.
-					return apperr.ErrInvalidArgument.
-						With("role", mr.Name).
-						With("permission", ra).
-						With("expected", "resource:action, without the application slug — "+
-							"the manifest is already scoped to "+app.Slug)
+				keepRoles = append(keepRoles, roleID)
+				permIDs := make([]string, 0, len(mr.Permissions))
+				for _, ra := range mr.Permissions {
+					id, ok := keyByRA[ra]
+					if !ok {
+						// Naming the expected form matters: the obvious guess is
+						// the full permission key, and "invalid argument" against
+						// a value that looks right is a long afternoon.
+						return apperr.ErrInvalidArgument.
+							With("role", mr.Name).
+							With("permission", ra).
+							With("expected", "resource:action, without the application slug — "+
+								"the manifest is already scoped to "+app.Slug)
+					}
+					permIDs = append(permIDs, id)
 				}
-				permIDs = append(permIDs, id)
+				if err := u.roles.SetRolePermissions(ctx, roleID, permIDs); err != nil {
+					return err
+				}
+				if err := u.applyRoleGraph(ctx, roleID, nil, mr.Patterns); err != nil {
+					return err
+				}
+				rolesApplied++
 			}
-			if err := u.roles.SetRolePermissions(ctx, roleID, permIDs); err != nil {
-				return err
-			}
-			if err := u.applyRoleGraph(ctx, roleID, nil, mr.Patterns); err != nil {
-				return err
-			}
-			rolesApplied++
-		}
-		report["roles"] = map[string]any{"applied": rolesApplied}
 
-		// Routes: full replacement, priority-unique, shadow-checked.
-		policies := make([]tenancydomain.RoutePolicyInput, 0, len(m.Routes))
-		for _, rt := range m.Routes {
-			permID := ""
-			if rt.Effect == "require_permission" {
-				id, ok := keyByRA[rt.Permission]
-				if !ok {
-					return apperr.ErrInvalidArgument.
-						With("route", rt.PathPattern).With("permission", rt.Permission)
+			// Roles the document stopped naming are RETIRED, not deleted and
+			// not revoked: they cannot be granted to anybody new, and every
+			// grant that already names one keeps deciding exactly as it did
+			// (migration 0044). Permissions have worked this way since 0004;
+			// roles simply had nowhere to record it, so "removed from the
+			// document" meant nothing.
+			retired, derr := u.roleCatalog.DeprecateRolesExcept(ctx, app.ID, keepRoles)
+			if derr != nil {
+				return derr
+			}
+			// Same rail as the permissions section above, and it costs no
+			// extra query: this runs inside the apply transaction, so raising
+			// here puts every one of them back.
+			if len(m.Roles) == 0 && len(retired) > 0 {
+				return apperr.ErrInvalidArgument.
+					With("roles", "section is present but empty").
+					With("catalog", strconv.Itoa(len(retired))+" live roles").
+					With("hint", "refusing to retire an entire role catalog in one apply")
+			}
+			report["roles"] = map[string]any{"applied": rolesApplied, "deprecated": retired}
+		}
+
+		// Routes: full replacement, priority-unique, shadow-checked. Full
+		// replacement is why the section has to have been DECLARED: a
+		// document that never mentions routes is not a document saying the
+		// application has none.
+		if m.HasRoutes {
+			policies := make([]tenancydomain.RoutePolicyInput, 0, len(m.Routes))
+			for _, rt := range m.Routes {
+				permID := ""
+				if rt.Effect == "require_permission" {
+					id, ok := keyByRA[rt.Permission]
+					if !ok {
+						return apperr.ErrInvalidArgument.
+							With("route", rt.PathPattern).With("permission", rt.Permission)
+					}
+					permID = id
 				}
-				permID = id
+				bindings, _ := json.Marshal(rt.ScopeBindings)
+				methods := rt.Methods
+				if len(methods) == 0 {
+					methods = []string{"*"}
+				}
+				policies = append(policies, tenancydomain.RoutePolicyInput{
+					Priority: rt.Priority, Effect: rt.Effect, PathPattern: rt.PathPattern,
+					HostPattern: rt.HostPattern, Methods: methods,
+					PermissionID: permID, ScopeBindings: bindings,
+				})
 			}
-			bindings, _ := json.Marshal(rt.ScopeBindings)
-			methods := rt.Methods
-			if len(methods) == 0 {
-				methods = []string{"*"}
+			if err := u.routes.ReplaceRoutePolicies(ctx, actor.TenantID, app.ID, policies); err != nil {
+				return err
 			}
-			policies = append(policies, tenancydomain.RoutePolicyInput{
-				Priority: rt.Priority, Effect: rt.Effect, PathPattern: rt.PathPattern,
-				HostPattern: rt.HostPattern, Methods: methods,
-				PermissionID: permID, ScopeBindings: bindings,
-			})
+			report["routes"] = map[string]any{"replaced": len(policies)}
 		}
-		if err := u.routes.ReplaceRoutePolicies(ctx, p.TenantID, app.ID, policies); err != nil {
-			return err
-		}
-		report["routes"] = map[string]any{"replaced": len(policies)}
 
 		v, verr := u.apps.BumpManifestVersion(ctx, app.ID)
 		if verr != nil {
@@ -493,34 +600,13 @@ func (u *authzAdminInteractor) ApplyManifest(ctx context.Context, applicationSlu
 		if err := u.tx.WithinTx(ctx, apply); err != nil {
 			return "", 0, err
 		}
-		u.emit(ctx, p, "manifest.apply", app.ID, map[string]string{
+		u.emitAs(ctx, actor, "manifest.apply", app.ID, map[string]string{
 			"application": applicationSlug, "version": fmt.Sprint(version),
+			// Which sections a document carried is the difference between a
+			// routine role update and someone replacing a route table.
+			"format": format, "sections": strings.Join(m.Sections(), ","),
 		})
 	}
 	raw, _ := json.Marshal(report)
 	return string(raw), version, nil
-}
-
-func validateManifest(m *Manifest) error {
-	seen := map[string]bool{}
-	for _, p := range m.Permissions {
-		if p.Resource == "" || p.Action == "" {
-			return apperr.ErrInvalidArgument.With("manifest", "permission missing resource/action")
-		}
-		seen[p.Resource+":"+p.Action] = true
-	}
-	prio := map[int]string{}
-	for _, r := range m.Routes {
-		switch r.Effect {
-		case "public", "require_auth", "require_permission", "deny":
-		default:
-			return apperr.ErrInvalidArgument.With("route", r.PathPattern).With("effect", r.Effect)
-		}
-		if prev, dup := prio[r.Priority]; dup {
-			return apperr.ErrInvalidArgument.With("route", r.PathPattern).
-				With("conflict", prev).With("priority", fmt.Sprint(r.Priority))
-		}
-		prio[r.Priority] = r.PathPattern
-	}
-	return nil
 }

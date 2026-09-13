@@ -129,6 +129,29 @@ export const api = {
   syncRuns: (sourceId: Uuid) => live.syncRuns(sourceId),
   syncPlan: (sourceId: Uuid) => live.runSync(sourceId, true),
   syncApply: (sourceId: Uuid) => live.runSync(sourceId, false),
+  /* Catalog sources: where an application's permissions and roles are read
+     from when nobody is pushing them. Scope sync (above) is the same idea one
+     layer down — that one feeds STRUCTURE, this one feeds the catalog. */
+  catalogSources: () => live.catalogSources(),
+  catalogRuns: (sourceId: Uuid, limit?: number) => live.catalogRuns(sourceId, limit),
+  createCatalogSource: (i: {
+    applicationSlug: string; name: string
+    format: import('./types').CatalogFormat
+    configJson: string; intervalSeconds: number
+  }) => live.createCatalogSource(i),
+  updateCatalogSource: (i: {
+    id: Uuid; name: string; status: string
+    format: import('./types').CatalogFormat
+    configJson: string; intervalSeconds: number
+  }) => live.updateCatalogSource(i),
+  deleteCatalogSource: (sourceId: Uuid) => live.deleteCatalogSource(sourceId),
+  /** Dry fetches and validates without writing, and without moving the clock. */
+  runCatalogSource: (sourceId: Uuid, dry: boolean) => live.runCatalogSource(sourceId, dry),
+  applyCatalogDocument: (
+    applicationSlug: string, document: string, dry: boolean,
+    format: import('./types').CatalogFormat,
+  ) => live.applyManifest(applicationSlug, document, dry, format),
+
   createSyncSource: (i: {
     axis_code: string; kind: import('./types').SyncKind
     target: string; default_node_type: string

@@ -453,12 +453,15 @@ POST /v1/admin/auth-pages
                 "primary_color": "#0f766e", "background_color": "#f8fafc",
                 "text_color": "#111827", "corner_radius": "lg", "font": "system" },
     "layout": "split",                 // centered | split | minimal
+    // Block order, and by omission which blocks render at all. Absent means
+    // the default order below. The form cannot be left out.
+    "sections": ["logo", "heading", "subheading", "form", "links"],
     "copy":   { "heading": "Partner sign-in",
                 "subheading": "Use the account your account manager issued.",
                 "username_label": "Company email", "submit_label": "Continue" },
     "links":  [ { "label": "Contact support", "url": "https://help…" } ],
     "features": { "show_realm_picker": false, "show_registration": false,
-                  "show_forgot_password": true, "remember_me": false }
+                  "remember_me": false }
   } }
 ```
 
@@ -519,8 +522,87 @@ PUT /v1/admin/applications/{slug}/manifest
 ```
 
 Registers permissions, roles and route policies. Anubis validates, diffs against
-the current catalog, and applies. Removed permissions are marked `deprecated_at`,
-never deleted — never orphan a live grant. Shadowed route rules are rejected.
+the current catalog, and applies. Shadowed route rules are rejected.
+
+**Removal retires, it never deletes.** A permission or role the document stops
+naming is marked `deprecated_at`: it cannot be attached to anything new, and
+everything that already refers to it keeps working — `authorize()` does not
+read the column, so retiring a role at 09:00 locks nobody out at 09:01. Taking
+access away is a separate, deliberate act: revoke the grants. Re-declaring a
+retired permission or role revives it, and a re-declared role also picks up the
+document's current description and realm kinds.
+
+Only roles the manifest owns (`is_system`) are retired this way. A role an
+operator created by hand inside the same application is untouched, because a
+document that does not mention it is not evidence anybody wanted it gone. An
+empty `roles` or `permissions` section on a catalog that has live entries is
+refused outright rather than retiring everything in one apply.
+
+**Only the sections the document declares are touched.** A manifest that omits
+`permissions` is not a manifest saying the application has none: the catalog is
+left alone. Sending `"routes": []` clears the route table, because that is
+somebody saying so on purpose — the distinction is between absent and empty.
+A present-but-empty `permissions` section on an application that has live
+permissions is refused outright rather than deprecating a whole catalog in one
+call.
+
+#### CSV
+
+`format: "csv"` parses the same document out of a spreadsheet export, because
+the catalog usually lives in one. A CSV carries **one sheet per document**,
+decided by its header:
+
+| Sheet | Columns |
+| :--- | :--- |
+| permissions | `resource`, `action`, `description`, `risk`, `min_assurance`, `requires_amr`, `max_auth_age` |
+| roles | `role`, `description`, `permissions`, `patterns`, `allowed_realm_kinds` |
+
+Header matching ignores case and separators (`Min Assurance` = `min_assurance`),
+multi-value cells split on `;` or `,`, and a roles sheet may name permissions a
+previous manifest installed — they are resolved from the catalog, not only from
+the document. Routes are JSON-only: a route's ordering and scope bindings do not
+survive being flattened into cells.
+
+### Catalog sources
+
+```http
+POST   /v1/admin/catalog/sources          # configure
+DELETE /v1/admin/catalog/sources/{id}     # stop reading it; the history goes too
+POST   /v1/admin/catalog/sources/{id}/run # now, or dry
+GET    /v1/admin/catalog/sources/{id}/runs
+```
+
+The fourth way a catalog arrives: a URL Anubis reads on a clock, rather than a
+document somebody pushes. A source is **pinned to one application** at creation
+and cannot be repointed — the document is always applied under that
+application's id and slug, so a compromised feed can make a mess inside exactly
+one application and reach nothing else.
+
+- `interval_seconds` of `0` is a source that only runs when asked. The floor is
+  300: a catalog is a document a team edits, not a data feed.
+- A run whose document is byte-identical to the last applied one is recorded as
+  `skipped` and writes nothing. Applying bumps `manifest_version`, and that is
+  what tells every gate its snapshot is stale — a five-minute poll of an
+  unchanged file would otherwise rebuild them 288 times a day.
+- Every attempt is recorded — including one that could not fetch — with the
+  actor (`system` for a scheduled run) and the reason it failed.
+- Hosts are subject to the same egress policy as scope feeds: link-local and
+  loopback are refused (`ANUBIS_SYNC_ALLOW_LOOPBACK=1` for development,
+  `ANUBIS_SYNC_DENY_HOSTS` to extend it).
+- A source carries `last_status` — how its most recent attempt ended — so a
+  list can show a broken feed without a request per row. `last_run_at` moves
+  only when a real run happens: a dry run deliberately does not touch the
+  clock.
+- Deleting a source removes its run history with it. What it applied survives
+  in the audit log, and the permissions and roles it installed are untouched.
+  Disabling stops the scheduler without losing either.
+
+**In the console.** *Catalog sync* (under Access) lists every source with its
+last result, and one source opens a drawer holding its settings, a dry run, a
+run now, and its history. The other three channels are elsewhere: an
+application pushes a manifest over this API, and *Applications → Manifest*
+takes a pasted document or an uploaded `.json`/`.csv` file for the same apply
+with a dry run first.
 
 ---
 

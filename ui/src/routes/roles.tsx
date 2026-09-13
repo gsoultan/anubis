@@ -70,6 +70,16 @@ function Roles() {
                 <span className="chip">system</span>
               </Tooltip>
             )}
+            {/* The pill is spent on the exception: almost every role is live,
+                and the one that is not is what somebody is scanning for. */}
+            {r.deprecated && (
+              <Tooltip
+                label="Retired: its manifest stopped naming it. It cannot be granted to anybody new — every grant that already has it keeps working."
+                withArrow
+              >
+                <span className="v-pill v-pill-deny" style={{ cursor: 'help' }}>retired</span>
+              </Tooltip>
+            )}
           </div>
           <span className="t-xs">{r.description}</span>
         </div>

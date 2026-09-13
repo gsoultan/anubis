@@ -131,21 +131,30 @@ export function CreateGrant({ opened }: { opened: boolean }) {
   })
   const subjectKind = realms?.find((r) => r.id === subject?.realm_id)?.kind
 
+  /* Both reasons a role cannot be granted, said in the option rather than
+     discovered on submit. Retirement comes first because it is absolute: the
+     grants_role_live trigger (0044) refuses the insert whoever the subject is. */
   const roleOptions = (roles ?? []).map((r) => {
-    const blocked = !!subjectKind && !r.allowed_realm_kinds.includes(subjectKind)
+    const why = r.deprecated
+      ? 'retired from the catalog'
+      : (!!subjectKind && !r.allowed_realm_kinds.includes(subjectKind))
+          ? `not grantable to ${subjectKind}`
+          : ''
     return {
       value: r.id,
-      label: blocked ? `${r.name} — not grantable to ${subjectKind}` : r.name,
-      disabled: blocked,
+      label: why ? `${r.name} — ${why}` : r.name,
+      disabled: why !== '',
     }
   })
 
   // Switching subject to a realm the chosen role cannot serve must clear the
   // role, or the form submits into a guaranteed guard rejection.
   useEffect(() => {
-    if (!roleId || !subjectKind) return
+    if (!roleId) return
     const role = roles?.find((r) => r.id === roleId)
-    if (role && !role.allowed_realm_kinds.includes(subjectKind)) setRoleId(null)
+    if (!role) return
+    if (role.deprecated) { setRoleId(null); return }
+    if (subjectKind && !role.allowed_realm_kinds.includes(subjectKind)) setRoleId(null)
   }, [subjectKind, roleId, roles])
 
   const reset = () => {

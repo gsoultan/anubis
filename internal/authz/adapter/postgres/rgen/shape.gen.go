@@ -21,5 +21,6 @@ func _assertRoleShape(m m0.Role) {
 		m.Description,
 		m.AssignableAt,
 		m.AllowedRealmKinds,
+		m.DeprecatedAt,
 	}
 }

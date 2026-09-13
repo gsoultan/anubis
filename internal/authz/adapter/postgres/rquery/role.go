@@ -1,6 +1,8 @@
 package authzrquery
 
 import (
+	"time"
+
 	"github.com/gsoultan/storm"
 	"github.com/gsoultan/storm/runtime"
 )
@@ -17,6 +19,8 @@ type RoleRow struct {
 	AssignableAt      []string
 	ApplicationID     runtime.Null[string]
 	ApplicationSlug   runtime.Null[string]
+	// Retired from the catalog (0044). Live roles carry NULL.
+	DeprecatedAt runtime.Null[time.Time]
 }
 
 // ListRoles is the TENANT's roles: what its own people can be given. Who may
@@ -27,7 +31,7 @@ var ListRoles = storm.SQL[RoleRow](`
 SELECT r.id::text AS id, r.tenant_id::text AS tenant_id, r.name, r.description,
        r.is_system, r.allowed_realm_kinds, r.assignable_at,
        r.application_id::text AS application_id,
-       a.slug AS application_slug
+       a.slug AS application_slug, r.deprecated_at
 FROM roles r
 LEFT JOIN applications a ON a.id = r.application_id
 WHERE r.tenant_id = $1
@@ -39,7 +43,7 @@ var GetRole = storm.SQL[RoleRow](`
 SELECT r.id::text AS id, r.tenant_id::text AS tenant_id, r.name, r.description,
        r.is_system, r.allowed_realm_kinds, r.assignable_at,
        r.application_id::text AS application_id,
-       a.slug AS application_slug
+       a.slug AS application_slug, r.deprecated_at
 FROM roles r
 LEFT JOIN applications a ON a.id = r.application_id
 WHERE r.id = $1 AND r.tenant_id = $2`)
@@ -167,3 +171,52 @@ SELECT DISTINCT rp.role_id::text AS role_id
 FROM role_permission_patterns rp
 JOIN roles r ON r.id = rp.role_id
 WHERE r.tenant_id = $1`)
+
+// --- the catalog side of a role ----------------------------------------------
+
+// UpsertSystemRole installs or refreshes a role a manifest declares.
+//
+// UpdateRole above deliberately refuses system roles (`AND NOT is_system`):
+// a manifest owns them and an operator must not edit them by hand. That left
+// the apply path with no way to change one either, so a document that renamed
+// a description or re-declared a retired role changed nothing — sync that
+// only ever adds is not sync.
+//
+// The conditional DO UPDATE is the guard: if the name is already taken by a
+// role somebody created by hand, or by another application's, no row is
+// updated and none is returned. The caller says so out loud rather than
+// quietly capturing a role the manifest does not own.
+var UpsertSystemRole = storm.SQL[CreatedRoleRow](`
+INSERT INTO roles (tenant_id, name, description, application_id, is_system,
+                   allowed_realm_kinds)
+VALUES ($1, $2, $3, $4, true, $5::text[])
+ON CONFLICT (tenant_id, name) DO UPDATE
+    SET description = EXCLUDED.description,
+        allowed_realm_kinds = EXCLUDED.allowed_realm_kinds,
+        deprecated_at = NULL,
+        updated_at = now()
+    WHERE roles.is_system AND roles.application_id = EXCLUDED.application_id
+RETURNING id::text AS id`)
+
+// DeprecatedRoleRow is the name of a role this apply retired.
+type DeprecatedRoleRow struct{ Name string }
+
+// DeprecateRolesExcept retires the manifest roles this document stopped
+// naming. Deprecated is not revoked: authorize() never reads the column, so
+// every grant already naming the role decides exactly as it did — what stops
+// is granting it to anybody new (trigger grants_role_live, 0044).
+//
+// `is_system` is not an optimisation. A role an operator created by hand
+// inside this application is theirs, and a document that does not mention it
+// is not evidence they wanted it gone.
+var DeprecateRolesExcept = storm.SQL[DeprecatedRoleRow](`
+UPDATE roles
+SET deprecated_at = now(), updated_at = now()
+WHERE application_id = $1
+  AND is_system
+  AND deprecated_at IS NULL
+  -- COALESCE, because an EMPTY keep-list arrives as NULL and
+  -- NOT (id = ANY(NULL)) is NULL — which excludes every row and quietly
+  -- retires nothing, the exact opposite of what "keep none" asks for.
+  AND NOT (id = ANY(COALESCE($2::uuid[], '{}')))
+RETURNING name`)

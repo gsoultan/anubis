@@ -17,7 +17,7 @@ import type {
   RealmCategory, RealmKind, Role, ScopeAxis, ScopeNode, ScopeNodeType,
   SecuritySignal,  StrictDryRun, SyncPlan, SyncRun, SyncSource, Tenant,
   Ial, Risk, Uuid, AuthPage, PageConfig, PageKind, SigningKeyRecord,
-  CredentialInfo,
+  CredentialInfo, CatalogSource, CatalogRun, CatalogFormat,
 } from './types'
 
 /** Unix seconds to ISO, with the protobuf zero meaning "never". */
@@ -237,6 +237,7 @@ export async function roles(): Promise<Role[]> {
     is_system: r.isSystem,
     allowed_realm_kinds: r.allowedRealmKinds as RealmKind[],
     assignable_at: r.assignableAt,
+    deprecated: r.deprecated,
     /* ListRoles does not carry a permission count, so this is not a real
        number and the roles screen should not present it as one. Fixing it
        properly means adding the count to the Role message rather than making
@@ -535,9 +536,99 @@ export async function rotateClientSecret(id: string): Promise<string> {
 
 /** Apply an application's manifest: the permissions, roles and route policies
     it declares. Run it dry first — it reports what would change. */
-export async function applyManifest(applicationSlug: string, manifestJson: string, dry: boolean) {
-  const resp = await rpc.authzAdmin.applyManifest({ applicationSlug, manifestJson, dry })
+export async function applyManifest(
+  applicationSlug: string, document: string, dry: boolean, format: CatalogFormat = 'json',
+) {
+  /* manifestJson carries the document whatever the format — the field predates
+     CSV and renaming it would break every caller for a word. */
+  const resp = await rpc.authzAdmin.applyManifest({
+    applicationSlug, manifestJson: document, dry, format,
+  })
   return resp
+}
+
+/* --- catalog sources ------------------------------------------------------- */
+
+function catalogSourceOf(s: {
+  id: string; applicationSlug: string; name: string; kind: string; format: string
+  status: string; configJson: string; intervalSeconds: number
+  lastRunAt: bigint; nextRunAt: bigint; lastStatus: string
+}): CatalogSource {
+  return {
+    id: s.id,
+    application_slug: s.applicationSlug,
+    name: s.name,
+    kind: s.kind,
+    format: s.format === 'csv' ? 'csv' : 'json',
+    status: s.status === 'disabled' ? 'disabled' : 'active',
+    config_json: s.configJson,
+    interval_seconds: s.intervalSeconds,
+    last_run_at: at(s.lastRunAt),
+    next_run_at: at(s.nextRunAt),
+    last_status: (s.lastStatus || '') as CatalogSource['last_status'],
+  }
+}
+
+function catalogRunOf(r: {
+  id: string; sourceId: string; startedAt: bigint; finishedAt: bigint; dry: boolean
+  status: string; actor: string; documentSha: string; reportJson: string; error: string
+}): CatalogRun {
+  return {
+    id: r.id,
+    source_id: r.sourceId,
+    started_at: atRequired(r.startedAt),
+    finished_at: at(r.finishedAt),
+    dry: r.dry,
+    status: r.status as CatalogRun['status'],
+    actor: r.actor,
+    document_sha: r.documentSha,
+    report_json: r.reportJson,
+    error: r.error,
+  }
+}
+
+export async function catalogSources(): Promise<CatalogSource[]> {
+  const resp = await rpc.authzAdmin.listCatalogSources({})
+  return resp.sources.map(catalogSourceOf)
+}
+
+export async function createCatalogSource(in_: {
+  applicationSlug: string; name: string; format: CatalogFormat
+  configJson: string; intervalSeconds: number
+}): Promise<CatalogSource | null> {
+  const resp = await rpc.authzAdmin.createCatalogSource({
+    applicationSlug: in_.applicationSlug, name: in_.name, kind: 'http',
+    format: in_.format, configJson: in_.configJson,
+    intervalSeconds: in_.intervalSeconds,
+  })
+  return resp.source ? catalogSourceOf(resp.source) : null
+}
+
+export async function updateCatalogSource(in_: {
+  id: Uuid; name: string; status: string; format: CatalogFormat
+  configJson: string; intervalSeconds: number
+}): Promise<CatalogSource | null> {
+  const resp = await rpc.authzAdmin.updateCatalogSource({
+    id: in_.id, name: in_.name, status: in_.status, format: in_.format,
+    configJson: in_.configJson, intervalSeconds: in_.intervalSeconds,
+  })
+  return resp.source ? catalogSourceOf(resp.source) : null
+}
+
+export async function deleteCatalogSource(sourceId: Uuid): Promise<void> {
+  await rpc.authzAdmin.deleteCatalogSource({ id: sourceId })
+}
+
+/** Runs a source now. A dry run fetches and validates without writing, and
+    without moving the source's clock. */
+export async function runCatalogSource(sourceId: Uuid, dry: boolean): Promise<CatalogRun | null> {
+  const resp = await rpc.authzAdmin.runCatalogSource({ sourceId, dry })
+  return resp.run ? catalogRunOf(resp.run) : null
+}
+
+export async function catalogRuns(sourceId: Uuid, limit = 20): Promise<CatalogRun[]> {
+  const resp = await rpc.authzAdmin.listCatalogRuns({ sourceId, limit })
+  return resp.runs.map(catalogRunOf)
 }
 
 /* Scope. Axes carry two JSON blobs — how a target is resolved at decision
@@ -1085,6 +1176,8 @@ export async function createRole(i: NewRoleInput): Promise<void> {
       applicationSlug: '', isSystem: false,
       allowedRealmKinds: i.allowed_realm_kinds,
       assignableAt: [], parentIds: [], patterns: i.permission_keys,
+      // Server-owned: a request never retires a role, a manifest does.
+      deprecated: false,
     },
   })
   void resp
@@ -1101,6 +1194,8 @@ export async function updateRole(i: {
       applicationSlug: '', isSystem: false,
       allowedRealmKinds: i.allowed_realm_kinds,
       assignableAt: [], parentIds: [], patterns: i.permission_keys,
+      // Server-owned: a request never retires a role, a manifest does.
+      deprecated: false,
     },
   })
 }

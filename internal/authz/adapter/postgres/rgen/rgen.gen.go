@@ -48,6 +48,7 @@ func init() {
 	storm.RegisterScanner(scanDoneRow)
 	storm.RegisterScanner(scanRoleIDRow)
 	storm.RegisterScanner(scanEffectiveRow)
+	storm.RegisterScanner(scanDeprecatedRoleRow)
 	storm.RegisterScanner(scanGrantRow)
 	storm.RegisterScanner(scanGrantScopeRow)
 	storm.RegisterScanner(scanCreatedGrantRow)
@@ -67,6 +68,12 @@ func init() {
 	storm.RegisterScanner(scanUpsertedPermissionRow)
 	storm.RegisterScanner(scanDeprecatedKeyRow)
 	storm.RegisterScanner(scanPermissionIDRow)
+	storm.RegisterScanner(scanCatalogSourceRow)
+	storm.RegisterScanner(scanCreatedCatalogSourceRow)
+	storm.RegisterScanner(scanCatalogRunRow)
+	storm.RegisterScanner(scanLastAppliedDigestRow)
+	storm.RegisterStatement(`
+DELETE FROM catalog_sync_sources WHERE id = $1 AND tenant_id = $2`)
 	storm.RegisterStatement(`
 DELETE FROM membership_entries WHERE membership_id = $1`)
 	storm.RegisterStatement(`
@@ -75,6 +82,17 @@ DELETE FROM role_parents WHERE role_id = $1`)
 DELETE FROM role_permission_patterns WHERE role_id = $1`)
 	storm.RegisterStatement(`
 DELETE FROM role_permissions WHERE role_id = $1`)
+	storm.RegisterStatement(`
+INSERT INTO catalog_sync_runs (source_id, tenant_id, dry, actor)
+VALUES ($1, $2, $3, $4)
+RETURNING id::text AS id`)
+	storm.RegisterStatement(`
+INSERT INTO catalog_sync_sources
+       (tenant_id, application_id, kind, format, status, name, config,
+        interval_seconds, next_run_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8,
+        CASE WHEN $8 > 0 THEN now() ELSE NULL END)
+RETURNING id::text AS id`)
 	storm.RegisterStatement(`
 INSERT INTO grant_scopes (grant_id, tenant_id, axis_code, scope_node_id, inherit)
 VALUES ($1, $2, $3, $4, $5)`)
@@ -121,9 +139,61 @@ VALUES ($1, $2)
 ON CONFLICT DO NOTHING`)
 	storm.RegisterStatement(`
 INSERT INTO roles (tenant_id, name, description, application_id, is_system,
+                   allowed_realm_kinds)
+VALUES ($1, $2, $3, $4, true, $5::text[])
+ON CONFLICT (tenant_id, name) DO UPDATE
+    SET description = EXCLUDED.description,
+        allowed_realm_kinds = EXCLUDED.allowed_realm_kinds,
+        deprecated_at = NULL,
+        updated_at = now()
+    WHERE roles.is_system AND roles.application_id = EXCLUDED.application_id
+RETURNING id::text AS id`)
+	storm.RegisterStatement(`
+INSERT INTO roles (tenant_id, name, description, application_id, is_system,
                    allowed_realm_kinds, assignable_at)
 VALUES ($1, $2, $3, $4, $5, $6::text[], $7::text[])
 RETURNING id::text AS id`)
+	storm.RegisterStatement(`
+SELECT
+       s.id::text AS id, s.tenant_id::text AS tenant_id,
+       s.application_id::text AS application_id, a.slug AS application_slug,
+       s.kind, s.format, s.status, s.name, s.config::text AS config,
+       s.interval_seconds, s.last_run_at, s.next_run_at,
+       (SELECT r.status FROM catalog_sync_runs r
+         WHERE r.source_id = s.id
+         ORDER BY r.started_at DESC LIMIT 1) AS last_status
+FROM catalog_sync_sources s
+JOIN applications a ON a.id = s.application_id
+WHERE s.id = $1 AND s.tenant_id = $2`)
+	storm.RegisterStatement(`
+SELECT
+       s.id::text AS id, s.tenant_id::text AS tenant_id,
+       s.application_id::text AS application_id, a.slug AS application_slug,
+       s.kind, s.format, s.status, s.name, s.config::text AS config,
+       s.interval_seconds, s.last_run_at, s.next_run_at,
+       (SELECT r.status FROM catalog_sync_runs r
+         WHERE r.source_id = s.id
+         ORDER BY r.started_at DESC LIMIT 1) AS last_status
+FROM catalog_sync_sources s
+JOIN applications a ON a.id = s.application_id
+WHERE s.status = 'active'
+  AND s.next_run_at IS NOT NULL
+  AND s.next_run_at <= $1
+ORDER BY s.next_run_at
+LIMIT $2`)
+	storm.RegisterStatement(`
+SELECT
+       s.id::text AS id, s.tenant_id::text AS tenant_id,
+       s.application_id::text AS application_id, a.slug AS application_slug,
+       s.kind, s.format, s.status, s.name, s.config::text AS config,
+       s.interval_seconds, s.last_run_at, s.next_run_at,
+       (SELECT r.status FROM catalog_sync_runs r
+         WHERE r.source_id = s.id
+         ORDER BY r.started_at DESC LIMIT 1) AS last_status
+FROM catalog_sync_sources s
+JOIN applications a ON a.id = s.application_id
+WHERE s.tenant_id = $1
+ORDER BY s.name`)
 	storm.RegisterStatement(`
 SELECT (role_recompute_effective($1) IS NULL) AS done`)
 	storm.RegisterStatement(`
@@ -164,6 +234,13 @@ WHERE tenant_id = $1
   AND action = 'authorize' AND result = 'allow'
 ORDER BY occurred_at DESC
 LIMIT $2`)
+	storm.RegisterStatement(`
+SELECT document_sha
+FROM catalog_sync_runs
+WHERE source_id = $1 AND dry = false AND status IN ('ok','skipped')
+      AND document_sha <> ''
+ORDER BY started_at DESC
+LIMIT 1`)
 	storm.RegisterStatement(`
 SELECT g.id::text AS id, g.identity_id::text AS identity_id,
        g.role_id::text AS role_id, r.name AS role_name, g.self_scoped,
@@ -216,6 +293,13 @@ SELECT id::text AS id, key, risk, min_assurance, requires_amr,
        COALESCE(max_auth_age::text, '')::text AS max_auth_age, deprecated_at
 FROM permissions
 WHERE tenant_id = $1 AND key = $2`)
+	storm.RegisterStatement(`
+SELECT id::text AS id, source_id::text AS source_id, started_at, finished_at,
+       dry, status, actor, document_sha, report::text AS report, error
+FROM catalog_sync_runs
+WHERE source_id = $1
+ORDER BY started_at DESC
+LIMIT $2`)
 	storm.RegisterStatement(`
 SELECT id::text AS id, tenant_id::text AS tenant_id, name, description
 FROM memberships
@@ -273,7 +357,7 @@ ORDER BY pattern`)
 SELECT r.id::text AS id, r.tenant_id::text AS tenant_id, r.name, r.description,
        r.is_system, r.allowed_realm_kinds, r.assignable_at,
        r.application_id::text AS application_id,
-       a.slug AS application_slug
+       a.slug AS application_slug, r.deprecated_at
 FROM roles r
 LEFT JOIN applications a ON a.id = r.application_id
 WHERE r.id = $1 AND r.tenant_id = $2`)
@@ -281,12 +365,37 @@ WHERE r.id = $1 AND r.tenant_id = $2`)
 SELECT r.id::text AS id, r.tenant_id::text AS tenant_id, r.name, r.description,
        r.is_system, r.allowed_realm_kinds, r.assignable_at,
        r.application_id::text AS application_id,
-       a.slug AS application_slug
+       a.slug AS application_slug, r.deprecated_at
 FROM roles r
 LEFT JOIN applications a ON a.id = r.application_id
 WHERE r.tenant_id = $1
   AND ($2::text IS NULL OR r.name ILIKE '%' || $2 || '%')
 ORDER BY r.name`)
+	storm.RegisterStatement(`
+UPDATE catalog_sync_runs
+SET finished_at = now(), status = $2, document_sha = $3,
+    report = nullif($4, '')::jsonb, error = $5
+WHERE id = $1`)
+	storm.RegisterStatement(`
+UPDATE catalog_sync_sources
+SET last_run_at = now(),
+    next_run_at = CASE WHEN interval_seconds > 0
+                       THEN now() + make_interval(secs => interval_seconds)
+                       ELSE NULL END
+WHERE id = $1`)
+	storm.RegisterStatement(`
+UPDATE catalog_sync_sources
+SET name = $3, status = $4, config = $5::jsonb, format = $6,
+    interval_seconds = $7,
+    -- Changing the interval reschedules from now; leaving it alone leaves
+    -- the existing due time exactly where it was.
+    next_run_at = CASE
+        WHEN $7 = 0 THEN NULL
+        WHEN $7 <> interval_seconds OR next_run_at IS NULL THEN now()
+        ELSE next_run_at
+    END,
+    updated_at = now()
+WHERE id = $1 AND tenant_id = $2`)
 	storm.RegisterStatement(`
 UPDATE grants
 SET revoked_at = now(),
@@ -299,8 +408,23 @@ UPDATE permissions
 SET deprecated_at = now()
 WHERE application_id = $1
   AND deprecated_at IS NULL
-  AND NOT (id = ANY($2::uuid[]))
+  -- COALESCE: an empty keep-list arrives as NULL, and NOT (id = ANY(NULL))
+  -- is NULL, so every row is excluded and nothing is deprecated. The apply
+  -- path refuses an empty permissions section before reaching here, which is
+  -- the only reason this has never bitten.
+  AND NOT (id = ANY(COALESCE($2::uuid[], '{}')))
 RETURNING key`)
+	storm.RegisterStatement(`
+UPDATE roles
+SET deprecated_at = now(), updated_at = now()
+WHERE application_id = $1
+  AND is_system
+  AND deprecated_at IS NULL
+  -- COALESCE, because an EMPTY keep-list arrives as NULL and
+  -- NOT (id = ANY(NULL)) is NULL — which excludes every row and quietly
+  -- retires nothing, the exact opposite of what "keep none" asks for.
+  AND NOT (id = ANY(COALESCE($2::uuid[], '{}')))
+RETURNING name`)
 	storm.RegisterStatement(`
 UPDATE roles
 SET description = $3,
@@ -431,6 +555,7 @@ func scanRoleRow(rv [][]byte, r *authzrquery.RoleRow, sl *runtime.Slab) error {
 	}
 	r.ApplicationID = runtime.NullText(rv[7], sl)
 	r.ApplicationSlug = runtime.NullText(rv[8], sl)
+	r.DeprecatedAt = runtime.Nullable(rv[9], runtime.Timestamptz)
 	return nil
 }
 
@@ -462,6 +587,11 @@ func scanRoleIDRow(rv [][]byte, r *authzrquery.RoleIDRow, sl *runtime.Slab) erro
 func scanEffectiveRow(rv [][]byte, r *authzrquery.EffectiveRow, sl *runtime.Slab) error {
 	r.PermissionKey = runtime.NullText(rv[0], sl)
 	r.ViaRole = sl.Str(rv[1])
+	return nil
+}
+
+func scanDeprecatedRoleRow(rv [][]byte, r *authzrquery.DeprecatedRoleRow, sl *runtime.Slab) error {
+	r.Name = sl.Str(rv[0])
 	return nil
 }
 
@@ -615,5 +745,46 @@ func scanDeprecatedKeyRow(rv [][]byte, r *authzrquery.DeprecatedKeyRow, sl *runt
 
 func scanPermissionIDRow(rv [][]byte, r *authzrquery.PermissionIDRow, sl *runtime.Slab) error {
 	r.ID = sl.Str(rv[0])
+	return nil
+}
+
+func scanCatalogSourceRow(rv [][]byte, r *authzrquery.CatalogSourceRow, sl *runtime.Slab) error {
+	r.ID = sl.Str(rv[0])
+	r.TenantID = sl.Str(rv[1])
+	r.ApplicationID = sl.Str(rv[2])
+	r.ApplicationSlug = sl.Str(rv[3])
+	r.Kind = sl.Str(rv[4])
+	r.Format = sl.Str(rv[5])
+	r.Status = sl.Str(rv[6])
+	r.Name = sl.Str(rv[7])
+	r.Config = sl.Str(rv[8])
+	r.IntervalSeconds = runtime.Int4(rv[9])
+	r.LastRunAt = runtime.Nullable(rv[10], runtime.Timestamptz)
+	r.NextRunAt = runtime.Nullable(rv[11], runtime.Timestamptz)
+	r.LastStatus = runtime.NullText(rv[12], sl)
+	return nil
+}
+
+func scanCreatedCatalogSourceRow(rv [][]byte, r *authzrquery.CreatedCatalogSourceRow, sl *runtime.Slab) error {
+	r.ID = sl.Str(rv[0])
+	return nil
+}
+
+func scanCatalogRunRow(rv [][]byte, r *authzrquery.CatalogRunRow, sl *runtime.Slab) error {
+	r.ID = sl.Str(rv[0])
+	r.SourceID = sl.Str(rv[1])
+	r.StartedAt = runtime.Timestamptz(rv[2])
+	r.FinishedAt = runtime.Nullable(rv[3], runtime.Timestamptz)
+	r.Dry = runtime.Bool(rv[4])
+	r.Status = sl.Str(rv[5])
+	r.Actor = sl.Str(rv[6])
+	r.DocumentSha = sl.Str(rv[7])
+	r.Report = runtime.NullText(rv[8], sl)
+	r.Error = sl.Str(rv[9])
+	return nil
+}
+
+func scanLastAppliedDigestRow(rv [][]byte, r *authzrquery.LastAppliedDigestRow, sl *runtime.Slab) error {
+	r.DocumentSha = sl.Str(rv[0])
 	return nil
 }

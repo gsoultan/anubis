@@ -94,6 +94,36 @@ type AuthPage struct {
 	RealmID *string
 }
 
+type CatalogSyncRun struct {
+	StartedAt   time.Time
+	FinishedAt  *time.Time
+	ID          string
+	SourceID    string
+	TenantID    string
+	Dry         bool
+	Status      string
+	Actor       string
+	DocumentSha string
+	Report      []byte
+	Error       string
+}
+
+type CatalogSyncSource struct {
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+	LastRunAt       *time.Time
+	NextRunAt       *time.Time
+	ID              string
+	TenantID        string
+	ApplicationID   string
+	Kind            string
+	Format          string
+	Status          string
+	Name            string
+	Config          []byte
+	IntervalSeconds int32
+}
+
 type CatalogVersion struct {
 	ChangedAt time.Time
 	Version   int64
@@ -394,6 +424,8 @@ type Role struct {
 	Description       string
 	AssignableAt      []string
 	AllowedRealmKinds []string
+	// Retired from the catalog: cannot be granted anew, keeps working for every grant that already names it. NULL = live.
+	DeprecatedAt *time.Time
 }
 
 type RoleGrantable struct {
