@@ -26,6 +26,8 @@ references". New topics live in their own file from 2026-09-11 on:
   and where the grant form lives now.
 - [[identity-directory-reads]] — the empty-uuid 500, the tenant filter the
   category query ignored, and the columns nothing ever selected.
+- [[tenant-scoped-reads]] — why a discarded principal is the tell for a
+  cross-tenant read, and the three that were.
   graphify needs the SQL extra here.
 
 ## Load-bearing decisions (see docs/adr/)

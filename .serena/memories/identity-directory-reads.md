@@ -24,7 +24,8 @@ The query is now `WHERE tenant_id = $1 AND (realm optional)`, and
 `TestRealmCategoriesRefuseAnotherTenantsRealm` plants a realm under a second
 tenant and demands nothing comes back. **Any listing whose only filter is a
 child id is worth re-reading**: the tenant column has to be in the WHERE, not
-just in the principal.
+just in the principal. That re-reading happened — [[tenant-scoped-reads]] —
+and found three more.
 
 ## A column nothing ever selected
 

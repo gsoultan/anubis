@@ -155,9 +155,16 @@ type EffectiveRow struct {
 }
 
 // GetRoleEffective lists a role's effective permissions with provenance.
+//
+// The join on the SUBJECT role is what scopes this to a tenant. Without it the
+// role id was taken on trust from the request, and the answer -- another
+// tenant's permission keys and the names of the roles conferring them -- is
+// their access model. ListRolesUsingPattern below has always filtered
+// r.tenant_id; this query simply never did.
 var GetRoleEffective = storm.SQL[EffectiveRow](`
 SELECT p.key AS permission_key, vr.name AS via_role
 FROM role_permissions_effective rpe
+JOIN roles r ON r.id = rpe.role_id AND r.tenant_id = $2
 JOIN permissions p ON p.id = rpe.permission_id
 JOIN roles vr ON vr.id = rpe.via_role_id
 WHERE rpe.role_id = $1

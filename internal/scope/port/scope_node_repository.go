@@ -18,7 +18,9 @@ type ScopeNodeRepository interface {
 	// beside one screenful of grants, not the whole axis.
 	ScopeNodesByIDs(ctx context.Context, tenantID string, ids []string) ([]scopedomain.ScopeNodeRecord, error)
 	ScopeNodeByRef(ctx context.Context, tenantID, axis, ref string) (*scopedomain.ScopeNodeRecord, error)
-	ScopeAncestors(ctx context.Context, nodeID string) ([]scopedomain.ScopeAncestor, error)
+	// ScopeAncestors is tenant-scoped: nodeID arrives from a request, and the
+	// answer is the chain of names above a node -- somebody's org chart.
+	ScopeAncestors(ctx context.Context, tenantID, nodeID string) ([]scopedomain.ScopeAncestor, error)
 	EnsureAxisRoot(ctx context.Context, tenantID, axis string) (string, error)
 	AddScopeNode(ctx context.Context, tenantID, axis, nodeType, parentID, slug, name, externalRef string) (string, error)
 	MoveScopeNode(ctx context.Context, nodeID, newParentID string) error

@@ -130,6 +130,7 @@ SELECT n.id, n.axis_code, n.node_type, n.parent_id, n.slug, n.name,
   FROM scope_closure c
   JOIN scope_nodes n ON n.id = c.ancestor_id
  WHERE c.descendant_id = sqlc.arg(node_id)
+   AND n.tenant_id = sqlc.arg(tenant_id)
  ORDER BY c.depth DESC;
 
 -- Dashboard: the structure's live size.

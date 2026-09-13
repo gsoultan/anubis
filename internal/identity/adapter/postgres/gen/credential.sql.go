@@ -240,12 +240,14 @@ SELECT id, identity_id, tenant_id, kind, lookup_key, label,
        sign_counter, created_at, last_used_at, expires_at, revoked_at
 FROM credentials
 WHERE identity_id = $1
-  AND ($2::text IS NULL OR kind = $2)
+  AND tenant_id = $2
+  AND ($3::text IS NULL OR kind = $3)
 ORDER BY created_at DESC
 `
 
 type ListCredentialsParams struct {
 	IdentityID string
+	TenantID   string
 	Kind       *string
 }
 
@@ -263,8 +265,11 @@ type ListCredentialsRow struct {
 	RevokedAt   *time.Time
 }
 
+// tenant_id is a filter, not just a column in the SELECT list. It was the
+// second and never the first, so an admin RPC carrying somebody else's
+// identity id answered with their inventory of how their people sign in.
 func (q *Queries) ListCredentials(ctx context.Context, arg ListCredentialsParams) ([]ListCredentialsRow, error) {
-	rows, err := q.db.Query(ctx, listCredentials, arg.IdentityID, arg.Kind)
+	rows, err := q.db.Query(ctx, listCredentials, arg.IdentityID, arg.TenantID, arg.Kind)
 	if err != nil {
 		return nil, err
 	}

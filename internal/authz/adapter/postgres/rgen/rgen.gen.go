@@ -344,6 +344,7 @@ ORDER BY p.key`)
 	storm.RegisterStatement(`
 SELECT p.key AS permission_key, vr.name AS via_role
 FROM role_permissions_effective rpe
+JOIN roles r ON r.id = rpe.role_id AND r.tenant_id = $2
 JOIN permissions p ON p.id = rpe.permission_id
 JOIN roles vr ON vr.id = rpe.via_role_id
 WHERE rpe.role_id = $1

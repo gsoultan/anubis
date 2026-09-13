@@ -106,7 +106,7 @@ func (u *identityAdminInteractor) GetIdentity(ctx context.Context, id string) (*
 	if err != nil {
 		return nil, nil, err
 	}
-	creds, err := u.creds.ListCredentials(ctx, id, "")
+	creds, err := u.creds.ListCredentials(ctx, p.TenantID, id, "")
 	if err != nil {
 		return nil, nil, err
 	}
@@ -290,10 +290,11 @@ func (u *identityAdminInteractor) RequestErasure(ctx context.Context, id string)
 }
 
 func (u *identityAdminInteractor) ListCredentials(ctx context.Context, identityID string) ([]credential.CredentialInfo, error) {
-	if _, err := u.guard.Require(ctx, "anubis:identity:read"); err != nil {
+	p, err := u.guard.Require(ctx, "anubis:identity:read")
+	if err != nil {
 		return nil, err
 	}
-	return u.creds.ListCredentials(ctx, identityID, "")
+	return u.creds.ListCredentials(ctx, p.TenantID, identityID, "")
 }
 
 func (u *identityAdminInteractor) RevokeCredential(ctx context.Context, credentialID string) error {
