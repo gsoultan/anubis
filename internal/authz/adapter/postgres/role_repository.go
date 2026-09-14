@@ -188,8 +188,8 @@ func (s *Repository) RolesUsingPatterns(ctx context.Context, tenantID string) ([
 	return out, nil
 }
 
-func (s *Repository) RoleEffective(ctx context.Context, roleID string) ([]authzdomain.EffectivePermissionRecord, error) {
-	rows, err := authzrquery.GetRoleEffective.Query(ctx, s.rex(ctx), roleID)
+func (s *Repository) RoleEffective(ctx context.Context, tenantID, roleID string) ([]authzdomain.EffectivePermissionRecord, error) {
+	rows, err := authzrquery.GetRoleEffective.Query(ctx, s.rex(ctx), roleID, tenantID)
 	if err != nil {
 		return nil, database.MapErr(err)
 	}

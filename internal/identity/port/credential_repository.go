@@ -17,6 +17,8 @@ type CredentialRepository interface {
 	ActiveCredentialOfKind(ctx context.Context, identityID, kind string) (*credential.Credential, error)
 	ActiveCredentialKinds(ctx context.Context, identityID string) ([]string, error)
 	TouchCredentialUsed(ctx context.Context, id string, signCounter int64)
-	ListCredentials(ctx context.Context, identityID, kind string) ([]credential.CredentialInfo, error)
+	// ListCredentials is tenant-scoped: identityID reaches this from an admin
+	// request, and an identity id alone proves nothing about who may read it.
+	ListCredentials(ctx context.Context, tenantID, identityID, kind string) ([]credential.CredentialInfo, error)
 	CredentialOwner(ctx context.Context, id string) (identityID string, tenantID string, kind string, err error)
 }

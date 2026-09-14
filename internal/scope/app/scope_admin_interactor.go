@@ -640,8 +640,13 @@ func (u *scopeAdminInteractor) ScopeNodes(ctx context.Context, ids []string) ([]
 // ScopeAncestors is the chain from the axis root down, which is what turns a
 // scope decision into an explanation rather than a bare yes or no.
 func (u *scopeAdminInteractor) ScopeAncestors(ctx context.Context, id string) ([]scopedomain.ScopeAncestor, error) {
-	if _, err := u.guard.Require(ctx, "anubis:identity:read"); err != nil {
+	// The principal, not `_`. Require answers "may this caller read
+	// identities?" and never "is this node theirs?" -- so discarding p left
+	// the id taken on trust, and the answer is a chain of names, which is the
+	// shape of whoever's organisation the id belonged to.
+	p, err := u.guard.Require(ctx, "anubis:identity:read")
+	if err != nil {
 		return nil, err
 	}
-	return u.nodes.ScopeAncestors(ctx, id)
+	return u.nodes.ScopeAncestors(ctx, p.TenantID, id)
 }

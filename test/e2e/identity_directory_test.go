@@ -223,7 +223,12 @@ func TestARealmKindIsCorrectableOnlyWhileEmpty(t *testing.T) {
 	admin := anubisv1connect.NewTenantAdminServiceClient(http.DefaultClient, baseURL)
 	idAdmin := anubisv1connect.NewIdentityAdminServiceClient(http.DefaultClient, baseURL)
 
-	code := fmt.Sprintf("kindprobe%d", time.Now().UnixNano()%1e6)
+	// Full nanoseconds, not %1e6. This clock has MICROSECOND granularity, so
+	// UnixNano() always ends in 000 and the modulo left one thousand possible
+	// codes rather than a million -- every accumulated probe realm in the dev
+	// database ends in 000. These realms are never cleaned up, so each run
+	// drew from a shrinking pool until CreateRealm hit a duplicate key.
+	code := fmt.Sprintf("kindprobe%d", time.Now().UnixNano())
 	created, err := admin.CreateRealm(ctx, operatorBearer(connect.NewRequest(&anubisv1.CreateRealmRequest{
 		Realm: &anubisv1.Realm{
 			Code: code, Kind: "internal", DisplayName: "Typed as internal by mistake",

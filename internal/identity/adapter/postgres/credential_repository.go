@@ -87,9 +87,9 @@ func (s *Repository) TouchCredentialUsed(ctx context.Context, id string, signCou
 	})
 }
 
-func (s *Repository) ListCredentials(ctx context.Context, identityID, kind string) ([]credential.CredentialInfo, error) {
+func (s *Repository) ListCredentials(ctx context.Context, tenantID, identityID, kind string) ([]credential.CredentialInfo, error) {
 	rows, err := s.q(ctx).ListCredentials(ctx, gen.ListCredentialsParams{
-		IdentityID: identityID, Kind: database.OptStr(kind),
+		TenantID: tenantID, IdentityID: identityID, Kind: database.OptStr(kind),
 	})
 	if err != nil {
 		return nil, database.MapErr(err)

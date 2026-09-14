@@ -170,10 +170,11 @@ func (u *authzAdminInteractor) applyRoleGraph(ctx context.Context, roleID string
 }
 
 func (u *authzAdminInteractor) GetRoleEffective(ctx context.Context, roleID string) ([]authzdomain.EffectivePermissionRecord, error) {
-	if _, err := u.guard.Require(ctx, "anubis:role:admin"); err != nil {
+	p, err := u.guard.Require(ctx, "anubis:role:admin")
+	if err != nil {
 		return nil, err
 	}
-	return u.roles.RoleEffective(ctx, roleID)
+	return u.roles.RoleEffective(ctx, p.TenantID, roleID)
 }
 
 func (u *authzAdminInteractor) ListPermissions(ctx context.Context, applicationSlug string, includeDeprecated bool) ([]authzdomain.PermissionRecord, error) {

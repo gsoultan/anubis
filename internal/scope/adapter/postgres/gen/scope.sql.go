@@ -635,8 +635,14 @@ SELECT n.id, n.axis_code, n.node_type, n.parent_id, n.slug, n.name,
   FROM scope_closure c
   JOIN scope_nodes n ON n.id = c.ancestor_id
  WHERE c.descendant_id = $1
+   AND n.tenant_id = $2
  ORDER BY c.depth DESC
 `
+
+type ScopeAncestorsParams struct {
+	NodeID   string
+	TenantID string
+}
 
 type ScopeAncestorsRow struct {
 	ID          string
@@ -655,8 +661,8 @@ type ScopeAncestorsRow struct {
 // makes a scope decision explainable: "this grant reaches here BECAUSE it was
 // given on that ancestor". Read from the closure table, so it costs one index
 // scan rather than a recursive walk.
-func (q *Queries) ScopeAncestors(ctx context.Context, nodeID string) ([]ScopeAncestorsRow, error) {
-	rows, err := q.db.Query(ctx, scopeAncestors, nodeID)
+func (q *Queries) ScopeAncestors(ctx context.Context, arg ScopeAncestorsParams) ([]ScopeAncestorsRow, error) {
+	rows, err := q.db.Query(ctx, scopeAncestors, arg.NodeID, arg.TenantID)
 	if err != nil {
 		return nil, err
 	}

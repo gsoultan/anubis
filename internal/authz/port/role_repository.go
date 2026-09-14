@@ -21,5 +21,7 @@ type RoleRepository interface {
 	RecomputeRole(ctx context.Context, roleID string) error
 	RolesBelow(ctx context.Context, roleID string) ([]string, error)
 	RolesUsingPatterns(ctx context.Context, tenantID string) ([]string, error)
-	RoleEffective(ctx context.Context, roleID string) ([]authzdomain.EffectivePermissionRecord, error)
+	// RoleEffective is tenant-scoped: roleID arrives from a request, and a
+	// role id alone proves nothing about who may read it.
+	RoleEffective(ctx context.Context, tenantID, roleID string) ([]authzdomain.EffectivePermissionRecord, error)
 }

@@ -241,7 +241,7 @@ func TestEnrolOrDenyRollout(t *testing.T) {
 	admin := anubisv1connect.NewTenantAdminServiceClient(http.DefaultClient, baseURL)
 	idAdmin := anubisv1connect.NewIdentityAdminServiceClient(http.DefaultClient, baseURL)
 
-	realmCode := fmt.Sprintf("enrol%d", time.Now().UnixNano()%1e6)
+	realmCode := fmt.Sprintf("enrol%d", time.Now().UnixNano())
 	created, err := admin.CreateRealm(ctx, operatorBearer(connect.NewRequest(&anubisv1.CreateRealmRequest{
 		Realm: &anubisv1.Realm{
 			Code: realmCode, Kind: "internal", DisplayName: "Enrolment probe",
@@ -367,7 +367,7 @@ func TestAGrantCannotReplaceAnEnrolledFactor(t *testing.T) {
 	admin := anubisv1connect.NewTenantAdminServiceClient(http.DefaultClient, baseURL)
 	idAdmin := anubisv1connect.NewIdentityAdminServiceClient(http.DefaultClient, baseURL)
 
-	realmCode := fmt.Sprintf("regrant%d", time.Now().UnixNano()%1e6)
+	realmCode := fmt.Sprintf("regrant%d", time.Now().UnixNano())
 	created, err := admin.CreateRealm(ctx, operatorBearer(connect.NewRequest(&anubisv1.CreateRealmRequest{
 		Realm: &anubisv1.Realm{
 			Code: realmCode, Kind: "internal", DisplayName: "Grant reuse probe",

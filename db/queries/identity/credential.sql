@@ -10,10 +10,14 @@ FROM credentials
 WHERE id = sqlc.arg(id);
 
 -- name: ListCredentials :many
+-- tenant_id is a filter, not just a column in the SELECT list. It was the
+-- second and never the first, so an admin RPC carrying somebody else's
+-- identity id answered with their inventory of how their people sign in.
 SELECT id, identity_id, tenant_id, kind, lookup_key, label,
        sign_counter, created_at, last_used_at, expires_at, revoked_at
 FROM credentials
 WHERE identity_id = sqlc.arg(identity_id)
+  AND tenant_id = sqlc.arg(tenant_id)
   AND (sqlc.narg(kind)::text IS NULL OR kind = sqlc.narg(kind))
 ORDER BY created_at DESC;
 

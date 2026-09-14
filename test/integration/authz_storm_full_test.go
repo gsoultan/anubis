@@ -131,7 +131,7 @@ func TestStormFull_RoleFamily(t *testing.T) {
 		if err := repo.RecomputeRole(ctx, id); err != nil {
 			return err
 		}
-		if _, err := repo.RoleEffective(ctx, id); err != nil {
+		if _, err := repo.RoleEffective(ctx, tenant, id); err != nil {
 			return err
 		}
 		return errRollback

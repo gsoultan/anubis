@@ -208,7 +208,7 @@ func (u *enrollmentInteractor) EnrollDeviceKey(ctx context.Context, publicKey, l
 	}
 	// Bounded: without a cap, an attacker with a live session can enrol
 	// devices indefinitely and keep access after the password changes.
-	existing, err := u.creds.ListCredentials(ctx, p.IdentityID, "device_key")
+	existing, err := u.creds.ListCredentials(ctx, p.TenantID, p.IdentityID, "device_key")
 	if err != nil {
 		return "", err
 	}
