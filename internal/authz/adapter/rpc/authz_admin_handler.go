@@ -9,7 +9,9 @@ import (
 	anubisv1 "github.com/gsoultan/anubis/gen/go/anubis/v1"
 	"github.com/gsoultan/anubis/gen/go/anubis/v1/anubisv1connect"
 	apiconnect "github.com/gsoultan/anubis/internal/api/connect"
+	authzcatalog "github.com/gsoultan/anubis/internal/authz/app/catalog"
 	authzdomain "github.com/gsoultan/anubis/internal/authz/domain"
+	"github.com/gsoultan/anubis/internal/authz/domain/catalogsync"
 	"github.com/gsoultan/anubis/internal/authz/domain/grant"
 	"github.com/gsoultan/anubis/internal/authz/domain/membership"
 	authzsvc "github.com/gsoultan/anubis/internal/authz/service"
@@ -18,12 +20,13 @@ import (
 
 // AuthzAdminHandler implements anubisv1connect.AuthzAdminServiceHandler.
 type AuthzAdminHandler struct {
-	svc authzsvc.AuthzAdminService
-	f   mw.Factory
+	svc     authzsvc.AuthzAdminService
+	catalog authzsvc.CatalogAdminService
+	f       mw.Factory
 }
 
-func NewAuthzAdminHandler(svc authzsvc.AuthzAdminService, f mw.Factory) *AuthzAdminHandler {
-	return &AuthzAdminHandler{svc: svc, f: f}
+func NewAuthzAdminHandler(svc authzsvc.AuthzAdminService, catalog authzsvc.CatalogAdminService, f mw.Factory) *AuthzAdminHandler {
+	return &AuthzAdminHandler{svc: svc, catalog: catalog, f: f}
 }
 
 var _ anubisv1connect.AuthzAdminServiceHandler = (*AuthzAdminHandler)(nil)
@@ -41,6 +44,7 @@ func (h *AuthzAdminHandler) ListRoles(ctx context.Context, req *connect.Request[
 				ApplicationSlug: r.ApplicationSlug, IsSystem: r.IsSystem,
 				AllowedRealmKinds: r.AllowedRealmKinds, AssignableAt: r.AssignableAt,
 				ParentIds: parents[r.ID], Patterns: patterns[r.ID],
+				Deprecated: r.Deprecated,
 			})
 		}
 		return resp, nil
@@ -64,7 +68,7 @@ func roleProto(r *authzdomain.RoleRecord, parents, patterns []string) *anubisv1.
 		Id: r.ID, Name: r.Name, Description: r.Description,
 		ApplicationSlug: r.ApplicationSlug, IsSystem: r.IsSystem,
 		AllowedRealmKinds: r.AllowedRealmKinds, AssignableAt: r.AssignableAt,
-		ParentIds: parents, Patterns: patterns,
+		ParentIds: parents, Patterns: patterns, Deprecated: r.Deprecated,
 	}
 }
 
@@ -308,7 +312,7 @@ func (h *AuthzAdminHandler) ResyncMembership(ctx context.Context, req *connect.R
 
 func (h *AuthzAdminHandler) ApplyManifest(ctx context.Context, req *connect.Request[anubisv1.ApplyManifestRequest]) (*connect.Response[anubisv1.ApplyManifestResponse], error) {
 	out, err := h.f.Do(ctx, "admin.manifest.apply", func(ctx context.Context) (any, error) {
-		report, version, err := h.svc.ApplyManifest(ctx, req.Msg.ApplicationSlug, req.Msg.ManifestJson, req.Msg.Dry)
+		report, version, err := h.svc.ApplyManifest(ctx, req.Msg.ApplicationSlug, req.Msg.ManifestJson, req.Msg.Format, req.Msg.Dry)
 		if err != nil {
 			return nil, err
 		}
@@ -364,4 +368,139 @@ func (h *AuthzAdminHandler) SearchGrants(ctx context.Context, req *connect.Reque
 		return nil, apiconnect.Err(ctx, err)
 	}
 	return connect.NewResponse(out.(*anubisv1.SearchGrantsResponse)), nil
+}
+
+// --- catalog sources -------------------------------------------------------
+//
+// The catalog's fourth channel. The first three (an API call, an uploaded
+// file, a role edited by hand) all arrive through ApplyManifest above and
+// need none of this.
+
+func catalogSourcePB(s catalogsync.Source) *anubisv1.CatalogSource {
+	out := &anubisv1.CatalogSource{
+		Id: s.ID, ApplicationSlug: s.ApplicationSlug, Name: s.Name,
+		Kind: s.Kind, Format: s.Format, Status: s.Status,
+		ConfigJson: string(s.Config), IntervalSeconds: int32(s.IntervalSeconds),
+		LastStatus: s.LastStatus,
+	}
+	if s.LastRunAt != nil {
+		out.LastRunAt = s.LastRunAt.Unix()
+	}
+	if s.NextRunAt != nil {
+		out.NextRunAt = s.NextRunAt.Unix()
+	}
+	return out
+}
+
+func catalogRunPB(r catalogsync.Run) *anubisv1.CatalogRun {
+	out := &anubisv1.CatalogRun{
+		Id: r.ID, SourceId: r.SourceID, StartedAt: r.StartedAt.Unix(),
+		Dry: r.Dry, Status: r.Status, Actor: r.Actor,
+		DocumentSha: r.DocumentSHA, ReportJson: r.Report, Error: r.Error,
+	}
+	if r.FinishedAt != nil {
+		out.FinishedAt = r.FinishedAt.Unix()
+	}
+	return out
+}
+
+func (h *AuthzAdminHandler) ListCatalogSources(ctx context.Context, _ *connect.Request[anubisv1.ListCatalogSourcesRequest]) (*connect.Response[anubisv1.ListCatalogSourcesResponse], error) {
+	out, err := h.f.Do(ctx, "admin.catalog.sources", func(ctx context.Context) (any, error) {
+		sources, err := h.catalog.ListSources(ctx)
+		if err != nil {
+			return nil, err
+		}
+		resp := &anubisv1.ListCatalogSourcesResponse{}
+		for _, s := range sources {
+			resp.Sources = append(resp.Sources, catalogSourcePB(s))
+		}
+		return resp, nil
+	})
+	if err != nil {
+		return nil, apiconnect.Err(ctx, err)
+	}
+	return connect.NewResponse(out.(*anubisv1.ListCatalogSourcesResponse)), nil
+}
+
+func (h *AuthzAdminHandler) CreateCatalogSource(ctx context.Context, req *connect.Request[anubisv1.CreateCatalogSourceRequest]) (*connect.Response[anubisv1.CreateCatalogSourceResponse], error) {
+	out, err := h.f.Do(ctx, "admin.catalog.source.create", func(ctx context.Context) (any, error) {
+		s, err := h.catalog.CreateSource(ctx, authzcatalog.SourceInput{
+			ApplicationSlug: req.Msg.ApplicationSlug, Name: req.Msg.Name,
+			Kind: req.Msg.Kind, Format: req.Msg.Format,
+			ConfigJSON:      req.Msg.ConfigJson,
+			IntervalSeconds: int(req.Msg.IntervalSeconds),
+		})
+		if err != nil {
+			return nil, err
+		}
+		return &anubisv1.CreateCatalogSourceResponse{Source: catalogSourcePB(*s)}, nil
+	})
+	if err != nil {
+		return nil, apiconnect.Err(ctx, err)
+	}
+	return connect.NewResponse(out.(*anubisv1.CreateCatalogSourceResponse)), nil
+}
+
+func (h *AuthzAdminHandler) UpdateCatalogSource(ctx context.Context, req *connect.Request[anubisv1.UpdateCatalogSourceRequest]) (*connect.Response[anubisv1.UpdateCatalogSourceResponse], error) {
+	out, err := h.f.Do(ctx, "admin.catalog.source.update", func(ctx context.Context) (any, error) {
+		s, err := h.catalog.UpdateSource(ctx, authzcatalog.SourceInput{
+			ID: req.Msg.Id, Name: req.Msg.Name, Status: req.Msg.Status,
+			Format:     req.Msg.Format,
+			ConfigJSON: req.Msg.ConfigJson, IntervalSeconds: int(req.Msg.IntervalSeconds),
+		})
+		if err != nil {
+			return nil, err
+		}
+		return &anubisv1.UpdateCatalogSourceResponse{Source: catalogSourcePB(*s)}, nil
+	})
+	if err != nil {
+		return nil, apiconnect.Err(ctx, err)
+	}
+	return connect.NewResponse(out.(*anubisv1.UpdateCatalogSourceResponse)), nil
+}
+
+func (h *AuthzAdminHandler) DeleteCatalogSource(ctx context.Context, req *connect.Request[anubisv1.DeleteCatalogSourceRequest]) (*connect.Response[anubisv1.DeleteCatalogSourceResponse], error) {
+	_, err := h.f.Do(ctx, "admin.catalog.source.delete", func(ctx context.Context) (any, error) {
+		return nil, h.catalog.DeleteSource(ctx, req.Msg.Id)
+	})
+	if err != nil {
+		return nil, apiconnect.Err(ctx, err)
+	}
+	return connect.NewResponse(&anubisv1.DeleteCatalogSourceResponse{}), nil
+}
+
+func (h *AuthzAdminHandler) RunCatalogSource(ctx context.Context, req *connect.Request[anubisv1.RunCatalogSourceRequest]) (*connect.Response[anubisv1.RunCatalogSourceResponse], error) {
+	out, err := h.f.Do(ctx, "admin.catalog.source.run", func(ctx context.Context) (any, error) {
+		run, err := h.catalog.RunSource(ctx, req.Msg.SourceId, req.Msg.Dry)
+		if err != nil {
+			return nil, err
+		}
+		resp := &anubisv1.RunCatalogSourceResponse{}
+		if run != nil {
+			resp.Run = catalogRunPB(*run)
+		}
+		return resp, nil
+	})
+	if err != nil {
+		return nil, apiconnect.Err(ctx, err)
+	}
+	return connect.NewResponse(out.(*anubisv1.RunCatalogSourceResponse)), nil
+}
+
+func (h *AuthzAdminHandler) ListCatalogRuns(ctx context.Context, req *connect.Request[anubisv1.ListCatalogRunsRequest]) (*connect.Response[anubisv1.ListCatalogRunsResponse], error) {
+	out, err := h.f.Do(ctx, "admin.catalog.runs", func(ctx context.Context) (any, error) {
+		runs, err := h.catalog.ListRuns(ctx, req.Msg.SourceId, req.Msg.Limit)
+		if err != nil {
+			return nil, err
+		}
+		resp := &anubisv1.ListCatalogRunsResponse{}
+		for _, r := range runs {
+			resp.Runs = append(resp.Runs, catalogRunPB(r))
+		}
+		return resp, nil
+	})
+	if err != nil {
+		return nil, apiconnect.Err(ctx, err)
+	}
+	return connect.NewResponse(out.(*anubisv1.ListCatalogRunsResponse)), nil
 }

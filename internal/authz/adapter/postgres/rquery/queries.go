@@ -15,9 +15,11 @@ package authzrquery
 import "github.com/gsoultan/storm"
 
 // Queries is what cmd/stormgen validates and emits scanners for. Every
-// declaration in the package MUST be listed — an omitted one still runs, but
-// without generate-time schema checking, which is the property this package
-// exists to provide.
+// declaration in the package MUST be listed, and an omitted one does not
+// merely lose its generate-time schema check: as of storm v0.10.0 it REFUSES
+// TO RUN, at runtime, with "this statement was not declared at generate
+// time". The build is clean and the tests pass — a scheduled job is where you
+// find out. Adding a declaration is two edits, here and `storm generate`.
 func Queries() []storm.RawDecl {
 	return []storm.RawDecl{
 		// authz.go
@@ -29,6 +31,7 @@ func Queries() []storm.RawDecl {
 		ListRolePatterns, DeleteRolePatterns, InsertRolePattern,
 		DeleteRolePermissions, InsertRolePermission,
 		RecomputeRoleEffective, RolesBelow, GetRoleEffective, ListRolesUsingPattern,
+		UpsertSystemRole, DeprecateRolesExcept,
 		// grant.go
 		ListGrantsByIdentity, ListGrantScopes, CreateGrant, InsertGrantScope,
 		RevokeGrant, SearchGrants, CountLiveGrants,
@@ -39,5 +42,9 @@ func Queries() []storm.RawDecl {
 		AssignMembership, UnassignMembership, ResyncMembership,
 		// permission.go
 		ListPermissions, UpsertPermission, DeprecatePermissionsExcept, PermissionIDByKey,
+		// catalog_sync.go
+		ListCatalogSources, GetCatalogSource, DueCatalogSources,
+		CreateCatalogSource, UpdateCatalogSource, DeleteCatalogSource, ScheduleCatalogSource,
+		StartCatalogRun, FinishCatalogRun, ListCatalogRuns, LastAppliedDigest,
 	}
 }

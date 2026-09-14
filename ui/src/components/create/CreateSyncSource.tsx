@@ -69,7 +69,7 @@ export function CreateSyncSource({ opened }: { opened: boolean }) {
       description={<>Point a structure at the system that owns it — the ERP for products, the
         CRM for customers. Rows are matched by a stable reference, vanished rows are
         <b> archived, never deleted</b>, and items created by hand are never touched.</>}
-      footer={<CancelSubmit onCancel={close}
+      footer={<CancelSubmit onCancel={close} onSubmit={() => void save()}
         canSubmit={ready}
         submitting={busy} label="Connect source" />}
     >

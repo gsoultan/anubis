@@ -1,4 +1,12 @@
-package feed
+// Package egress is the one policy for "Anubis is about to connect to a host
+// somebody configured".
+//
+// Two features need it and neither may have its own copy: a scope feed reads
+// an organisation's structure from an ERP, and a catalog source reads an
+// application's permissions and roles from wherever that team publishes
+// them. A guard that exists twice is a guard that will differ, and the half
+// that is weaker is the one an attacker finds.
+package egress
 
 import (
 	"net"
@@ -25,14 +33,18 @@ import (
 // installation that wants its own internal ranges off limits;
 // ANUBIS_SYNC_ALLOW_LOOPBACK re-opens loopback for a development machine
 // where the "external" database is a container on the same host.
-const externalTimeout = 60 * time.Second
+// Timeout bounds a single conversation with an external source.
+const Timeout = 60 * time.Second
 
 // alwaysDenied is not configurable. 169.254.0.0/16 carries the metadata
 // service on every major cloud, and fe80::/10 is its IPv6 equivalent;
 // reaching either from a feed is not a use case anyone has.
 var alwaysDenied = []string{"169.254.0.0/16", "fe80::/10"}
 
-func allowExternalHost(host string) error {
+// AllowHost refuses a hostname whose addresses are off limits. It resolves
+// the name, because the policy is about where the packet goes and a name is
+// not where the packet goes.
+func AllowHost(host string) error {
 	if host == "" {
 		return apperr.ErrInvalidArgument.With("dsn", "no host")
 	}

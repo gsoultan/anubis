@@ -15,6 +15,7 @@ func roleRecordOf(r authzrquery.RoleRow) authzdomain.RoleRecord {
 		ID: r.ID, Name: r.Name, Description: r.Description,
 		ApplicationSlug: r.ApplicationSlug.V, IsSystem: r.IsSystem,
 		AllowedRealmKinds: r.AllowedRealmKinds, AssignableAt: r.AssignableAt,
+		Deprecated: r.DeprecatedAt.Valid,
 	}
 }
 
@@ -61,6 +62,7 @@ func (s *Repository) RoleByName(ctx context.Context, tenantID, name string) (*au
 	return &authzdomain.RoleRecord{
 		ID: uuidStr(r.ID), Name: r.Name, Description: r.Description,
 		IsSystem: r.IsSystem, AllowedRealmKinds: r.AllowedRealmKinds,
+		Deprecated: r.DeprecatedAt.Valid,
 	}, nil
 }
 
@@ -205,4 +207,37 @@ func orDefaultKinds(k []string) []string {
 		return []string{"internal"}
 	}
 	return k
+}
+
+// --- the catalog side of a role ----------------------------------------------
+
+func (s *Repository) UpsertSystemRole(ctx context.Context, tenantID, applicationID string, r authzdomain.RoleRecord) (string, error) {
+	row, ok, err := authzrquery.UpsertSystemRole.One(ctx, s.rex(ctx),
+		// orDefaultKinds, exactly as CreateRole does: a nil slice reaches
+		// Postgres as NULL and the column is NOT NULL, and a role declaring no
+		// realm kinds has always meant "internal only" rather than "nowhere".
+		tenantID, r.Name, r.Description, applicationID, orDefaultKinds(r.AllowedRealmKinds))
+	if err != nil {
+		return "", database.MapErr(err)
+	}
+	if !ok {
+		// The conditional DO UPDATE matched nothing, which means the name
+		// belongs to a role this manifest does not own.
+		return "", apperr.ErrConflict.
+			With("role", r.Name).
+			With("reason", "a role with this name exists and was not created by this application's manifest")
+	}
+	return row.ID, nil
+}
+
+func (s *Repository) DeprecateRolesExcept(ctx context.Context, applicationID string, keepIDs []string) ([]string, error) {
+	rows, err := authzrquery.DeprecateRolesExcept.Query(ctx, s.rex(ctx), applicationID, keepIDs)
+	if err != nil {
+		return nil, database.MapErr(err)
+	}
+	out := make([]string, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, r.Name)
+	}
+	return out, nil
 }

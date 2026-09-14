@@ -14,5 +14,19 @@ for pkg in $(go list ./internal/*/domain/... ./internal/shared/... 2>/dev/null);
     fail=1
   fi
 done
+
+# The unguarded entry points. Two usecases take their own tenant id and check
+# no operator, because the caller is a scheduler and there is no operator to
+# check. That is safe exactly as long as nothing reachable from the network
+# can call them: a transport supplying its own tenant id has proved nothing.
+for sym in ApplyDocumentAsSystem RunDue; do
+  hits=$(grep -rn "\.$sym(" internal/*/adapter/rpc internal/*/adapter/http internal/api 2>/dev/null || true)
+  if [ -n "$hits" ]; then
+    echo "FAIL: $sym is unguarded and must not be called from a transport:" >&2
+    echo "$hits" >&2
+    fail=1
+  fi
+done
+
 [ "$fail" = "0" ] || exit 1
-echo "ok: domain and shared packages are stdlib-only"
+echo "ok: domain and shared packages are stdlib-only; unguarded applies are not reachable from a transport"

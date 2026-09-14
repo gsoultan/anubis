@@ -109,8 +109,12 @@ function SignIn() {
   }
 
   return (
-    <div className="flex h-full items-center justify-center" style={{ background: 'var(--s-base)' }}>
-      <div className="fade" style={{ width: 360 }}>
+    /* min-h-dvh, not h-full: on mobile the browser chrome is inside 100vh, so a
+       centred card sits partly under it. The padding is what stops a 360px card
+       from touching both edges of a 360px phone. */
+    <div className="flex min-h-dvh items-center justify-center p-4"
+      style={{ background: 'var(--s-base)' }}>
+      <div className="fade" style={{ width: 'min(360px, 100%)' }}>
         <div className="mb-5 flex items-center gap-2.5">
           <Jackal />
           <div className="leading-none">

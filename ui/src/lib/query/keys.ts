@@ -30,6 +30,8 @@ export const qk = {
   memberships: () => ['memberships'] as const,
   syncSources: () => ['sync-sources'] as const,
   syncRuns: (sourceId: string) => ['sync-runs', sourceId] as const,
+  catalogSources: () => ['catalog-sources'] as const,
+  catalogRuns: (sourceId: string) => ['catalog-runs', sourceId] as const,
 
   dashboard: () => ['dashboard'] as const,
   audit: () => ['audit'] as const,

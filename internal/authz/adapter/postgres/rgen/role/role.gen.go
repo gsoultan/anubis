@@ -30,6 +30,7 @@ type Row struct {
 	Description       string
 	AssignableAt      []string
 	AllowedRealmKinds []string
+	DeprecatedAt      runtime.Null[time.Time]
 }
 
 // Operator ids. Argument-taking operators are numbered first, so the
@@ -67,7 +68,7 @@ const (
 	opNotExists runtime.Op = 26
 )
 
-const nCols = 10
+const nCols = 11
 
 // Query is a value type: composing one allocates nothing. Predicates
 // are a postfix token stream, so disjunction and negation are
@@ -236,6 +237,13 @@ func (q *Query) cursor(col uint32, r Row) {
 		}
 		q.strs[q.ns] = r.Description
 		q.ns++
+	case 10:
+		if int(q.ntm) >= len(q.tims) {
+			q.over = true
+			return
+		}
+		q.tims[q.ntm] = r.DeprecatedAt.V
+		q.ntm++
 	}
 }
 
@@ -413,6 +421,7 @@ var (
 	Description       = TextCol{7}
 	AssignableAt      = TextArrayCol{8}
 	AllowedRealmKinds = TextArrayCol{9}
+	DeprecatedAt      = NullTimeCol{10}
 )
 
 // UUIDCol addresses a uuid column.
@@ -548,6 +557,27 @@ func (h TextArrayCol) ContainedBy(v ...string) Pred {
 func (h TextArrayCol) Overlaps(v ...string) Pred {
 	return Pred{col: h.c, op: opArrayOverlaps, anyStr: v}
 }
+
+// NullTimeCol addresses a timestamptz column.
+type NullTimeCol struct{ c uint8 }
+
+func (h NullTimeCol) Asc() Sort  { return Sort(runtime.MakeOrder(runtime.Asc, uint32(h.c))) }
+func (h NullTimeCol) Desc() Sort { return Sort(runtime.MakeOrder(runtime.Desc, uint32(h.c))) }
+func (h NullTimeCol) AscNullsFirst() Sort {
+	return Sort(runtime.MakeOrder(runtime.AscNullsFirst, uint32(h.c)))
+}
+func (h NullTimeCol) DescNullsLast() Sort {
+	return Sort(runtime.MakeOrder(runtime.DescNullsLast, uint32(h.c)))
+}
+
+func (h NullTimeCol) Eq(v time.Time) Pred    { return Pred{col: h.c, op: opEq, tim: v} }
+func (h NullTimeCol) NotEq(v time.Time) Pred { return Pred{col: h.c, op: opNotEq, tim: v} }
+func (h NullTimeCol) Gt(v time.Time) Pred    { return Pred{col: h.c, op: opGt, tim: v} }
+func (h NullTimeCol) Gte(v time.Time) Pred   { return Pred{col: h.c, op: opGte, tim: v} }
+func (h NullTimeCol) Lt(v time.Time) Pred    { return Pred{col: h.c, op: opLt, tim: v} }
+func (h NullTimeCol) Lte(v time.Time) Pred   { return Pred{col: h.c, op: opLte, tim: v} }
+func (h NullTimeCol) IsNull() Pred           { return Pred{col: h.c, op: opIsNull} }
+func (h NullTimeCol) IsNotNull() Pred        { return Pred{col: h.c, op: opIsNotNull} }
 
 // Where applies predicates, ANDed together.
 func (q Query) Where(ps ...Pred) Query {
@@ -800,6 +830,13 @@ func (q *Query) leaf(p Pred) {
 		}
 		q.strs[q.ns] = p.str
 		q.ns++
+	case 10:
+		if int(q.ntm) >= 4 {
+			q.over = true
+			return
+		}
+		q.tims[q.ntm] = p.tim
+		q.ntm++
 	}
 	q.push(runtime.MakeLeaf(uint32(p.op), uint32(p.col)))
 }
@@ -867,8 +904,16 @@ func (q Query) AllowedRealmKindsContainedBy(v ...string) Query {
 func (q Query) AllowedRealmKindsOverlaps(v ...string) Query {
 	return q.Where(AllowedRealmKinds.Overlaps(v...))
 }
+func (q Query) DeprecatedAtEq(v time.Time) Query    { return q.Where(DeprecatedAt.Eq(v)) }
+func (q Query) DeprecatedAtNotEq(v time.Time) Query { return q.Where(DeprecatedAt.NotEq(v)) }
+func (q Query) DeprecatedAtGt(v time.Time) Query    { return q.Where(DeprecatedAt.Gt(v)) }
+func (q Query) DeprecatedAtGte(v time.Time) Query   { return q.Where(DeprecatedAt.Gte(v)) }
+func (q Query) DeprecatedAtLt(v time.Time) Query    { return q.Where(DeprecatedAt.Lt(v)) }
+func (q Query) DeprecatedAtLte(v time.Time) Query   { return q.Where(DeprecatedAt.Lte(v)) }
+func (q Query) DeprecatedAtIsNull() Query           { return q.Where(DeprecatedAt.IsNull()) }
+func (q Query) DeprecatedAtIsNotNull() Query        { return q.Where(DeprecatedAt.IsNotNull()) }
 
-const selectPrefix = `SELECT "id", "created_at", "updated_at", "tenant_id", "application_id", "is_system", "name", "description", "assignable_at", "allowed_realm_kinds" FROM "roles"`
+const selectPrefix = `SELECT "id", "created_at", "updated_at", "tenant_id", "application_id", "is_system", "name", "description", "assignable_at", "allowed_realm_kinds", "deprecated_at" FROM "roles"`
 const countPrefix = `SELECT count(*) FROM "roles"`
 const existsPrefix = `SELECT 1 FROM "roles"`
 const existsSuffix = ` LIMIT 1`
@@ -965,6 +1010,12 @@ var orderTable = [nCols][4]string{
 		"\"allowed_realm_kinds\" ASC NULLS FIRST",
 		"\"allowed_realm_kinds\" DESC NULLS LAST",
 	},
+	{ // deprecated_at
+		"\"deprecated_at\"",
+		"\"deprecated_at\" DESC",
+		"\"deprecated_at\" ASC NULLS FIRST",
+		"\"deprecated_at\" DESC NULLS LAST",
+	},
 }
 
 // identTable is each column's bare quoted name, for the left side of a
@@ -980,6 +1031,7 @@ var identTable = [nCols]string{
 	"\"description\"",
 	"\"assignable_at\"",
 	"\"allowed_realm_kinds\"",
+	"\"deprecated_at\"",
 }
 
 var lowering = runtime.Lowering{
@@ -1012,7 +1064,7 @@ func orderOf(dir, col uint32) string {
 
 // fragTable is every predicate this table can produce, lowered at build
 // time. Runtime splices; it never formats.
-var fragTable = [10][27]runtime.Frag{
+var fragTable = [11][27]runtime.Frag{
 	{ // id
 		{}, // opNone
 		{A: "\"id\" = $", B: ""},
@@ -1303,6 +1355,35 @@ var fragTable = [10][27]runtime.Frag{
 		{},
 		{},
 	},
+	{ // deprecated_at
+		{}, // opNone
+		{A: "\"deprecated_at\" = $", B: ""},
+		{A: "\"deprecated_at\" <> $", B: ""},
+		{A: "\"deprecated_at\" > $", B: ""},
+		{A: "\"deprecated_at\" >= $", B: ""},
+		{A: "\"deprecated_at\" < $", B: ""},
+		{A: "\"deprecated_at\" <= $", B: ""},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{A: "\"deprecated_at\" IS NULL", B: ""},
+		{A: "\"deprecated_at\" IS NOT NULL", B: ""},
+		{},
+		{},
+	},
 }
 
 func fragOf(op, col uint32) runtime.Frag {
@@ -1475,6 +1556,7 @@ func scan(rv [][]byte, r *Row, sl *runtime.Slab) error {
 	if decErr != nil {
 		return decErr
 	}
+	r.DeprecatedAt = runtime.Nullable(rv[10], runtime.Timestamptz)
 	return decErr
 }
 
@@ -1604,6 +1686,10 @@ func (q Query) bindPreds(b *binder) []any {
 			b.strs[ns] = q.strs[ns]
 			v = append(v, &b.strs[ns])
 			ns++
+		case 10:
+			b.tims[ntm] = q.tims[ntm]
+			v = append(v, &b.tims[ntm])
+			ntm++
 		}
 	}
 	b.vals = v
@@ -1741,7 +1827,7 @@ func (q Query) Prepare(b *Binder) (string, []any) {
 
 // insertSQL does not vary: the column list is fixed by the table, so
 // the placeholders are known at build time and nothing is spliced.
-const insertSQL = `INSERT INTO "roles" ("id", "created_at", "updated_at", "tenant_id", "application_id", "is_system", "name", "description", "assignable_at", "allowed_realm_kinds") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING "id", "created_at", "updated_at", "tenant_id", "application_id", "is_system", "name", "description", "assignable_at", "allowed_realm_kinds"`
+const insertSQL = `INSERT INTO "roles" ("id", "created_at", "updated_at", "tenant_id", "application_id", "is_system", "name", "description", "assignable_at", "allowed_realm_kinds", "deprecated_at") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING "id", "created_at", "updated_at", "tenant_id", "application_id", "is_system", "name", "description", "assignable_at", "allowed_realm_kinds", "deprecated_at"`
 
 const updatePrefix = `UPDATE "roles" SET `
 const deletePrefix = `DELETE FROM "roles"`
@@ -1757,9 +1843,10 @@ const (
 	dDescription       uint64 = 1 << 5
 	dAssignableAt      uint64 = 1 << 6
 	dAllowedRealmKinds uint64 = 1 << 7
+	dDeprecatedAt      uint64 = 1 << 8
 )
 
-const nUpdatable = 8
+const nUpdatable = 9
 
 // setFrags is every assignment this table can make, lowered at build time.
 var setFrags = [nUpdatable]runtime.Frag{
@@ -1771,6 +1858,7 @@ var setFrags = [nUpdatable]runtime.Frag{
 	{A: "\"description\" = $", B: ""},         // description
 	{A: "\"assignable_at\" = $", B: ""},       // assignable_at
 	{A: "\"allowed_realm_kinds\" = $", B: ""}, // allowed_realm_kinds
+	{A: "\"deprecated_at\" = $", B: ""},       // deprecated_at
 }
 
 // pkFrags addresses one row.
@@ -1792,9 +1880,10 @@ const (
 	iDescription       uint64 = 1 << 7
 	iAssignableAt      uint64 = 1 << 8
 	iAllowedRealmKinds uint64 = 1 << 9
+	iDeprecatedAt      uint64 = 1 << 10
 )
 
-const nInsertable = 10
+const nInsertable = 11
 
 // insCols is the quoted column name for each insert bit.
 var insCols = [nInsertable]string{
@@ -1808,6 +1897,7 @@ var insCols = [nInsertable]string{
 	"\"description\"",
 	"\"assignable_at\"",
 	"\"allowed_realm_kinds\"",
+	"\"deprecated_at\"",
 }
 
 // insParts and insPlaceholder come from the back end at build time; the
@@ -1816,7 +1906,7 @@ var insParts = runtime.InsertParts{Open: " (", Sep: ", ", Mid: ") VALUES (", Clo
 var insPlaceholder = runtime.Placeholder{}
 
 const insPrefix = "INSERT INTO \"roles\""
-const insReturning = " RETURNING \"id\", \"created_at\", \"updated_at\", \"tenant_id\", \"application_id\", \"is_system\", \"name\", \"description\", \"assignable_at\", \"allowed_realm_kinds\""
+const insReturning = " RETURNING \"id\", \"created_at\", \"updated_at\", \"tenant_id\", \"application_id\", \"is_system\", \"name\", \"description\", \"assignable_at\", \"allowed_realm_kinds\", \"deprecated_at\""
 
 var insCache = runtime.NewMaskCache()
 
@@ -1894,6 +1984,18 @@ func (m *Mut) SetAssignableAt(v []string) {
 func (m *Mut) SetAllowedRealmKinds(v []string) {
 	m.row.AllowedRealmKinds = v
 	m.dirty |= dAllowedRealmKinds
+}
+
+func (m *Mut) SetDeprecatedAt(v time.Time) {
+	m.row.DeprecatedAt = runtime.Null[time.Time]{V: v, Valid: true}
+	m.dirty |= dDeprecatedAt
+}
+
+// SetDeprecatedAtNull writes SQL NULL. It is a separate method because a
+// zero value and an absent value are different facts.
+func (m *Mut) SetDeprecatedAtNull() {
+	m.row.DeprecatedAt = runtime.Null[time.Time]{}
+	m.dirty |= dDeprecatedAt
 }
 
 // Ins stages a new row. Unlike Mut it has a setter for every insertable
@@ -1978,6 +2080,18 @@ func (n *Ins) SetAllowedRealmKinds(v []string) {
 	n.set |= iAllowedRealmKinds
 }
 
+func (n *Ins) SetDeprecatedAt(v time.Time) {
+	n.row.DeprecatedAt = runtime.Null[time.Time]{V: v, Valid: true}
+	n.set |= iDeprecatedAt
+}
+
+// SetDeprecatedAtNull writes SQL NULL explicitly, which is not the same as
+// leaving the column unset and taking its default.
+func (n *Ins) SetDeprecatedAtNull() {
+	n.row.DeprecatedAt = runtime.Null[time.Time]{}
+	n.set |= iDeprecatedAt
+}
+
 // The conflict encoding. One byte holds both which unique index an
 // upsert names and what it does on collision, so the insert statement
 // cache stays keyed by one mask and one byte:
@@ -2024,7 +2138,7 @@ var conflictSpecs = []string{
 
 // assignable is the columns target i may overwrite, given the mask.
 func assignable(i uint8, mask uint64) []string {
-	set := make([]string, 0, 8)
+	set := make([]string, 0, 9)
 	switch i {
 	case 0:
 		if mask&(1<<2) != 0 {
@@ -2051,6 +2165,9 @@ func assignable(i uint8, mask uint64) []string {
 		if mask&(1<<9) != 0 {
 			set = append(set, "allowed_realm_kinds")
 		}
+		if mask&(1<<10) != 0 {
+			set = append(set, "deprecated_at")
+		}
 	case 1:
 		if mask&(1<<2) != 0 {
 			set = append(set, "updated_at")
@@ -2069,6 +2186,9 @@ func assignable(i uint8, mask uint64) []string {
 		}
 		if mask&(1<<9) != 0 {
 			set = append(set, "allowed_realm_kinds")
+		}
+		if mask&(1<<10) != 0 {
+			set = append(set, "deprecated_at")
 		}
 	}
 	return set
@@ -2136,6 +2256,7 @@ var assignFor = map[string]string{
 	"description":         "\"description\" = EXCLUDED.\"description\"",
 	"assignable_at":       "\"assignable_at\" = EXCLUDED.\"assignable_at\"",
 	"allowed_realm_kinds": "\"allowed_realm_kinds\" = EXCLUDED.\"allowed_realm_kinds\"",
+	"deprecated_at":       "\"deprecated_at\" = EXCLUDED.\"deprecated_at\"",
 }
 
 func assignExcluded(c string) string { return assignFor[c] }
@@ -2199,6 +2320,8 @@ func (n *Ins) Insert(ctx context.Context, ex runtime.Executor) (Row, error) {
 			args = append(args, n.row.AssignableAt)
 		case 9:
 			args = append(args, n.row.AllowedRealmKinds)
+		case 10:
+			args = append(args, n.row.DeprecatedAt.Arg())
 		}
 	}
 	var out Row
@@ -2236,7 +2359,7 @@ func Inserts() int { return insCache.Masks() }
 // not treat a zero as 'unset': that guess is why other ORMs cannot insert
 // a false, a 0 or an empty string into a column with a default.
 func Insert(ctx context.Context, ex runtime.Executor, r *Row) error {
-	args := make([]any, 0, 10)
+	args := make([]any, 0, 11)
 	args = append(args, r.ID)
 	args = append(args, r.CreatedAt)
 	args = append(args, r.UpdatedAt)
@@ -2247,6 +2370,7 @@ func Insert(ctx context.Context, ex runtime.Executor, r *Row) error {
 	args = append(args, r.Description)
 	args = append(args, r.AssignableAt)
 	args = append(args, r.AllowedRealmKinds)
+	args = append(args, r.DeprecatedAt.Arg())
 	rows, err := ex.Query(ctx, insertSQL, args)
 	if err != nil {
 		return err
@@ -2283,13 +2407,14 @@ var copyCols = []string{
 	"description",
 	"assignable_at",
 	"allowed_realm_kinds",
+	"deprecated_at",
 }
 
 // rowSource walks a []Row for CopyFrom without copying any of it.
 type rowSource struct {
 	rows []Row
 	i    int
-	buf  [10]any
+	buf  [11]any
 }
 
 func (s *rowSource) Next() bool {
@@ -2317,6 +2442,7 @@ func (s *rowSource) Values() []any {
 	s.buf[7] = &r.Description
 	s.buf[8] = &r.AssignableAt
 	s.buf[9] = &r.AllowedRealmKinds
+	s.buf[10] = r.DeprecatedAt.Ptr()
 	return s.buf[:]
 }
 
@@ -2357,8 +2483,9 @@ func InsertOp(r Row) runtime.BatchOp {
 	mask |= 1 << 7
 	mask |= 1 << 8
 	mask |= 1 << 9
+	mask |= 1 << 10
 	st := stmtForInsertNoReturn(mask, 0)
-	args := make([]any, 0, 10)
+	args := make([]any, 0, 11)
 	args = append(args, r.ID)
 	args = append(args, r.CreatedAt)
 	args = append(args, r.UpdatedAt)
@@ -2369,6 +2496,7 @@ func InsertOp(r Row) runtime.BatchOp {
 	args = append(args, r.Description)
 	args = append(args, r.AssignableAt)
 	args = append(args, r.AllowedRealmKinds)
+	args = append(args, r.DeprecatedAt.Arg())
 	return runtime.BatchOp{SQL: st.SQL, Args: args}
 }
 
@@ -2422,6 +2550,8 @@ func (n *Ins) Op() (runtime.BatchOp, error) {
 			args = append(args, n.row.AssignableAt)
 		case 9:
 			args = append(args, n.row.AllowedRealmKinds)
+		case 10:
+			args = append(args, n.row.DeprecatedAt.Arg())
 		}
 	}
 	return runtime.BatchOp{SQL: st.SQL, Args: args}, nil
@@ -2480,6 +2610,8 @@ func (m *Mut) UpdateOp() (runtime.BatchOp, bool) {
 			args = append(args, m.row.AssignableAt)
 		case 7:
 			args = append(args, m.row.AllowedRealmKinds)
+		case 8:
+			args = append(args, m.row.DeprecatedAt.Arg())
 		}
 	}
 	args = append(args, m.row.ID)
@@ -2551,6 +2683,8 @@ func (m *Mut) Update(ctx context.Context, ex runtime.Executor) error {
 			args = append(args, m.row.AssignableAt)
 		case 7:
 			args = append(args, m.row.AllowedRealmKinds)
+		case 8:
+			args = append(args, m.row.DeprecatedAt.Arg())
 		}
 	}
 	args = append(args, m.row.ID)

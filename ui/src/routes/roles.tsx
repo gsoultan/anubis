@@ -8,13 +8,11 @@ import { Page } from '@/components/shell/Page'
 import { DataTable, Cell, type Column } from '@/components/ui/DataTable'
 import { api } from '@/lib/api/client'
 import { qk } from '@/lib/query/keys'
+import { REALM_KIND_COLOR } from '@/lib/realmKind'
 import type { Permission, Role } from '@/lib/api/types'
 
 export const Route = createFileRoute('/roles')({ component: Roles })
 
-const KIND_COLOR: Record<string, string> = {
-  internal: 'var(--gold)', partner: 'var(--info)', public: 'var(--grape)', service: 'var(--ink-3)',
-}
 /* The count alone answered "how many" but not "which" — the question every
    reviewer actually has. Click to see the bundle, loaded on demand. */
 function RolePermissions({ roleId, count }: { roleId: string; count: number }) {
@@ -72,6 +70,16 @@ function Roles() {
                 <span className="chip">system</span>
               </Tooltip>
             )}
+            {/* The pill is spent on the exception: almost every role is live,
+                and the one that is not is what somebody is scanning for. */}
+            {r.deprecated && (
+              <Tooltip
+                label="Retired: its manifest stopped naming it. It cannot be granted to anybody new — every grant that already has it keeps working."
+                withArrow
+              >
+                <span className="v-pill v-pill-deny" style={{ cursor: 'help' }}>retired</span>
+              </Tooltip>
+            )}
           </div>
           <span className="t-xs">{r.description}</span>
         </div>
@@ -79,7 +87,7 @@ function Roles() {
     { key: 'realms', header: 'Grantable to', width: 210, render: (r) => (
         <div className="flex flex-wrap gap-1">
           {r.allowed_realm_kinds.map((k) => (
-            <span key={k} className="chip" style={{ color: KIND_COLOR[k] }}>{k}</span>
+            <span key={k} className="chip" style={{ color: REALM_KIND_COLOR[k] }}>{k}</span>
           ))}
         </div>
       ) },

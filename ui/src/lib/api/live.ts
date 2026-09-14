@@ -17,7 +17,7 @@ import type {
   RealmCategory, RealmKind, Role, ScopeAxis, ScopeNode, ScopeNodeType,
   SecuritySignal,  StrictDryRun, SyncPlan, SyncRun, SyncSource, Tenant,
   Ial, Risk, Uuid, AuthPage, PageConfig, PageKind, SigningKeyRecord,
-  CredentialInfo,
+  CredentialInfo, CatalogSource, CatalogRun, CatalogFormat,
 } from './types'
 
 /** Unix seconds to ISO, with the protobuf zero meaning "never". */
@@ -134,13 +134,19 @@ async function realmCodeFor(realmId?: string): Promise<string> {
 async function toIdentity(i: {
   id: string; username: string; email: string; realm: string; status: string
   assuranceLevel: number; tokenEpoch: number; externalRef: string
+  category: string
   createdAt: bigint; lastLoginAt: bigint; disabledAt: bigint; anonymizedAt: bigint
+  retentionUntil: bigint
 }): Promise<Identity> {
   return {
     id: i.id,
     tenant_id: '',
     realm_id: await realmIdByCode(i.realm),
-    category_id: null,
+    /* The admin API names a category by CODE, and always has — this was
+       hardcoded null, so every screen looking a category up by id found
+       nothing and the label silently never rendered. Codes are unique per
+       REALM, not per tenant, so a consumer matches code AND realm. */
+    category: i.category || null,
     username: i.username,
     email: i.email || null,
     status: i.status as Identity['status'],
@@ -151,7 +157,7 @@ async function toIdentity(i: {
     last_login_at: at(i.lastLoginAt),
     disabled_at: at(i.disabledAt),
     anonymized_at: at(i.anonymizedAt),
-    retention_until: null,
+    retention_until: at(i.retentionUntil),
   }
 }
 
@@ -206,23 +212,10 @@ export async function identity(id: Uuid): Promise<Identity | null> {
   const resp = await rpc.identityAdmin.getIdentity({ id })
   const i = resp.identity
   if (!i) return null
-  return {
-    id: i.id,
-    tenant_id: '',
-    realm_id: await realmIdByCode(i.realm),
-    category_id: null,
-    username: i.username,
-    email: i.email || null,
-    status: i.status as Identity['status'],
-    assurance_level: i.assuranceLevel as Ial,
-    token_epoch: i.tokenEpoch,
-    external_ref: i.externalRef || null,
-    created_at: atRequired(i.createdAt),
-    last_login_at: at(i.lastLoginAt),
-    disabled_at: at(i.disabledAt),
-    anonymized_at: at(i.anonymizedAt),
-    retention_until: null,
-  }
+  /* One mapper, not a hand-built copy of it. The copy is how a person's own
+     page came to report no category and no retention while the list reported
+     both: two places to add a field, and only one of them got it. */
+  return await toIdentity(i)
 }
 
 export async function roles(): Promise<Role[]> {
@@ -237,6 +230,7 @@ export async function roles(): Promise<Role[]> {
     is_system: r.isSystem,
     allowed_realm_kinds: r.allowedRealmKinds as RealmKind[],
     assignable_at: r.assignableAt,
+    deprecated: r.deprecated,
     /* ListRoles does not carry a permission count, so this is not a real
        number and the roles screen should not present it as one. Fixing it
        properly means adding the count to the Role message rather than making
@@ -535,9 +529,99 @@ export async function rotateClientSecret(id: string): Promise<string> {
 
 /** Apply an application's manifest: the permissions, roles and route policies
     it declares. Run it dry first — it reports what would change. */
-export async function applyManifest(applicationSlug: string, manifestJson: string, dry: boolean) {
-  const resp = await rpc.authzAdmin.applyManifest({ applicationSlug, manifestJson, dry })
+export async function applyManifest(
+  applicationSlug: string, document: string, dry: boolean, format: CatalogFormat = 'json',
+) {
+  /* manifestJson carries the document whatever the format — the field predates
+     CSV and renaming it would break every caller for a word. */
+  const resp = await rpc.authzAdmin.applyManifest({
+    applicationSlug, manifestJson: document, dry, format,
+  })
   return resp
+}
+
+/* --- catalog sources ------------------------------------------------------- */
+
+function catalogSourceOf(s: {
+  id: string; applicationSlug: string; name: string; kind: string; format: string
+  status: string; configJson: string; intervalSeconds: number
+  lastRunAt: bigint; nextRunAt: bigint; lastStatus: string
+}): CatalogSource {
+  return {
+    id: s.id,
+    application_slug: s.applicationSlug,
+    name: s.name,
+    kind: s.kind,
+    format: s.format === 'csv' ? 'csv' : 'json',
+    status: s.status === 'disabled' ? 'disabled' : 'active',
+    config_json: s.configJson,
+    interval_seconds: s.intervalSeconds,
+    last_run_at: at(s.lastRunAt),
+    next_run_at: at(s.nextRunAt),
+    last_status: (s.lastStatus || '') as CatalogSource['last_status'],
+  }
+}
+
+function catalogRunOf(r: {
+  id: string; sourceId: string; startedAt: bigint; finishedAt: bigint; dry: boolean
+  status: string; actor: string; documentSha: string; reportJson: string; error: string
+}): CatalogRun {
+  return {
+    id: r.id,
+    source_id: r.sourceId,
+    started_at: atRequired(r.startedAt),
+    finished_at: at(r.finishedAt),
+    dry: r.dry,
+    status: r.status as CatalogRun['status'],
+    actor: r.actor,
+    document_sha: r.documentSha,
+    report_json: r.reportJson,
+    error: r.error,
+  }
+}
+
+export async function catalogSources(): Promise<CatalogSource[]> {
+  const resp = await rpc.authzAdmin.listCatalogSources({})
+  return resp.sources.map(catalogSourceOf)
+}
+
+export async function createCatalogSource(in_: {
+  applicationSlug: string; name: string; format: CatalogFormat
+  configJson: string; intervalSeconds: number
+}): Promise<CatalogSource | null> {
+  const resp = await rpc.authzAdmin.createCatalogSource({
+    applicationSlug: in_.applicationSlug, name: in_.name, kind: 'http',
+    format: in_.format, configJson: in_.configJson,
+    intervalSeconds: in_.intervalSeconds,
+  })
+  return resp.source ? catalogSourceOf(resp.source) : null
+}
+
+export async function updateCatalogSource(in_: {
+  id: Uuid; name: string; status: string; format: CatalogFormat
+  configJson: string; intervalSeconds: number
+}): Promise<CatalogSource | null> {
+  const resp = await rpc.authzAdmin.updateCatalogSource({
+    id: in_.id, name: in_.name, status: in_.status, format: in_.format,
+    configJson: in_.configJson, intervalSeconds: in_.intervalSeconds,
+  })
+  return resp.source ? catalogSourceOf(resp.source) : null
+}
+
+export async function deleteCatalogSource(sourceId: Uuid): Promise<void> {
+  await rpc.authzAdmin.deleteCatalogSource({ id: sourceId })
+}
+
+/** Runs a source now. A dry run fetches and validates without writing, and
+    without moving the source's clock. */
+export async function runCatalogSource(sourceId: Uuid, dry: boolean): Promise<CatalogRun | null> {
+  const resp = await rpc.authzAdmin.runCatalogSource({ sourceId, dry })
+  return resp.run ? catalogRunOf(resp.run) : null
+}
+
+export async function catalogRuns(sourceId: Uuid, limit = 20): Promise<CatalogRun[]> {
+  const resp = await rpc.authzAdmin.listCatalogRuns({ sourceId, limit })
+  return resp.runs.map(catalogRunOf)
 }
 
 /* Scope. Axes carry two JSON blobs — how a target is resolved at decision
@@ -673,13 +757,22 @@ export const defaultPageConfig = (kind: PageKind): PageConfig => ({
     font: 'system',
   },
   layout: 'centered',
+  /* Every one of these, verbatim from pagecfg.Copy.applyDefaults. The
+     sign-out half used to carry only confirm_heading, so the builder previewed
+     a page with no body text and an empty headline on the signed-out step —
+     while the hosted page rendered the server's defaults for both. */
   copy:
     kind === 'signout'
-      ? { heading: '', username_label: '', password_label: '', submit_label: '',
-          confirm_heading: 'Sign out?' }
+      ? { heading: 'You have been signed out',
+          username_label: '', password_label: '', submit_label: '',
+          confirm_heading: 'Sign out?',
+          confirm_body: 'You will need to sign in again to continue.',
+          body: 'Your session on this device has ended.',
+          return_label: 'Return to the application' }
       : { heading: 'Sign in', username_label: 'Username', password_label: 'Password',
           submit_label: 'Sign in' },
   links: [],
+  sections: ['logo', 'heading', 'subheading', 'form', 'links'],
   features: {},
   motion: { entrance: 'none' },
   ...(kind === 'signout' ? { behavior: { confirm: true } } : {}),
@@ -1085,6 +1178,8 @@ export async function createRole(i: NewRoleInput): Promise<void> {
       applicationSlug: '', isSystem: false,
       allowedRealmKinds: i.allowed_realm_kinds,
       assignableAt: [], parentIds: [], patterns: i.permission_keys,
+      // Server-owned: a request never retires a role, a manifest does.
+      deprecated: false,
     },
   })
   void resp
@@ -1101,6 +1196,8 @@ export async function updateRole(i: {
       applicationSlug: '', isSystem: false,
       allowedRealmKinds: i.allowed_realm_kinds,
       assignableAt: [], parentIds: [], patterns: i.permission_keys,
+      // Server-owned: a request never retires a role, a manifest does.
+      deprecated: false,
     },
   })
 }

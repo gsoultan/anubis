@@ -201,6 +201,24 @@ const (
 	// AuthzAdminServiceApplyManifestProcedure is the fully-qualified name of the AuthzAdminService's
 	// ApplyManifest RPC.
 	AuthzAdminServiceApplyManifestProcedure = "/anubis.v1.AuthzAdminService/ApplyManifest"
+	// AuthzAdminServiceListCatalogSourcesProcedure is the fully-qualified name of the
+	// AuthzAdminService's ListCatalogSources RPC.
+	AuthzAdminServiceListCatalogSourcesProcedure = "/anubis.v1.AuthzAdminService/ListCatalogSources"
+	// AuthzAdminServiceCreateCatalogSourceProcedure is the fully-qualified name of the
+	// AuthzAdminService's CreateCatalogSource RPC.
+	AuthzAdminServiceCreateCatalogSourceProcedure = "/anubis.v1.AuthzAdminService/CreateCatalogSource"
+	// AuthzAdminServiceUpdateCatalogSourceProcedure is the fully-qualified name of the
+	// AuthzAdminService's UpdateCatalogSource RPC.
+	AuthzAdminServiceUpdateCatalogSourceProcedure = "/anubis.v1.AuthzAdminService/UpdateCatalogSource"
+	// AuthzAdminServiceDeleteCatalogSourceProcedure is the fully-qualified name of the
+	// AuthzAdminService's DeleteCatalogSource RPC.
+	AuthzAdminServiceDeleteCatalogSourceProcedure = "/anubis.v1.AuthzAdminService/DeleteCatalogSource"
+	// AuthzAdminServiceRunCatalogSourceProcedure is the fully-qualified name of the AuthzAdminService's
+	// RunCatalogSource RPC.
+	AuthzAdminServiceRunCatalogSourceProcedure = "/anubis.v1.AuthzAdminService/RunCatalogSource"
+	// AuthzAdminServiceListCatalogRunsProcedure is the fully-qualified name of the AuthzAdminService's
+	// ListCatalogRuns RPC.
+	AuthzAdminServiceListCatalogRunsProcedure = "/anubis.v1.AuthzAdminService/ListCatalogRuns"
 	// TenantAdminServiceListTenantsProcedure is the fully-qualified name of the TenantAdminService's
 	// ListTenants RPC.
 	TenantAdminServiceListTenantsProcedure = "/anubis.v1.TenantAdminService/ListTenants"
@@ -1452,6 +1470,15 @@ type AuthzAdminServiceClient interface {
 	// Registers an application's permission/role/route catalog. Validates,
 	// diffs, applies. Removed permissions are deprecated, never deleted.
 	ApplyManifest(context.Context, *connect.Request[v1.ApplyManifestRequest]) (*connect.Response[v1.ApplyManifestResponse], error)
+	// Catalog sources: where an application's permissions and roles are read
+	// from when nobody is pushing them. RunCatalogSource is the manual trigger;
+	// the scheduler's own entry point is not on this surface by design.
+	ListCatalogSources(context.Context, *connect.Request[v1.ListCatalogSourcesRequest]) (*connect.Response[v1.ListCatalogSourcesResponse], error)
+	CreateCatalogSource(context.Context, *connect.Request[v1.CreateCatalogSourceRequest]) (*connect.Response[v1.CreateCatalogSourceResponse], error)
+	UpdateCatalogSource(context.Context, *connect.Request[v1.UpdateCatalogSourceRequest]) (*connect.Response[v1.UpdateCatalogSourceResponse], error)
+	DeleteCatalogSource(context.Context, *connect.Request[v1.DeleteCatalogSourceRequest]) (*connect.Response[v1.DeleteCatalogSourceResponse], error)
+	RunCatalogSource(context.Context, *connect.Request[v1.RunCatalogSourceRequest]) (*connect.Response[v1.RunCatalogSourceResponse], error)
+	ListCatalogRuns(context.Context, *connect.Request[v1.ListCatalogRunsRequest]) (*connect.Response[v1.ListCatalogRunsResponse], error)
 }
 
 // NewAuthzAdminServiceClient constructs a client for the anubis.v1.AuthzAdminService service. By
@@ -1561,6 +1588,42 @@ func NewAuthzAdminServiceClient(httpClient connect.HTTPClient, baseURL string, o
 			connect.WithSchema(authzAdminServiceMethods.ByName("ApplyManifest")),
 			connect.WithClientOptions(opts...),
 		),
+		listCatalogSources: connect.NewClient[v1.ListCatalogSourcesRequest, v1.ListCatalogSourcesResponse](
+			httpClient,
+			baseURL+AuthzAdminServiceListCatalogSourcesProcedure,
+			connect.WithSchema(authzAdminServiceMethods.ByName("ListCatalogSources")),
+			connect.WithClientOptions(opts...),
+		),
+		createCatalogSource: connect.NewClient[v1.CreateCatalogSourceRequest, v1.CreateCatalogSourceResponse](
+			httpClient,
+			baseURL+AuthzAdminServiceCreateCatalogSourceProcedure,
+			connect.WithSchema(authzAdminServiceMethods.ByName("CreateCatalogSource")),
+			connect.WithClientOptions(opts...),
+		),
+		updateCatalogSource: connect.NewClient[v1.UpdateCatalogSourceRequest, v1.UpdateCatalogSourceResponse](
+			httpClient,
+			baseURL+AuthzAdminServiceUpdateCatalogSourceProcedure,
+			connect.WithSchema(authzAdminServiceMethods.ByName("UpdateCatalogSource")),
+			connect.WithClientOptions(opts...),
+		),
+		deleteCatalogSource: connect.NewClient[v1.DeleteCatalogSourceRequest, v1.DeleteCatalogSourceResponse](
+			httpClient,
+			baseURL+AuthzAdminServiceDeleteCatalogSourceProcedure,
+			connect.WithSchema(authzAdminServiceMethods.ByName("DeleteCatalogSource")),
+			connect.WithClientOptions(opts...),
+		),
+		runCatalogSource: connect.NewClient[v1.RunCatalogSourceRequest, v1.RunCatalogSourceResponse](
+			httpClient,
+			baseURL+AuthzAdminServiceRunCatalogSourceProcedure,
+			connect.WithSchema(authzAdminServiceMethods.ByName("RunCatalogSource")),
+			connect.WithClientOptions(opts...),
+		),
+		listCatalogRuns: connect.NewClient[v1.ListCatalogRunsRequest, v1.ListCatalogRunsResponse](
+			httpClient,
+			baseURL+AuthzAdminServiceListCatalogRunsProcedure,
+			connect.WithSchema(authzAdminServiceMethods.ByName("ListCatalogRuns")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -1582,6 +1645,12 @@ type authzAdminServiceClient struct {
 	unassignMembership   *connect.Client[v1.UnassignMembershipRequest, v1.UnassignMembershipResponse]
 	resyncMembership     *connect.Client[v1.ResyncMembershipRequest, v1.ResyncMembershipResponse]
 	applyManifest        *connect.Client[v1.ApplyManifestRequest, v1.ApplyManifestResponse]
+	listCatalogSources   *connect.Client[v1.ListCatalogSourcesRequest, v1.ListCatalogSourcesResponse]
+	createCatalogSource  *connect.Client[v1.CreateCatalogSourceRequest, v1.CreateCatalogSourceResponse]
+	updateCatalogSource  *connect.Client[v1.UpdateCatalogSourceRequest, v1.UpdateCatalogSourceResponse]
+	deleteCatalogSource  *connect.Client[v1.DeleteCatalogSourceRequest, v1.DeleteCatalogSourceResponse]
+	runCatalogSource     *connect.Client[v1.RunCatalogSourceRequest, v1.RunCatalogSourceResponse]
+	listCatalogRuns      *connect.Client[v1.ListCatalogRunsRequest, v1.ListCatalogRunsResponse]
 }
 
 // ListRoles calls anubis.v1.AuthzAdminService.ListRoles.
@@ -1664,6 +1733,36 @@ func (c *authzAdminServiceClient) ApplyManifest(ctx context.Context, req *connec
 	return c.applyManifest.CallUnary(ctx, req)
 }
 
+// ListCatalogSources calls anubis.v1.AuthzAdminService.ListCatalogSources.
+func (c *authzAdminServiceClient) ListCatalogSources(ctx context.Context, req *connect.Request[v1.ListCatalogSourcesRequest]) (*connect.Response[v1.ListCatalogSourcesResponse], error) {
+	return c.listCatalogSources.CallUnary(ctx, req)
+}
+
+// CreateCatalogSource calls anubis.v1.AuthzAdminService.CreateCatalogSource.
+func (c *authzAdminServiceClient) CreateCatalogSource(ctx context.Context, req *connect.Request[v1.CreateCatalogSourceRequest]) (*connect.Response[v1.CreateCatalogSourceResponse], error) {
+	return c.createCatalogSource.CallUnary(ctx, req)
+}
+
+// UpdateCatalogSource calls anubis.v1.AuthzAdminService.UpdateCatalogSource.
+func (c *authzAdminServiceClient) UpdateCatalogSource(ctx context.Context, req *connect.Request[v1.UpdateCatalogSourceRequest]) (*connect.Response[v1.UpdateCatalogSourceResponse], error) {
+	return c.updateCatalogSource.CallUnary(ctx, req)
+}
+
+// DeleteCatalogSource calls anubis.v1.AuthzAdminService.DeleteCatalogSource.
+func (c *authzAdminServiceClient) DeleteCatalogSource(ctx context.Context, req *connect.Request[v1.DeleteCatalogSourceRequest]) (*connect.Response[v1.DeleteCatalogSourceResponse], error) {
+	return c.deleteCatalogSource.CallUnary(ctx, req)
+}
+
+// RunCatalogSource calls anubis.v1.AuthzAdminService.RunCatalogSource.
+func (c *authzAdminServiceClient) RunCatalogSource(ctx context.Context, req *connect.Request[v1.RunCatalogSourceRequest]) (*connect.Response[v1.RunCatalogSourceResponse], error) {
+	return c.runCatalogSource.CallUnary(ctx, req)
+}
+
+// ListCatalogRuns calls anubis.v1.AuthzAdminService.ListCatalogRuns.
+func (c *authzAdminServiceClient) ListCatalogRuns(ctx context.Context, req *connect.Request[v1.ListCatalogRunsRequest]) (*connect.Response[v1.ListCatalogRunsResponse], error) {
+	return c.listCatalogRuns.CallUnary(ctx, req)
+}
+
 // AuthzAdminServiceHandler is an implementation of the anubis.v1.AuthzAdminService service.
 type AuthzAdminServiceHandler interface {
 	ListRoles(context.Context, *connect.Request[v1.ListRolesRequest]) (*connect.Response[v1.ListRolesResponse], error)
@@ -1687,6 +1786,15 @@ type AuthzAdminServiceHandler interface {
 	// Registers an application's permission/role/route catalog. Validates,
 	// diffs, applies. Removed permissions are deprecated, never deleted.
 	ApplyManifest(context.Context, *connect.Request[v1.ApplyManifestRequest]) (*connect.Response[v1.ApplyManifestResponse], error)
+	// Catalog sources: where an application's permissions and roles are read
+	// from when nobody is pushing them. RunCatalogSource is the manual trigger;
+	// the scheduler's own entry point is not on this surface by design.
+	ListCatalogSources(context.Context, *connect.Request[v1.ListCatalogSourcesRequest]) (*connect.Response[v1.ListCatalogSourcesResponse], error)
+	CreateCatalogSource(context.Context, *connect.Request[v1.CreateCatalogSourceRequest]) (*connect.Response[v1.CreateCatalogSourceResponse], error)
+	UpdateCatalogSource(context.Context, *connect.Request[v1.UpdateCatalogSourceRequest]) (*connect.Response[v1.UpdateCatalogSourceResponse], error)
+	DeleteCatalogSource(context.Context, *connect.Request[v1.DeleteCatalogSourceRequest]) (*connect.Response[v1.DeleteCatalogSourceResponse], error)
+	RunCatalogSource(context.Context, *connect.Request[v1.RunCatalogSourceRequest]) (*connect.Response[v1.RunCatalogSourceResponse], error)
+	ListCatalogRuns(context.Context, *connect.Request[v1.ListCatalogRunsRequest]) (*connect.Response[v1.ListCatalogRunsResponse], error)
 }
 
 // NewAuthzAdminServiceHandler builds an HTTP handler from the service implementation. It returns
@@ -1792,6 +1900,42 @@ func NewAuthzAdminServiceHandler(svc AuthzAdminServiceHandler, opts ...connect.H
 		connect.WithSchema(authzAdminServiceMethods.ByName("ApplyManifest")),
 		connect.WithHandlerOptions(opts...),
 	)
+	authzAdminServiceListCatalogSourcesHandler := connect.NewUnaryHandler(
+		AuthzAdminServiceListCatalogSourcesProcedure,
+		svc.ListCatalogSources,
+		connect.WithSchema(authzAdminServiceMethods.ByName("ListCatalogSources")),
+		connect.WithHandlerOptions(opts...),
+	)
+	authzAdminServiceCreateCatalogSourceHandler := connect.NewUnaryHandler(
+		AuthzAdminServiceCreateCatalogSourceProcedure,
+		svc.CreateCatalogSource,
+		connect.WithSchema(authzAdminServiceMethods.ByName("CreateCatalogSource")),
+		connect.WithHandlerOptions(opts...),
+	)
+	authzAdminServiceUpdateCatalogSourceHandler := connect.NewUnaryHandler(
+		AuthzAdminServiceUpdateCatalogSourceProcedure,
+		svc.UpdateCatalogSource,
+		connect.WithSchema(authzAdminServiceMethods.ByName("UpdateCatalogSource")),
+		connect.WithHandlerOptions(opts...),
+	)
+	authzAdminServiceDeleteCatalogSourceHandler := connect.NewUnaryHandler(
+		AuthzAdminServiceDeleteCatalogSourceProcedure,
+		svc.DeleteCatalogSource,
+		connect.WithSchema(authzAdminServiceMethods.ByName("DeleteCatalogSource")),
+		connect.WithHandlerOptions(opts...),
+	)
+	authzAdminServiceRunCatalogSourceHandler := connect.NewUnaryHandler(
+		AuthzAdminServiceRunCatalogSourceProcedure,
+		svc.RunCatalogSource,
+		connect.WithSchema(authzAdminServiceMethods.ByName("RunCatalogSource")),
+		connect.WithHandlerOptions(opts...),
+	)
+	authzAdminServiceListCatalogRunsHandler := connect.NewUnaryHandler(
+		AuthzAdminServiceListCatalogRunsProcedure,
+		svc.ListCatalogRuns,
+		connect.WithSchema(authzAdminServiceMethods.ByName("ListCatalogRuns")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/anubis.v1.AuthzAdminService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case AuthzAdminServiceListRolesProcedure:
@@ -1826,6 +1970,18 @@ func NewAuthzAdminServiceHandler(svc AuthzAdminServiceHandler, opts ...connect.H
 			authzAdminServiceResyncMembershipHandler.ServeHTTP(w, r)
 		case AuthzAdminServiceApplyManifestProcedure:
 			authzAdminServiceApplyManifestHandler.ServeHTTP(w, r)
+		case AuthzAdminServiceListCatalogSourcesProcedure:
+			authzAdminServiceListCatalogSourcesHandler.ServeHTTP(w, r)
+		case AuthzAdminServiceCreateCatalogSourceProcedure:
+			authzAdminServiceCreateCatalogSourceHandler.ServeHTTP(w, r)
+		case AuthzAdminServiceUpdateCatalogSourceProcedure:
+			authzAdminServiceUpdateCatalogSourceHandler.ServeHTTP(w, r)
+		case AuthzAdminServiceDeleteCatalogSourceProcedure:
+			authzAdminServiceDeleteCatalogSourceHandler.ServeHTTP(w, r)
+		case AuthzAdminServiceRunCatalogSourceProcedure:
+			authzAdminServiceRunCatalogSourceHandler.ServeHTTP(w, r)
+		case AuthzAdminServiceListCatalogRunsProcedure:
+			authzAdminServiceListCatalogRunsHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -1897,6 +2053,30 @@ func (UnimplementedAuthzAdminServiceHandler) ResyncMembership(context.Context, *
 
 func (UnimplementedAuthzAdminServiceHandler) ApplyManifest(context.Context, *connect.Request[v1.ApplyManifestRequest]) (*connect.Response[v1.ApplyManifestResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.AuthzAdminService.ApplyManifest is not implemented"))
+}
+
+func (UnimplementedAuthzAdminServiceHandler) ListCatalogSources(context.Context, *connect.Request[v1.ListCatalogSourcesRequest]) (*connect.Response[v1.ListCatalogSourcesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.AuthzAdminService.ListCatalogSources is not implemented"))
+}
+
+func (UnimplementedAuthzAdminServiceHandler) CreateCatalogSource(context.Context, *connect.Request[v1.CreateCatalogSourceRequest]) (*connect.Response[v1.CreateCatalogSourceResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.AuthzAdminService.CreateCatalogSource is not implemented"))
+}
+
+func (UnimplementedAuthzAdminServiceHandler) UpdateCatalogSource(context.Context, *connect.Request[v1.UpdateCatalogSourceRequest]) (*connect.Response[v1.UpdateCatalogSourceResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.AuthzAdminService.UpdateCatalogSource is not implemented"))
+}
+
+func (UnimplementedAuthzAdminServiceHandler) DeleteCatalogSource(context.Context, *connect.Request[v1.DeleteCatalogSourceRequest]) (*connect.Response[v1.DeleteCatalogSourceResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.AuthzAdminService.DeleteCatalogSource is not implemented"))
+}
+
+func (UnimplementedAuthzAdminServiceHandler) RunCatalogSource(context.Context, *connect.Request[v1.RunCatalogSourceRequest]) (*connect.Response[v1.RunCatalogSourceResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.AuthzAdminService.RunCatalogSource is not implemented"))
+}
+
+func (UnimplementedAuthzAdminServiceHandler) ListCatalogRuns(context.Context, *connect.Request[v1.ListCatalogRunsRequest]) (*connect.Response[v1.ListCatalogRunsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.AuthzAdminService.ListCatalogRuns is not implemented"))
 }
 
 // TenantAdminServiceClient is a client for the anubis.v1.TenantAdminService service.

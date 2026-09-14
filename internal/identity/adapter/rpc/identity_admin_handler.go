@@ -44,6 +44,9 @@ func identityProto(r *identitydomain.IdentityRecord) *anubisv1.Identity {
 	if r.AnonymizedAt != nil {
 		out.AnonymizedAt = r.AnonymizedAt.Unix()
 	}
+	if r.RetentionUntil != nil {
+		out.RetentionUntil = r.RetentionUntil.Unix()
+	}
 	return out
 }
 

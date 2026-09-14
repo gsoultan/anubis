@@ -65,7 +65,9 @@ func (s *Repository) UpdateRealm(ctx context.Context, tenantID string, r identit
 // query — the Populations screen's figures, computed where the rows are.
 func (s *Repository) CountIdentitiesByCategory(ctx context.Context, tenantID, realmID string) (map[string]int64, error) {
 	rows, err := s.q(ctx).CountIdentitiesByCategory(ctx, gen.CountIdentitiesByCategoryParams{
-		TenantID: tenantID, RealmID: &realmID,
+		// OptStr, not &realmID: an empty string is "every realm", and handing
+		// Postgres '' for a uuid is an error, not an empty filter.
+		TenantID: tenantID, RealmID: database.OptStr(realmID),
 	})
 	if err != nil {
 		return nil, database.MapErr(err)
@@ -77,8 +79,10 @@ func (s *Repository) CountIdentitiesByCategory(ctx context.Context, tenantID, re
 	return out, nil
 }
 
-func (s *Repository) ListRealmCategories(ctx context.Context, realmID string) ([]identitydomain.RealmCategoryRecord, error) {
-	rows, err := s.q(ctx).ListRealmCategories(ctx, realmID)
+func (s *Repository) ListRealmCategories(ctx context.Context, tenantID, realmID string) ([]identitydomain.RealmCategoryRecord, error) {
+	rows, err := s.q(ctx).ListRealmCategories(ctx, gen.ListRealmCategoriesParams{
+		TenantID: tenantID, RealmID: database.OptStr(realmID),
+	})
 	if err != nil {
 		return nil, database.MapErr(err)
 	}

@@ -45,7 +45,7 @@ export function CreateRole({ opened }: { opened: boolean }) {
       footer={
         <form.Subscribe selector={(s) => [s.canSubmit, s.isSubmitting] as const}>
           {([canSubmit, isSubmitting]) => (
-            <CancelSubmit onCancel={close}
+            <CancelSubmit onCancel={close} onSubmit={() => void form.handleSubmit()}
               canSubmit={!!canSubmit && form.state.values.permission_keys.length > 0}
               submitting={!!isSubmitting} label="Add role" />
           )}

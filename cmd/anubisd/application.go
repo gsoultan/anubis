@@ -23,10 +23,12 @@ import (
 	tokenapp "github.com/gsoultan/anubis/internal/auth/app/token"
 	authep "github.com/gsoultan/anubis/internal/auth/endpoint"
 	authsvc "github.com/gsoultan/anubis/internal/auth/service"
+	authzfeed "github.com/gsoultan/anubis/internal/authz/adapter/feed"
 	authzpg "github.com/gsoultan/anubis/internal/authz/adapter/postgres"
 	authzrpc "github.com/gsoultan/anubis/internal/authz/adapter/rpc"
 	authzapp "github.com/gsoultan/anubis/internal/authz/app"
 	authzadmin "github.com/gsoultan/anubis/internal/authz/app/admin"
+	authzcatalog "github.com/gsoultan/anubis/internal/authz/app/catalog"
 	authzep "github.com/gsoultan/anubis/internal/authz/endpoint"
 	authzsvc "github.com/gsoultan/anubis/internal/authz/service"
 	controlpg "github.com/gsoultan/anubis/internal/control/adapter/postgres"
@@ -88,6 +90,10 @@ type application struct {
 	tenancy  *tenancypg.Repository
 	audit    *auditpg.Repository
 	gate     *gatepg.Repository
+
+	// The one usecase two subsystems share: the admin RPC surface applies
+	// catalogs on request, the scheduler applies them on a clock.
+	authzAdmin authzadmin.AuthzAdminUsecase
 }
 
 func newApplication(ctx context.Context, cfg *config.Config, db *database.DB, logger *slog.Logger) (*application, error) {
@@ -113,10 +119,26 @@ func newApplication(ctx context.Context, cfg *config.Config, db *database.DB, lo
 	a.auditor = auditpg.NewChainedAuditor(a.audit, logger)
 	a.issuer = authapp.NewPasetoTokenIssuer(cfg.Issuer, ring, a.tenancy, a.identity,
 		a.auth, a.auth, a.authz, a.tenancy, a.clock)
+	// Built here rather than in registerRPC because two things need it now:
+	// the admin RPC surface and the catalog scheduler, and a second instance
+	// would be a second place to get the wiring wrong.
+	a.authzAdmin = authzadmin.NewAuthzAdminInteractor(a.control, a.clock.Now,
+		a.authz, a.authz, a.authz, a.authz,
+		a.authz, a.tenancy, a.tenancy, a.auth, a.auditor)
 	return a, nil
 }
 
 func (a *application) close() { a.auditor.Close() }
+
+// catalogSync is the fourth channel a catalog can arrive through: sources
+// Anubis reads on a clock. The other three — an API call, an uploaded file, a
+// role edited by hand — arrive through a request and need nothing running.
+// Two callers build one each: the RPC surface gets the narrowed
+// operator-facing half, the scheduler gets the whole thing.
+func (a *application) catalogSync(logger *slog.Logger) authzcatalog.CatalogSyncUsecase {
+	return authzcatalog.NewSyncInteractor(a.control, a.clock.Now, a.authz,
+		authzfeed.NewHTTPFetcher(), a.authzAdmin, a.tenancy, a.auditor, logger)
+}
 
 // runMaintenance starts the recurring database maintenance every deployment
 // needs. Replicas coordinate through advisory locks, so this is safe to run
@@ -124,7 +146,8 @@ func (a *application) close() { a.auditor.Close() }
 func (a *application) runMaintenance(ctx context.Context, db *database.DB, logger *slog.Logger) {
 	retention := identityapp.NewRetentionInteractor(a.identity, a.identity, db, a.auditor)
 	sched := jobs.NewScheduler(db, logger,
-		maintenanceJobs(a.audit, a.auth, retention, a.auth, a.control, logger)...)
+		maintenanceJobs(a.audit, a.auth, retention, a.auth, a.control,
+			a.catalogSync(logger), logger)...)
 	go sched.Run(ctx)
 }
 
@@ -199,11 +222,10 @@ func (a *application) registerRPC(rpc *http.ServeMux, opts connect.HandlerOption
 	rpc.Handle(anubisv1connect.NewScopeAdminServiceHandler(
 		scoperpc.NewScopeAdminHandler(scopesvc.NewScopeAdminService(scopeAdmin), f), opts))
 
-	authzAdmin := authzadmin.NewAuthzAdminInteractor(a.control, a.clock.Now,
-		a.authz, a.authz, a.authz,
-		a.authz, a.tenancy, a.tenancy, a.auth, a.auditor)
+	authzAdmin := a.authzAdmin
 	rpc.Handle(anubisv1connect.NewAuthzAdminServiceHandler(
-		authzrpc.NewAuthzAdminHandler(authzsvc.NewAuthzAdminService(authzAdmin), f), opts))
+		authzrpc.NewAuthzAdminHandler(authzsvc.NewAuthzAdminService(authzAdmin),
+			authzsvc.NewCatalogAdminService(a.catalogSync(logger)), f), opts))
 
 	// --- control plane (ADR-0011) -------------------------------------------
 	// Who operates this installation, and over which tenants. The owner that

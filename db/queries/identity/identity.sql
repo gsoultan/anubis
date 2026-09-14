@@ -13,7 +13,8 @@ WHERE i.tenant_id = sqlc.arg(tenant_id)
 -- name: GetIdentity :one
 SELECT i.id, i.tenant_id, i.token_epoch, i.status, i.username, i.email,
        i.external_ref, i.assurance_level, i.disabled_at, i.anonymized_at,
-       i.created_at, i.last_login_at, i.realm_id, i.category_id,
+       i.created_at, i.last_login_at, i.retention_until,
+       i.realm_id, i.category_id,
        r.code AS realm_code, r.kind AS realm_kind,
        c.code AS category_code
 FROM identities i
@@ -26,7 +27,8 @@ WHERE i.id = sqlc.arg(id) AND i.tenant_id = sqlc.arg(tenant_id);
 -- order and the probe stays an index range scan at any offset.
 SELECT i.id, i.tenant_id, i.token_epoch, i.status, i.username, i.email,
        i.external_ref, i.assurance_level, i.disabled_at, i.anonymized_at,
-       i.created_at, i.last_login_at, i.realm_id, i.category_id,
+       i.created_at, i.last_login_at, i.retention_until,
+       i.realm_id, i.category_id,
        r.code AS realm_code, r.kind AS realm_kind,
        c.code AS category_code
 FROM identities i
@@ -147,7 +149,12 @@ WHERE tenant_id = $1 AND retention_until IS NOT NULL
 -- Counted in the database because the console used to count rows it had
 -- fetched — capped at 2,000 of 57,000, so every figure was wrong.
 -- name: CountIdentitiesByCategory :many
+-- realm_id nullable, matching ListRealmCategories: a tenant-wide category
+-- listing has no realm to count within, and the two have to agree or the
+-- counts belong to a different set of categories than the names.
 SELECT category_id, count(*) AS n
 FROM identities
-WHERE tenant_id = $1 AND realm_id = $2 AND category_id IS NOT NULL
+WHERE tenant_id = sqlc.arg(tenant_id)
+  AND (sqlc.narg(realm_id)::uuid IS NULL OR realm_id = sqlc.narg(realm_id))
+  AND category_id IS NOT NULL
 GROUP BY category_id;

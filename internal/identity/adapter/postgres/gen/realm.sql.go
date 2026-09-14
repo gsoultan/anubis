@@ -323,9 +323,15 @@ func (q *Queries) GetRealmCategoryByCode(ctx context.Context, arg GetRealmCatego
 const listRealmCategories = `-- name: ListRealmCategories :many
 SELECT id, realm_id, code, display_name, sort_order
 FROM realm_categories
-WHERE realm_id = $1
-ORDER BY sort_order, code
+WHERE tenant_id = $1
+  AND ($2::uuid IS NULL OR realm_id = $2)
+ORDER BY realm_id, sort_order, code
 `
+
+type ListRealmCategoriesParams struct {
+	TenantID string
+	RealmID  *string
+}
 
 type ListRealmCategoriesRow struct {
 	ID          string
@@ -335,8 +341,16 @@ type ListRealmCategoriesRow struct {
 	SortOrder   int32
 }
 
-func (q *Queries) ListRealmCategories(ctx context.Context, realmID string) ([]ListRealmCategoriesRow, error) {
-	rows, err := q.db.Query(ctx, listRealmCategories, realmID)
+// Tenant-scoped ALWAYS, realm optional.
+//
+// The tenant filter is not decoration. This used to key on realm_id alone,
+// so an operator who learned another tenant's realm id read that tenant's
+// categories: the caller's tenant was checked by the guard and then never
+// used. realm_id nullable because the People screen spans populations and
+// has no single realm to ask about -- it used to send ” for "all", which
+// Postgres rejects as an invalid uuid, and the whole call 500'd.
+func (q *Queries) ListRealmCategories(ctx context.Context, arg ListRealmCategoriesParams) ([]ListRealmCategoriesRow, error) {
+	rows, err := q.db.Query(ctx, listRealmCategories, arg.TenantID, arg.RealmID)
 	if err != nil {
 		return nil, err
 	}

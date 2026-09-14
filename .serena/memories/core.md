@@ -14,6 +14,18 @@ references". New topics live in their own file from 2026-09-11 on:
   clean / pending 1 / drift 59), and the soft-delete traps.
 - [[releasing]] — tags, drafts, cosign verification, superseding a draft.
 - [[test-timing-and-tooling]] — why short timing budgets flake on CI, and why
+- [[page-rendering]] — how a configured page becomes HTML: the ZgotmplZ trap,
+  derived colours, `sections`, and the mobile rules that fail in silence.
+- [[catalog-sync]] — the one apply path behind all four ways a permission or
+  role catalog arrives, and why absent is not empty.
+- [[console-tables]] — the one table primitive in `ui/`, why `.panel` must
+  use `overflow: clip`, and the column rules the People screen follows.
+- [[console-person-page]] — why a record you can act on is a page, the
+  trailing-underscore route, and the query-key prefix rule.
+- [[console-create-drawers]] — every create drawer's submit button was inert,
+  and where the grant form lives now.
+- [[identity-directory-reads]] — the empty-uuid 500, the tenant filter the
+  category query ignored, and the columns nothing ever selected.
   graphify needs the SQL extra here.
 
 ## Load-bearing decisions (see docs/adr/)

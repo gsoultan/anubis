@@ -193,3 +193,17 @@ func TestABadEntranceNamesItsField(t *testing.T) {
 		t.Fatalf("error does not name the field: %v", err)
 	}
 }
+
+// show_forgot_password was removed because nothing rendered it. Configs stored
+// while it existed must keep parsing: dropping a page because it carries a key
+// this build no longer knows would take a tenant's sign-in offline to tidy up
+// a field that never did anything.
+func TestLegacyFeatureKeyStillParses(t *testing.T) {
+	c, err := Parse(KindSignin, []byte(`{"features":{"show_forgot_password":true,"remember_me":true}}`))
+	if err != nil {
+		t.Fatalf("a config with the retired key was refused: %v", err)
+	}
+	if !c.Features.RememberMe {
+		t.Error("the keys that still exist were lost with it")
+	}
+}
