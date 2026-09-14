@@ -278,13 +278,28 @@ func TestScopeSyncRecordsHistory(t *testing.T) {
 	src := createSource(t, token, axis, "http",
 		fmt.Sprintf(`{"url":%q,"default_node_type":"e2e_hist_node"}`, feed.URL))
 
-	before := len(listRuns(t, token, src))
+	/* Not a count. ListSyncRuns caps at 25 and createSource REUSES the axis's
+	   existing source, so on a database this suite has run against for a
+	   while `before` is already the cap and `before+2` is unreachable — the
+	   assertion fails on accumulated history rather than on a missing row.
+	   What actually has to be true is that these two runs are now the newest
+	   two, which is also what the dry/applied check below reads. */
+	seen := map[string]bool{}
+	for _, r := range listRuns(t, token, src) {
+		seen[r.GetId()] = true
+	}
 	runSync(t, token, src, true) // a dry run is history too
 	runSync(t, token, src, false)
 
 	runs := listRuns(t, token, src)
-	if len(runs) < before+2 {
-		t.Fatalf("history did not record both runs: had %d, now %d", before, len(runs))
+	if len(runs) < 2 {
+		t.Fatalf("history holds %d runs after two syncs", len(runs))
+	}
+	for _, r := range runs[:2] {
+		if seen[r.GetId()] {
+			t.Fatalf("run %s was already in history before these two syncs — "+
+				"the newest two are not the ones just made", r.GetId())
+		}
 	}
 	// Newest first, and the dry run must be distinguishable from the real
 	// one — they leave identical counts behind.

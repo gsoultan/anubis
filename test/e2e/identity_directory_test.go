@@ -303,32 +303,79 @@ func TestARealmKindIsCorrectableOnlyWhileEmpty(t *testing.T) {
 // category label under each name had therefore never once rendered.
 func TestRealmCategoriesListWithoutARealm(t *testing.T) {
 	requireServer(t)
+	dbURL := os.Getenv("ANUBIS_DB_URL")
+	if dbURL == "" {
+		t.Skip("ANUBIS_DB_URL not set")
+	}
 	ctx := context.Background()
 	token := platformLogin(t)
 	tenantAdmin := anubisv1connect.NewTenantAdminServiceClient(http.DefaultClient, baseURL)
+
+	realms, err := tenantAdmin.ListRealms(ctx, operatorBearer(connect.NewRequest(
+		&anubisv1.ListRealmsRequest{}), token))
+	if err != nil {
+		t.Fatalf("list realms: %v", err)
+	}
+	if len(realms.Msg.GetRealms()) == 0 {
+		t.Fatal("the tenant has no populations at all")
+	}
+	known := map[string]bool{}
+	for _, r := range realms.Msg.GetRealms() {
+		known[r.GetId()] = true
+	}
+	/* Prefer a population that already has a category somebody is IN, so the
+	   second half of this test -- that naming a realm does count -- actually
+	   runs. realms[0] is whatever sorts first, which on a database carrying
+	   leftover probe realms is an empty one. */
+	db, err := sql.Open("pgx", dbURL)
+	if err != nil {
+		t.Fatalf("open db: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+
+	home := realms.Msg.GetRealms()[0]
+	var populatedRealm string
+	if err := db.QueryRowContext(ctx,
+		`SELECT c.realm_id::text FROM realm_categories c
+		   JOIN identities i ON i.category_id = c.id
+		  GROUP BY c.realm_id LIMIT 1`).Scan(&populatedRealm); err == nil {
+		for _, r := range realms.Msg.GetRealms() {
+			if r.GetId() == populatedRealm {
+				home = r
+			}
+		}
+	}
+
+	/* The fixture makes its own category rather than trusting the dataset.
+	   Migration 0012 seeds one only for realms that exist WHEN IT RUNS, and a
+	   database built migrations-first has none — which is how an assertion
+	   that "the seeded tenant defines several" passed here and failed on CI. */
+	code := fmt.Sprintf("catprobe%d", time.Now().UnixNano())
+	made, err := tenantAdmin.CreateRealmCategory(ctx, operatorBearer(connect.NewRequest(
+		&anubisv1.CreateRealmCategoryRequest{Category: &anubisv1.RealmCategory{
+			RealmId: home.GetId(), Code: code, DisplayName: "Category probe", SortOrder: 900,
+		}}), token))
+	if err != nil {
+		t.Fatalf("create probe category: %v", err)
+	}
+	t.Cleanup(func() {
+		if _, err := db.ExecContext(context.Background(),
+			`DELETE FROM realm_categories WHERE id = $1`, made.Msg.GetCategory().GetId()); err != nil {
+			t.Errorf("probe category not removed: %v", err)
+		}
+	})
 
 	all, err := tenantAdmin.ListRealmCategories(ctx, operatorBearer(connect.NewRequest(
 		&anubisv1.ListRealmCategoriesRequest{RealmId: ""}), token))
 	if err != nil {
 		t.Fatalf("list categories across all populations: %v", err)
 	}
-	if len(all.Msg.GetCategories()) == 0 {
-		t.Fatal("no categories at all — the seeded tenant defines several, " +
-			"so an empty answer means the filter matched nothing rather than everything")
-	}
-
-	// Every category must name the realm it belongs to, because a code is
-	// unique per realm and a consumer resolving a name needs both.
-	realms, err := tenantAdmin.ListRealms(ctx, operatorBearer(connect.NewRequest(
-		&anubisv1.ListRealmsRequest{}), token))
-	if err != nil {
-		t.Fatalf("list realms: %v", err)
-	}
-	known := map[string]bool{}
-	for _, r := range realms.Msg.GetRealms() {
-		known[r.GetId()] = true
-	}
+	var found bool
 	for _, c := range all.Msg.GetCategories() {
+		if c.GetCode() == code {
+			found = true
+		}
+		// A code is unique per realm, so a consumer resolving a name needs both.
 		if c.GetRealmId() == "" {
 			t.Fatalf("category %q carries no realm id", c.GetCode())
 		}
@@ -337,47 +384,59 @@ func TestRealmCategoriesListWithoutARealm(t *testing.T) {
 				c.GetCode(), c.GetRealmId())
 		}
 	}
+	if !found {
+		t.Fatalf("the tenant-wide listing did not contain %q, which was just "+
+			"created in %s — the filter matched nothing rather than everything",
+			code, home.GetCode())
+	}
 
 	// Narrowing to one realm must return a subset of the same answer, or the
 	// two code paths disagree about what a category is.
-	first := all.Msg.GetCategories()[0]
 	one, err := tenantAdmin.ListRealmCategories(ctx, operatorBearer(connect.NewRequest(
-		&anubisv1.ListRealmCategoriesRequest{RealmId: first.GetRealmId()}), token))
+		&anubisv1.ListRealmCategoriesRequest{RealmId: home.GetId()}), token))
 	if err != nil {
 		t.Fatalf("list categories for one population: %v", err)
 	}
-	if len(one.Msg.GetCategories()) == 0 {
-		t.Fatalf("realm %s reported no categories, but %q is in it",
-			first.GetRealmId(), first.GetCode())
-	}
+	var narrowed bool
 	for _, c := range one.Msg.GetCategories() {
-		if c.GetRealmId() != first.GetRealmId() {
+		if c.GetRealmId() != home.GetId() {
 			t.Fatalf("asked for realm %s, got a category from %s",
-				first.GetRealmId(), c.GetRealmId())
+				home.GetId(), c.GetRealmId())
 		}
+		if c.GetCode() == code {
+			narrowed = true
+		}
+	}
+	if !narrowed {
+		t.Fatalf("realm %s reported no %q, but it was created there", home.GetCode(), code)
 	}
 
-	// identity_count is the population's figure, and computing it tenant-wide
-	// is a grouped scan of the entire directory — 338ms on this database, for
-	// a number the screen making the tenant-wide call never displays. Naming a
-	// realm is what asks for it; the two answers must differ, or the scan
-	// crept back in.
-	var counted bool
-	for _, c := range one.Msg.GetCategories() {
-		if c.GetIdentityCount() > 0 {
-			counted = true
-		}
-	}
-	if !counted {
-		t.Fatal("a realm-scoped listing reported no member counts at all — " +
-			"the seeded populations are not empty")
-	}
+	/* identity_count is the population's figure, and computing it tenant-wide
+	   is a grouped scan of the entire directory — 338ms over 14k buffers on a
+	   57k-identity tenant, for a number the screen making that call never
+	   displays. Naming a realm is what asks for it. */
 	for _, c := range all.Msg.GetCategories() {
 		if c.GetIdentityCount() != 0 {
 			t.Fatalf("category %q carries a count on the tenant-wide listing (%d): "+
 				"counting every realm is a scan of the whole directory, and no "+
 				"caller of this shape reads the number",
 				c.GetCode(), c.GetIdentityCount())
+		}
+	}
+	// The other half — that naming a realm DOES count — needs a category some
+	// people are actually in, which a freshly migrated database need not have.
+	var populated string
+	if err := db.QueryRowContext(ctx,
+		`SELECT c.code FROM realm_categories c
+		   JOIN identities i ON i.category_id = c.id
+		  WHERE c.realm_id = $1 GROUP BY c.code LIMIT 1`, home.GetId()).Scan(&populated); err != nil {
+		t.Logf("no populated category in %s, so the counting half is unproven here", home.GetCode())
+		return
+	}
+	for _, c := range one.Msg.GetCategories() {
+		if c.GetCode() == populated && c.GetIdentityCount() == 0 {
+			t.Fatalf("category %q has members in the database but the "+
+				"realm-scoped listing reported none", populated)
 		}
 	}
 }
