@@ -13,6 +13,7 @@ import (
 	auditport "github.com/gsoultan/anubis/internal/audit/port"
 	"github.com/gsoultan/anubis/internal/authz/guard"
 	authzport "github.com/gsoultan/anubis/internal/authz/port"
+	"github.com/gsoultan/anubis/internal/platform/metrics"
 	scopedomain "github.com/gsoultan/anubis/internal/scope/domain"
 	scopeport "github.com/gsoultan/anubis/internal/scope/port"
 	"github.com/gsoultan/anubis/internal/shared/apperr"
@@ -553,10 +554,18 @@ func (u *scopeAdminInteractor) runDueOne(ctx context.Context, src scopedomain.Sy
 	// One bad feed must not stop the others. The failure is already durable —
 	// a fetch that fails emits sync.fetch_failed into the tenant's own audit
 	// trail — and the loop is the wrong place to give up on every other tenant.
+	//
+	// Which is exactly why this is counted. Swallowing the error keeps
+	// anubis_job_runs_total{job="scope_sync"} on "ok" however many sources are
+	// failing, so without its own counter a structure can go stale for a week
+	// with every operational signal green.
 	if _, err := u.runSync(ctx, src.TenantID, nil, src, nil, false); err != nil {
+		metrics.IncScopeSync(src.Axis, "failed")
 		u.logger.Warn("scope sync failed", "source", src.ID, "axis", src.Axis,
 			"tenant", src.TenantID, "error", apperr.AsError(err).Code)
+		return
 	}
+	metrics.IncScopeSync(src.Axis, "ok")
 }
 
 // recordFailure writes the run row for an attempt that never reached the

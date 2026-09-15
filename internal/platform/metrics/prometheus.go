@@ -25,6 +25,7 @@ func Handler() http.Handler {
 		writeJobFamily(&b)
 		writeSnapshots(&b)
 		writeSnapshotRefreshes(&b)
+		writeScopeSync(&b)
 		writeSnapshotNodes(&b)
 		writeDeprecated(&b)
 		writePool(&b)
@@ -122,6 +123,16 @@ func writeSnapshotRefreshes(b *strings.Builder) {
 	for _, k := range familyKeys(&counters, "snaprefresh") {
 		v, _ := counters.Load(k)
 		fmt.Fprintf(b, "anubis_gate_snapshot_refresh_total{tenant=%q,result=%q} %d\n",
+			labelOf(k, 0), labelOf(k, 1), v.(interface{ Load() uint64 }).Load())
+	}
+}
+
+func writeScopeSync(b *strings.Builder) {
+	fmt.Fprint(b, "# HELP anubis_scope_sync_runs_total Scheduled structure syncs by outcome. Manual runs are not counted.\n")
+	fmt.Fprint(b, "# TYPE anubis_scope_sync_runs_total counter\n")
+	for _, k := range familyKeys(&counters, "scopesync") {
+		v, _ := counters.Load(k)
+		fmt.Fprintf(b, "anubis_scope_sync_runs_total{axis=%q,result=%q} %d\n",
 			labelOf(k, 0), labelOf(k, 1), v.(interface{ Load() uint64 }).Load())
 	}
 }

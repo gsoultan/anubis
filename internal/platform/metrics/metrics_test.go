@@ -16,6 +16,8 @@ func TestExpositionCarriesAllFamilies(t *testing.T) {
 	IncAudit("token.reuse_detected")
 	IncJob("retention", "ok")
 	IncJob("retention", "skipped")
+	IncScopeSync("org", "ok")
+	IncScopeSync("customer", "failed")
 	SetSnapshotLoaded("impack", time.Unix(1_700_000_000, 0))
 	SetBuildInfo("test-sha")
 	IncDeprecated("TenantAdminService/PutSigninPage")
@@ -38,6 +40,8 @@ func TestExpositionCarriesAllFamilies(t *testing.T) {
 		`anubis_audit_events_total{action="token.reuse_detected"} 1`,
 		`anubis_job_runs_total{job="retention",result="ok"} 1`,
 		`anubis_job_runs_total{job="retention",result="skipped"} 1`,
+		`anubis_scope_sync_runs_total{axis="org",result="ok"} 1`,
+		`anubis_scope_sync_runs_total{axis="customer",result="failed"} 1`,
 		`anubis_gate_snapshot_loaded_timestamp_seconds{tenant="impack"} 1700000000`,
 		`anubis_deprecated_rpc_total{rpc="TenantAdminService/PutSigninPage"} 1`,
 		`anubis_build_info{version="test-sha"} 1`,

@@ -27,12 +27,22 @@ IP and restrict it with a NetworkPolicy; the scraper is the only client.
 | **Pool saturation** | `rate(anubis_db_pool_empty_acquires_total[5m]) > 0` | Callers are waiting for connections. Check `anubis_db_pool_*` gauges against `ANUBIS_DB_MAX_CONNS`; size to the database, not the app. |
 | **Version skew** | `count(count by (version) (anubis_build_info)) > 1` for > 1h | A rollout that never finished: two versions serving side by side long after a deploy window should have closed. |
 | **Snapshot never rebuilds** | `rate(anubis_gate_snapshot_refresh_total{result=~"rebuilt\|verify"}[30m]) == 0` while `result="unchanged"` is climbing | The gate skips rebuilding a snapshot whose catalog version has not moved ([ADR-0015](adr/0015-scope-hierarchy-at-scale.md)). If a tenant is *never* rebuilt, either it is genuinely idle, or an invalidation trigger was lost and the version stopped moving — which looks identical from the outside and means stale authorization. The periodic `verify` rebuild bounds this to one max-age window, so its absence is the signal. |
+| **Structure sync failing** | `rate(anubis_scope_sync_runs_total{result="ok"}[6h]) == 0 and rate(anubis_scope_sync_runs_total{result="failed"}[6h]) > 0` | A structure on a clock has been failing and has not succeeded once in six hours. The tree the console shows is whatever the last good sync left behind, and the access granted on it keeps working — a department HR deleted is still a node, and the grants on it still decide. Absence of success is the signal rather than a failure count, because a source on a daily interval only fails once a day and a threshold on failures alone would never fire for it. The `axis` label names the structure; the `scope sync failed` log line carries the source and tenant, and the Source panel shows the reason. **This is not covered by the maintenance-job alert**: `RunDue` returns nil when a source fails so that one bad feed does not stop every other tenant's, which leaves `anubis_job_runs_total{job="scope_sync"}` on `ok` however many sources are broken. |
 | **Snapshot load failing** | `rate(anubis_gate_snapshot_refresh_total{result="failed"}[15m]) > 0` | The instance is serving the previous snapshot (fail-static) and will fail closed once it passes max age. This fires *before* the staleness page and names the tenant. |
 
 ## Deliberately not alerted
 
 - `anubis_job_runs_total{result="skipped"}` — another replica held the
   advisory lock. That is the coordination mechanism working, not a failure.
+- A *single* `anubis_scope_sync_runs_total{result="failed"}` — a source system
+  that is briefly unreachable is the normal weather for a feed Anubis does not
+  own. The scheduler already moves the source on to its next interval rather
+  than retrying, so one failure costs one interval of staleness. Sustained
+  failure with no success is the thing worth waking somebody for, which is what
+  the rule above says.
+- Manual sync runs, failed or otherwise — `IncScopeSync` is only called from
+  the scheduler. Somebody pressed the button and watched the result; the
+  operator this instrumentation is for is the one who is not looking.
 - `anubis_gate_snapshot_refresh_total{result="unchanged"}` climbing — the
   version gate skipping a rebuild it did not need. That is the optimisation
   working; it should be the overwhelming majority of refreshes.

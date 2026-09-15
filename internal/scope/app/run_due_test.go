@@ -4,11 +4,13 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 
 	auditdomain "github.com/gsoultan/anubis/internal/audit/domain"
+	"github.com/gsoultan/anubis/internal/platform/metrics"
 	scopedomain "github.com/gsoultan/anubis/internal/scope/domain"
 	scopeport "github.com/gsoultan/anubis/internal/scope/port"
 )
@@ -184,5 +186,51 @@ func TestRunDueRecordsNoFailureWhenTheRunSucceeds(t *testing.T) {
 	}
 	if len(repo.failures) != 0 {
 		t.Errorf("failures = %v, want none — scope_sync_apply records its own run", repo.failures)
+	}
+}
+
+// RunDue returns nil when a source fails, so anubis_job_runs_total stays "ok"
+// however many feeds are broken. The counter is the only thing that knows, so
+// it has to move — otherwise a structure goes stale for a week with every
+// operational signal green.
+//
+// Asserted against the real exposition rather than a reader added to the
+// metrics package for the benefit of a test: what Prometheus sees is the thing
+// that matters, and a counter nothing scrapes is not instrumentation.
+func TestRunDueCountsOutcomes(t *testing.T) {
+	scrape := func() string {
+		rec := httptest.NewRecorder()
+		metrics.Handler().ServeHTTP(rec, httptest.NewRequest("GET", "/metrics", nil))
+		return rec.Body.String()
+	}
+	// Axis codes unique to this test, so a count is exact rather than "more
+	// than it was" and no other test can move it.
+	failing := oneDueSource()
+	failing[0].Axis = "runduetest_failing"
+	working := oneDueSource()
+	working[0].Axis = "runduetest_working"
+
+	repo := &dueSyncRepo{due: failing}
+	u, _ := schedulerUnderTest(repo, stubFetcher{err: errors.New("connection refused")})
+	if _, err := u.RunDue(context.Background(), time.Now(), 0); err != nil {
+		t.Fatalf("RunDue: %v", err)
+	}
+
+	repo2 := &dueSyncRepo{due: working}
+	u2, _ := schedulerUnderTest(repo2, stubFetcher{
+		rows: []scopedomain.SyncFeedRow{{Ref: "jkt", Name: "Jakarta"}},
+	})
+	if _, err := u2.RunDue(context.Background(), time.Now(), 0); err != nil {
+		t.Fatalf("RunDue: %v", err)
+	}
+
+	body := scrape()
+	for _, want := range []string{
+		`anubis_scope_sync_runs_total{axis="runduetest_failing",result="failed"} 1`,
+		`anubis_scope_sync_runs_total{axis="runduetest_working",result="ok"} 1`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("exposition missing %q", want)
+		}
 	}
 }

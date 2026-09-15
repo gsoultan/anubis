@@ -73,6 +73,34 @@ The console distinguishes them: a run that reconciled and could not place N
 rows shows "N unplaced", one that never reached the feed shows why. The second
 used to render as "0 unplaced".
 
+## The job counter cannot see a failing source
+
+`anubis_job_runs_total{job="scope_sync"}` stays on `ok` however many sources
+are failing, because `RunDue` returns nil so one bad feed cannot stop every
+other tenant's. The existing **Maintenance job failing** alert therefore never
+fires for this. Measured side by side on the dev box:
+
+```
+anubis_job_runs_total{job="scope_sync",result="ok"} 1
+anubis_scope_sync_runs_total{axis="e2e_dead_axis",result="failed"} 1
+```
+
+`IncScopeSync(axis, result)` is the counter that knows. Labelled by **axis**,
+not source id: an axis is bounded by the registry, source ids grow with
+tenants, and the log line carries source and tenant for the follow-up. Only the
+scheduler calls it — a manual run had somebody watching it.
+
+The rule is **absence of success**, not a failure count:
+
+```promql
+rate(anubis_scope_sync_runs_total{result="ok"}[6h]) == 0
+  and rate(anubis_scope_sync_runs_total{result="failed"}[6h]) > 0
+```
+
+A threshold on failures alone would never fire for a source on a daily
+interval, which fails once a day. Same shape as **Snapshot never rebuilds**,
+and for the same reason: the thing that has stopped happening is the signal.
+
 ## Changing the schedule of a source that already exists
 
 `SetSyncSchedule` is its own RPC, usecase and query. It cannot go through

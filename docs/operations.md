@@ -380,6 +380,16 @@ locks, so every instance can run them safely.
 | `sweep_one_time_tokens` | hourly | MFA/PKCE/nonce rows live seconds; the rest is bloat on a hot path |
 | `retention` | 6h | Applies realm `default_retention`, anonymises past the deadline, **shreds the PII key** |
 | `signing_key_expiry` | boot + 6h | Warns 14 days out; an expired active key stops every login |
+| `sweep_platform_refresh` | 6h | Operator refresh chains expire in hours; the rows only matter to theft detection while their family is alive |
+| `catalog_sync` | 1 min tick | Applies catalog sources that have come due. The minute is the tick; each source carries its own interval (0043) |
+| `scope_sync` | 1 min tick | Re-reads structures from their source of truth. Same shape as `catalog_sync`; each source carries its own interval, floor 5 minutes (0045) |
+
+Both sync jobs swallow a single source's failure so one bad feed cannot stop
+every other tenant's, which means `anubis_job_runs_total` stays `ok` while
+sources fail. `anubis_scope_sync_runs_total` is what sees that — see
+[alerting.md](alerting.md#warn), **Structure sync failing**. A source that has
+failed is visible in the console on the structure's Source panel, with the
+reason, and in the tenant's audit log as `sync.fetch_failed`.
 
 ## Key rotation
 
