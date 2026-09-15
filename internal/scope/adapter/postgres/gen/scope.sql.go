@@ -131,17 +131,23 @@ func (q *Queries) CreateScopeNodeType(ctx context.Context, arg CreateScopeNodeTy
 }
 
 const createSyncSource = `-- name: CreateSyncSource :one
-INSERT INTO scope_sync_sources (tenant_id, axis_code, kind, config)
+INSERT INTO scope_sync_sources (tenant_id, axis_code, kind, config, interval_seconds,
+                                next_run_at)
 VALUES ($1, $2, $3,
-        $4::jsonb)
+        $4::jsonb, $5,
+        -- A source created WITH an interval is due immediately: the operator
+        -- who just pointed Anubis at an ERP expects the tree to fill, not to
+        -- sit empty until the first interval elapses.
+        CASE WHEN $5 > 0 THEN now() ELSE NULL END)
 RETURNING id
 `
 
 type CreateSyncSourceParams struct {
-	TenantID string
-	AxisCode string
-	Kind     string
-	Config   []byte
+	TenantID        string
+	AxisCode        string
+	Kind            string
+	Config          []byte
+	IntervalSeconds int32
 }
 
 func (q *Queries) CreateSyncSource(ctx context.Context, arg CreateSyncSourceParams) (string, error) {
@@ -150,10 +156,72 @@ func (q *Queries) CreateSyncSource(ctx context.Context, arg CreateSyncSourcePara
 		arg.AxisCode,
 		arg.Kind,
 		arg.Config,
+		arg.IntervalSeconds,
 	)
 	var id string
 	err := row.Scan(&id)
 	return id, err
+}
+
+const dueSyncSources = `-- name: DueSyncSources :many
+SELECT id, tenant_id, axis_code, kind, status, config, last_run_at,
+       interval_seconds, next_run_at
+FROM scope_sync_sources
+WHERE status = 'active'
+  AND next_run_at IS NOT NULL
+  AND next_run_at <= $1
+ORDER BY next_run_at
+LIMIT $2
+`
+
+type DueSyncSourcesParams struct {
+	Now *time.Time
+	Lim int32
+}
+
+type DueSyncSourcesRow struct {
+	ID              string
+	TenantID        string
+	AxisCode        string
+	Kind            string
+	Status          string
+	Config          []byte
+	LastRunAt       *time.Time
+	IntervalSeconds int32
+	NextRunAt       *time.Time
+}
+
+// DueSyncSources is the scheduler's only read. It carries no tenant filter
+// because a timer serves every tenant at once; that is exactly why the usecase
+// behind it must never be reachable from a transport.
+func (q *Queries) DueSyncSources(ctx context.Context, arg DueSyncSourcesParams) ([]DueSyncSourcesRow, error) {
+	rows, err := q.db.Query(ctx, dueSyncSources, arg.Now, arg.Lim)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []DueSyncSourcesRow
+	for rows.Next() {
+		var i DueSyncSourcesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.TenantID,
+			&i.AxisCode,
+			&i.Kind,
+			&i.Status,
+			&i.Config,
+			&i.LastRunAt,
+			&i.IntervalSeconds,
+			&i.NextRunAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const ensureAxisRoot = `-- name: EnsureAxisRoot :one
@@ -293,7 +361,8 @@ func (q *Queries) GetScopeNodeByRef(ctx context.Context, arg GetScopeNodeByRefPa
 }
 
 const getSyncSource = `-- name: GetSyncSource :one
-SELECT id, tenant_id, axis_code, kind, status, config, last_run_at
+SELECT id, tenant_id, axis_code, kind, status, config, last_run_at,
+       interval_seconds, next_run_at
 FROM scope_sync_sources
 WHERE id = $1 AND tenant_id = $2
 `
@@ -304,13 +373,15 @@ type GetSyncSourceParams struct {
 }
 
 type GetSyncSourceRow struct {
-	ID        string
-	TenantID  string
-	AxisCode  string
-	Kind      string
-	Status    string
-	Config    []byte
-	LastRunAt *time.Time
+	ID              string
+	TenantID        string
+	AxisCode        string
+	Kind            string
+	Status          string
+	Config          []byte
+	LastRunAt       *time.Time
+	IntervalSeconds int32
+	NextRunAt       *time.Time
 }
 
 func (q *Queries) GetSyncSource(ctx context.Context, arg GetSyncSourceParams) (GetSyncSourceRow, error) {
@@ -324,6 +395,8 @@ func (q *Queries) GetSyncSource(ctx context.Context, arg GetSyncSourceParams) (G
 		&i.Status,
 		&i.Config,
 		&i.LastRunAt,
+		&i.IntervalSeconds,
+		&i.NextRunAt,
 	)
 	return i, err
 }
@@ -552,20 +625,23 @@ func (q *Queries) ListSyncRuns(ctx context.Context, arg ListSyncRunsParams) ([]L
 }
 
 const listSyncSources = `-- name: ListSyncSources :many
-SELECT id, tenant_id, axis_code, kind, status, config, last_run_at
+SELECT id, tenant_id, axis_code, kind, status, config, last_run_at,
+       interval_seconds, next_run_at
 FROM scope_sync_sources
 WHERE tenant_id = $1
 ORDER BY axis_code
 `
 
 type ListSyncSourcesRow struct {
-	ID        string
-	TenantID  string
-	AxisCode  string
-	Kind      string
-	Status    string
-	Config    []byte
-	LastRunAt *time.Time
+	ID              string
+	TenantID        string
+	AxisCode        string
+	Kind            string
+	Status          string
+	Config          []byte
+	LastRunAt       *time.Time
+	IntervalSeconds int32
+	NextRunAt       *time.Time
 }
 
 func (q *Queries) ListSyncSources(ctx context.Context, tenantID string) ([]ListSyncSourcesRow, error) {
@@ -585,6 +661,8 @@ func (q *Queries) ListSyncSources(ctx context.Context, tenantID string) ([]ListS
 			&i.Status,
 			&i.Config,
 			&i.LastRunAt,
+			&i.IntervalSeconds,
+			&i.NextRunAt,
 		); err != nil {
 			return nil, err
 		}
@@ -627,6 +705,29 @@ func (q *Queries) RenameScopeNode(ctx context.Context, arg RenameScopeNodeParams
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const scheduleNextSyncSource = `-- name: ScheduleNextSyncSource :exec
+UPDATE scope_sync_sources
+SET next_run_at = CASE WHEN interval_seconds > 0
+                       THEN now() + make_interval(secs => interval_seconds)
+                       ELSE NULL END
+WHERE id = $1
+`
+
+// ScheduleNextSyncSource moves a source on whether or not the run worked. A
+// feed that is down otherwise becomes a hot loop against somebody else's
+// server: the tick would find it due again one minute later, forever.
+//
+// It moves next_run_at ONLY. last_run_at already has a meaning in this schema
+// — scope_sync_apply stamps it, and only after a fetch succeeded and rows were
+// reconciled (0017). Stamping it here too would make it "last attempted" for
+// scheduled sources and "last succeeded" for manual ones, and the console's
+// "Last synced …" line would cheerfully report a time at which the sync had in
+// fact failed.
+func (q *Queries) ScheduleNextSyncSource(ctx context.Context, id string) error {
+	_, err := q.db.Exec(ctx, scheduleNextSyncSource, id)
+	return err
 }
 
 const scopeAncestors = `-- name: ScopeAncestors :many
@@ -769,6 +870,36 @@ func (q *Queries) ScopeSyncApply(ctx context.Context, arg ScopeSyncApplyParams) 
 	return report, err
 }
 
+const setSyncSchedule = `-- name: SetSyncSchedule :execrows
+UPDATE scope_sync_sources
+SET interval_seconds = $1,
+    next_run_at = CASE
+        WHEN $1 = 0 THEN NULL
+        WHEN $1 <> interval_seconds OR next_run_at IS NULL THEN now()
+        ELSE next_run_at
+    END
+WHERE id = $2 AND tenant_id = $3
+`
+
+type SetSyncScheduleParams struct {
+	IntervalSeconds int32
+	ID              string
+	TenantID        string
+}
+
+// SetSyncSchedule changes WHEN a source runs and nothing else. It exists
+// because UpdateSyncSource replaces config wholesale — which is correct, since
+// merging secrets is how half-rotated credentials happen — and the console is
+// never sent dsn or auth_header. Rescheduling through that path would save a
+// config with the credentials missing.
+func (q *Queries) SetSyncSchedule(ctx context.Context, arg SetSyncScheduleParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setSyncSchedule, arg.IntervalSeconds, arg.ID, arg.TenantID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const updateScopeAxis = `-- name: UpdateScopeAxis :execrows
 UPDATE scope_axes
 SET display_name = $1,
@@ -806,21 +937,32 @@ func (q *Queries) UpdateScopeAxis(ctx context.Context, arg UpdateScopeAxisParams
 const updateSyncSource = `-- name: UpdateSyncSource :execrows
 UPDATE scope_sync_sources
 SET config = $1::jsonb,
-    status = $2
-WHERE id = $3 AND tenant_id = $4
+    status = $2,
+    interval_seconds = $3,
+    -- Changing the interval reschedules from now; leaving it alone leaves the
+    -- existing due time exactly where it was, so saving an unrelated edit does
+    -- not quietly restart the clock on a feed that was about to run.
+    next_run_at = CASE
+        WHEN $3 = 0 THEN NULL
+        WHEN $3 <> interval_seconds OR next_run_at IS NULL THEN now()
+        ELSE next_run_at
+    END
+WHERE id = $4 AND tenant_id = $5
 `
 
 type UpdateSyncSourceParams struct {
-	Config   []byte
-	Status   string
-	ID       string
-	TenantID string
+	Config          []byte
+	Status          string
+	IntervalSeconds int32
+	ID              string
+	TenantID        string
 }
 
 func (q *Queries) UpdateSyncSource(ctx context.Context, arg UpdateSyncSourceParams) (int64, error) {
 	result, err := q.db.Exec(ctx, updateSyncSource,
 		arg.Config,
 		arg.Status,
+		arg.IntervalSeconds,
 		arg.ID,
 		arg.TenantID,
 	)

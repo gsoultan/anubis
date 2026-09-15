@@ -12,6 +12,7 @@ import (
 	identityapp "github.com/gsoultan/anubis/internal/identity/app"
 	"github.com/gsoultan/anubis/internal/platform/crypto/keyring"
 	"github.com/gsoultan/anubis/internal/platform/jobs"
+	scopeapp "github.com/gsoultan/anubis/internal/scope/app"
 )
 
 // Advisory lock ids for maintenance. Fixed and distinct so replicas contend
@@ -23,6 +24,7 @@ const (
 	lockKeyCheck     = 0x616e7562_0004
 	lockSweepRefresh = 0x616e7562_0005
 	lockCatalogSync  = 0x616e7562_0006
+	lockScopeSync    = 0x616e7562_0007
 )
 
 // maintenanceJobs is everything that must keep running for the database to
@@ -34,9 +36,34 @@ func maintenanceJobs(
 	keys authport.KeyRepository,
 	refresh controlport.PlatformRefreshStore,
 	catalog authzcatalog.CatalogSyncUsecase,
+	scope scopeapp.ScopeSyncSchedulerUsecase,
 	logger *slog.Logger,
 ) []jobs.Job {
 	return []jobs.Job{
+		{
+			// Structures that have come due. Same shape as catalog_sync, on
+			// purpose: a minute is the TICK, each source carries its own
+			// interval with a five-minute floor (0045), and a tick that finds
+			// nothing is one probe of the partial index over scheduled
+			// sources alone.
+			//
+			// Its own lock, not catalog_sync's. Sharing one would serialise
+			// every tenant's structure refresh behind every tenant's catalog
+			// refresh, and a slow ERP would starve the other job entirely.
+			//
+			// The timeout is generous because a feed is somebody else's
+			// server: an axis in the benchmark dataset holds ~20,000 nodes,
+			// and the reconcile is one statement per row.
+			Name: "scope_sync", Every: time.Minute, LockID: lockScopeSync,
+			Timeout: 10 * time.Minute,
+			Run: func(ctx context.Context) error {
+				n, err := scope.RunDue(ctx, time.Now(), 0)
+				if err == nil && n > 0 {
+					logger.Info("scope sources run", "sources", n)
+				}
+				return err
+			},
+		},
 		{
 			// Catalog sources that have come due. A minute is the TICK, not
 			// the interval — each source carries its own, with a five-minute

@@ -263,6 +263,10 @@ service ScopeAdminService {
   // Rotate a feed's credentials or move it to a new endpoint without losing
   // the source's history. Config is REPLACED, never merged.
   rpc UpdateSyncSource(UpdateSyncSourceRequest) returns (UpdateSyncSourceResponse);
+  // Changes WHEN a source runs, and nothing else. Separate from
+  // UpdateSyncSource because that replaces config wholesale and no client is
+  // ever sent a source's dsn or auth_header to send back.
+  rpc SetSyncSchedule(SetSyncScheduleRequest) returns (SetSyncScheduleResponse);
   rpc RunSync(RunSyncRequest) returns (RunSyncResponse);
   // ListSyncRuns is what a feed has actually done. The reconciler has
   // recorded every run since migration 0017; nothing read it until now, so
@@ -425,6 +429,14 @@ message SyncSource {
   string status = 4;
   string config_json = 5;
   int64 last_run_at = 6;
+  // Seconds between scheduled runs. 0 = manual only, which is what every
+  // source created before 0045 stays. Floor of 300 when set: a structure is
+  // an org chart, and anything faster is polling somebody else's ERP for rows
+  // that did not move.
+  int32 interval_seconds = 7;
+  // When the scheduler will next run this source. 0 = never, i.e. manual.
+  // Read-only: set interval_seconds and the server derives this.
+  int64 next_run_at = 8;
 }
 
 message ListSyncSourcesRequest {}
@@ -446,6 +458,16 @@ message UpdateSyncSourceRequest {
 }
 
 message UpdateSyncSourceResponse {
+  SyncSource source = 1;
+}
+
+message SetSyncScheduleRequest {
+  string source_id = 1;
+  // 0 = manual only. Otherwise at least 300.
+  int32 interval_seconds = 2;
+}
+
+message SetSyncScheduleResponse {
   SyncSource source = 1;
 }
 

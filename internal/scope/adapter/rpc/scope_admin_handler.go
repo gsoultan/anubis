@@ -223,6 +223,23 @@ func (h *ScopeAdminHandler) UpsertScopeNodes(ctx context.Context, req *connect.R
 	return connect.NewResponse(&anubisv1.UpsertScopeNodesResponse{ReportJson: out.(string)}), nil
 }
 
+// syncSourceProto is one mapping for the three responses that carry a source.
+// Three hand-written copies is how interval_seconds would have shipped on list
+// and gone missing on create.
+func syncSourceProto(s scopedomain.SyncSourceRecord) *anubisv1.SyncSource {
+	src := &anubisv1.SyncSource{
+		Id: s.ID, Axis: s.Axis, Kind: s.Kind, Status: s.Status,
+		ConfigJson: string(s.Config), IntervalSeconds: s.IntervalSeconds,
+	}
+	if s.LastRunAt != nil {
+		src.LastRunAt = s.LastRunAt.Unix()
+	}
+	if s.NextRunAt != nil {
+		src.NextRunAt = s.NextRunAt.Unix()
+	}
+	return src
+}
+
 func (h *ScopeAdminHandler) ListSyncSources(ctx context.Context, _ *connect.Request[anubisv1.ListSyncSourcesRequest]) (*connect.Response[anubisv1.ListSyncSourcesResponse], error) {
 	out, err := h.f.Do(ctx, "admin.sync.sources", func(ctx context.Context) (any, error) {
 		return h.svc.ListSyncSources(ctx)
@@ -232,14 +249,7 @@ func (h *ScopeAdminHandler) ListSyncSources(ctx context.Context, _ *connect.Requ
 	}
 	resp := &anubisv1.ListSyncSourcesResponse{}
 	for _, s := range out.([]scopedomain.SyncSourceRecord) {
-		src := &anubisv1.SyncSource{
-			Id: s.ID, Axis: s.Axis, Kind: s.Kind, Status: s.Status,
-			ConfigJson: string(s.Config),
-		}
-		if s.LastRunAt != nil {
-			src.LastRunAt = s.LastRunAt.Unix()
-		}
-		resp.Sources = append(resp.Sources, src)
+		resp.Sources = append(resp.Sources, syncSourceProto(s))
 	}
 	return connect.NewResponse(resp), nil
 }
@@ -256,9 +266,7 @@ func (h *ScopeAdminHandler) CreateSyncSource(ctx context.Context, req *connect.R
 	}
 	s := out.(*scopedomain.SyncSourceRecord)
 	return connect.NewResponse(&anubisv1.CreateSyncSourceResponse{
-		Source: &anubisv1.SyncSource{
-			Id: s.ID, Axis: s.Axis, Kind: s.Kind, Status: s.Status, ConfigJson: string(s.Config),
-		},
+		Source: syncSourceProto(*s),
 	}), nil
 }
 
@@ -267,6 +275,7 @@ func (h *ScopeAdminHandler) UpdateSyncSource(ctx context.Context, req *connect.R
 		s := req.Msg.Source
 		return h.svc.UpdateSyncSource(ctx, scopedomain.SyncSourceRecord{
 			ID: s.Id, Status: s.Status, Config: []byte(s.ConfigJson),
+			IntervalSeconds: s.IntervalSeconds,
 		})
 	})
 	if err != nil {
@@ -274,9 +283,19 @@ func (h *ScopeAdminHandler) UpdateSyncSource(ctx context.Context, req *connect.R
 	}
 	s := out.(*scopedomain.SyncSourceRecord)
 	return connect.NewResponse(&anubisv1.UpdateSyncSourceResponse{
-		Source: &anubisv1.SyncSource{
-			Id: s.ID, Axis: s.Axis, Kind: s.Kind, Status: s.Status, ConfigJson: string(s.Config),
-		},
+		Source: syncSourceProto(*s),
+	}), nil
+}
+
+func (h *ScopeAdminHandler) SetSyncSchedule(ctx context.Context, req *connect.Request[anubisv1.SetSyncScheduleRequest]) (*connect.Response[anubisv1.SetSyncScheduleResponse], error) {
+	out, err := h.f.Do(ctx, "admin.sync.schedule_set", func(ctx context.Context) (any, error) {
+		return h.svc.SetSyncSchedule(ctx, req.Msg.SourceId, req.Msg.IntervalSeconds)
+	})
+	if err != nil {
+		return nil, apiconnect.Err(ctx, err)
+	}
+	return connect.NewResponse(&anubisv1.SetSyncScheduleResponse{
+		Source: syncSourceProto(*out.(*scopedomain.SyncSourceRecord)),
 	}), nil
 }
 
