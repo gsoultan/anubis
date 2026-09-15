@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useQuery, useMutation } from '@tanstack/react-query'
-import { Badge, Button, Modal, MultiSelect, Popover, TextInput, Tooltip } from '@mantine/core'
-import { IconPlus, IconFlask, IconAlertTriangle, IconSitemapFilled, IconRefresh, IconPlugConnected } from '@tabler/icons-react'
+import { Badge, Button, Modal, MultiSelect, Popover, SegmentedControl, Select, TextInput, Tooltip } from '@mantine/core'
+import { IconPlus, IconFlask, IconAlertTriangle, IconSitemapFilled, IconRefresh, IconPlugConnected, IconClock } from '@tabler/icons-react'
 import { queryClient } from '@/lib/query/client'
 import { notifyCreated, notifyRejected } from '@/components/create/shell'
 import { api } from '@/lib/api/client'
@@ -9,6 +9,7 @@ import { useCreate } from '@/stores/create'
 import { useState } from 'react'
 import { Page } from '@/components/shell/Page'
 import { ScopeTree } from '@/components/scope/ScopeTree'
+import { SYNC_INTERVALS } from '@/lib/syncIntervals'
 import { AxisIcon } from '@/components/scope/AxisIcon'
 import { qk } from '@/lib/query/keys'
 import type { ScopeNode, StrictDryRun } from '@/lib/api/types'
@@ -45,6 +46,15 @@ function DryRun({ r }: { r: StrictDryRun }) {
   )
 }
 
+/* Seconds as an operator said them. The drawer offers a fixed set, so this
+   only has to name those; anything else falls back to minutes rather than
+   pretending not to know. */
+function everyLabel(secs: number): string {
+  if (secs % 86400 === 0) return secs === 86400 ? 'day' : `${secs / 86400} days`
+  if (secs % 3600 === 0) return secs === 3600 ? 'hour' : `${secs / 3600} hours`
+  return `${Math.round(secs / 60)} minutes`
+}
+
 /* The level rules, visible and editable. "Departments can sit under offices
    or divisions" is data — this panel is where an operator adds a Division
    level between existing ones, without a deploy. The same rules drive the
@@ -75,7 +85,7 @@ function ItemKinds({ axisCode }: { axisCode: string }) {
   }
 
   return (
-    <div className="panel p-4">
+    <div className="p-4">
       <div className="mb-1 flex items-baseline justify-between">
         <div className="t-label">Item kinds</div>
         <div className="t-xs">what may sit under what</div>
@@ -85,19 +95,26 @@ function ItemKinds({ axisCode }: { axisCode: string }) {
         every picker follows. The database rejects illegal placements outright.
       </div>
       <div className="flex flex-col gap-1.5">
+        {/* Name over parents, not beside them. Side by side the select was
+            pinned at 220px and the level's own name was what gave way —
+            "Department" and "Departments" both rendered as "Depart…", which
+            is the one thing this panel exists to tell apart. */}
         {mine.map((t) => (
-          <div key={t.code} className="panel-inset flex items-center justify-between gap-2 px-2.5 py-1.5">
-            <div className="flex min-w-0 items-center gap-2">
-              <span className="t-body truncate" style={{ fontWeight: 530 }}>{t.display_name}</span>
-              <span className="chip">{t.code}</span>
+          <div key={t.code} className="panel-inset px-2.5 py-2">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex min-w-0 items-baseline gap-2">
+                <span className="t-body truncate" style={{ fontWeight: 530 }}>{t.display_name}</span>
+                <span className="chip">{t.code}</span>
+              </div>
+              {t.parent_types.length === 0 && (
+                <Tooltip label="The root of this structure — nothing sits above it.">
+                  <span className="chip chip-accent">root</span>
+                </Tooltip>
+              )}
             </div>
-            {t.parent_types.length === 0 ? (
-              <Tooltip label="The root of this structure — nothing sits above it.">
-                <span className="chip chip-gold">root</span>
-              </Tooltip>
-            ) : (
+            {t.parent_types.length > 0 && (
               <MultiSelect
-                size="xs" w={220} value={t.parent_types}
+                size="xs" mt={6} value={t.parent_types}
                 aria-label={`Legal parents of ${t.display_name}`}
                 data={mine.filter((x) => x.code !== t.code).map((x) => ({ value: x.code, label: x.display_name }))}
                 onChange={(v) => void save(t.code, v)}
@@ -143,13 +160,26 @@ function SyncCard({ axisCode }: { axisCode: string }) {
     enabled: !!source,
   })
   const [preview, setPreview] = useState<import('@/lib/api/types').SyncPlan | null>(null)
-  const [busy, setBusy] = useState<'plan' | 'apply' | null>(null)
+  const [busy, setBusy] = useState<'plan' | 'apply' | 'schedule' | null>(null)
 
   const refresh = () => Promise.all([
     queryClient.invalidateQueries({ queryKey: qk.scope() }),
     queryClient.invalidateQueries({ queryKey: qk.syncSources() }),
     queryClient.invalidateQueries({ queryKey: qk.syncRuns(source?.id ?? '') }),
   ])
+  const doSchedule = async (secs: number) => {
+    if (!source || secs === source.interval_seconds) return
+    setBusy('schedule')
+    try {
+      await api.setSyncSchedule(source.id, secs)
+      notifyCreated(secs > 0 ? 'Refresh scheduled' : 'Refresh turned off',
+        secs > 0
+          ? `Anubis re-reads this structure every ${everyLabel(secs)}.`
+          : 'This structure now only syncs when somebody asks.')
+      await queryClient.invalidateQueries({ queryKey: qk.syncSources() })
+    } catch (e) { notifyRejected(e) }
+    setBusy(null)
+  }
   const doPlan = async () => {
     if (!source) return
     setBusy('plan')
@@ -170,7 +200,7 @@ function SyncCard({ axisCode }: { axisCode: string }) {
 
   if (!source) {
     return (
-      <div className="panel p-4" style={{ borderStyle: 'dashed' }}>
+      <div className="p-4">
         <div className="t-label mb-1">Sync</div>
         <div className="t-xs mb-2.5">
           This structure is maintained by hand. Connect the system that owns it — matched by
@@ -185,7 +215,7 @@ function SyncCard({ axisCode }: { axisCode: string }) {
   }
 
   return (
-    <div className="panel p-4">
+    <div className="p-4">
       <Modal opened={!!preview} onClose={() => setPreview(null)} title="Preview — nothing applied yet" size={440}>
         {preview && (
           <div className="flex flex-col gap-3">
@@ -226,10 +256,33 @@ function SyncCard({ axisCode }: { axisCode: string }) {
       <div className="chip mb-2 w-fit" style={{ maxWidth: '100%' }}>
         <span className="truncate">{source.target}</span>
       </div>
-      <div className="t-xs mb-3">
+      <div className="t-xs mb-1">
         {source.last_run_at
           ? `Last synced ${source.last_run_at.slice(0, 16).replace('T', ' ')}`
           : 'Never synced — preview first.'}
+      </div>
+      {/* Whether a clock owns this feed, and the control to change it. A source
+          that refreshes itself and one that waits for a button look identical
+          otherwise, and "why is this tree stale?" has exactly two answers.
+          Editable here because a schedule set only at connect time would mean
+          every source that already exists is stuck manual forever. */}
+      <div className="mb-3 flex items-center gap-2">
+        <IconClock size={13}
+          style={{ color: source.interval_seconds > 0 ? 'var(--allow)' : 'var(--ink-4)', flexShrink: 0 }} />
+        <Select
+          size="xs" aria-label="Refresh interval" className="flex-1"
+          data={SYNC_INTERVALS}
+          value={String(source.interval_seconds)}
+          disabled={busy === 'schedule'}
+          onChange={(v) => void doSchedule(Number(v ?? 0))}
+        />
+      </div>
+      <div className="t-xs mb-3">
+        {source.interval_seconds > 0
+          ? `Next run ${source.next_run_at
+              ? source.next_run_at.slice(0, 16).replace('T', ' ')
+              : 'shortly'} · a failed run waits for the next one.`
+          : 'Nothing refreshes this on its own.'}
       </div>
       <div className="flex items-center gap-2">
         <Button size="xs" variant="default" loading={busy === 'plan'} onClick={() => void doPlan()}>
@@ -263,9 +316,12 @@ function SyncCard({ axisCode }: { axisCode: string }) {
   )
 }
 
+type Pane = 'settings' | 'levels' | 'source'
+
 function Scope() {
   const { openCreate } = useCreate()
   const [selected, setSelected] = useState<ScopeNode | null>(null)
+  const [pane, setPane] = useState<Pane>('settings')
   const { data: axes } = useQuery({ queryKey: qk.axes(), queryFn: api.axes })
   const { data: nodeTypes } = useQuery({ queryKey: qk.nodeTypes(), queryFn: api.nodeTypes })
   // ?axis= makes a structure deep-linkable (docs, and the screenshot harness)
@@ -294,90 +350,63 @@ function Scope() {
       }
     >
       <div className="flex flex-col gap-4">
-        {/* Axis switcher. Reads as a set of peers rather than browser tabs,
-            which matters because axes are genuinely independent forests. */}
-        <div className="flex flex-wrap gap-2">
+        {/* Axis switcher. Axes are genuinely independent forests, so this
+            reads as a set of peers — but it is still navigation, and as a
+            wrapping grid of cards it took five rows and ~290px before the
+            tree it selects. The code moved into Settings, where it is read
+            once, rather than riding every tab. */}
+        <div className="axis-rail-wrap">
+        <div className="axis-rail" role="tablist" aria-label="Structure">
           {axes?.map((a) => {
             const on = a.code === active
             return (
-              <button key={a.code} onClick={() => { setTab(a.code); setSelected(null) }}
-                className="panel flex items-center gap-2.5 px-3 py-2 text-left"
-                style={{
-                  borderColor: on ? 'color-mix(in srgb, var(--gold) 30%, transparent)' : 'var(--line)',
-                  background: on ? 'linear-gradient(180deg, var(--gold-glow), var(--s-raised) 70%)' : 'var(--s-raised)',
-                  transition: 'all var(--t-fast)',
-                }}>
-                <span style={{ color: on ? 'var(--gold)' : 'var(--ink-3)', display: 'flex' }}>
+              <button key={a.code} role="tab" aria-selected={on}
+                onClick={() => { setTab(a.code); setSelected(null) }}
+                className="axis-tab" {...(on ? { 'data-active': '' } : {})}>
+                <span className="axis-tab-icon">
                   <AxisIcon name={a.ui_schema.icon} size={15} />
                 </span>
-                <span>
-                  <span className="t-body block" style={{ fontWeight: on ? 570 : 460 }}>{a.display_name}</span>
-                  <span className="t-xs block font-mono" style={{ fontSize: 10 }}>{a.code}</span>
-                </span>
+                {a.display_name}
                 {a.default_effect === 'deny' && (
-                  <span className="chip" style={{ color: 'var(--deny)', borderColor: 'color-mix(in srgb, var(--deny) 20%, transparent)' }}>strict</span>
+                  <Tooltip label="Strict: a grant that does not name this structure is denied.">
+                    <span className="axis-tab-strict" />
+                  </Tooltip>
                 )}
               </button>
             )
           })}
         </div>
+        </div>
 
         {axis && (
-          <div className="grid gap-4" style={{ gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr)' }}>
-            <div className="panel overflow-hidden">
-              <div className="flex items-baseline justify-between px-4 py-3"
-                style={{ borderBottom: '1px solid var(--line-soft)' }}>
+          /* Tree left and wide, detail rail right and fixed. The split used to
+             be 50/50, which gave half the screen to settings read once a
+             quarter and half to the tree that is the actual work — and because
+             a grid stretches its columns to equal height, the tree panel grew
+             to 860px to match the settings stack and rendered one row of
+             content inside an empty white rectangle. items-start stops that. */
+          <div className="grid items-start gap-4"
+            style={{ gridTemplateColumns: 'minmax(0,1fr) 400px' }}>
+            <div className="panel overflow-clip">
+              <div className="panel-head">
                 <span className="t-label">{axis.display_name} tree</span>
                 <span className="t-xs">children load on expand</span>
               </div>
-              <div className="p-3">
+              {/* A minimum as well as a maximum. Autosize shrinks to content,
+                  so an axis holding one root collapsed the primary surface to
+                  a single row beside a 400px rail. */}
+              <div className="p-3" style={{ minHeight: 380 }}>
                 <ScopeTree axis={axis.code} selectedId={selected?.id ?? null}
-                  onSelect={setSelected} height={430} />
+                  onSelect={setSelected} height="calc(100vh - 272px)" />
               </div>
             </div>
 
-            <div className="flex flex-col gap-4">
-              <div className="panel p-4">
-                <div className="t-label mb-3">Configuration</div>
-                <div className="flex flex-col gap-2">
-                  {[
-                    ['code', <span key="c" className="chip">{axis.code}</span>],
-                    ['default effect', <span key="d" className="chip" style={{
-                      color: axis.default_effect === 'deny' ? 'var(--deny)' : 'var(--ink-2)',
-                    }}>{axis.default_effect}</span>],
-                    ['resolution', <span key="r" className="chip">{axis.resolution.from === 'token'
-                      ? 'token' : `context.${axis.resolution.key}`}</span>],
-                    ['picker', <span key="p" className="chip">{axis.ui_schema.picker}</span>],
-                  ].map(([label, node]) => (
-                    <div key={String(label)} className="flex items-center justify-between gap-3">
-                      <span className="t-xs">{label as string}</span>
-                      {node as React.ReactNode}
-                    </div>
-                  ))}
-                </div>
-
-                {axis.ui_schema.help && (
-                  <div className="t-xs mt-3" style={{ borderTop: '1px solid var(--line-soft)', paddingTop: 10 }}>
-                    {axis.ui_schema.help}
-                  </div>
-                )}
-
-                <div className="mt-3.5 flex items-center justify-between gap-3"
-                  style={{ borderTop: '1px solid var(--line-soft)', paddingTop: 12 }}>
-                  <span className="t-xs" style={{ maxWidth: 230 }}>
-                    Preview what would break if every access rule had to name this structure explicitly.
-                  </span>
-                  <Button size="xs" variant="default" leftSection={<IconFlask size={13} />}
-                    loading={dryRun.isPending} onClick={() => dryRun.mutate(axis.code)}>
-                    Strict dry run
-                  </Button>
-                </div>
-                {dryRun.data?.axis_code === axis.code && <DryRun r={dryRun.data} />}
-              </div>
-
-              <SyncCard axisCode={axis.code} />
-              <ItemKinds axisCode={axis.code} />
-
+            {/* Sticky, and the selection comes FIRST. It used to be the fourth
+                panel in the stack: you clicked a node at the top of the tree
+                and the answer appeared ~900px away, below the fold, under
+                three settings cards. A detail pane that is not on screen when
+                the thing it describes is clicked is not a detail pane. */}
+            <div className="sticky top-0 flex flex-col gap-4">
               {selected ? (
                 <div className="panel rise p-4">
                   <div className="t-label mb-2.5">Selected item</div>
@@ -385,12 +414,14 @@ function Scope() {
                   <div className="mt-2 flex flex-wrap items-center gap-1.5">
                     <span className="chip">{selected.node_type}</span>
                     {selected.is_axis_root && (
-                      <span className="chip chip-gold">axis root</span>
+                      <span className="chip chip-accent">axis root</span>
                     )}
                     <span className="chip">{selected.child_count ?? 0} children</span>
                   </div>
                   <div className="mt-2.5">
-                    <span className="chip">{selected.id}</span>
+                    <span className="chip" style={{ maxWidth: '100%' }}>
+                      <span className="truncate">{selected.id}</span>
+                    </span>
                   </div>
                   {(() => {
                     /* Contextual verb: the schema knows what may live under
@@ -405,7 +436,7 @@ function Scope() {
                       ? `Add ${legal[0]!.display_name.toLowerCase()}`
                       : 'Add item'
                     return (
-                      <Button size="xs" variant="light" mt={12}
+                      <Button size="xs" variant="light" mt={12} fullWidth
                         leftSection={<IconPlus size={13} />}
                         onClick={() => openCreate('node', { axisCode: axis.code, parentId: selected.id })}>
                         {label} under “{selected.name}”
@@ -421,16 +452,72 @@ function Scope() {
                   )}
                 </div>
               ) : (
-                <div className="panel flex flex-col items-center justify-center px-4 py-10 text-center">
-                  <Tooltip label="Select any node in the tree">
-                    <div className="mb-2.5 flex items-center justify-center rounded-full"
-                      style={{ width: 34, height: 34, background: 'var(--s-sunken)', border: '1px solid var(--line)' }}>
-                      <AxisIcon name={axis.ui_schema.icon} size={15} />
-                    </div>
-                  </Tooltip>
-                  <div className="t-sm">Select an item to inspect it</div>
+                <div className="panel flex flex-col items-center justify-center px-4 py-8 text-center">
+                  <div className="mb-2.5 flex items-center justify-center rounded-full"
+                    style={{ width: 34, height: 34, background: 'var(--s-sunken)', border: '1px solid var(--line)' }}>
+                    <AxisIcon name={axis.ui_schema.icon} size={15} />
+                  </div>
+                  <div className="t-sm">Select an item in the tree to inspect it</div>
                 </div>
               )}
+
+              {/* Configuration, levels and source were three stacked cards —
+                  three borders and ~700px for settings nobody opens twice in a
+                  day. One panel, three panes. */}
+              <div className="panel overflow-clip">
+                <div style={{ padding: 8, borderBottom: '1px solid var(--line-soft)' }}>
+                  <SegmentedControl
+                    size="xs" fullWidth value={pane}
+                    onChange={(v) => setPane(v as Pane)}
+                    data={[
+                      { value: 'settings', label: 'Settings' },
+                      { value: 'levels', label: 'Levels' },
+                      { value: 'source', label: 'Source' },
+                    ]}
+                  />
+                </div>
+
+                {pane === 'settings' && (
+                  <div className="p-4">
+                    <div className="flex flex-col gap-2">
+                      {[
+                        ['code', <span key="c" className="chip">{axis.code}</span>],
+                        ['default effect', <span key="d" className="chip" style={{
+                          color: axis.default_effect === 'deny' ? 'var(--deny)' : 'var(--ink-2)',
+                        }}>{axis.default_effect}</span>],
+                        ['resolution', <span key="r" className="chip">{axis.resolution.from === 'token'
+                          ? 'token' : `context.${axis.resolution.key}`}</span>],
+                        ['picker', <span key="p" className="chip">{axis.ui_schema.picker}</span>],
+                      ].map(([label, node]) => (
+                        <div key={String(label)} className="flex items-center justify-between gap-3">
+                          <span className="t-xs">{label as string}</span>
+                          {node as React.ReactNode}
+                        </div>
+                      ))}
+                    </div>
+
+                    {axis.ui_schema.help && (
+                      <div className="t-xs mt-3" style={{ borderTop: '1px solid var(--line-soft)', paddingTop: 10 }}>
+                        {axis.ui_schema.help}
+                      </div>
+                    )}
+
+                    <div className="mt-3.5" style={{ borderTop: '1px solid var(--line-soft)', paddingTop: 12 }}>
+                      <div className="t-xs mb-2">
+                        Preview what would break if every access rule had to name this structure explicitly.
+                      </div>
+                      <Button size="xs" variant="default" fullWidth leftSection={<IconFlask size={13} />}
+                        loading={dryRun.isPending} onClick={() => dryRun.mutate(axis.code)}>
+                        Strict dry run
+                      </Button>
+                    </div>
+                    {dryRun.data?.axis_code === axis.code && <DryRun r={dryRun.data} />}
+                  </div>
+                )}
+
+                {pane === 'levels' && <ItemKinds axisCode={axis.code} />}
+                {pane === 'source' && <SyncCard axisCode={axis.code} />}
+              </div>
             </div>
           </div>
         )}
