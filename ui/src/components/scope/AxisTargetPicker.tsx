@@ -38,12 +38,19 @@ function AxisRow({ axis, value, onChange, warn }: {
   const unset = !value
   const flag = unset && warn
 
+  /* A row in a list, not a card of its own. Seven axes meant seven bordered
+     panels stacked down a 400px column — 600px of chrome for seven selects,
+     and seven competing edges for the eye to resolve before reading one
+     label. One panel, one divider between rows. */
   return (
     <div
-      className="panel px-3 py-2.5"
-      style={flag ? { borderColor: 'color-mix(in srgb, var(--warn) 24%, transparent)', background: 'linear-gradient(180deg, var(--warn-bg), var(--s-raised) 70%)' } : undefined}
+      className="px-3 py-2.5"
+      style={{
+        borderBottom: '1px solid var(--line-soft)',
+        ...(flag ? { background: 'var(--warn-bg)' } : null),
+      }}
     >
-      <div className="mb-2 flex items-center justify-between gap-2">
+      <div className="mb-1.5 flex items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
           <span style={{ color: 'var(--ink-3)', display: 'flex' }}>
             <AxisIcon name={axis.ui_schema.icon} size={14} />
@@ -130,9 +137,10 @@ export function AxisTargetPicker({
 
   if (isLoading) {
     return (
-      <div className="flex flex-col gap-2">
+      <div className="panel overflow-clip">
         {[0, 1, 2].map((i) => (
-          <div key={i} className="panel h-[86px] animate-pulse" style={{ opacity: 0.35 }} />
+          <div key={i} className="h-[68px] animate-pulse"
+            style={{ opacity: 0.35, borderBottom: '1px solid var(--line-soft)' }} />
         ))}
       </div>
     )
@@ -149,13 +157,13 @@ export function AxisTargetPicker({
   }
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="panel overflow-clip [&>*:last-child]:border-b-0">
       {axes.map((a) => (
         <AxisRow key={a.code} axis={a} value={targets[a.code] ?? null}
           onChange={(v) => onChange(a.code, v)} warn={showUnsetWarning} />
       ))}
       {onOwnerChange && (
-        <div className="panel px-3 py-2.5">
+        <div className="px-3 py-2.5">
           <div className="mb-1.5 flex items-center gap-2">
             <span style={{ color: 'var(--ink-3)', display: 'flex' }}><AxisIcon name="tag" size={14} /></span>
             <span className="t-body" style={{ fontWeight: 550 }}>Record owner</span>

@@ -21,84 +21,148 @@
    may name a raw color. That single rule is what makes light mode a token
    swap instead of a redesign. Tinted borders/fills in components are derived
    with color-mix() from the same tokens, so they re-tint per scheme for free.
+
+   THREE FAMILIES, THREE JOBS — do not cross them:
+
+     --brand      the jackal and the wordmark. Identity, nothing else.
+     --accent     everything interactive: buttons, links, focus, active nav.
+     --allow/--deny/--warn/--info   meaning. Verdicts and status only.
+
+   The accent used to be the same amber as --warn, so "you are here" and
+   "something is wrong" rendered in one colour. Interactive is now blue and
+   sits a full hue family away from every status colour, which is what makes
+   the separation structural rather than a matter of discipline.
    =========================================================================== */
 :root {
-  --r-xs: 4px;  --r-sm: 6px;  --r-md: 8px;  --r-lg: 12px;
+  --r-xs: 4px;  --r-sm: 6px;  --r-md: 8px;  --r-lg: 12px;  --r-xl: 16px;
   --ease: cubic-bezier(.32, .72, 0, 1);
   --t-fast: 120ms var(--ease);
   --t-mid:  180ms var(--ease);
-  /* Height of a toolbar/footer rail inside a table panel. The sticky column
-     header offsets by exactly this, so the two cannot drift apart. */
-  --rail: 48px;
+
+  /* Density. A table row is one line of content vertically centred in
+     --row-h; a cell that genuinely needs two lines grows past it, because
+     `height` on a <td> resolves as a minimum. Rails match the row so a
+     toolbar, the sticky header and the first row form one rhythm. */
+  --row-h: 44px;
+  --rail:  44px;
+
+  /* Shell metrics, named once so the header, the sidebar and every sticky
+     offset cannot drift apart. */
+  --nav-w:    232px;
+  --header-h: 56px;
 }
 
 :root[data-mantine-color-scheme='dark'] {
-  --s-base:     #0b0d11;
-  --s-sunken:   #090a0d;
-  --s-raised:   #13161c;
-  --s-overlay:  #1a1e25;   /* hover + active fills */
-  --s-hover:    #20242d;
+  /* Surfaces step by ~9 points each, not the ~2 they used to. Below about 6
+     the steps are invisible on an office monitor, which is why the sidebar,
+     the page and every panel used to read as one flat sheet of black. */
+  --s-nav:      #0a0d12;   /* sidebar — deliberately below the page */
+  --s-sunken:   #0a0d12;   /* wells, table headers, inset rows */
+  --s-base:     #11151c;   /* the page itself */
+  --s-raised:   #1a1f29;   /* panels and cards */
+  --s-overlay:  #232936;   /* hover + active fills */
+  --s-hover:    #2c3342;
 
-  --line:        #262b34;
-  --line-soft:   #1d212a;
-  --line-strong: #39404d;
+  --line:        #2a3140;
+  --line-soft:   #1f2530;
+  --line-strong: #3a4356;
 
-  --ink:   #edeff4;
-  --ink-2: #aab1bf;
-  --ink-3: #767e8d;
-  --ink-4: #4e5560;
+  --ink:   #eef1f6;
+  --ink-2: #a9b2c3;
+  --ink-3: #77808f;   /* 4.6:1 on --s-base — the floor for real text */
+  --ink-4: #525a69;   /* decorative only: separators, disabled glyphs */
 
-  --gold:      #e3ad3c;
-  --gold-glow: #e3ad3c1f;
-  --gold-chip-bg:   #17130a;
-  --gold-chip-line: #3a2f14;
+  /* Interactive. --accent is the readable one (text, icons, active nav);
+     --accent-solid is the one a filled button sits on, and is darker so
+     white on top of it clears 4.5:1. */
+  --accent:         #7590fb;
+  --accent-solid:   #4361ee;
+  --accent-hover:   #5a76f5;
+  --accent-contrast:#ffffff;
+  --accent-bg:      #7590fb1f;
+  --accent-line:    #7590fb52;
+
+  --brand:      #e0b458;   /* jackal + wordmark ONLY */
 
   /* Verdict palette. Reserved for meaning; nothing decorative may use it. */
-  --allow: #3ddc97;  --allow-bg: #3ddc9714;
-  --deny:  #ff6b6b;  --deny-bg:  #ff6b6b14;
-  --warn:  #f3c14a;  --warn-bg:  #f3c14a14;
-  --info:  #6aa9ff;  --info-bg:  #6aa9ff14;
-  --grape: #b98cff;
+  --allow: #34d399;  --allow-bg: #34d39918;
+  --deny:  #f87171;  --deny-bg:  #f8717118;
+  --warn:  #fbbf24;  --warn-bg:  #fbbf2418;
+  --info:  #38bdf8;  --info-bg:  #38bdf818;   /* cyan, so it cannot read as accent */
+  --grape: #c084fc;
 
-  --tooltip-bg: #1a1e25;
-  --tooltip-ink: #edeff4;
-  --panel-shadow: none;
-  --overlay-tint: #05060a;
+  /* Population kinds. A fourth family, because these are categories and not
+     verdicts: a `partner` realm was painted with --info, which is the status
+     colour for "here is a fact you should notice". Borrowing it meant the
+     dashboard's realm bars and an informational callout were the same blue. */
+  --kind-internal: #d9a32f;
+  --kind-partner:  #22d3ee;
+  --kind-public:   #c084fc;
+  --kind-service:  #94a3b8;
+
+  --tooltip-bg: #232936;
+  --tooltip-ink: #eef1f6;
+
+  /* Dark mode had no elevation at all. A panel that is only a 1px border on
+     near-black does not read as sitting above anything. */
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / .40);
+  --shadow-md: 0 2px 6px rgb(0 0 0 / .45);
+  --shadow-lg: 0 12px 32px -8px rgb(0 0 0 / .65);
+  --panel-shadow: var(--shadow-sm);
+  --overlay-tint: #05070b;
 }
 
 :root[data-mantine-color-scheme='light'] {
-  --s-base:     #f5f6f8;
-  --s-sunken:   #edeff3;
+  /* Light runs the other way round: the sidebar and the panels are the white,
+     the page behind them is the tint. The border between nav and content is
+     what separates them, which is why --line has to be genuinely visible. */
+  --s-nav:      #ffffff;
+  --s-sunken:   #eef1f5;
+  --s-base:     #f6f8fa;
   --s-raised:   #ffffff;
-  --s-overlay:  #eef1f5;
-  --s-hover:    #e7eaf0;
+  --s-overlay:  #f1f4f8;
+  --s-hover:    #e8ecf2;
 
-  --line:        #e3e6ec;
-  --line-soft:   #edf0f4;
-  --line-strong: #cdd3dd;
+  --line:        #dfe3ea;
+  --line-soft:   #eaedf2;
+  --line-strong: #c3cad6;
 
-  --ink:   #1c2230;
-  --ink-2: #4a5468;
-  --ink-3: #79839a;
-  --ink-4: #aeb6c6;
+  --ink:   #0f1626;
+  --ink-2: #4b5566;
+  --ink-3: #656f7f;   /* 4.8:1 on --s-base */
+  --ink-4: #99a2b0;
 
-  /* Bright gold fails contrast on white, so light mode runs a deeper cut of
-     the same hue for text and icons. */
-  --gold:      #9a7412;
-  --gold-glow: #9a74121a;
-  --gold-chip-bg:   #faf5e6;
-  --gold-chip-line: #e7d9ae;
+  --accent:         #3b5bdc;
+  --accent-solid:   #3b5bdc;
+  --accent-hover:   #2f49b4;
+  --accent-contrast:#ffffff;
+  --accent-bg:      #3b5bdc14;
+  --accent-line:    #3b5bdc3d;
 
-  --allow: #0f9d63;  --allow-bg: #0f9d6312;
-  --deny:  #d92d2d;  --deny-bg:  #d92d2d10;
-  --warn:  #b3690a;  --warn-bg:  #f59e0b14;
-  --info:  #2f63d8;  --info-bg:  #2f63d812;
-  --grape: #6d3fc4;
+  --brand:      #a8801c;
 
-  --tooltip-bg: #242a38;   /* dark tooltip on light UI — the readable default */
-  --tooltip-ink: #f2f4f8;
-  --panel-shadow: 0 1px 2px rgb(16 24 40 / .06);
-  --overlay-tint: #101623;
+  /* Every status colour here clears 4.5:1 on white. The previous light greens
+     and ambers did not: #0f9d63 was 3.5:1, so "allow" was the one word on the
+     screen a person with ordinary eyesight could not read. */
+  --allow: #047857;  --allow-bg: #04785712;
+  --deny:  #b91c1c;  --deny-bg:  #b91c1c10;
+  --warn:  #b45309;  --warn-bg:  #b4530912;
+  --info:  #0369a1;  --info-bg:  #0369a112;
+  --grape: #6d28d9;
+
+  --kind-internal: #a8801c;
+  --kind-partner:  #0e7490;
+  --kind-public:   #6d28d9;
+  --kind-service:  #64748b;
+
+  --tooltip-bg: #0f1626;   /* dark tooltip on light UI — the readable default */
+  --tooltip-ink: #f6f8fa;
+
+  --shadow-sm: 0 1px 2px rgb(16 24 40 / .05), 0 1px 3px rgb(16 24 40 / .04);
+  --shadow-md: 0 2px 4px rgb(16 24 40 / .06), 0 4px 12px -2px rgb(16 24 40 / .08);
+  --shadow-lg: 0 12px 32px -8px rgb(16 24 40 / .18);
+  --panel-shadow: var(--shadow-sm);
+  --overlay-tint: #0f1626;
 }
 
 @theme {
@@ -109,7 +173,8 @@
   --color-ink:     var(--ink);
   --color-ink2:    var(--ink-2);
   --color-ink3:    var(--ink-3);
-  --color-gold:    var(--gold);
+  --color-accent:  var(--accent);
+  --color-brand:   var(--brand);
   --color-allow:   var(--allow);
   --color-deny:    var(--deny);
   --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -129,18 +194,18 @@
 
   .tnum { font-variant-numeric: tabular-nums; }
 
-  ::-webkit-scrollbar { width: 9px; height: 9px; }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb {
     background: var(--line-strong); border-radius: 99px;
-    border: 2px solid var(--s-base);
+    border: 3px solid transparent; background-clip: content-box;
   }
-  ::-webkit-scrollbar-thumb:hover { background: var(--ink-4); }
+  ::-webkit-scrollbar-thumb:hover { background: var(--ink-4); background-clip: content-box; }
 
-  ::selection { background: var(--gold-glow); color: var(--ink); }
+  ::selection { background: var(--accent-bg); color: var(--ink); }
 
   *:focus-visible {
-    outline: 2px solid var(--gold);
+    outline: 2px solid var(--accent);
     outline-offset: 2px;
     border-radius: var(--r-xs);
   }
@@ -148,24 +213,27 @@
 
 @layer components {
   /* ---- typography ------------------------------------------------------ */
-  .t-display { font-size: 26px; line-height: 1.15; font-weight: 620; letter-spacing: -.022em; }
-  .t-h1      { font-size: 18px; line-height: 1.3;  font-weight: 600; letter-spacing: -.015em; }
-  .t-h2      { font-size: 14px; line-height: 1.4;  font-weight: 600; letter-spacing: -.008em; }
-  .t-body    { font-size: 13px; line-height: 1.55; }
+  /* One step between sizes, and the step is large enough to read as a step.
+     A display and an h1 four points apart are not a hierarchy, they are two
+     headings someone forgot to reconcile. */
+  .t-display { font-size: 22px; line-height: 1.2;  font-weight: 640; letter-spacing: -.021em; }
+  .t-h1      { font-size: 16px; line-height: 1.35; font-weight: 610; letter-spacing: -.014em; }
+  .t-h2      { font-size: 13.5px; line-height: 1.4; font-weight: 600; letter-spacing: -.008em; }
+  .t-body    { font-size: 13px; line-height: 1.5; }
   .t-sm      { font-size: 12.5px; line-height: 1.5; color: var(--ink-2); }
-  .t-xs      { font-size: 11px; line-height: 1.45; color: var(--ink-3); }
+  .t-xs      { font-size: 11.5px; line-height: 1.45; color: var(--ink-3); }
   .t-label {
-    font-size: 10px; line-height: 1; font-weight: 600;
-    letter-spacing: .07em; text-transform: uppercase; color: var(--ink-3);
+    font-size: 10.5px; line-height: 1; font-weight: 650;
+    letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3);
   }
-  .t-num { font-size: 26px; line-height: 1.1; font-weight: 600; letter-spacing: -.02em;
+  .t-num { font-size: 24px; line-height: 1.1; font-weight: 640; letter-spacing: -.02em;
            font-variant-numeric: tabular-nums; }
 
   /* ---- surfaces -------------------------------------------------------- */
   .panel {
     background: var(--s-raised);
     border: 1px solid var(--line);
-    border-radius: var(--r-md);
+    border-radius: var(--r-lg);
     box-shadow: var(--panel-shadow);
   }
   .panel-inset {
@@ -173,21 +241,36 @@
     border: 1px solid var(--line-soft);
     border-radius: var(--r-sm);
   }
-  .panel-hover { transition: border-color var(--t-fast), background var(--t-fast); }
-  .panel-hover:hover { border-color: var(--line-strong); background: var(--s-overlay); }
+  .panel-hover {
+    transition: border-color var(--t-fast), background var(--t-fast),
+                box-shadow var(--t-fast), translate var(--t-fast);
+  }
+  .panel-hover:hover {
+    border-color: var(--line-strong);
+    box-shadow: var(--shadow-md);
+    translate: 0 -1px;
+  }
+
+  /* A panel heading and the body below it, so every card opens the same way
+     instead of each screen inventing its own padding. */
+  .panel-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 13px 16px; border-bottom: 1px solid var(--line-soft);
+  }
+  .panel-body { padding: 16px; }
 
   /* ---- identifiers ----------------------------------------------------- */
   .chip {
     display: inline-flex; align-items: center;
     font-family: var(--font-mono); font-size: 11px; line-height: 1;
-    letter-spacing: -.02em; padding: 3.5px 7px; border-radius: var(--r-xs);
+    letter-spacing: -.02em; padding: 4px 7px; border-radius: var(--r-xs);
     background: var(--s-sunken); border: 1px solid var(--line-soft);
     color: var(--ink-2); white-space: nowrap;
   }
-  .chip-gold {
-    color: var(--gold);
-    border-color: var(--gold-chip-line);
-    background: var(--gold-chip-bg);
+  .chip-accent {
+    color: var(--accent);
+    border-color: var(--accent-line);
+    background: var(--accent-bg);
   }
 
   /* ---- verdicts -------------------------------------------------------- */
@@ -232,31 +315,84 @@
   .gate:last-child::after { display: none; }
 
   /* ---- nav ------------------------------------------------------------- */
+  /* The active item is a filled pill, not a hairline in the gutter. The old
+     2px rail sat outside the item's own box and was the only thing marking
+     position — on the tinted sidebar it disappeared entirely. */
   .nav-item {
-    position: relative; display: flex; align-items: center; gap: 9px;
-    padding: 7px 10px; border-radius: var(--r-sm);
-    color: var(--ink-2); font-size: 13px; font-weight: 450;
+    position: relative; display: flex; align-items: center; gap: 10px;
+    padding: 0 10px; height: 32px; border-radius: var(--r-sm);
+    color: var(--ink-2); font-size: 13px; font-weight: 480;
     transition: color var(--t-fast), background var(--t-fast);
   }
-  .nav-item:hover { color: var(--ink); background: var(--s-raised); }
-  .nav-item[data-active] { color: var(--ink); background: var(--s-overlay); font-weight: 550; }
-  .nav-item[data-active]::before {
-    content: ''; position: absolute; left: -8px; top: 50%; translate: 0 -50%;
-    width: 2px; height: 15px; border-radius: 99px; background: var(--gold);
+  .nav-item:hover { color: var(--ink); background: var(--s-overlay); }
+  .nav-item[data-active] {
+    color: var(--accent);
+    background: var(--accent-bg);
+    font-weight: 570;
+  }
+  .nav-icon { display: flex; flex: none; color: var(--ink-3); transition: color var(--t-fast); }
+  .nav-item:hover .nav-icon { color: var(--ink-2); }
+  .nav-item[data-active] .nav-icon { color: var(--accent); }
+
+  /* ---- axis rail -------------------------------------------------------- */
+  /* Switching structure is navigation, so it is a rail of tabs, not a grid of
+     cards. As cards it wrapped: this installation registers 26 axes, which
+     came to five rows and ~290px of chrome before the tree it selects. One
+     row that scrolls is bounded no matter how many axes exist. */
+  .axis-rail-wrap { position: relative; }
+  /* Overflow has to be visible as overflow. The fade sits on the wrapper, not
+     the scroller, so it stays put while the tabs move under it; when the tabs
+     do not reach the edge it fades the rail's own background and disappears. */
+  .axis-rail-wrap::after {
+    content: ''; position: absolute; right: 1px; top: 1px; bottom: 1px; width: 40px;
+    border-radius: 0 var(--r-lg) var(--r-lg) 0; pointer-events: none;
+    background: linear-gradient(to right, transparent, var(--s-sunken) 75%);
+  }
+  .axis-rail {
+    display: flex; align-items: center; gap: 4px;
+    overflow-x: auto; scrollbar-width: none;
+    padding: 5px; border-radius: var(--r-lg);
+    background: var(--s-sunken); border: 1px solid var(--line);
+  }
+  .axis-rail::-webkit-scrollbar { display: none; }
+  .axis-tab {
+    display: inline-flex; align-items: center; gap: 7px; flex: none;
+    height: 32px; padding: 0 11px; border-radius: var(--r-sm);
+    border: 1px solid transparent; background: transparent;
+    color: var(--ink-2); font-size: 13px; font-weight: 480;
+    white-space: nowrap; cursor: pointer;
+    transition: color var(--t-fast), background var(--t-fast), border-color var(--t-fast);
+  }
+  .axis-tab:hover { color: var(--ink); background: var(--s-overlay); }
+  .axis-tab[data-active] {
+    color: var(--accent); background: var(--s-raised);
+    border-color: var(--accent-line); font-weight: 570;
+    box-shadow: var(--shadow-sm);
+  }
+  .axis-tab-icon { display: flex; color: var(--ink-3); transition: color var(--t-fast); }
+  .axis-tab[data-active] .axis-tab-icon { color: var(--accent); }
+  /* A strict axis denies anything that does not name it, so the rail says so
+     before you open it. A dot, not the word — the word is in the panel. */
+  .axis-tab-strict {
+    width: 5px; height: 5px; border-radius: 99px; flex: none;
+    background: var(--deny);
   }
 
   /* ---- tables ---------------------------------------------------------- */
   .tbl { width: 100%; border-collapse: separate; border-spacing: 0; }
   .tbl thead th {
     position: sticky; top: 0; z-index: 1;
-    background: var(--s-raised);
-    padding: 9px 14px; text-align: left;
+    background: var(--s-sunken);
+    padding: 0 14px; height: 34px; text-align: left;
     border-bottom: 1px solid var(--line);
-    font-size: 10px; font-weight: 600; letter-spacing: .07em;
+    font-size: 10.5px; font-weight: 650; letter-spacing: .06em;
     text-transform: uppercase; color: var(--ink-3); white-space: nowrap;
   }
+  /* `height` on a cell resolves as a minimum, so a one-line row is exactly
+     --row-h and a cell that needs two lines still grows instead of clipping.
+     That is what lets density be a token rather than a per-table decision. */
   .tbl tbody td {
-    padding: 12px 14px; font-size: 13px;
+    height: var(--row-h); padding: 6px 14px; font-size: 13px;
     border-bottom: 1px solid var(--line-soft); vertical-align: middle;
   }
   .tbl tbody tr { transition: background var(--t-fast); }
@@ -265,7 +401,7 @@
   .tbl .num { text-align: right; font-variant-numeric: tabular-nums; }
   .tbl tbody tr[data-clickable] { cursor: pointer; }
   .tbl tbody tr[data-clickable]:focus-visible {
-    outline: 2px solid var(--gold); outline-offset: -2px;
+    outline: 2px solid var(--accent); outline-offset: -2px;
   }
 
   /* A row that leads somewhere says so. Kept invisible until the row is
@@ -282,7 +418,7 @@
      tall so the sticky column header can offset past it by the same amount. */
   .tbl-rail {
     display: flex; align-items: center; gap: 10px;
-    height: var(--rail); padding: 0 14px;
+    min-height: var(--rail); padding: 7px 14px;
     background: var(--s-raised);
   }
   .tbl-rail-top { position: sticky; top: 0; z-index: 2; border-bottom: 1px solid var(--line); }
@@ -297,9 +433,9 @@
   /* ---- avatar ---------------------------------------------------------- */
   .avatar {
     display: inline-flex; align-items: center; justify-content: center;
-    width: 28px; height: 28px; flex-shrink: 0;
-    border-radius: var(--r-sm); border: 1px solid transparent;
-    font-size: 11.5px; font-weight: 650; letter-spacing: -.01em; line-height: 1;
+    width: 26px; height: 26px; flex-shrink: 0;
+    border-radius: 99px; border: 1px solid transparent;
+    font-size: 11px; font-weight: 650; letter-spacing: -.01em; line-height: 1;
     text-transform: uppercase; user-select: none;
   }
 
@@ -314,7 +450,7 @@
     transition: opacity var(--t-fast), border-color var(--t-fast);
   }
   .sort-row[data-dragging] { opacity: .4; }
-  .sort-row[data-over] { border-color: var(--gold); }
+  .sort-row[data-over] { border-color: var(--accent); }
   .sort-handle {
     display: inline-flex; align-items: center; justify-content: center;
     width: 22px; height: 28px; flex: none; cursor: grab;
@@ -322,7 +458,7 @@
   }
   .sort-handle:hover:not(:disabled) { color: var(--ink); background: var(--s-overlay); }
   .sort-handle:active:not(:disabled) { cursor: grabbing; }
-  .sort-handle:focus-visible { outline: 2px solid var(--gold); outline-offset: -2px; }
+  .sort-handle:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
   .sort-handle:disabled { opacity: .3; cursor: default; }
 
   /* ---- motion ---------------------------------------------------------- */

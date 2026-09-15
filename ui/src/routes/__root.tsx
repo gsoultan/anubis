@@ -23,7 +23,7 @@ import { isAuthenticated } from '@/lib/anubis'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api/client'
 import { qk } from '@/lib/query/keys'
-import { IconBuildingBank, IconChevronDown, IconBrush, IconCheck } from '@tabler/icons-react'
+import { IconBuildingBank, IconChevronDown, IconChevronRight, IconBrush, IconCheck } from '@tabler/icons-react'
 
 type Item = { to: string; label: string; icon: ReactNode; hint?: string }
 /* Platform view: what the SUPER ADMIN sees — the tenants themselves, and the
@@ -98,26 +98,33 @@ function NavItem({ to, label, icon, hint }: Item) {
   const active = to === '/' ? pathname === '/' : pathname.startsWith(to)
   const el = (
     <Link to={to} className="nav-item no-underline" {...(active ? { 'data-active': '' } : {})}>
-      <span style={{ color: active ? 'var(--gold)' : 'var(--ink-3)', display: 'flex' }}>{icon}</span>
-      {label}
+      <span className="nav-icon">{icon}</span>
+      <span className="truncate">{label}</span>
     </Link>
   )
   return hint ? <Tooltip label={hint} position="right" openDelay={600}>{el}</Tooltip> : el
 }
 
+/* The one place gold survives. It is the mark, not a UI colour — everything
+   interactive moved to --accent so that nothing on screen can be mistaken for
+   a status. */
 function Jackal() {
   return (
-    <svg viewBox="0 0 24 24" width={20} height={20} aria-hidden>
-      <defs>
-        <linearGradient id="jk" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#e8bc55" /><stop offset="100%" stopColor="#b6801d" />
-        </linearGradient>
-      </defs>
-      <path d="M4 3l3.2 5.4A8.6 8.6 0 0 1 12 7c1.7 0 3.3.5 4.8 1.4L20 3l.9 7.4c.3 2.6-.6 5.2-2.5 7L12 22l-6.4-4.6c-1.9-1.8-2.8-4.4-2.5-7L4 3z"
-        fill="url(#jk)" />
-      <circle cx="9.4" cy="12.6" r="1.05" fill="#0a0b0e" />
-      <circle cx="14.6" cy="12.6" r="1.05" fill="#0a0b0e" />
-    </svg>
+    <span
+      className="flex items-center justify-center"
+      style={{
+        width: 28, height: 28, borderRadius: 8, flex: 'none',
+        background: 'color-mix(in srgb, var(--brand) 14%, transparent)',
+        border: '1px solid color-mix(in srgb, var(--brand) 26%, transparent)',
+      }}
+    >
+      <svg viewBox="0 0 24 24" width={16} height={16} aria-hidden>
+        <path d="M4 3l3.2 5.4A8.6 8.6 0 0 1 12 7c1.7 0 3.3.5 4.8 1.4L20 3l.9 7.4c.3 2.6-.6 5.2-2.5 7L12 22l-6.4-4.6c-1.9-1.8-2.8-4.4-2.5-7L4 3z"
+          fill="var(--brand)" />
+        <circle cx="9.4" cy="12.6" r="1.15" fill="var(--s-nav)" />
+        <circle cx="14.6" cy="12.6" r="1.15" fill="var(--s-nav)" />
+      </svg>
+    </span>
   )
 }
 
@@ -138,7 +145,7 @@ function NewMenu() {
   return (
     <Menu position="bottom-end" width={280} shadow="xl">
       <Menu.Target>
-        <Button size="xs" leftSection={<IconPlus size={14} />}>Add</Button>
+        <Button size="xs" h={32} leftSection={<IconPlus size={14} />}>Add</Button>
       </Menu.Target>
       <Menu.Dropdown>
         {items.map((it) => (
@@ -158,7 +165,7 @@ function ThemeToggle() {
   const next = computed === 'dark' ? 'light' : 'dark'
   return (
     <ActionIcon
-      variant="default" size={30} aria-label={`Switch to ${next} theme`}
+      variant="default" size={32} radius="sm" aria-label={`Switch to ${next} theme`}
       onClick={() => setColorScheme(next)}
     >
       {computed === 'dark' ? <IconSun size={15} /> : <IconMoon size={15} />}
@@ -172,11 +179,18 @@ function SideNav() {
   const owner = useIsOwner()
   const groups = owner ? [...PLATFORM_GROUPS, ...GROUPS] : GROUPS
   return (
-    <nav className="flex-1 overflow-y-auto px-3 pb-3">
+    <nav className="flex-1 overflow-y-auto px-2.5 pb-3">
       {groups.map((g, gi) => (
-        <div key={g.title ?? gi} className={gi === 0 ? '' : 'mt-4'}>
-          {g.title && <div className="t-label px-2.5 pb-1.5">{g.title}</div>}
-          <div className="flex flex-col gap-0.5">
+        <div
+          key={g.title ?? gi}
+          className={gi === 0 ? '' : 'mt-3 pt-3'}
+          /* A hairline above each titled group. Five sections separated only by
+             whitespace read as one long list — the eye needs an edge to count
+             groups against. */
+          style={gi === 0 ? undefined : { borderTop: '1px solid var(--line-soft)' }}
+        >
+          {g.title && <div className="t-label px-2.5 pb-2">{g.title}</div>}
+          <div className="flex flex-col gap-px">
             {g.items.map((n) => <NavItem key={n.to} {...n} />)}
           </div>
         </div>
@@ -233,17 +247,33 @@ function TenantPicker() {
   if (tenants.length === 1) {
     return (
       <Tooltip label={`Administering ${active?.name ?? current} as ${active?.role ?? ''}`}>
-        <div className="chip">{active?.name ?? current}</div>
+        <div className="flex items-center gap-2 px-2.5"
+          style={{ height: 32, borderRadius: 'var(--r-sm)',
+            border: '1px solid var(--line)', background: 'var(--s-raised)' }}>
+          <IconBuildingBank size={14} style={{ color: 'var(--accent)', flex: 'none' }} />
+          <span className="t-body truncate" style={{ fontWeight: 560, maxWidth: 180 }}>
+            {active?.name ?? current}
+          </span>
+        </div>
       </Tooltip>
     )
   }
   return (
-    <Menu position="bottom-end" width={240}>
+    <Menu position="bottom-start" width={260}>
       <Menu.Target>
-        <button className="panel-inset flex items-center gap-2 px-2.5 py-1.5" style={{ cursor: 'pointer' }}>
-          <IconBuildingBank size={13} style={{ color: 'var(--gold)' }} />
-          <span className="t-xs" style={{ fontWeight: 550 }}>{active?.name ?? current}</span>
-          <IconChevronDown size={12} style={{ color: 'var(--ink-3)' }} />
+        <button
+          className="flex items-center gap-2 px-2.5"
+          style={{
+            cursor: 'pointer', height: 32, borderRadius: 'var(--r-sm)',
+            border: '1px solid var(--line)', background: 'var(--s-raised)',
+            transition: 'border-color var(--t-fast), background var(--t-fast)',
+          }}
+        >
+          <IconBuildingBank size={14} style={{ color: 'var(--accent)', flex: 'none' }} />
+          <span className="t-body truncate" style={{ fontWeight: 560, maxWidth: 180 }}>
+            {active?.name ?? current}
+          </span>
+          <IconChevronDown size={13} style={{ color: 'var(--ink-3)', flex: 'none' }} />
         </button>
       </Menu.Target>
       <Menu.Dropdown>
@@ -285,8 +315,17 @@ function Account() {
   return (
     <Menu position="bottom-end" width={200}>
       <Menu.Target>
-        <button className="chip chip-gold" style={{ cursor: 'pointer' }}>
-          {who?.username ?? 'signed in'}
+        <button className="flex items-center gap-2 pl-1 pr-2"
+          style={{ cursor: 'pointer', height: 32, borderRadius: 'var(--r-sm)',
+            border: '1px solid var(--line)', background: 'var(--s-sunken)' }}>
+          <span className="avatar" style={{ width: 22, height: 22, fontSize: 10,
+            background: 'var(--accent-bg)', color: 'var(--accent)',
+            borderColor: 'var(--accent-line)' }}>
+            {(who?.username ?? '?').slice(0, 1)}
+          </span>
+          <span className="t-xs truncate" style={{ color: 'var(--ink-2)', fontWeight: 560, maxWidth: 110 }}>
+            {who?.username ?? 'signed in'}
+          </span>
         </button>
       </Menu.Target>
       <Menu.Dropdown>
@@ -316,29 +355,38 @@ function RootLayout() {
       <CommandPalette />
       <CreateDrawers />
 
-      {/* Sidebar. Fixed 216px: wide enough that no label truncates, narrow
-          enough that the content column keeps a comfortable measure. */}
+      {/* Sidebar. --nav-w wide: enough that no label truncates, narrow enough
+          that the content column keeps a comfortable measure. It sits on
+          --s-nav, which is below the page in dark and above it in light — in
+          both schemes the nav and the content are visibly different planes,
+          which the old two-point gap between surfaces never achieved. */}
       <aside
-        className="flex w-[216px] shrink-0 flex-col"
-        style={{ borderRight: '1px solid var(--line)', background: 'var(--s-sunken)' }}
+        className="flex shrink-0 flex-col"
+        style={{ width: 'var(--nav-w)', borderRight: '1px solid var(--line)',
+          background: 'var(--s-nav)' }}
       >
-        <div className="flex items-center gap-2.5 px-4" style={{ height: 52 }}>
+        <div className="flex items-center gap-2.5 px-4"
+          style={{ height: 'var(--header-h)' }}>
           <Jackal />
           <div className="leading-none">
-            <div style={{ fontSize: 14, fontWeight: 650, letterSpacing: '-.02em' }}>Anubis</div>
-            <div className="t-xs" style={{ marginTop: 2 }}>console</div>
+            <div style={{ fontSize: 14.5, fontWeight: 660, letterSpacing: '-.022em' }}>Anubis</div>
+            <div className="t-xs" style={{ marginTop: 3, fontSize: 10.5 }}>console</div>
           </div>
         </div>
 
         <SideNav />
-        <div className="px-3 pb-3">
-          <div className="panel-inset flex items-center gap-2 px-2.5 py-2">
-            <IconPointFilled size={11} style={{ color: 'var(--warn)' }} />
+
+        {/* A green dot when the console is live. This used to be --warn, so a
+            perfectly healthy installation announced itself in the colour the
+            rest of the UI uses for "something needs attention". */}
+        <div className="px-2.5 pb-3 pt-2" style={{ borderTop: '1px solid var(--line-soft)' }}>
+          <div className="flex items-center gap-2 px-2.5 py-1.5">
+            <IconPointFilled size={10} style={{ color: authed ? 'var(--allow)' : 'var(--warn)', flex: 'none' }} />
             <div className="min-w-0">
-              <div className="t-xs" style={{ color: 'var(--ink-2)', fontWeight: 550 }}>
+              <div className="t-xs truncate" style={{ color: 'var(--ink-2)', fontWeight: 560 }}>
                 {authed ? 'Platform console' : 'Sample data'}
               </div>
-              <div className="t-xs" style={{ fontSize: 10 }}>
+              <div className="t-xs truncate" style={{ fontSize: 10.5 }}>
                 {authed ? 'Operating this installation' : 'Most screens use built-in data'}
               </div>
             </div>
@@ -347,23 +395,35 @@ function RootLayout() {
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
+        {/* Left is context — which tenant, and where inside it. Right is
+            action. The tenant used to be a small chip fourth from the right,
+            among the theme toggle and the account menu; in a console where
+            every write lands in exactly one organisation, the answer to
+            "which one am I changing?" belongs at the start of the line, not
+            filed with the preferences. */}
         <header
-          className="flex shrink-0 items-center justify-between gap-4 px-6"
-          style={{ height: 52, borderBottom: '1px solid var(--line)' }}
+          className="flex shrink-0 items-center justify-between gap-4 px-5"
+          style={{ height: 'var(--header-h)', borderBottom: '1px solid var(--line)',
+            background: 'var(--s-base)' }}
         >
-          <Breadcrumb />
-          <div className="flex items-center gap-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <TenantPicker />
+            <Breadcrumb />
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
             <button
               onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true }))}
-              className="panel-inset flex items-center gap-2 px-2.5 py-1.5"
-              style={{ transition: 'border-color var(--t-fast)' }}
+              className="flex items-center gap-2 px-2.5"
+              style={{ height: 32, borderRadius: 'var(--r-sm)',
+                border: '1px solid var(--line)', background: 'var(--s-sunken)',
+                transition: 'border-color var(--t-fast), background var(--t-fast)' }}
             >
-              <IconSearch size={13} style={{ color: 'var(--ink-3)' }} />
-              <span className="t-xs" style={{ minWidth: 92, textAlign: 'left' }}>Search…</span>
-              <kbd className="chip" style={{ fontSize: 9.5 }}>⌘K</kbd>
+              <IconSearch size={14} style={{ color: 'var(--ink-3)' }} />
+              <span className="t-xs" style={{ minWidth: 88, textAlign: 'left' }}>Search…</span>
+              <kbd className="chip" style={{ fontSize: 9.5, padding: '3px 5px' }}>⌘K</kbd>
             </button>
             <NewMenu />
-            <TenantPicker />
+            <div style={{ width: 1, height: 22, background: 'var(--line)' }} />
             <ThemeToggle />
             <Account />
           </div>
@@ -428,9 +488,9 @@ function PersonCrumb({ id }: { id: string }) {
   const { data } = useQuery({ queryKey: qk.identity(id), queryFn: () => api.identity(id) })
   return (
     <>
-      <Link to="/identities" className="t-xs no-underline">People</Link>
-      <span style={{ color: 'var(--ink-4)' }}>/</span>
-      <span className="t-body truncate" style={{ fontWeight: 550, maxWidth: 260 }}>
+      <Link to="/identities" className="t-xs no-underline shrink-0">People</Link>
+      <IconChevronRight size={13} style={{ color: 'var(--ink-4)', flex: 'none' }} />
+      <span className="t-body truncate" style={{ fontWeight: 560, maxWidth: 260 }}>
         {data?.username ?? '…'}
       </span>
     </>
@@ -442,13 +502,15 @@ function Breadcrumb() {
   const personId = pathname.startsWith('/identities/')
     ? pathname.slice('/identities/'.length)
     : ''
+  /* No "Anubis /" root any more. The wordmark is in the sidebar and the tenant
+     sits immediately to the left of this; a crumb whose first segment is the
+     product name is a tautology that pushed the only useful segment along. */
   return (
-    <div className="flex items-center gap-2">
-      <span className="t-xs">Anubis</span>
-      <span style={{ color: 'var(--ink-4)' }}>/</span>
+    <div className="flex min-w-0 items-center gap-2">
+      <IconChevronRight size={13} style={{ color: 'var(--ink-4)', flex: 'none' }} />
       {personId
         ? <PersonCrumb id={personId} />
-        : <span className="t-body" style={{ fontWeight: 550 }}>{TITLES[pathname] ?? 'Not found'}</span>}
+        : <span className="t-body truncate" style={{ fontWeight: 560 }}>{TITLES[pathname] ?? 'Not found'}</span>}
     </div>
   )
 }

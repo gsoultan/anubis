@@ -18,6 +18,10 @@ references". New topics live in their own file from 2026-09-11 on:
   derived colours, `sections`, and the mobile rules that fail in silence.
 - [[catalog-sync]] — the one apply path behind all four ways a permission or
   role catalog arrives, and why absent is not empty.
+- [[console-design-system]] — the three colour families that may never be
+  crossed, the contrast floors, and why density is one token.
+- [[scope-sync-schedule]] — structures on a clock (0045), the hot-loop guard,
+  and why a scheduled run may not wear an operator's identity.
 - [[console-tables]] — the one table primitive in `ui/`, why `.panel` must
   use `overflow: clip`, and the column rules the People screen follows.
 - [[console-person-page]] — why a record you can act on is a page, the

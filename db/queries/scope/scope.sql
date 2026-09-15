@@ -98,27 +98,102 @@ SELECT scope_sync_apply(sqlc.arg(source_id), sqlc.arg(rows)::jsonb,
                         sqlc.arg(dry))::text AS report;
 
 -- name: ListSyncSources :many
-SELECT id, tenant_id, axis_code, kind, status, config, last_run_at
+SELECT id, tenant_id, axis_code, kind, status, config, last_run_at,
+       interval_seconds, next_run_at
 FROM scope_sync_sources
 WHERE tenant_id = sqlc.arg(tenant_id)
 ORDER BY axis_code;
 
 -- name: GetSyncSource :one
-SELECT id, tenant_id, axis_code, kind, status, config, last_run_at
+SELECT id, tenant_id, axis_code, kind, status, config, last_run_at,
+       interval_seconds, next_run_at
 FROM scope_sync_sources
 WHERE id = sqlc.arg(id) AND tenant_id = sqlc.arg(tenant_id);
 
 -- name: UpdateSyncSource :execrows
 UPDATE scope_sync_sources
 SET config = sqlc.arg(config)::jsonb,
-    status = sqlc.arg(status)
+    status = sqlc.arg(status),
+    interval_seconds = sqlc.arg(interval_seconds),
+    -- Changing the interval reschedules from now; leaving it alone leaves the
+    -- existing due time exactly where it was, so saving an unrelated edit does
+    -- not quietly restart the clock on a feed that was about to run.
+    next_run_at = CASE
+        WHEN sqlc.arg(interval_seconds) = 0 THEN NULL
+        WHEN sqlc.arg(interval_seconds) <> interval_seconds OR next_run_at IS NULL THEN now()
+        ELSE next_run_at
+    END
 WHERE id = sqlc.arg(id) AND tenant_id = sqlc.arg(tenant_id);
 
 -- name: CreateSyncSource :one
-INSERT INTO scope_sync_sources (tenant_id, axis_code, kind, config)
+INSERT INTO scope_sync_sources (tenant_id, axis_code, kind, config, interval_seconds,
+                                next_run_at)
 VALUES (sqlc.arg(tenant_id), sqlc.arg(axis_code), sqlc.arg(kind),
-        sqlc.arg(config)::jsonb)
+        sqlc.arg(config)::jsonb, sqlc.arg(interval_seconds),
+        -- A source created WITH an interval is due immediately: the operator
+        -- who just pointed Anubis at an ERP expects the tree to fill, not to
+        -- sit empty until the first interval elapses.
+        CASE WHEN sqlc.arg(interval_seconds) > 0 THEN now() ELSE NULL END)
 RETURNING id;
+
+-- RecordSyncFailure writes the run row for an attempt that never reached
+-- scope_sync_apply. That function opens its own row and catches per-row errors,
+-- so everything that gets as far as reconciling is already recorded — but a
+-- feed that cannot be fetched never gets there, and left one operator looking
+-- at an empty history while nothing had synced for days. The report keeps the
+-- reconciler's shape so one reader serves both kinds of row.
+-- name: RecordSyncFailure :exec
+INSERT INTO scope_sync_runs (source_id, dry, status, finished_at, report)
+VALUES (sqlc.arg(source_id), false, 'failed', now(),
+        jsonb_build_object(
+            'error', sqlc.arg(reason)::text,
+            'added', 0, 'renamed', 0, 'moved', 0, 'archived', 0,
+            'unchanged', 0, 'errors', '[]'::jsonb));
+
+-- SetSyncSchedule changes WHEN a source runs and nothing else. It exists
+-- because UpdateSyncSource replaces config wholesale — which is correct, since
+-- merging secrets is how half-rotated credentials happen — and the console is
+-- never sent dsn or auth_header. Rescheduling through that path would save a
+-- config with the credentials missing.
+-- name: SetSyncSchedule :execrows
+UPDATE scope_sync_sources
+SET interval_seconds = sqlc.arg(interval_seconds),
+    next_run_at = CASE
+        WHEN sqlc.arg(interval_seconds) = 0 THEN NULL
+        WHEN sqlc.arg(interval_seconds) <> interval_seconds OR next_run_at IS NULL THEN now()
+        ELSE next_run_at
+    END
+WHERE id = sqlc.arg(id) AND tenant_id = sqlc.arg(tenant_id);
+
+-- DueSyncSources is the scheduler's only read. It carries no tenant filter
+-- because a timer serves every tenant at once; that is exactly why the usecase
+-- behind it must never be reachable from a transport.
+-- name: DueSyncSources :many
+SELECT id, tenant_id, axis_code, kind, status, config, last_run_at,
+       interval_seconds, next_run_at
+FROM scope_sync_sources
+WHERE status = 'active'
+  AND next_run_at IS NOT NULL
+  AND next_run_at <= sqlc.arg(now)
+ORDER BY next_run_at
+LIMIT sqlc.arg(lim);
+
+-- ScheduleNextSyncSource moves a source on whether or not the run worked. A
+-- feed that is down otherwise becomes a hot loop against somebody else's
+-- server: the tick would find it due again one minute later, forever.
+--
+-- It moves next_run_at ONLY. last_run_at already has a meaning in this schema
+-- — scope_sync_apply stamps it, and only after a fetch succeeded and rows were
+-- reconciled (0017). Stamping it here too would make it "last attempted" for
+-- scheduled sources and "last succeeded" for manual ones, and the console's
+-- "Last synced …" line would cheerfully report a time at which the sync had in
+-- fact failed.
+-- name: ScheduleNextSyncSource :exec
+UPDATE scope_sync_sources
+SET next_run_at = CASE WHEN interval_seconds > 0
+                       THEN now() + make_interval(secs => interval_seconds)
+                       ELSE NULL END
+WHERE id = sqlc.arg(id);
 
 -- ScopeAncestors is the chain from an axis root down to a node, which is what
 -- makes a scope decision explainable: "this grant reaches here BECAUSE it was

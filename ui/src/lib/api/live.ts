@@ -1241,12 +1241,16 @@ export async function syncSources(): Promise<SyncSource[]> {
       target: cfg.url ?? cfg.query ?? cfg.table ?? cfg.dsn ?? '',
       default_node_type: cfg.default_node_type ?? '',
       last_run_at: s.lastRunAt > 0 ? new Date(Number(s.lastRunAt) * 1000).toISOString() : null,
+      interval_seconds: s.intervalSeconds,
+      next_run_at: s.nextRunAt > 0 ? new Date(Number(s.nextRunAt) * 1000).toISOString() : null,
     }
   })
 }
 
 export async function createSyncSource(i: {
   axis_code: string; kind: SyncSource['kind']; target: string; default_node_type: string
+  /** Seconds between scheduled runs; 0 or omitted leaves it manual. */
+  interval_seconds?: number
   /** Database kinds only: the SOURCE system's connection, never Anubis's. */
   dsn?: string
   /** db_table only: which of its columns mean ref / parent_ref / name / node_type. */
@@ -1276,8 +1280,17 @@ export async function createSyncSource(i: {
       $typeName: 'anubis.v1.SyncSource',
       id: '', axis: i.axis_code, kind: i.kind, status: 'active',
       configJson: JSON.stringify(cfg), lastRunAt: BigInt(0),
+      intervalSeconds: i.interval_seconds ?? 0, nextRunAt: BigInt(0),
     },
   })
+}
+
+/** Changes only WHEN a source runs. Deliberately not updateSyncSource: that
+    replaces config wholesale, and the console is never sent a source's dsn or
+    auth_header — so rescheduling through it would save the source with its
+    credentials missing. */
+export async function setSyncSchedule(sourceId: string, intervalSeconds: number): Promise<void> {
+  await rpc.scopeAdmin.setSyncSchedule({ sourceId, intervalSeconds })
 }
 
 export async function runSync(sourceId: string, dry: boolean): Promise<SyncPlan> {
@@ -1344,6 +1357,7 @@ export async function syncRuns(sourceId: Uuid, limit = 25): Promise<SyncRun[]> {
       added: n('added'), renamed: n('renamed'), moved: n('moved'),
       archived: n('archived'), unchanged: n('unchanged'),
       errors: Array.isArray(rep?.errors) ? rep.errors.length : 0,
+      ...(typeof rep?.['error'] === 'string' ? { error: rep['error'] as string } : {}),
     }
   })
 }

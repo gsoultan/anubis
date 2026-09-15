@@ -95,7 +95,11 @@ export function ScopeTree({
   selectedId: string | null
   onSelect: (n: ScopeNode) => void
   searchable?: boolean
-  height?: number
+  /** Max height of the scroll area. Accepts a CSS length so the Structure
+      page can hand it a viewport-relative height and let the tree fill the
+      screen — as a fixed 430px it left an empty white rectangle wherever the
+      panel beside it was taller. */
+  height?: number | string
 }) {
   const [q, setQ] = useState('')
   const { data: roots, isLoading } = useQuery({
@@ -124,6 +128,23 @@ export function ScopeTree({
       )}
       <ScrollArea.Autosize mah={height} type="hover">
         {isLoading && <Loader size="xs" />}
+
+        {/* An axis with no items rendered as blank space — no rows, no
+            message, nothing to say whether it was empty or still loading.
+            Both ends of the search need the same courtesy. */}
+        {!isLoading && q.trim().length < 2 && (roots?.length ?? 0) === 0 && (
+          <div className="px-3 py-12 text-center">
+            <div className="t-sm">No items in this structure yet</div>
+            <div className="t-xs mt-1">Add the first one with “Add item” above.</div>
+          </div>
+        )}
+        {q.trim().length >= 2 && hits !== undefined && hits.length === 0 && (
+          <div className="px-3 py-12 text-center">
+            <div className="t-sm">Nothing matches “{q.trim()}”</div>
+            <div className="t-xs mt-1">Search covers this structure only.</div>
+          </div>
+        )}
+
         {q.trim().length >= 2
           ? hits?.map((n) => (
               <UnstyledButton key={n.id} onClick={() => select(n)}

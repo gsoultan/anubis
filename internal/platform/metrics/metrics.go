@@ -136,6 +136,24 @@ func IncSnapshotRefresh(tenant, result string) {
 	counter(key("snaprefresh", tenant, result)).Add(1)
 }
 
+// IncScopeSync counts SCHEDULED structure syncs by outcome: ok or failed.
+//
+// The maintenance-job counter cannot see this. RunDue deliberately returns nil
+// when an individual source fails, so that one bad feed does not stop every
+// other tenant's — which means anubis_job_runs_total{job="scope_sync"} stays
+// "ok" while every source in the installation is failing. This is the counter
+// that knows the difference.
+//
+// Labelled by axis, not by source id: an axis is registered by an operator and
+// bounded by the axis registry, while source ids grow with tenants. The log
+// line carries source and tenant for the follow-up.
+//
+// Manual runs are not counted. Somebody pressed the button and watched the
+// result; the operator this is for is the one who is not looking.
+func IncScopeSync(axis, result string) {
+	counter(key("scopesync", axis, result)).Add(1)
+}
+
 // SetSnapshotNodes records how many scope nodes a tenant's snapshot holds.
 // Every instance holds every tenant's snapshot, so this is the number to size
 // memory against: roughly 95 bytes per node (ADR-0015).

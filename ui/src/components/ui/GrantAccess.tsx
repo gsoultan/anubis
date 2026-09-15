@@ -28,7 +28,7 @@ export function GrantRole({ grant: g, memberships }: {
       <span className="t-body" style={{ fontWeight: 550 }}>{g.role_name}</span>
       {g.via_membership_id && (
         <Tooltip label="Derived from a membership — manage it there, not here.">
-          <span className="chip w-fit" style={{ color: 'var(--gold)', borderColor: 'var(--gold-chip-line)', background: 'var(--gold-chip-bg)' }}>
+          <span className="chip w-fit" style={{ color: 'var(--accent)', borderColor: 'var(--accent-line)', background: 'var(--accent-bg)' }}>
             via {memberships?.find((x) => x.id === g.via_membership_id)?.name ?? 'membership'}
           </span>
         </Tooltip>

@@ -42,7 +42,7 @@ function ReportView({ report }: { report: Report }) {
   return (
     <div className="panel mt-4 p-4">
       <div className="mb-3 flex items-center gap-2">
-        {report.applied ? <IconCheck size={16} style={{ color: 'var(--gold)' }} />
+        {report.applied ? <IconCheck size={16} style={{ color: 'var(--accent)' }} />
           : clean ? <IconFileSpreadsheet size={16} /> : <IconAlertTriangle size={16} />}
         <span className="t-h1">
           {report.applied ? 'Imported'

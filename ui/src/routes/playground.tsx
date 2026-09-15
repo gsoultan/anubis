@@ -277,7 +277,12 @@ function Playground() {
             onClick={() => { reset(); setResult(null) }}>Reset</Button>
           <Button size="xs" disabled={!ready} loading={running} onClick={run}
             leftSection={<IconPlayerPlayFilled size={11} />}
-            rightSection={<kbd className="chip" style={{ fontSize: 9, borderColor: 'transparent', background: '#0003' }}>⌘↵</kbd>}>
+            rightSection={<kbd className="chip" style={{ fontSize: 9, borderColor: 'transparent',
+              /* Sits on the filled accent button, so the wash is derived from
+                 the colour that button's label uses — not a raw #0003, which
+                 was the one hard-coded colour left in console chrome. */
+              background: 'color-mix(in srgb, var(--accent-contrast) 22%, transparent)',
+              color: 'var(--accent-contrast)' }}>⌘↵</kbd>}>
             Evaluate
           </Button>
         </>
@@ -286,6 +291,10 @@ function Playground() {
       <div className="grid gap-5" style={{ gridTemplateColumns: 'minmax(320px, 400px) minmax(0, 1fr)' }}>
         {/* ---------------- composer ---------------- */}
         <div className="flex flex-col gap-4">
+          {/* Subject and permission are one question — "can this person do
+              this?" — so they are one panel. Two cards with a gap between them
+              made the console's central question read as two unrelated
+              settings. */}
           <div className="panel p-4">
             <div className="t-label mb-2.5">Subject</div>
             <IdentityPicker
@@ -308,10 +317,9 @@ function Playground() {
                 }}>{subj.status}</span>
               </div>
             )}
-          </div>
 
-          <div className="panel p-4">
-            <div className="t-label mb-2.5">Permission</div>
+            <div className="t-label mb-2.5 mt-4 pt-4"
+              style={{ borderTop: '1px solid var(--line-soft)' }}>Permission</div>
             <Select
               searchable clearable placeholder="Select a permission"
               data={(permissions ?? []).map((p) => ({ value: p.key, label: p.key }))}
@@ -360,15 +368,19 @@ function Playground() {
           </div>
         </div>
 
-        {/* ---------------- verdict ---------------- */}
-        <div className="flex flex-col gap-4">
+        {/* ---------------- verdict ----------------
+            Sticky: the axis list is as long as the installation has axes, and
+            an operator iterating on a denial scrolls to change one axis and
+            then needs the verdict — and the Evaluate button's own ⌘↵ hint —
+            without scrolling back. */}
+        <div className="sticky top-0 flex flex-col gap-4 self-start">
           {!result && !running && (
             <div className="panel flex flex-col items-center justify-center px-6 py-16 text-center">
               <div
                 className="mb-4 flex items-center justify-center rounded-full"
-                style={{ width: 46, height: 46, background: 'var(--gold-glow)' }}
+                style={{ width: 46, height: 46, background: 'var(--accent-bg)' }}
               >
-                <IconBolt size={20} style={{ color: 'var(--gold)' }} />
+                <IconBolt size={20} style={{ color: 'var(--accent)' }} />
               </div>
               <div className="t-h1">Nothing evaluated yet</div>
               <p className="t-sm mt-1.5" style={{ maxWidth: 380 }}>
@@ -382,7 +394,7 @@ function Playground() {
                     onClick={() => p.apply({ setSubject, setPermission, setTarget, permissions })}
                     className="panel-inset panel-hover flex items-center gap-2.5 px-3 py-2.5 text-left"
                   >
-                    <IconChevronRight size={12} style={{ color: 'var(--gold)', flexShrink: 0 }} />
+                    <IconChevronRight size={12} style={{ color: 'var(--accent)', flexShrink: 0 }} />
                     <div className="min-w-0">
                       <div className="t-sm" style={{ color: 'var(--ink)' }}>{p.label}</div>
                       <div className="t-xs">{p.hint}</div>
@@ -395,7 +407,7 @@ function Playground() {
 
           {running && (
             <div className="panel flex items-center justify-center py-20">
-              <Loader size="sm" color="gold" />
+              <Loader size="sm" color="accent" />
             </div>
           )}
 

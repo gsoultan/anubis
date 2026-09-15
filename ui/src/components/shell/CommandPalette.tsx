@@ -104,7 +104,7 @@ export function CommandPalette() {
                   color: i === idx ? 'var(--ink)' : 'var(--ink-2)',
                 }}
               >
-                <span style={{ color: i === idx ? 'var(--gold)' : 'var(--ink-3)' }}>{c.icon}</span>
+                <span style={{ color: i === idx ? 'var(--accent)' : 'var(--ink-3)' }}>{c.icon}</span>
                 <span className="flex-1 text-[13px]">{c.label}</span>
                 {i === idx && <IconCornerDownLeft size={12} style={{ color: 'var(--ink-3)' }} />}
               </button>

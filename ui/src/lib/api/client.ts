@@ -152,9 +152,14 @@ export const api = {
     format: import('./types').CatalogFormat,
   ) => live.applyManifest(applicationSlug, document, dry, format),
 
+  setSyncSchedule: (sourceId: string, intervalSeconds: number) =>
+    live.setSyncSchedule(sourceId, intervalSeconds),
+
   createSyncSource: (i: {
     axis_code: string; kind: import('./types').SyncKind
     target: string; default_node_type: string
+    /** Seconds between scheduled runs; 0 or omitted leaves it manual. */
+    interval_seconds?: number
     /** Database kinds: the SOURCE system's connection. The scheme picks the
         engine, so postgres://, mysql:// and mariadb:// all work. */
     dsn?: string

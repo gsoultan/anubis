@@ -3,7 +3,9 @@ package scopeapp
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -11,6 +13,7 @@ import (
 	auditport "github.com/gsoultan/anubis/internal/audit/port"
 	"github.com/gsoultan/anubis/internal/authz/guard"
 	authzport "github.com/gsoultan/anubis/internal/authz/port"
+	"github.com/gsoultan/anubis/internal/platform/metrics"
 	scopedomain "github.com/gsoultan/anubis/internal/scope/domain"
 	scopeport "github.com/gsoultan/anubis/internal/scope/port"
 	"github.com/gsoultan/anubis/internal/shared/apperr"
@@ -20,8 +23,9 @@ import (
 	"github.com/gsoultan/anubis/internal/shared/validate"
 )
 
-// scopeAdminInteractor implements ScopeAdminUsecase.
+// scopeAdminInteractor implements ScopeAdmin.
 type scopeAdminInteractor struct {
+	logger  *slog.Logger
 	guard   *guard.Guard
 	axes    scopeport.ScopeAxisRepository
 	nodes   scopeport.ScopeNodeRepository
@@ -47,10 +51,11 @@ func NewScopeAdminInteractor(
 	fetcher scopeport.ScopeFeedFetcher,
 	tx txm.TxManager,
 	audit auditport.Auditor,
-) ScopeAdminUsecase {
+	logger *slog.Logger,
+) ScopeAdmin {
 	return &scopeAdminInteractor{
 		guard: guard.New().WithOperators(ops, clockNow), axes: axes, nodes: nodes, sync: sync,
-		authz: authz, fetcher: fetcher, tx: tx, audit: audit,
+		authz: authz, fetcher: fetcher, tx: tx, audit: audit, logger: logger,
 	}
 }
 
@@ -64,6 +69,24 @@ func (u *scopeAdminInteractor) emit(ctx context.Context, p *authctx.Principal, a
 		SessionID: p.SessionID, TargetID: target, Action: action, Result: "allow",
 		IP: authctx.ClientIP(ctx), Detail: jsonx.Must(detail),
 	})
+}
+
+// emitSync records a sync event for either kind of caller. p is nil for a
+// scheduled run, which then audits as actor_kind='system' with no actor id.
+// The shape that must never occur is a timer's run wearing an operator's
+// identity because the code only knew how to write one kind of entry.
+func (u *scopeAdminInteractor) emitSync(ctx context.Context, tenantID string,
+	p *authctx.Principal, action, target string, detail map[string]string,
+) {
+	ev := auditdomain.AuditEvent{
+		TenantID: tenantID, ActorKind: "system", TargetID: target,
+		Action: action, Result: "allow",
+		IP: authctx.ClientIP(ctx), Detail: jsonx.Must(detail),
+	}
+	if p != nil {
+		ev.ActorID, ev.ActorKind, ev.SessionID = p.IdentityID, "identity", p.SessionID
+	}
+	u.audit.Emit(ctx, ev)
 }
 
 func (u *scopeAdminInteractor) ListScopeAxes(ctx context.Context) ([]scopedomain.ScopeAxisRecord, error) {
@@ -430,6 +453,32 @@ func (u *scopeAdminInteractor) UpdateSyncSource(ctx context.Context, src scopedo
 	return u.sync.SyncSource(ctx, p.TenantID, src.ID)
 }
 
+// SetSyncSchedule puts a source on a clock or takes it off one. It deliberately
+// cannot touch config: the console is never sent dsn or auth_header, so a
+// screen that rescheduled through UpdateSyncSource — which replaces config
+// wholesale, on purpose — would save the source with its credentials gone.
+func (u *scopeAdminInteractor) SetSyncSchedule(ctx context.Context, sourceID string, intervalSeconds int32) (*scopedomain.SyncSourceRecord, error) {
+	p, err := u.guard.Require(ctx, "anubis:sync:admin")
+	if err != nil {
+		return nil, err
+	}
+	if intervalSeconds != 0 && intervalSeconds < scopedomain.MinSyncIntervalSeconds {
+		return nil, apperr.ErrInvalidArgument.With("interval_seconds",
+			"0 for manual, or at least 300 seconds")
+	}
+	existing, err := u.sync.SyncSource(ctx, p.TenantID, sourceID)
+	if err != nil {
+		return nil, apperr.ErrNotFound
+	}
+	if err := u.sync.SetSyncSchedule(ctx, p.TenantID, sourceID, intervalSeconds); err != nil {
+		return nil, err
+	}
+	u.emit(ctx, p, "sync.schedule_set", sourceID, map[string]string{
+		"axis": existing.Axis, "interval_seconds": strconv.Itoa(int(intervalSeconds)),
+	})
+	return u.sync.SyncSource(ctx, p.TenantID, sourceID)
+}
+
 // RunSync reconciles a structure from its source of truth. Rows may be
 // PUSHED by the caller, or — when none are supplied — PULLED by the server
 // from wherever the structure actually lives: an HTTP API, a query against
@@ -461,13 +510,95 @@ func (u *scopeAdminInteractor) RunSync(ctx context.Context, sourceID string, row
 	if err != nil {
 		return "", apperr.ErrNotFound
 	}
+	return u.runSync(ctx, p.TenantID, p, *source, rows, dry)
+}
+
+// dueSyncBatch bounds one tick. A tick that finds more sources than this
+// leaves the rest for the next minute rather than holding the advisory lock
+// while it works through an installation's whole backlog.
+const dueSyncBatch = 50
+
+// RunDue is the scheduler. It checks no permission and takes its tenant from
+// each record rather than from a caller, because the authority for the run was
+// settled when an operator configured the source. See
+// ScopeSyncSchedulerUsecase for why this is kept off the transport.
+func (u *scopeAdminInteractor) RunDue(ctx context.Context, now time.Time, limit int32) (int, error) {
+	if limit <= 0 || limit > dueSyncBatch {
+		limit = dueSyncBatch
+	}
+	due, err := u.sync.DueSyncSources(ctx, now, limit)
+	if err != nil {
+		return 0, err
+	}
+	ran := 0
+	for _, src := range due {
+		u.runDueOne(ctx, src)
+		ran++
+	}
+	return ran, nil
+}
+
+// runDueOne is one scheduled attempt. Separate from the loop so the reschedule
+// can be deferred: a source has to move on whether or not the run worked, or a
+// feed that is down becomes a hot loop against somebody else's server — the
+// next tick would find it due again a minute later, forever.
+func (u *scopeAdminInteractor) runDueOne(ctx context.Context, src scopedomain.SyncSourceRecord) {
+	defer func() {
+		if serr := u.sync.ScheduleNextSyncSource(ctx, src.ID); serr != nil {
+			// Failing to reschedule IS the hot loop, so it is an error, not a
+			// warning: this source is now due on every tick until it is fixed.
+			u.logger.Error("scope source not rescheduled",
+				"source", src.ID, "axis", src.Axis, "error", serr)
+		}
+	}()
+	// One bad feed must not stop the others. The failure is already durable —
+	// a fetch that fails emits sync.fetch_failed into the tenant's own audit
+	// trail — and the loop is the wrong place to give up on every other tenant.
+	//
+	// Which is exactly why this is counted. Swallowing the error keeps
+	// anubis_job_runs_total{job="scope_sync"} on "ok" however many sources are
+	// failing, so without its own counter a structure can go stale for a week
+	// with every operational signal green.
+	if _, err := u.runSync(ctx, src.TenantID, nil, src, nil, false); err != nil {
+		metrics.IncScopeSync(src.Axis, "failed")
+		u.logger.Warn("scope sync failed", "source", src.ID, "axis", src.Axis,
+			"tenant", src.TenantID, "error", apperr.AsError(err).Code)
+		return
+	}
+	metrics.IncScopeSync(src.Axis, "ok")
+}
+
+// recordFailure writes the run row for an attempt that never reached the
+// reconciler. scope_sync_apply opens its own row and catches per-row errors, so
+// anything that gets as far as reconciling records itself; a fetch that fails
+// never gets there. Unattended that was invisible — the Source pane showed a
+// schedule, an empty history, and no hint that nothing had synced for days.
+//
+// Losing the row must not fail the caller: the run already failed, and its
+// reason reaches the audit trail either way. It is still worth shouting about.
+func (u *scopeAdminInteractor) recordFailure(ctx context.Context, sourceID, reason string) {
+	if err := u.sync.RecordSyncFailure(ctx, sourceID, reason); err != nil {
+		u.logger.Error("scope sync failure not recorded", "source", sourceID, "error", err)
+	}
+}
+
+// runSync is one attempt with the authority question already settled: either
+// the guard passed, or there was no operator to guard because a timer asked.
+// tenantID is passed rather than read from p precisely so the scheduled path
+// cannot fall back to an ambient tenant it does not have.
+func (u *scopeAdminInteractor) runSync(ctx context.Context, tenantID string,
+	p *authctx.Principal, src scopedomain.SyncSourceRecord,
+	rows []SyncRowInput, dry bool,
+) (string, error) {
+	source := &src
+	sourceID := src.ID
 	if source.Status != "active" {
 		return "", apperr.ErrInvalidArgument.With("source", "disabled")
 	}
 	// Rows with no parent_ref attach to the axis root, so it must exist
 	// before the reconciler runs — syncing into a brand-new axis is the
 	// normal case, not an edge case.
-	if _, err := u.nodes.EnsureAxisRoot(ctx, p.TenantID, source.Axis); err != nil {
+	if _, err := u.nodes.EnsureAxisRoot(ctx, tenantID, source.Axis); err != nil {
 		return "", err
 	}
 	if len(rows) == 0 {
@@ -478,12 +609,14 @@ func (u *scopeAdminInteractor) RunSync(ctx context.Context, sourceID string, row
 		if ferr != nil {
 			// A feed that cannot be reached must not silently archive every
 			// node it was supposed to confirm.
-			u.emit(ctx, p, "sync.fetch_failed", sourceID, map[string]string{
+			u.emitSync(ctx, tenantID, p, "sync.fetch_failed", sourceID, map[string]string{
 				"kind": source.Kind, "error": apperr.AsError(ferr).Code,
 			})
+			u.recordFailure(ctx, sourceID, ferr.Error())
 			return "", ferr
 		}
 		if len(fetched) == 0 {
+			u.recordFailure(ctx, sourceID, "feed returned zero rows; refusing to archive the whole axis")
 			return "", apperr.ErrInvalidArgument.With("feed", "returned zero rows; refusing to archive the whole axis")
 		}
 		rows = make([]SyncRowInput, 0, len(fetched))
@@ -519,7 +652,7 @@ func (u *scopeAdminInteractor) RunSync(ctx context.Context, sourceID string, row
 		return "", err
 	}
 	if !dry {
-		u.emit(ctx, p, "sync.run", sourceID, map[string]string{
+		u.emitSync(ctx, tenantID, p, "sync.run", sourceID, map[string]string{
 			"rows": itoaLen(rows), "kind": source.Kind,
 		})
 	}
@@ -564,6 +697,12 @@ func itoaLen[T any](v []T) string {
 // creation rather than at 3am when the sync runs. Credentials inside dsn/
 // auth_header are never logged or echoed back.
 func validateSyncConfig(s scopedomain.SyncSourceRecord) error {
+	// The schema carries the same floor as a CHECK. Repeating it here is what
+	// turns a constraint violation into a message an operator can act on.
+	if s.IntervalSeconds != 0 && s.IntervalSeconds < scopedomain.MinSyncIntervalSeconds {
+		return apperr.ErrInvalidArgument.With("interval_seconds",
+			"0 for manual, or at least 300 seconds")
+	}
 	var cfg map[string]any
 	if err := json.Unmarshal(s.Config, &cfg); err != nil {
 		return apperr.ErrInvalidArgument.With("config", "invalid JSON")

@@ -80,7 +80,7 @@ function StartHere() {
             <div className="flex items-center gap-2.5">
               <span className="tnum flex items-center justify-center rounded-full"
                 style={{ width: 22, height: 22, fontSize: 11, fontWeight: 650,
-                  background: 'var(--gold-glow)', color: 'var(--gold)' }}>{st.n}</span>
+                  background: 'var(--accent-bg)', color: 'var(--accent)' }}>{st.n}</span>
               <span className="t-body" style={{ fontWeight: 600 }}>{st.title}</span>
             </div>
             <span className="t-xs" style={{ minHeight: 30 }}>{st.hint}</span>
@@ -110,16 +110,25 @@ function Overview() {
   const paging = data.signals.filter((s) => s.severity === 'page')
   const alerting = data.signals.filter((s) => s.severity !== 'page')
   const total = data.identities_by_realm.reduce((a, r) => a + r.count, 0)
+  /* Biggest first, and only as many as earn a bar. Sorting matters as much as
+     the cap: unsorted, the eight rows that survived were whichever eight the
+     query happened to return, not the eight worth looking at. */
+  const bySize = [...data.identities_by_realm].sort((a, b) => b.count - a.count)
+  const shown = bySize.slice(0, 8)
+  const rest = bySize.slice(8)
+  const restCount = rest.reduce((a, r) => a + r.count, 0)
 
   return (
     <Page
       title="Overview"
       description="Alerts first, numbers second — anything needing a human leads the page."
     >
-      <div className="flex flex-col gap-5">
-        <StartHere />
-        {/* Paging signals lead. Burying the one event that means "a token was
-            stolen" under vanity metrics inverts the console's priorities. */}
+      <div className="flex flex-col gap-4">
+        {/* Paging signals lead — the page says "alerts first, numbers second"
+            and then rendered a dismissable onboarding card above them. Nothing
+            outranks the one event that means a token was stolen. StartHere now
+            sits under the alerts, where it is still the first thing on an
+            installation that has no alerts to show. */}
         {paging.map((s) => {
           const m = SIGNAL[s.kind]
           return (
@@ -154,6 +163,8 @@ function Overview() {
           )
         })}
 
+        <StartHere />
+
         <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(4, minmax(0,1fr))' }}>
           <Stat label="Identities" value={total.toLocaleString()} to="/identities"
             icon={<IconUsers size={11} />}
@@ -180,7 +191,7 @@ function Overview() {
               <div className="t-xs">one tenant, isolated by realm</div>
             </div>
             <div className="flex flex-col gap-3.5">
-              {data.identities_by_realm.map((r, i) => {
+              {shown.map((r, i) => {
                 const pct = (r.count / total) * 100
                 const colour = realmKindColor(r.kind)
                 return (
@@ -211,6 +222,28 @@ function Overview() {
                 )
               })}
             </div>
+
+            {/* The tail, as one line. This installation runs 58 populations and
+                50 of them hold a single enrolment probe — rendering them all
+                made the biggest panel on the page a column of empty bars
+                labelled 0.0%, and pushed the two panels beside it off screen. */}
+            {rest.length > 0 && (
+              <Link to="/realms"
+                className="mt-3.5 flex items-baseline justify-between gap-3 no-underline">
+                <span className="t-xs">
+                  {rest.length} smaller population{rest.length === 1 ? '' : 's'}
+                </span>
+                <span className="flex items-baseline gap-2">
+                  <span className="tnum t-body" style={{ fontWeight: 600, color: 'var(--ink-2)' }}>
+                    {restCount.toLocaleString()}
+                  </span>
+                  <span className="t-xs tnum" style={{ width: 38, textAlign: 'right' }}>
+                    {((restCount / total) * 100).toFixed(1)}%
+                  </span>
+                </span>
+              </Link>
+            )}
+
             <div className="t-xs mt-4" style={{ borderTop: '1px solid var(--line-soft)', paddingTop: 12 }}>
               Partners are not separate tenants — that would require cross-tenant grants, which
               every composite foreign key in the schema exists to forbid.
@@ -249,8 +282,8 @@ function Overview() {
                   </div>
                 </div>
                 <div className="flex shrink-0 items-center justify-center rounded-lg"
-                  style={{ width: 34, height: 34, background: 'var(--gold-glow)' }}>
-                  <IconChevronRight size={16} style={{ color: 'var(--gold)' }} />
+                  style={{ width: 34, height: 34, background: 'var(--accent-bg)' }}>
+                  <IconChevronRight size={16} style={{ color: 'var(--accent)' }} />
                 </div>
               </div>
               <div className="mt-3 flex items-end justify-between gap-3"

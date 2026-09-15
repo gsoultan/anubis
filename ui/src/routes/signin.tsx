@@ -37,19 +37,27 @@ export const Route = createFileRoute('/signin')({
   component: SignIn,
 })
 
+/* Same boxed mark as the shell's, so the product the operator signs into looks
+   like the product they arrive in. The old one hardcoded two hex golds and a
+   near-black eye, which meant the wordmark was the one element on the page
+   that did not follow the colour scheme. */
 function Jackal() {
   return (
-    <svg viewBox="0 0 24 24" width={30} height={30} aria-hidden>
-      <defs>
-        <linearGradient id="jk-signin" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#e8bc55" /><stop offset="100%" stopColor="#b6801d" />
-        </linearGradient>
-      </defs>
-      <path d="M4 3l3.2 5.4A8.6 8.6 0 0 1 12 7c1.7 0 3.3.5 4.8 1.4L20 3l.9 7.4c.3 2.6-.6 5.2-2.5 7L12 22l-6.4-4.6c-1.9-1.8-2.8-4.4-2.5-7L4 3z"
-        fill="url(#jk-signin)" />
-      <circle cx="9.4" cy="12.6" r="1.05" fill="#0a0b0e" />
-      <circle cx="14.6" cy="12.6" r="1.05" fill="#0a0b0e" />
-    </svg>
+    <span
+      className="flex items-center justify-center"
+      style={{
+        width: 40, height: 40, borderRadius: 11, flex: 'none',
+        background: 'color-mix(in srgb, var(--brand) 14%, transparent)',
+        border: '1px solid color-mix(in srgb, var(--brand) 26%, transparent)',
+      }}
+    >
+      <svg viewBox="0 0 24 24" width={23} height={23} aria-hidden>
+        <path d="M4 3l3.2 5.4A8.6 8.6 0 0 1 12 7c1.7 0 3.3.5 4.8 1.4L20 3l.9 7.4c.3 2.6-.6 5.2-2.5 7L12 22l-6.4-4.6c-1.9-1.8-2.8-4.4-2.5-7L4 3z"
+          fill="var(--brand)" />
+        <circle cx="9.4" cy="12.6" r="1.15" fill="var(--s-base)" />
+        <circle cx="14.6" cy="12.6" r="1.15" fill="var(--s-base)" />
+      </svg>
+    </span>
   )
 }
 
@@ -112,22 +120,31 @@ function SignIn() {
     /* min-h-dvh, not h-full: on mobile the browser chrome is inside 100vh, so a
        centred card sits partly under it. The padding is what stops a 360px card
        from touching both edges of a 360px phone. */
-    <div className="flex min-h-dvh items-center justify-center p-4"
+    <div className="relative flex min-h-dvh items-center justify-center p-4"
       style={{ background: 'var(--s-base)' }}>
-      <div className="fade" style={{ width: 'min(360px, 100%)' }}>
-        <div className="mb-5 flex items-center gap-2.5">
+      {/* A card centred in a flat field reads as an unstyled page. Two very
+          soft washes give the plane some depth without putting anything on it
+          that has to be read. */}
+      <div aria-hidden className="pointer-events-none absolute inset-0" style={{
+        background:
+          'radial-gradient(60rem 30rem at 50% -10%, var(--accent-bg), transparent 70%),' +
+          'radial-gradient(40rem 20rem at 50% 110%, color-mix(in srgb, var(--brand) 7%, transparent), transparent 70%)',
+      }} />
+
+      <div className="fade relative" style={{ width: 'min(384px, 100%)' }}>
+        <div className="mb-5 flex items-center gap-3">
           <Jackal />
           <div className="leading-none">
             <div style={{ fontSize: 19, fontWeight: 650, letterSpacing: '-.02em' }}>Anubis</div>
-            <div className="t-xs" style={{ marginTop: 3 }}>platform console</div>
+            <div className="t-xs" style={{ marginTop: 4 }}>platform console</div>
           </div>
         </div>
 
-        <div className="panel p-5">
+        <div className="panel p-6" style={{ boxShadow: 'var(--shadow-lg)' }}>
           {challenge ? (
             <form onSubmit={submitCode}>
               <div className="mb-1 flex items-center gap-2">
-                <IconShieldLock size={17} style={{ color: 'var(--gold)' }} />
+                <IconShieldLock size={17} style={{ color: 'var(--accent)' }} />
                 <h1 className="t-h1">Second factor</h1>
               </div>
               <p className="t-sm mb-4">
@@ -171,6 +188,16 @@ function SignIn() {
           </form>
           )}
         </div>
+
+        {/* Which installation this is. consoleConfig already returns the
+            issuer and the form already fetches it; an operator who runs a
+            staging and a production Anubis had no way to tell the two sign-in
+            pages apart. */}
+        {cfg?.issuer && (
+          <div className="mt-4 text-center">
+            <span className="chip">{cfg.issuer}</span>
+          </div>
+        )}
       </div>
     </div>
   )

@@ -19,10 +19,10 @@ import type { Realm } from '@/lib/api/types'
 export const Route = createFileRoute('/realms')({ component: Realms })
 
 const KIND = {
-  internal: { colour: 'var(--gold)', tint: 'color-mix(in srgb, var(--gold) 8%, transparent)' },
-  partner:  { colour: 'var(--info)', tint: 'color-mix(in srgb, var(--info) 8%, transparent)' },
-  public:   { colour: 'var(--grape)',     tint: 'color-mix(in srgb, var(--grape) 8%, transparent)' },
-  service:  { colour: 'var(--ink-3)', tint: '#ffffff08' },
+  internal: { colour: 'var(--kind-internal)', tint: 'color-mix(in srgb, var(--kind-internal) 8%, transparent)' },
+  partner:  { colour: 'var(--kind-partner)',  tint: 'color-mix(in srgb, var(--kind-partner) 8%, transparent)' },
+  public:   { colour: 'var(--kind-public)',   tint: 'color-mix(in srgb, var(--kind-public) 8%, transparent)' },
+  service:  { colour: 'var(--kind-service)',  tint: 'color-mix(in srgb, var(--kind-service) 8%, transparent)' },
 } as const
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {

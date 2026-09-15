@@ -147,6 +147,9 @@ const (
 	// ScopeAdminServiceUpdateSyncSourceProcedure is the fully-qualified name of the ScopeAdminService's
 	// UpdateSyncSource RPC.
 	ScopeAdminServiceUpdateSyncSourceProcedure = "/anubis.v1.ScopeAdminService/UpdateSyncSource"
+	// ScopeAdminServiceSetSyncScheduleProcedure is the fully-qualified name of the ScopeAdminService's
+	// SetSyncSchedule RPC.
+	ScopeAdminServiceSetSyncScheduleProcedure = "/anubis.v1.ScopeAdminService/SetSyncSchedule"
 	// ScopeAdminServiceRunSyncProcedure is the fully-qualified name of the ScopeAdminService's RunSync
 	// RPC.
 	ScopeAdminServiceRunSyncProcedure = "/anubis.v1.ScopeAdminService/RunSync"
@@ -884,6 +887,10 @@ type ScopeAdminServiceClient interface {
 	// Rotate a feed's credentials or move it to a new endpoint without losing
 	// the source's history. Config is REPLACED, never merged.
 	UpdateSyncSource(context.Context, *connect.Request[v1.UpdateSyncSourceRequest]) (*connect.Response[v1.UpdateSyncSourceResponse], error)
+	// Changes WHEN a source runs, and nothing else. Separate from
+	// UpdateSyncSource because that replaces config wholesale and no client is
+	// ever sent a source's dsn or auth_header to send back.
+	SetSyncSchedule(context.Context, *connect.Request[v1.SetSyncScheduleRequest]) (*connect.Response[v1.SetSyncScheduleResponse], error)
 	RunSync(context.Context, *connect.Request[v1.RunSyncRequest]) (*connect.Response[v1.RunSyncResponse], error)
 	// ListSyncRuns is what a feed has actually done. The reconciler has
 	// recorded every run since migration 0017; nothing read it until now, so
@@ -1010,6 +1017,12 @@ func NewScopeAdminServiceClient(httpClient connect.HTTPClient, baseURL string, o
 			connect.WithSchema(scopeAdminServiceMethods.ByName("UpdateSyncSource")),
 			connect.WithClientOptions(opts...),
 		),
+		setSyncSchedule: connect.NewClient[v1.SetSyncScheduleRequest, v1.SetSyncScheduleResponse](
+			httpClient,
+			baseURL+ScopeAdminServiceSetSyncScheduleProcedure,
+			connect.WithSchema(scopeAdminServiceMethods.ByName("SetSyncSchedule")),
+			connect.WithClientOptions(opts...),
+		),
 		runSync: connect.NewClient[v1.RunSyncRequest, v1.RunSyncResponse](
 			httpClient,
 			baseURL+ScopeAdminServiceRunSyncProcedure,
@@ -1045,6 +1058,7 @@ type scopeAdminServiceClient struct {
 	listSyncSources     *connect.Client[v1.ListSyncSourcesRequest, v1.ListSyncSourcesResponse]
 	createSyncSource    *connect.Client[v1.CreateSyncSourceRequest, v1.CreateSyncSourceResponse]
 	updateSyncSource    *connect.Client[v1.UpdateSyncSourceRequest, v1.UpdateSyncSourceResponse]
+	setSyncSchedule     *connect.Client[v1.SetSyncScheduleRequest, v1.SetSyncScheduleResponse]
 	runSync             *connect.Client[v1.RunSyncRequest, v1.RunSyncResponse]
 	listSyncRuns        *connect.Client[v1.ListSyncRunsRequest, v1.ListSyncRunsResponse]
 }
@@ -1139,6 +1153,11 @@ func (c *scopeAdminServiceClient) UpdateSyncSource(ctx context.Context, req *con
 	return c.updateSyncSource.CallUnary(ctx, req)
 }
 
+// SetSyncSchedule calls anubis.v1.ScopeAdminService.SetSyncSchedule.
+func (c *scopeAdminServiceClient) SetSyncSchedule(ctx context.Context, req *connect.Request[v1.SetSyncScheduleRequest]) (*connect.Response[v1.SetSyncScheduleResponse], error) {
+	return c.setSyncSchedule.CallUnary(ctx, req)
+}
+
 // RunSync calls anubis.v1.ScopeAdminService.RunSync.
 func (c *scopeAdminServiceClient) RunSync(ctx context.Context, req *connect.Request[v1.RunSyncRequest]) (*connect.Response[v1.RunSyncResponse], error) {
 	return c.runSync.CallUnary(ctx, req)
@@ -1182,6 +1201,10 @@ type ScopeAdminServiceHandler interface {
 	// Rotate a feed's credentials or move it to a new endpoint without losing
 	// the source's history. Config is REPLACED, never merged.
 	UpdateSyncSource(context.Context, *connect.Request[v1.UpdateSyncSourceRequest]) (*connect.Response[v1.UpdateSyncSourceResponse], error)
+	// Changes WHEN a source runs, and nothing else. Separate from
+	// UpdateSyncSource because that replaces config wholesale and no client is
+	// ever sent a source's dsn or auth_header to send back.
+	SetSyncSchedule(context.Context, *connect.Request[v1.SetSyncScheduleRequest]) (*connect.Response[v1.SetSyncScheduleResponse], error)
 	RunSync(context.Context, *connect.Request[v1.RunSyncRequest]) (*connect.Response[v1.RunSyncResponse], error)
 	// ListSyncRuns is what a feed has actually done. The reconciler has
 	// recorded every run since migration 0017; nothing read it until now, so
@@ -1304,6 +1327,12 @@ func NewScopeAdminServiceHandler(svc ScopeAdminServiceHandler, opts ...connect.H
 		connect.WithSchema(scopeAdminServiceMethods.ByName("UpdateSyncSource")),
 		connect.WithHandlerOptions(opts...),
 	)
+	scopeAdminServiceSetSyncScheduleHandler := connect.NewUnaryHandler(
+		ScopeAdminServiceSetSyncScheduleProcedure,
+		svc.SetSyncSchedule,
+		connect.WithSchema(scopeAdminServiceMethods.ByName("SetSyncSchedule")),
+		connect.WithHandlerOptions(opts...),
+	)
 	scopeAdminServiceRunSyncHandler := connect.NewUnaryHandler(
 		ScopeAdminServiceRunSyncProcedure,
 		svc.RunSync,
@@ -1354,6 +1383,8 @@ func NewScopeAdminServiceHandler(svc ScopeAdminServiceHandler, opts ...connect.H
 			scopeAdminServiceCreateSyncSourceHandler.ServeHTTP(w, r)
 		case ScopeAdminServiceUpdateSyncSourceProcedure:
 			scopeAdminServiceUpdateSyncSourceHandler.ServeHTTP(w, r)
+		case ScopeAdminServiceSetSyncScheduleProcedure:
+			scopeAdminServiceSetSyncScheduleHandler.ServeHTTP(w, r)
 		case ScopeAdminServiceRunSyncProcedure:
 			scopeAdminServiceRunSyncHandler.ServeHTTP(w, r)
 		case ScopeAdminServiceListSyncRunsProcedure:
@@ -1437,6 +1468,10 @@ func (UnimplementedScopeAdminServiceHandler) CreateSyncSource(context.Context, *
 
 func (UnimplementedScopeAdminServiceHandler) UpdateSyncSource(context.Context, *connect.Request[v1.UpdateSyncSourceRequest]) (*connect.Response[v1.UpdateSyncSourceResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.ScopeAdminService.UpdateSyncSource is not implemented"))
+}
+
+func (UnimplementedScopeAdminServiceHandler) SetSyncSchedule(context.Context, *connect.Request[v1.SetSyncScheduleRequest]) (*connect.Response[v1.SetSyncScheduleResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.ScopeAdminService.SetSyncSchedule is not implemented"))
 }
 
 func (UnimplementedScopeAdminServiceHandler) RunSync(context.Context, *connect.Request[v1.RunSyncRequest]) (*connect.Response[v1.RunSyncResponse], error) {

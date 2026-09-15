@@ -1,36 +1,45 @@
 import { createTheme, rem, type MantineColorsTuple } from '@mantine/core'
 
-/* Anubis gold. Reserved for identity and navigation — never for status, so it
-   can never be confused with a verdict. */
-const gold: MantineColorsTuple = [
-  '#fdf6e6', '#f6e9cc', '#ecd39c', '#e2bc68', '#daa93e',
-  '#d69d24', '#d59718', '#bc830d', '#a67306', '#8d6100',
+/* The interactive colour: buttons, links, focus, active navigation.
+   Deliberately a full hue family away from every status colour — the previous
+   accent was the same amber as --warn, so "you are here" and "something is
+   wrong" rendered identically. Shades 6 and 7 are the filled-button shades and
+   both clear 4.5:1 against white text. */
+const accent: MantineColorsTuple = [
+  '#eef2ff', '#dce4ff', '#bcc9ff', '#97aaff', '#7590fb',
+  '#5a76f5', '#4361ee', '#3b5bdc', '#2f49b4', '#273c92',
 ]
 
-/* Cool neutral tuned to sit on #0a0b0e without turning muddy. */
+/* Anubis gold. The jackal and the wordmark, and nothing else. */
+const brand: MantineColorsTuple = [
+  '#fdf7ea', '#f7ebd0', '#eed6a1', '#e5c06e', '#ddae47',
+  '#d9a32f', '#d89c22', '#bf8717', '#a8801c', '#8d6100',
+]
+
+/* Cool neutral tuned to sit on the dark surfaces without turning muddy. */
 const slate: MantineColorsTuple = [
   '#f4f6f8', '#e7eaee', '#cbd1da', '#adb6c3', '#939eae',
   '#8290a2', '#78879b', '#667488', '#5a6779', '#4b586a',
 ]
 
 const allow: MantineColorsTuple = [
-  '#e6fbf2', '#ccf5e3', '#99ebc7', '#66e0ab', '#3ddc97',
-  '#22d489', '#12c97d', '#0aa967', '#068a54', '#046b41',
+  '#ecfdf5', '#d1fae5', '#a7f3d0', '#6ee7b7', '#34d399',
+  '#10b981', '#059669', '#047857', '#065f46', '#064e3b',
 ]
 
 const deny: MantineColorsTuple = [
-  '#ffecec', '#ffd6d6', '#ffadad', '#ff8585', '#ff6b6b',
-  '#ff5252', '#f83b3b', '#dc2626', '#b91c1c', '#991b1b',
+  '#fef2f2', '#fee2e2', '#fecaca', '#fca5a5', '#f87171',
+  '#ef4444', '#dc2626', '#b91c1c', '#991b1b', '#7f1d1d',
 ]
 
 export const theme = createTheme({
-  primaryColor: 'gold',
-  primaryShade: { dark: 5, light: 6 },
-  /* Filled gold buttons get dark text automatically — white-on-gold fails
-     contrast in both schemes. */
+  primaryColor: 'accent',
+  /* Dark takes 6 (#4361ee), light takes 7 (#3b5bdc). Both are dark enough that
+     autoContrast resolves to white text and clears AA at 13px. */
+  primaryShade: { dark: 6, light: 7 },
   autoContrast: true,
   luminanceThreshold: 0.4,
-  colors: { gold, slate, allow, deny },
+  colors: { accent, brand, slate, allow, deny },
   defaultRadius: 'sm',
 
   fontFamily:
@@ -47,11 +56,11 @@ export const theme = createTheme({
   lineHeights: { xs: '1.45', sm: '1.5', md: '1.55', lg: '1.5', xl: '1.4' },
 
   headings: {
-    fontWeight: '600',
+    fontWeight: '610',
     sizes: {
-      h1: { fontSize: rem(26), lineHeight: '1.15' },
-      h2: { fontSize: rem(18), lineHeight: '1.3' },
-      h3: { fontSize: rem(14), lineHeight: '1.4' },
+      h1: { fontSize: rem(22), lineHeight: '1.2' },
+      h2: { fontSize: rem(16), lineHeight: '1.35' },
+      h3: { fontSize: rem(13.5), lineHeight: '1.4' },
       h4: { fontSize: rem(13), lineHeight: '1.4' },
     },
   },
@@ -60,11 +69,10 @@ export const theme = createTheme({
   spacing: { xs: rem(6), sm: rem(10), md: rem(16), lg: rem(24), xl: rem(36) },
   radius:  { xs: rem(4), sm: rem(6), md: rem(8), lg: rem(12), xl: rem(16) },
 
-
   components: {
     Button: {
       defaultProps: { radius: 'sm' },
-      styles: { root: { fontWeight: 550, letterSpacing: '-0.005em' } },
+      styles: { root: { fontWeight: 560, letterSpacing: '-0.005em' } },
     },
     Badge: {
       defaultProps: { variant: 'light', radius: 'sm' },
@@ -84,21 +92,47 @@ export const theme = createTheme({
         tooltip: {
           background: 'var(--tooltip-bg)', border: '1px solid var(--line)',
           color: 'var(--tooltip-ink)', fontSize: rem(11.5), lineHeight: 1.5,
-          padding: '7px 10px',
+          padding: '7px 10px', borderRadius: rem(6),
         },
       },
     },
     Modal: {
       defaultProps: {
-        centered: true, radius: 'md',
+        centered: true, radius: 'lg',
         overlayProps: { blur: 3, backgroundOpacity: 0.55, color: 'var(--overlay-tint)' },
         transitionProps: { transition: 'pop', duration: 180 },
+      },
+      styles: {
+        content: { boxShadow: 'var(--shadow-lg)' },
+        header: { borderBottom: '1px solid var(--line-soft)' },
+        title: { fontWeight: 610, letterSpacing: '-0.014em' },
+      },
+    },
+    Drawer: {
+      defaultProps: {
+        overlayProps: { blur: 3, backgroundOpacity: 0.55, color: 'var(--overlay-tint)' },
+      },
+      styles: {
+        content: { background: 'var(--s-base)' },
+        header: { background: 'var(--s-base)', borderBottom: '1px solid var(--line)' },
+        title: { fontWeight: 610, letterSpacing: '-0.014em' },
       },
     },
     Popover: {
       defaultProps: { radius: 'md', shadow: 'xl', withinPortal: true,
         transitionProps: { transition: 'pop', duration: 140 } },
-      styles: { dropdown: { background: 'var(--s-raised)', border: '1px solid var(--line)' } },
+      styles: { dropdown: { background: 'var(--s-raised)', border: '1px solid var(--line)',
+        boxShadow: 'var(--shadow-lg)' } },
+    },
+    Menu: {
+      defaultProps: { radius: 'md', shadow: 'xl', withinPortal: true },
+      styles: {
+        dropdown: { background: 'var(--s-raised)', border: '1px solid var(--line)',
+          boxShadow: 'var(--shadow-lg)', padding: rem(5) },
+        item: { borderRadius: rem(6), fontSize: rem(13) },
+        label: { fontSize: rem(10.5), fontWeight: 650, letterSpacing: '0.06em',
+          textTransform: 'uppercase' as const, color: 'var(--ink-3)' },
+      },
     },
     Input: { styles: { input: { background: 'var(--s-sunken)', borderColor: 'var(--line)' } } },
     TextInput: { defaultProps: { size: 'sm' } },

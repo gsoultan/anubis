@@ -534,6 +534,10 @@ type ScopeSyncSource struct {
 	Kind      string
 	Status    string
 	Config    []byte
+	// When the scheduler should next run this source. NULL = manual only.
+	NextRunAt *time.Time
+	// Seconds between scheduled runs. 0 = manual only. Floor of 300 when set.
+	IntervalSeconds int32
 }
 
 type Session struct {

@@ -454,6 +454,13 @@ export interface SyncSource {
   target: string
   default_node_type: string
   last_run_at: string | null
+  /** Seconds between scheduled runs. 0 is a source that only runs when
+      somebody presses the button — which is every source made before the
+      schedule existed. */
+  interval_seconds: number
+  /** When the scheduler will next run it. Null when manual. Server-derived:
+      set interval_seconds, never this. */
+  next_run_at: string | null
 }
 
 /** The reconciler's report, as the server actually emits it: counts plus the
@@ -484,6 +491,10 @@ export interface SyncRun {
   unchanged: number
   /** Rows the reconciler could not place. */
   errors: number
+  /** Why an attempt failed before the reconciler ran — an unreachable feed, or
+      one that returned nothing. Absent on runs that got as far as reconciling,
+      which report `errors` instead. */
+  error?: string
 }
 
 export interface StrictDryRun {

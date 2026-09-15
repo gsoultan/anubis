@@ -7,7 +7,7 @@ import { Sparkline } from './Sparkline'
    caps, trend and sparkline below — the eye lands on the value first and only
    then picks up context. */
 export function Stat({
-  label, value, sub, series, trend, to, accent = 'var(--gold)', icon,
+  label, value, sub, series, trend, to, accent = 'var(--accent)', icon,
 }: {
   label: string
   value: string

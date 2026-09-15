@@ -58,7 +58,7 @@ function Keys() {
   }
 
   const columns: Column<SigningKeyRecord>[] = [
-    { key: 'kid', header: 'Key ID', width: 190, render: (k) => <span className="chip chip-gold">{k.kid}</span> },
+    { key: 'kid', header: 'Key ID', width: 190, render: (k) => <span className="chip chip-accent">{k.kid}</span> },
     { key: 'alg', header: 'Algorithm', width: 140, render: (k) => <span className="t-body">{k.alg}</span> },
     { key: 'purpose', header: 'Purpose', width: 100, render: (k) => <span className="t-xs">{k.purpose}</span> },
     {
@@ -104,7 +104,7 @@ function Keys() {
           <Banner tone="deny" title="A key in use is outside its published window">
             {unusable.map((k) => (
               <div key={k.kid}>
-                <span className="chip chip-gold">{k.kid}</span> is {windowProblem(k, now)}.
+                <span className="chip chip-accent">{k.kid}</span> is {windowProblem(k, now)}.
                 Verifiers reject tokens signed with it, so every token it mints is refused
                 — promote a prepared key.
               </div>
@@ -127,7 +127,7 @@ function Keys() {
           <Banner tone="warn" title="A prepared key is waiting">
             {pending.map((k) => (
               <div key={k.kid}>
-                <span className="chip chip-gold">{k.kid}</span> is published but not active.
+                <span className="chip chip-accent">{k.kid}</span> is published but not active.
                 Once consumers have had at least 2× the discovery cache TTL to see it,
                 run <code>anubisd keys promote {k.purpose}</code>.
               </div>

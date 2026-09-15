@@ -140,6 +140,16 @@ func (a *application) catalogSync(logger *slog.Logger) authzcatalog.CatalogSyncU
 		authzfeed.NewHTTPFetcher(), a.authzAdmin, a.tenancy, a.auditor, logger)
 }
 
+// scopeSync builds the scope-administration interactor. Two callers build one
+// each, exactly as catalogSync does: the RPC surface is handed the
+// operator-facing half through ScopeAdminService, and the scheduler is handed
+// ScopeSyncSchedulerUsecase, which has RunDue and nothing else.
+func (a *application) scopeSync(logger *slog.Logger) scopeapp.ScopeAdmin {
+	return scopeapp.NewScopeAdminInteractor(a.authz, a.control, a.clock.Now,
+		a.scope, a.scope, a.scope,
+		feed.NewFetcher(), a.auth, a.auditor, logger)
+}
+
 // runMaintenance starts the recurring database maintenance every deployment
 // needs. Replicas coordinate through advisory locks, so this is safe to run
 // on every instance.
@@ -147,7 +157,7 @@ func (a *application) runMaintenance(ctx context.Context, db *database.DB, logge
 	retention := identityapp.NewRetentionInteractor(a.identity, a.identity, db, a.auditor)
 	sched := jobs.NewScheduler(db, logger,
 		maintenanceJobs(a.audit, a.auth, retention, a.auth, a.control,
-			a.catalogSync(logger), logger)...)
+			a.catalogSync(logger), a.scopeSync(logger), logger)...)
 	go sched.Run(ctx)
 }
 
@@ -216,9 +226,7 @@ func (a *application) registerRPC(rpc *http.ServeMux, opts connect.HandlerOption
 			identitysvc.NewIdentityAdminService(identityAdmin, identityAttrs), f), opts))
 
 	syncengines.Register()
-	scopeAdmin := scopeapp.NewScopeAdminInteractor(a.authz, a.control, a.clock.Now,
-		a.scope, a.scope, a.scope,
-		feed.NewFetcher(), a.auth, a.auditor)
+	scopeAdmin := a.scopeSync(logger)
 	rpc.Handle(anubisv1connect.NewScopeAdminServiceHandler(
 		scoperpc.NewScopeAdminHandler(scopesvc.NewScopeAdminService(scopeAdmin), f), opts))
 

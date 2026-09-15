@@ -7,6 +7,7 @@ import { queryClient } from '@/lib/query/client'
 import { useCreate } from '@/stores/create'
 import { CreateShell, CancelSubmit, notifyCreated, notifyRejected } from './shell'
 import type { SyncKind } from '@/lib/api/types'
+import { SYNC_INTERVALS } from '@/lib/syncIntervals'
 
 const KINDS: { value: SyncKind; label: string; hint: string }[] = [
   { value: 'http', label: 'HTTP API', hint: 'Anubis calls an endpoint that returns the rows' },
@@ -26,6 +27,9 @@ export function CreateSyncSource({ opened }: { opened: boolean }) {
   const [authHeader, setAuthHeader] = useState('')
   const [cols, setCols] = useState({ ref: '', parent_ref: '', name: '', node_type: '' })
   const [nodeType, setNodeType] = useState<string | null>(null)
+  // '0' is manual, which is what every source was before the scheduler
+  // existed — so it stays the default here too.
+  const [interval, setInterval] = useState('0')
   const [busy, setBusy] = useState(false)
 
   const isDB = kind === 'db_query' || kind === 'db_table'
@@ -49,6 +53,7 @@ export function CreateSyncSource({ opened }: { opened: boolean }) {
     try {
       await api.createSyncSource({
         axis_code: axisCode, kind, target, default_node_type: nodeType,
+        interval_seconds: Number(interval),
         ...(isDB ? { dsn: dsn.trim() } : {}),
         ...(needsColumns ? { columns: cols } : {}),
         ...(kind === 'http' && authHeader.trim() ? { auth_header: authHeader.trim() } : {}),
@@ -56,7 +61,7 @@ export function CreateSyncSource({ opened }: { opened: boolean }) {
       notifyCreated('Source connected',
         'Run “Preview changes” to see what a sync would do before applying it.')
       await queryClient.invalidateQueries({ queryKey: qk.syncSources() })
-      setTarget(''); setDsn(''); setAuthHeader('')
+      setTarget(''); setDsn(''); setAuthHeader(''); setInterval('0')
       setCols({ ref: '', parent_ref: '', name: '', node_type: '' })
       close()
     } catch (e) { notifyRejected(e) }
@@ -83,7 +88,7 @@ export function CreateSyncSource({ opened }: { opened: boolean }) {
             {KINDS.map((k) => (
               <button key={k.value} onClick={() => setKind(k.value)}
                 className="panel-inset flex items-center justify-between gap-2 px-3 py-2 text-left"
-                style={kind === k.value ? { borderColor: 'var(--gold-chip-line)', background: 'var(--gold-chip-bg)' } : undefined}>
+                style={kind === k.value ? { borderColor: 'var(--accent-line)', background: 'var(--accent-bg)' } : undefined}>
                 <span className="t-body" style={{ fontWeight: 530 }}>{k.label}</span>
                 <span className="t-xs" style={{ textAlign: 'right' }}>{k.hint}</span>
               </button>
@@ -144,6 +149,17 @@ export function CreateSyncSource({ opened }: { opened: boolean }) {
           description="Applied to rows that do not declare one — level rules still apply."
           data={kinds.map((t) => ({ value: t.code, label: t.display_name }))}
           value={nodeType} onChange={setNodeType} />
+
+        {/* The floor is five minutes and the server enforces it too. A
+            structure is an org chart: it changes when HR changes it, and
+            polling faster is hammering somebody else's server for rows that
+            did not move. */}
+        <Select label="Refresh" required
+          description={interval === '0'
+            ? 'Runs only when somebody presses Sync now.'
+            : 'Anubis re-reads the source on this interval. A run that fails waits for the next one rather than retrying immediately.'}
+          data={SYNC_INTERVALS}
+          value={interval} onChange={(v) => setInterval(v ?? '0')} />
       </div>
     </CreateShell>
   )
