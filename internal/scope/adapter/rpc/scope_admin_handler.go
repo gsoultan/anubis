@@ -223,6 +223,24 @@ func (h *ScopeAdminHandler) UpsertScopeNodes(ctx context.Context, req *connect.R
 	return connect.NewResponse(&anubisv1.UpsertScopeNodesResponse{ReportJson: out.(string)}), nil
 }
 
+// syncSourceRecord is the inbound half of syncSourceProto, and exists for the
+// reason that one did not: interval_seconds shipped correctly on every
+// response, because the outbound mapping was shared, and was silently dropped
+// on create, because the inbound one was written by hand at each call site.
+// The drawer's Refresh control reported success and scheduled nothing.
+//
+// Fields the usecases do not accept from a caller — Kind and Axis on update —
+// are overwritten there from the stored row, so carrying them costs nothing.
+func syncSourceRecord(s *anubisv1.SyncSource) scopedomain.SyncSourceRecord {
+	if s == nil {
+		return scopedomain.SyncSourceRecord{}
+	}
+	return scopedomain.SyncSourceRecord{
+		ID: s.Id, Axis: s.Axis, Kind: s.Kind, Status: s.Status,
+		Config: []byte(s.ConfigJson), IntervalSeconds: s.IntervalSeconds,
+	}
+}
+
 // syncSourceProto is one mapping for the three responses that carry a source.
 // Three hand-written copies is how interval_seconds would have shipped on list
 // and gone missing on create.
@@ -256,10 +274,7 @@ func (h *ScopeAdminHandler) ListSyncSources(ctx context.Context, _ *connect.Requ
 
 func (h *ScopeAdminHandler) CreateSyncSource(ctx context.Context, req *connect.Request[anubisv1.CreateSyncSourceRequest]) (*connect.Response[anubisv1.CreateSyncSourceResponse], error) {
 	out, err := h.f.Do(ctx, "admin.sync.source_create", func(ctx context.Context) (any, error) {
-		s := req.Msg.Source
-		return h.svc.CreateSyncSource(ctx, scopedomain.SyncSourceRecord{
-			Axis: s.Axis, Kind: s.Kind, Config: []byte(s.ConfigJson),
-		})
+		return h.svc.CreateSyncSource(ctx, syncSourceRecord(req.Msg.Source))
 	})
 	if err != nil {
 		return nil, apiconnect.Err(ctx, err)
@@ -272,11 +287,7 @@ func (h *ScopeAdminHandler) CreateSyncSource(ctx context.Context, req *connect.R
 
 func (h *ScopeAdminHandler) UpdateSyncSource(ctx context.Context, req *connect.Request[anubisv1.UpdateSyncSourceRequest]) (*connect.Response[anubisv1.UpdateSyncSourceResponse], error) {
 	out, err := h.f.Do(ctx, "admin.sync.source_update", func(ctx context.Context) (any, error) {
-		s := req.Msg.Source
-		return h.svc.UpdateSyncSource(ctx, scopedomain.SyncSourceRecord{
-			ID: s.Id, Status: s.Status, Config: []byte(s.ConfigJson),
-			IntervalSeconds: s.IntervalSeconds,
-		})
+		return h.svc.UpdateSyncSource(ctx, syncSourceRecord(req.Msg.Source))
 	})
 	if err != nil {
 		return nil, apiconnect.Err(ctx, err)

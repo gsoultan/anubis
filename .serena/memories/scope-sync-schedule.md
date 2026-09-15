@@ -126,6 +126,24 @@ transport is handed a type without the method, not a rule saying not to call it.
 so the name gets that protection for free. Same reasoning as
 [[catalog-sync]]'s `ApplyDocumentAsSystem`.
 
+## The bug that shipped: map both directions or neither
+
+`syncSourceProto` was shared across the three responses that carry a source,
+with a comment saying three hand-written copies is how `interval_seconds` would
+ship on list and go missing on create. It then went missing on create anyway —
+because only the OUTBOUND mapping was shared, and the inbound one was still
+written by hand at each call site. `CreateSyncSource` simply did not name the
+field.
+
+The failure mode is silence. No error, no log: the drawer's Refresh control
+reported "Source connected", and the row stored `interval_seconds = 0`. Nothing
+ever ran, and nothing said so. It survived review and a green CI run because
+every test exercised `SetSyncSchedule` on a source that already existed.
+
+`syncSourceRecord` is now the inbound half, and both directions have a test
+that names every field. A mapping that forgets one is invisible; that is the
+whole argument for testing it.
+
 ## Watch out
 
 `internal/scope/domain/` sits at exactly 10 Go files, the `folder-size.sh`
