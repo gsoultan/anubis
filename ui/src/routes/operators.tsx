@@ -338,7 +338,7 @@ function Operators() {
                   <span className="flex items-center gap-2">
                     <span className="t-h1">{o.username}</span>
                     {o.owner && (
-                      <span className="chip chip-gold" title="Authority over every tenant">
+                      <span className="chip chip-accent" title="Authority over every tenant">
                         <IconCrown size={11} style={{ marginRight: 4 }} />owner
                       </span>
                     )}

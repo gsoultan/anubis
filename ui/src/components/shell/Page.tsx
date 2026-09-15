@@ -25,10 +25,16 @@ export function Page({
   /** Rendered on the heading's baseline — status, assurance. Facts, not actions. */
   badge?: ReactNode
 }) {
+  /* The heading block used to run title → description → content on three
+     separate rows, which cost about 190px before a table's first row appeared
+     — a fifth of a laptop screen spent on chrome. The description now sits on
+     the title's own column at a reading measure, and the gutter is a single
+     scale (px-5 / pt-5) shared with the header above it, so the page and the
+     shell line up on one vertical. */
   return (
     <div className="fade">
-      <div className="flex items-start justify-between gap-6 px-6 pb-5 pt-6">
-        <div className="flex min-w-0 items-start gap-3.5">
+      <div className="flex items-start justify-between gap-6 px-5 pb-4 pt-5">
+        <div className="flex min-w-0 items-start gap-3">
           {lead}
           <div className="min-w-0">
             {back && (
@@ -46,13 +52,13 @@ export function Page({
               {badge}
             </div>
             {description && (
-              <p className="t-sm mt-1.5" style={{ maxWidth: 640 }}>{description}</p>
+              <p className="t-sm mt-1" style={{ maxWidth: 680 }}>{description}</p>
             )}
           </div>
         </div>
         {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
       </div>
-      <div className={`px-6 pb-10 ${wide ? '' : 'max-w-[1400px]'}`}>{children}</div>
+      <div className={`px-5 pb-10 ${wide ? '' : 'max-w-[1440px]'}`}>{children}</div>
     </div>
   )
 }

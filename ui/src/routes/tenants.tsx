@@ -38,8 +38,8 @@ function TenantCard({ t }: { t: Tenant }) {
       <div className="mb-1 flex items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2.5">
           <div className="flex shrink-0 items-center justify-center rounded-lg"
-            style={{ width: 32, height: 32, background: 'var(--gold-glow)' }}>
-            <IconBuildingBank size={16} style={{ color: 'var(--gold)' }} />
+            style={{ width: 32, height: 32, background: 'var(--accent-bg)' }}>
+            <IconBuildingBank size={16} style={{ color: 'var(--accent)' }} />
           </div>
           <div className="min-w-0">
             <div className="t-h2 truncate">{t.name}</div>
@@ -86,7 +86,7 @@ function TenantCard({ t }: { t: Tenant }) {
 
       <button
         className="t-body mt-3 inline-flex items-center gap-1.5"
-        style={{ color: 'var(--gold)', fontWeight: 570 }}
+        style={{ color: 'var(--accent)', fontWeight: 570 }}
         disabled={suspended}
         onClick={() => setCurrentTenant(t.id)}
       >

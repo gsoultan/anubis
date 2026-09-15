@@ -2,7 +2,7 @@
    cost more than the whole feature is worth, and this keeps the palette under
    our control so it cannot stray into verdict colours. */
 export function Sparkline({
-  data, w = 88, h = 26, color = 'var(--gold)', fill = true,
+  data, w = 88, h = 26, color = 'var(--accent)', fill = true,
 }: { data: number[]; w?: number; h?: number; color?: string; fill?: boolean }) {
   if (data.length < 2) return null
   const min = Math.min(...data)

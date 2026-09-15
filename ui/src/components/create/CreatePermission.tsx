@@ -87,7 +87,7 @@ export function CreatePermission({ opened }: { opened: boolean }) {
         {preview && (
           <div className="panel-inset flex items-center justify-between px-3 py-2.5">
             <span className="t-xs">key (generated)</span>
-            <span className="chip chip-gold">{preview}</span>
+            <span className="chip chip-accent">{preview}</span>
           </div>
         )}
 

@@ -5,10 +5,10 @@ import type { RealmKind } from '@/lib/api/types'
    same colour as a `public` one, which is the difference between a robot and
    the general public. */
 export const REALM_KIND_COLOR: Record<RealmKind, string> = {
-  internal: 'var(--gold)',
-  partner:  'var(--info)',
-  public:   'var(--grape)',
-  service:  'var(--ink-3)',
+  internal: 'var(--kind-internal)',
+  partner:  'var(--kind-partner)',
+  public:   'var(--kind-public)',
+  service:  'var(--kind-service)',
 }
 
 export function realmKindColor(kind?: string): string {

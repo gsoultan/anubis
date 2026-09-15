@@ -60,8 +60,12 @@ function Roles() {
     (risk === 'all' || p.risk === risk) &&
     (!needle || p.key.toLowerCase().includes(needle)))
 
+  /* Every column carries an explicit width. Leave one without and it becomes
+     the only column the browser can grow, so all the slack on a wide display
+     pools into it — the role column ran 670px for 120px of name while
+     "grantable to" and "permissions" were squeezed against the right edge. */
   const roleCols: Column<Role>[] = [
-    { key: 'name', header: 'Role', render: (r) => (
+    { key: 'name', header: 'Role', width: 420, render: (r) => (
         <div className="flex flex-col gap-0.5">
           <div className="flex items-center gap-2">
             <span className="t-body" style={{ fontWeight: 570 }}>{r.name}</span>
@@ -121,8 +125,10 @@ function Roles() {
   ]
 
   const permCols: Column<Permission>[] = [
-    { key: 'key', header: 'Permission', render: (p) => (
-        <Cell top={<span className="font-mono" style={{ fontSize: 12 }}>{p.key}</span>}
+    /* stacked: a description is prose, not a qualifier on the key — inline it
+       would compete with the key for the same line and truncate both. */
+    { key: 'key', header: 'Permission', width: 420, render: (p) => (
+        <Cell stacked top={<span className="font-mono" style={{ fontSize: 12 }}>{p.key}</span>}
           bottom={p.description || undefined} />
       ) },
     { key: 'risk', header: 'Risk', width: 110, render: (p) => (

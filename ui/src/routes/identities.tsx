@@ -16,7 +16,6 @@ import { Page } from '@/components/shell/Page'
 import { DataTable, Cell, type Column } from '@/components/ui/DataTable'
 import { AttributesModal } from '@/components/ui/AttributesModal'
 import { CredentialsModal } from '@/components/ui/CredentialsModal'
-import { Initial } from '@/components/ui/Initial'
 import { api } from '@/lib/api/client'
 import * as live from '@/lib/api/live'
 import { realmKindColor } from '@/lib/realmKind'
@@ -35,12 +34,10 @@ const IAL_COLOR: Record<Ial, string> = {
   1: 'var(--warn)', 2: 'var(--info)', 3: 'var(--allow)',
 }
 
-/* The leftmost thing in a row is what the eye lands on, so it carries two
-   facts at once: who (the initial) and which population (the tint). That is
-   also why the population column no longer needs a coloured dot of its own —
-   the same information was being drawn twice, six columns apart.
-   `Initial` itself lives in components/ui now: a person's own page draws the
-   same avatar, and two copies is two colour rules. */
+/* The population's colour rides on a 6px dot in the population column, which
+   is where the population is named. It used to tint an avatar in the person
+   column instead — six columns away from its own label, and next to a letter
+   that was just the username's first character. */
 
 /* Active is what 99 rows in 100 are, so active is the quiet one. The pill is
    spent on the exception, which is the only row anyone is scanning for. The
@@ -187,19 +184,34 @@ function Identities() {
            Public are two different categories with two different names. */
         const c = categories?.find((x) => x.code === i.category && x.realm_id === i.realm_id)
         const sub = [i.email, c?.display_name ?? i.category].filter(Boolean).join(' · ')
+        /* No avatar here. It drew a first initial next to the username it was
+           the first initial of, tinted by the population named in the very
+           next column — both facts already on the row, costing 34px of the
+           widest column and 19px of row height. The person's own page still
+           opens with one, where it anchors a record instead of repeating a
+           neighbour. */
         return (
-          <div className="flex min-w-0 items-center gap-2.5">
-            <Initial name={i.username} colour={realmKindColor(r?.kind)} />
-            <Cell top={i.username}
-              bottom={sub || <span style={{ opacity: 0.5 }}>no email</span>} />
-          </div>
+          <Cell top={i.username}
+            bottom={sub || <span style={{ opacity: 0.5 }}>no email</span>} />
         )
       } },
+    /* The population repeats down the whole column — one tenant's list is
+       mostly one population — so it is set quiet. Weight belongs on what
+       differs between rows, not on the value they share. */
     { key: 'population', header: 'Population', width: 200, render: (i) => {
         const r = realmOf(i.realm_id)
-        return r
-          ? <Cell top={r.display_name} bottom={populationCode(r.code, r.display_name)} />
-          : <span className="t-xs">—</span>
+        if (!r) return <span className="t-xs">—</span>
+        const code = populationCode(r.code, r.display_name)
+        return (
+          <span className="flex min-w-0 items-center gap-2">
+            <span style={{ width: 6, height: 6, borderRadius: 99, flexShrink: 0,
+              background: realmKindColor(r.kind) }} />
+            <span className="t-body truncate" style={{ color: 'var(--ink-2)' }}>
+              {r.display_name}
+            </span>
+            {code && <span className="t-xs truncate">{code}</span>}
+          </span>
+        )
       } },
     { key: 'ial', header: 'Assurance', width: 120, render: (i) => (
         <Tooltip label={IAL_HINT[i.assurance_level]} withArrow>

@@ -66,7 +66,7 @@ export function DataTable<T>({
         {head}
         <tbody>
           {!rows &&
-            Array.from({ length: 6 }).map((_, i) => (
+            Array.from({ length: 10 }).map((_, i) => (
               <tr key={i}>
                 {columns.map((c) => (
                   <td key={c.key}>
@@ -115,12 +115,31 @@ export function DataTable<T>({
   )
 }
 
-/** Two-line cell: primary label with muted secondary beneath. */
-export function Cell({ top, bottom }: { top: ReactNode; bottom?: ReactNode }) {
+/** Primary label with a muted secondary.
+ *
+ *  Inline by default. Stacking every identity cell cost 63px a row, so eleven
+ *  of fifty-seven thousand people fitted on a laptop screen — a list that long
+ *  is read by scanning, and scanning is exactly what a two-line row prevents.
+ *  On one line the row is --row-h and about nineteen fit.
+ *
+ *  `stacked` is for the cells that genuinely carry two facts rather than a
+ *  name and its qualifier, and for detail pages where there is no list to
+ *  scan. */
+export function Cell({ top, bottom, stacked = false }: {
+  top: ReactNode; bottom?: ReactNode; stacked?: boolean
+}) {
+  if (stacked) {
+    return (
+      <div className="min-w-0">
+        <div className="t-body truncate" style={{ fontWeight: 520 }}>{top}</div>
+        {bottom && <div className="t-xs mt-0.5 truncate">{bottom}</div>}
+      </div>
+    )
+  }
   return (
-    <div className="min-w-0">
-      <div className="t-body truncate" style={{ fontWeight: 500 }}>{top}</div>
-      {bottom && <div className="t-xs mt-0.5 truncate">{bottom}</div>}
+    <div className="flex min-w-0 items-baseline gap-2">
+      <span className="t-body truncate" style={{ fontWeight: 520, flex: '0 1 auto' }}>{top}</span>
+      {bottom && <span className="t-xs truncate" style={{ flex: '1 1 auto' }}>{bottom}</span>}
     </div>
   )
 }

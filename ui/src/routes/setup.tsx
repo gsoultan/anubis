@@ -90,7 +90,7 @@ function Setup() {
           {step === 'key' && (
             <form onSubmit={(e) => { e.preventDefault(); setStep('database') }}>
               <div className="mb-1 flex items-center gap-2">
-                <IconKey size={17} style={{ color: 'var(--gold)' }} />
+                <IconKey size={17} style={{ color: 'var(--accent)' }} />
                 <h1 className="t-h1">Setup key</h1>
               </div>
               <p className="t-sm mb-4">
@@ -111,7 +111,7 @@ function Setup() {
           {step === 'database' && (
             <form onSubmit={(e) => { e.preventDefault(); setStep('owner') }}>
               <div className="mb-1 flex items-center gap-2">
-                <IconDatabase size={17} style={{ color: 'var(--gold)' }} />
+                <IconDatabase size={17} style={{ color: 'var(--accent)' }} />
                 <h1 className="t-h1">Database</h1>
               </div>
               <p className="t-sm mb-4">
@@ -140,7 +140,7 @@ function Setup() {
                     Test connection
                   </Button>
                   {tested && (
-                    <span className="t-xs flex items-center gap-1" style={{ color: 'var(--gold)' }}>
+                    <span className="t-xs flex items-center gap-1" style={{ color: 'var(--accent)' }}>
                       <IconCheck size={13} /> reachable
                     </span>
                   )}
@@ -157,7 +157,7 @@ function Setup() {
           {step === 'owner' && (
             <form onSubmit={(e) => { e.preventDefault(); install() }}>
               <div className="mb-1 flex items-center gap-2">
-                <IconUserShield size={17} style={{ color: 'var(--gold)' }} />
+                <IconUserShield size={17} style={{ color: 'var(--accent)' }} />
                 <h1 className="t-h1">Owner account</h1>
               </div>
               <p className="t-sm mb-4">
@@ -195,7 +195,7 @@ function Setup() {
           {step === 'done' && (
             <div>
               <div className="mb-1 flex items-center gap-2">
-                <IconCheck size={17} style={{ color: 'var(--gold)' }} />
+                <IconCheck size={17} style={{ color: 'var(--accent)' }} />
                 <h1 className="t-h1">Installed</h1>
               </div>
               <p className="t-sm mb-4">
