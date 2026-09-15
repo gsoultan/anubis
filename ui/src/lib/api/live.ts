@@ -1357,6 +1357,7 @@ export async function syncRuns(sourceId: Uuid, limit = 25): Promise<SyncRun[]> {
       added: n('added'), renamed: n('renamed'), moved: n('moved'),
       archived: n('archived'), unchanged: n('unchanged'),
       errors: Array.isArray(rep?.errors) ? rep.errors.length : 0,
+      ...(typeof rep?.['error'] === 'string' ? { error: rep['error'] as string } : {}),
     }
   })
 }

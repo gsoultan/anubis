@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"strings"
 	"testing"
 	"time"
 
@@ -19,8 +20,14 @@ type dueSyncRepo struct {
 	scopeport.ScopeSyncRepository
 	due         []scopedomain.SyncSourceRecord
 	rescheduled []string
+	failures    []string
 	applyErr    error
 	applied     int
+}
+
+func (r *dueSyncRepo) RecordSyncFailure(_ context.Context, _, reason string) error {
+	r.failures = append(r.failures, reason)
+	return nil
 }
 
 func (r *dueSyncRepo) DueSyncSources(context.Context, time.Time, int32) ([]scopedomain.SyncSourceRecord, error) {
@@ -99,6 +106,15 @@ func TestRunDueReschedulesAfterAFailedFetch(t *testing.T) {
 	if len(audit.events) != 1 || audit.events[0].Action != "sync.fetch_failed" {
 		t.Fatalf("events = %+v, want one sync.fetch_failed", audit.events)
 	}
+	// scope_sync_apply records everything that reaches it, and a fetch that
+	// fails never does. Without a row here the Source pane shows a schedule
+	// and an empty history while nothing has synced for days.
+	if len(repo.failures) != 1 {
+		t.Fatalf("failures = %v, want one recorded run", repo.failures)
+	}
+	if !strings.Contains(repo.failures[0], "connection refused") {
+		t.Errorf("recorded reason = %q, want it to name the cause", repo.failures[0])
+	}
 }
 
 // A run nobody asked for must not wear somebody's identity. The scheduler has
@@ -148,5 +164,25 @@ func TestRunDueRefusesAnEmptyFeed(t *testing.T) {
 	}
 	if len(repo.rescheduled) != 1 {
 		t.Errorf("rescheduled = %v, want one entry", repo.rescheduled)
+	}
+	// The refusal is the whole point, so it has to be visible afterwards.
+	if len(repo.failures) != 1 || !strings.Contains(repo.failures[0], "zero rows") {
+		t.Errorf("failures = %v, want the zero-row refusal recorded", repo.failures)
+	}
+}
+
+// The reconciler writes its own row, so a run that reaches it must not get a
+// second one from the app tier.
+func TestRunDueRecordsNoFailureWhenTheRunSucceeds(t *testing.T) {
+	repo := &dueSyncRepo{due: oneDueSource()}
+	u, _ := schedulerUnderTest(repo, stubFetcher{
+		rows: []scopedomain.SyncFeedRow{{Ref: "jkt", Name: "Jakarta"}},
+	})
+
+	if _, err := u.RunDue(context.Background(), time.Now(), 0); err != nil {
+		t.Fatalf("RunDue: %v", err)
+	}
+	if len(repo.failures) != 0 {
+		t.Errorf("failures = %v, want none — scope_sync_apply records its own run", repo.failures)
 	}
 }

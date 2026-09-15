@@ -559,6 +559,20 @@ func (u *scopeAdminInteractor) runDueOne(ctx context.Context, src scopedomain.Sy
 	}
 }
 
+// recordFailure writes the run row for an attempt that never reached the
+// reconciler. scope_sync_apply opens its own row and catches per-row errors, so
+// anything that gets as far as reconciling records itself; a fetch that fails
+// never gets there. Unattended that was invisible — the Source pane showed a
+// schedule, an empty history, and no hint that nothing had synced for days.
+//
+// Losing the row must not fail the caller: the run already failed, and its
+// reason reaches the audit trail either way. It is still worth shouting about.
+func (u *scopeAdminInteractor) recordFailure(ctx context.Context, sourceID, reason string) {
+	if err := u.sync.RecordSyncFailure(ctx, sourceID, reason); err != nil {
+		u.logger.Error("scope sync failure not recorded", "source", sourceID, "error", err)
+	}
+}
+
 // runSync is one attempt with the authority question already settled: either
 // the guard passed, or there was no operator to guard because a timer asked.
 // tenantID is passed rather than read from p precisely so the scheduled path
@@ -589,9 +603,11 @@ func (u *scopeAdminInteractor) runSync(ctx context.Context, tenantID string,
 			u.emitSync(ctx, tenantID, p, "sync.fetch_failed", sourceID, map[string]string{
 				"kind": source.Kind, "error": apperr.AsError(ferr).Code,
 			})
+			u.recordFailure(ctx, sourceID, ferr.Error())
 			return "", ferr
 		}
 		if len(fetched) == 0 {
+			u.recordFailure(ctx, sourceID, "feed returned zero rows; refusing to archive the whole axis")
 			return "", apperr.ErrInvalidArgument.With("feed", "returned zero rows; refusing to archive the whole axis")
 		}
 		rows = make([]SyncRowInput, 0, len(fetched))

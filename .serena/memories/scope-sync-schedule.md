@@ -53,6 +53,26 @@ so the console's "Last synced 15:01" would name a time at which the sync had in
 fact failed. The catalog's equivalent does set it; scope's must not, because
 scope already had the column doing something else.
 
+## A failure before the reconciler used to leave no trace
+
+`scope_sync_apply` opens its own run row and catches per-row errors, so
+anything that gets as far as reconciling records itself. A fetch that fails
+never gets there — and before the scheduler that was tolerable, because a human
+had pressed the button and saw the error. Unattended it meant the Source pane
+showed a schedule, an empty history, and no hint that nothing had synced for
+days. Verified on the dev box: `e2e_dead_axis` had **0 rows** in
+`scope_sync_runs` after real failed attempts.
+
+`RecordSyncFailure` writes that row from the app tier, with the reason in the
+report under the same shape the reconciler uses so one reader serves both. It
+covers the two pre-reconciler exits: an unreachable feed, and the zero-row
+refusal. A run that *does* reach the reconciler must not get a second row —
+there is a test for that, because it is the obvious way to break this later.
+
+The console distinguishes them: a run that reconciled and could not place N
+rows shows "N unplaced", one that never reached the feed shows why. The second
+used to render as "0 unplaced".
+
 ## Changing the schedule of a source that already exists
 
 `SetSyncSchedule` is its own RPC, usecase and query. It cannot go through

@@ -19,6 +19,9 @@ type ScopeSyncRepository interface {
 	// timer serves them all. Each record carries its own TenantID precisely
 	// because there is no ambient one to fall back on.
 	DueSyncSources(ctx context.Context, now time.Time, limit int32) ([]scopedomain.SyncSourceRecord, error)
+	// RecordSyncFailure records an attempt that failed before the reconciler
+	// ran, which is the only kind scope_sync_apply cannot record for itself.
+	RecordSyncFailure(ctx context.Context, sourceID, reason string) error
 	// SetSyncSchedule changes when a source runs, touching neither its config
 	// nor its status — the console cannot safely round-trip a config it is
 	// never sent the secrets of.

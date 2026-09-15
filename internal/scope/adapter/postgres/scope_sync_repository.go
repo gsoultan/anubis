@@ -109,6 +109,12 @@ func (s *Repository) DueSyncSources(ctx context.Context, now time.Time, limit in
 	return out, nil
 }
 
+func (s *Repository) RecordSyncFailure(ctx context.Context, sourceID, reason string) error {
+	return database.MapErr(s.q(ctx).RecordSyncFailure(ctx, gen.RecordSyncFailureParams{
+		SourceID: sourceID, Reason: reason,
+	}))
+}
+
 func (s *Repository) SetSyncSchedule(ctx context.Context, tenantID, id string, intervalSeconds int32) error {
 	n, err := s.q(ctx).SetSyncSchedule(ctx, gen.SetSyncScheduleParams{
 		ID: id, TenantID: tenantID, IntervalSeconds: intervalSeconds,

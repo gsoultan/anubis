@@ -491,6 +491,10 @@ export interface SyncRun {
   unchanged: number
   /** Rows the reconciler could not place. */
   errors: number
+  /** Why an attempt failed before the reconciler ran — an unreachable feed, or
+      one that returned nothing. Absent on runs that got as far as reconciling,
+      which report `errors` instead. */
+  error?: string
 }
 
 export interface StrictDryRun {

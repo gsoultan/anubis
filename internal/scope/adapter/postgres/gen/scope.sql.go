@@ -688,6 +688,31 @@ func (q *Queries) MoveScopeNode(ctx context.Context, arg MoveScopeNodeParams) er
 	return err
 }
 
+const recordSyncFailure = `-- name: RecordSyncFailure :exec
+INSERT INTO scope_sync_runs (source_id, dry, status, finished_at, report)
+VALUES ($1, false, 'failed', now(),
+        jsonb_build_object(
+            'error', $2::text,
+            'added', 0, 'renamed', 0, 'moved', 0, 'archived', 0,
+            'unchanged', 0, 'errors', '[]'::jsonb))
+`
+
+type RecordSyncFailureParams struct {
+	SourceID string
+	Reason   string
+}
+
+// RecordSyncFailure writes the run row for an attempt that never reached
+// scope_sync_apply. That function opens its own row and catches per-row errors,
+// so everything that gets as far as reconciling is already recorded — but a
+// feed that cannot be fetched never gets there, and left one operator looking
+// at an empty history while nothing had synced for days. The report keeps the
+// reconciler's shape so one reader serves both kinds of row.
+func (q *Queries) RecordSyncFailure(ctx context.Context, arg RecordSyncFailureParams) error {
+	_, err := q.db.Exec(ctx, recordSyncFailure, arg.SourceID, arg.Reason)
+	return err
+}
+
 const renameScopeNode = `-- name: RenameScopeNode :execrows
 UPDATE scope_nodes SET name = $1, status = 'active', updated_at = now()
 WHERE id = $2 AND tenant_id = $3
