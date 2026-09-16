@@ -2,7 +2,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import { ActionIcon, Button, Menu, SegmentedControl, TextInput, Tooltip } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
-import { IconInfoCircle, IconLock, IconDots, IconCirclePlus, IconSearch, IconTrash } from '@tabler/icons-react'
+import { IconInfoCircle, IconLock, IconDots, IconCirclePlus, IconSearch, IconTrash, IconX } from '@tabler/icons-react'
 import { useState } from 'react'
 import { queryClient } from '@/lib/query/client'
 import { useCreate } from '@/stores/create'
@@ -27,7 +27,7 @@ function Grants() {
      pulling a list it could never render. */
   const [trail, setTrail] = useState<string[]>([''])
   const cursor = trail[trail.length - 1] ?? ''
-  const { data: page } = useQuery({
+  const { data: page, isFetching } = useQuery({
     queryKey: ['grant-search', q, source, cursor],
     queryFn: () => api.searchGrants({
       query: q.trim(),
@@ -106,25 +106,67 @@ function Grants() {
       ) },
   ]
 
+  const filtered = q.trim() !== '' || source !== 'all'
+  function clearFilters() {
+    setQ('')
+    setSource('all')
+    setTrail([''])
+  }
+
+  /* On the table, not in the page header. DataTable's own contract says
+     filters belong on the thing they filter — People has followed it since the
+     rail existed and this screen never moved, so the same two controls sat in
+     two different places depending on which list you were looking at. */
+  const toolbar = (
+    <>
+      <TextInput size="xs" w={230} placeholder="Search person or role"
+        leftSection={<IconSearch size={14} />}
+        value={q} onChange={(e) => { setQ(e.currentTarget.value); setTrail(['']) }} />
+      <SegmentedControl size="xs" value={source}
+        onChange={(v) => { setSource(v); setTrail(['']) }}
+        data={[{ value: 'all', label: 'All' }, { value: 'direct', label: 'Direct' },
+               { value: 'membership', label: 'Via membership' }]} />
+      {filtered && (
+        <Button size="compact-xs" variant="subtle" color="gray"
+          leftSection={<IconX size={12} />} onClick={clearFilters}>
+          Clear
+        </Button>
+      )}
+      <span className="t-xs tnum ml-auto">
+        {isFetching ? 'loading…' : `${shown.length} shown`}
+      </span>
+    </>
+  )
+
+  /* Rendered whether or not there is a next page. The count used to sit in a
+     floating div above the table and the paging buttons only appeared when
+     paging existed, so a result that fit on one page reported its size in a
+     third place — the same fault People fixed by giving the footer a rail. */
+  const footer = (
+    <>
+      <span className="t-xs tnum">
+        {shown.length} on this page
+        {trail.length > 1 && ` · page ${trail.length}`}
+      </span>
+      <div className="ml-auto flex items-center gap-2">
+        <Button variant="default" size="compact-sm" disabled={trail.length <= 1}
+          onClick={() => setTrail((t) => t.slice(0, -1))}>Previous</Button>
+        <Button variant="default" size="compact-sm" disabled={!page?.next}
+          onClick={() => setTrail((t) => [...t, page?.next ?? ''])}>Next</Button>
+      </div>
+    </>
+  )
+
   return (
     <Page
       title="Access"
       description="Who can do what, and where. A grant ties a person to a role, optionally limited per axis — all limits must match at once."
       wide
       actions={
-        <>
-          <TextInput w={210} placeholder="Search person or role"
-            leftSection={<IconSearch size={14} />}
-            value={q} onChange={(e) => { setQ(e.currentTarget.value); setTrail(['']) }} />
-          <SegmentedControl size="xs" value={source}
-            onChange={(v) => { setSource(v); setTrail(['']) }}
-            data={[{ value: 'all', label: 'All' }, { value: 'direct', label: 'Direct' },
-                   { value: 'membership', label: 'Via membership' }]} />
-          <Button size="xs" leftSection={<IconCirclePlus size={14} />}
-            onClick={() => openCreate('grant')}>
-            Give access
-          </Button>
-        </>
+        <Button size="xs" leftSection={<IconCirclePlus size={14} />}
+          onClick={() => openCreate('grant')}>
+          Give access
+        </Button>
       }
     >
       <div className="flex flex-col gap-4">
@@ -136,25 +178,18 @@ function Grants() {
             Self-scoped grants cannot carry axis constraints; the database rejects the combination.
           </div>
         </div>
-        <div className="t-xs tnum" style={{ alignSelf: 'flex-end' }}>
-          {shown.length} on this page
-        </div>
-        <DataTable columns={columns} rows={shown} rowKey={(g) => g.id}
+        <DataTable columns={columns} rows={grants} rowKey={(g) => g.id}
+          toolbar={toolbar} footer={footer}
+          stale={isFetching && grants !== undefined}
           empty={{
-            title: q.trim() || source !== 'all' ? 'No access matches' : 'Nobody has access yet',
-            hint: q.trim() || source !== 'all'
+            title: filtered ? 'No access matches' : 'Nobody has access yet',
+            hint: filtered
               ? 'Try another search or source filter.'
               : 'Grants connect an identity to a role within a scope.',
-            action: <Button size="xs" variant="light" onClick={() => openCreate('grant')}>Give access</Button>,
+            action: filtered
+              ? <Button size="xs" variant="light" onClick={clearFilters}>Clear filters</Button>
+              : <Button size="xs" variant="light" onClick={() => openCreate('grant')}>Give access</Button>,
           }} />
-        {(trail.length > 1 || page?.next) && (
-          <div className="mt-3 flex items-center gap-2">
-            <Button variant="default" size="compact-sm" disabled={trail.length <= 1}
-              onClick={() => setTrail((t) => t.slice(0, -1))}>Previous</Button>
-            <Button variant="default" size="compact-sm" disabled={!page?.next}
-              onClick={() => setTrail((t) => [...t, page?.next ?? ''])}>Next</Button>
-          </div>
-        )}
       </div>
     </Page>
   )
