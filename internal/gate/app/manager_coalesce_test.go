@@ -93,12 +93,37 @@ func startManager(t *testing.T, quiet, maxWait time.Duration) (*Manager, *counti
 	t.Cleanup(cancel)
 	go m.Run(ctx)
 
-	select { // the initial refreshAll
+	select { // the initial refreshAll reached the loader
 	case <-l.loaded:
 	case <-time.After(2 * time.Second):
 		t.Fatal("initial snapshot load never happened")
 	}
+	// ...and then RECORDED it. LoadSnapshot signals from inside its own body,
+	// so the channel only says the loader was entered; Manager.load writes
+	// m.data after it returns. A test that starts counting inside that window
+	// sees the initial load arrive as an extra rebuild, and sees the refresh
+	// that raced it skip the version probe — because Get still returned nil,
+	// so there was no version to compare against. Both assertions in
+	// TestAnUnchangedTenantIsNotRebuilt fail that way, and only on a machine
+	// slow enough to lose the race.
+	waitUntil(t, 2*time.Second, "initial snapshot was never recorded", func() bool {
+		d, _ := m.Get("acme")
+		return d != nil
+	})
 	return m, l
+}
+
+// waitUntil polls a condition rather than sleeping a guess at it. A fixed
+// sleep is the same race with a friendlier failure message.
+func waitUntil(t *testing.T, limit time.Duration, what string, ok func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(limit)
+	for !ok() {
+		if time.Now().After(deadline) {
+			t.Fatalf("timed out after %s: %s", limit, what)
+		}
+		time.Sleep(time.Millisecond)
+	}
 }
 
 func TestABurstOfBumpsCostsOneReload(t *testing.T) {
