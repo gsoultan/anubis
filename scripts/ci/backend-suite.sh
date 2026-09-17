@@ -38,6 +38,7 @@ for out in \
   internal/control/adapter/postgres/rgen \
   internal/tenancy/adapter/postgres/rgen \
   internal/scope/adapter/postgres/rgen \
+  internal/auth/adapter/postgres/rgen \
   internal/platform/database/rgen \
 ; do
   go run ./cmd/stormgen generate "$out" -raw-schema live -dsn "$ANUBIS_DB_URL" >/dev/null

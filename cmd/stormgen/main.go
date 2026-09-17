@@ -23,6 +23,8 @@ import (
 
 	auditrmodel "github.com/gsoultan/anubis/internal/audit/adapter/postgres/rmodel"
 	auditrquery "github.com/gsoultan/anubis/internal/audit/adapter/postgres/rquery"
+	authrmodel "github.com/gsoultan/anubis/internal/auth/adapter/postgres/rmodel"
+	authrquery "github.com/gsoultan/anubis/internal/auth/adapter/postgres/rquery"
 	authzrmodel "github.com/gsoultan/anubis/internal/authz/adapter/postgres/rmodel"
 	authzrquery "github.com/gsoultan/anubis/internal/authz/adapter/postgres/rquery"
 	controlrmodel "github.com/gsoultan/anubis/internal/control/adapter/postgres/rmodel"
@@ -51,6 +53,7 @@ var contexts = map[string]declarations{
 	"control": {controlrmodel.All(), controlrquery.Queries()},
 	"tenancy": {tenancyrmodel.All(), tenancyrquery.Queries()},
 	"scope":   {scopermodel.All(), scopermquery.Queries()},
+	"auth":    {authrmodel.All(), authrquery.Queries()},
 	// No models: the technical context's two statements are advisory locks,
 	// which belong to no table.
 	"platform": {nil, platformrquery.Queries()},
