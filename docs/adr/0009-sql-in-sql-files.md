@@ -38,6 +38,39 @@ and quoted through `pgx.Identifier.Sanitize()`. Neither path can touch
 Anubis's own schema — a different connection, a different database.
 Everything reading Anubis's tables still goes through `db/queries`.
 
+## §6 Amendment (2026-09-17): the audit context, and builders over raw SQL
+
+The audit context moves off sqlc. Unlike authz — which migrated as raw
+`storm.SQL` declarations against one generated model — audit is **model-first**:
+`audit_log` is declared in `rmodel/`, storm generates the builders, and the
+repository composes predicates instead of naming a statement per filter
+combination.
+
+That is the difference worth recording. `QueryAudit` had five optional filters,
+each written as `($n::uuid IS NULL OR actor_id = $n)` because a `.sql` file
+cannot omit a clause. A builder omits it: an absent filter contributes no
+predicate, and storm compiles one statement per *shape*, so the shapes anybody
+actually uses stay prepared. The dynamic query stops being a static query
+wearing a disguise.
+
+What stays raw, in `rquery/`, is what genuinely is SQL: two void-returning
+function calls (`ensure_month_partitions`), the per-tenant advisory lock, and
+two aggregates using `FILTER`. Five declarations, against nine `.sql` queries
+before.
+
+`cmd/stormgen` now reads the bounded context out of the output path and hands
+storm only that context's models, so a query cannot compile against a table its
+context does not own — the boundary `AGENTS.md` draws, enforced where the code
+is produced. `scripts/ci/backend-suite.sh` regenerates every storm context and
+fails on drift.
+
+The storm executor and the uuid conversions moved to `platform/database`. They
+are plumbing, not policy, and one copy per context is one copy per context to
+forget when `database.Conn` grows a third producer.
+
+**Still sqlc:** identity, auth, scope, tenancy, gate, control, platform. The
+registry in `cmd/stormgen` is the record of how far this has got.
+
 ## §5 Amendment (2026-08-25): storm in the authz context
 
 The authz context is migrating from sqlc to [storm](https://github.com/gsoultan/storm)

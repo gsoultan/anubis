@@ -25,8 +25,14 @@ go run ./cmd/anubisd migrate
 # schema stormgen can PREPARE the rquery declarations against. A declaration
 # that drifted from migrations, or generated output that drifted from a
 # declaration, fails here naming the statement.
-go run ./cmd/stormgen generate internal/authz/adapter/postgres/rgen \
-  -raw-schema live -dsn "$ANUBIS_DB_URL" >/dev/null
+# One invocation per bounded context: stormgen reads the context out of the
+# output path and hands storm only THAT context's models, so a query cannot
+# compile against a table its context does not own. Add a line when a context
+# moves off sqlc.
+for ctx in authz audit; do
+  go run ./cmd/stormgen generate "internal/$ctx/adapter/postgres/rgen" \
+    -raw-schema live -dsn "$ANUBIS_DB_URL" >/dev/null
+done
 if ! git diff --exit-code --quiet internal/*/adapter/postgres/rgen; then
   echo "FAIL: storm generated code drifted — regenerate and commit (see cmd/stormgen)" >&2
   git --no-pager diff --stat internal/*/adapter/postgres/rgen >&2
