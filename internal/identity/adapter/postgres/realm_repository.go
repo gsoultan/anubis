@@ -4,55 +4,57 @@ import (
 	"context"
 	"time"
 
-	gen "github.com/gsoultan/anubis/internal/identity/adapter/postgres/gen"
+	identityrquery "github.com/gsoultan/anubis/internal/identity/adapter/postgres/rquery"
 	identitydomain "github.com/gsoultan/anubis/internal/identity/domain"
 	"github.com/gsoultan/anubis/internal/platform/database"
 )
 
 func (s *Repository) RealmByCode(ctx context.Context, tenantID, code string) (*identitydomain.Realm, error) {
-	row, err := s.q(ctx).GetRealmByCode(ctx, gen.GetRealmByCodeParams{TenantID: tenantID, Code: code})
+	row, ok, err := identityrquery.GetRealmByCode.One(ctx, s.ex(ctx), tenantID, code)
 	if err != nil {
 		return nil, database.MapErr(err)
 	}
-	return realmFromParts(row.ID, row.TenantID, row.Code, row.Kind, row.DisplayName,
-		int(row.MinAssurance), row.SelfRegistration, row.EmailVerificationRequired,
-		row.AllowedFactors, row.RequiredFactors, row.PasswordPolicy,
-		row.SessionTtlSecs, row.AccessTokenTtlSecs, row.RefreshTokenTtlSecs,
-		row.FactorEnrolmentDeadline), nil
+	if !ok {
+		return nil, database.NotFound()
+	}
+	return realmFromRow(row), nil
 }
 
 func (s *Repository) RealmByID(ctx context.Context, id string) (*identitydomain.Realm, error) {
-	row, err := s.q(ctx).GetRealm(ctx, id)
+	row, ok, err := identityrquery.GetRealm.One(ctx, s.ex(ctx), id)
 	if err != nil {
 		return nil, database.MapErr(err)
 	}
-	return realmFromParts(row.ID, row.TenantID, row.Code, row.Kind, row.DisplayName,
-		int(row.MinAssurance), row.SelfRegistration, row.EmailVerificationRequired,
-		row.AllowedFactors, row.RequiredFactors, row.PasswordPolicy,
-		row.SessionTtlSecs, row.AccessTokenTtlSecs, row.RefreshTokenTtlSecs,
-		row.FactorEnrolmentDeadline), nil
+	if !ok {
+		return nil, database.NotFound()
+	}
+	return realmFromRow(row), nil
 }
 
-func realmFromParts(id, tenantID, code, kind, name string, minAssurance int,
-	selfReg, emailVerify bool, allowed, required []string, policy []byte,
-	sessionSecs, accessSecs, refreshSecs int64,
-	enrolmentDeadline *time.Time) *identitydomain.Realm {
+// realmFromRow maps the policy a realm governs its population with.
+//
+// The TTLs arrive as seconds and become durations here; the text forms are for
+// the console, which edits them.
+func realmFromRow(r identityrquery.RealmWithSecsRow) *identitydomain.Realm {
 	return &identitydomain.Realm{
-		ID: id, TenantID: tenantID, Code: code, Kind: kind, DisplayName: name,
-		MinAssurance: minAssurance, SelfRegistration: selfReg,
-		EmailVerification: emailVerify,
-		AllowedFactors:    allowed, RequiredFactors: required,
-		SessionTTL:      time.Duration(sessionSecs) * time.Second,
-		AccessTokenTTL:  time.Duration(accessSecs) * time.Second,
-		RefreshTokenTTL: time.Duration(refreshSecs) * time.Second,
-		PasswordPolicy:  identitydomain.ParsePasswordPolicy(policy),
-		// Nil means the realm has not started enforcing enrolment, which is
-		// the zero value the domain reads as "not in force".
-		FactorEnrolmentDeadline: derefTime(enrolmentDeadline),
+		ID: r.ID, TenantID: r.TenantID, Code: r.Code, Kind: r.Kind,
+		DisplayName:       r.DisplayName,
+		MinAssurance:      int(r.MinAssurance),
+		SelfRegistration:  r.SelfRegistration,
+		EmailVerification: r.EmailVerificationRequired,
+		AllowedFactors:    r.AllowedFactors,
+		RequiredFactors:   r.RequiredFactors,
+		SessionTTL:        time.Duration(r.SessionTtlSecs) * time.Second,
+		AccessTokenTTL:    time.Duration(r.AccessTokenTtlSecs) * time.Second,
+		RefreshTokenTTL:   time.Duration(r.RefreshTokenTtlSecs) * time.Second,
+		PasswordPolicy:    identitydomain.ParsePasswordPolicy([]byte(r.PasswordPolicy)),
+		// The zero time means the realm has not started enforcing enrolment,
+		// which is what the domain reads as "not in force".
+		FactorEnrolmentDeadline: zeroTime(tptr(r.FactorEnrolmentDeadline)),
 	}
 }
 
-func derefTime(t *time.Time) time.Time {
+func zeroTime(t *time.Time) time.Time {
 	if t == nil {
 		return time.Time{}
 	}

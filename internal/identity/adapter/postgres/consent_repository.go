@@ -3,45 +3,65 @@ package identitypg
 import (
 	"context"
 
-	gen "github.com/gsoultan/anubis/internal/identity/adapter/postgres/gen"
+	"github.com/gsoultan/anubis/internal/identity/adapter/postgres/rgen/consent"
+	identityrquery "github.com/gsoultan/anubis/internal/identity/adapter/postgres/rquery"
 	identitydomain "github.com/gsoultan/anubis/internal/identity/domain"
 	"github.com/gsoultan/anubis/internal/platform/database"
+	"github.com/gsoultan/storm/runtime"
 )
 
+// ListConsents is the lawful basis for processing one person's data. Scoped by
+// tenant as well as identity — the tenant is what makes the identity id
+// somebody's to ask about.
 func (s *Repository) ListConsents(ctx context.Context, tenantID, identityID string) ([]identitydomain.ConsentRecord, error) {
-	rows, err := s.q(ctx).ListConsents(ctx, gen.ListConsentsParams{
-		IdentityID: identityID, TenantID: tenantID,
-	})
+	tid, ident, err := twoUUIDs(tenantID, identityID)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := consent.New().
+		Where(consent.IdentityID.Eq(ident), consent.TenantID.Eq(tid)).
+		Order(consent.GrantedAt.Desc()).
+		All(ctx, s.ex(ctx), nil)
 	if err != nil {
 		return nil, database.MapErr(err)
 	}
 	out := make([]identitydomain.ConsentRecord, 0, len(rows))
 	for _, r := range rows {
 		out = append(out, identitydomain.ConsentRecord{
-			ID: r.ID, IdentityID: r.IdentityID, Purpose: r.Purpose,
-			PolicyVersion: r.PolicyVersion, GrantedAt: r.GrantedAt,
-			WithdrawnAt: r.WithdrawnAt, ExpiresAt: r.ExpiresAt,
+			ID: database.UUIDStr(r.ID), IdentityID: database.UUIDStr(r.IdentityID),
+			Purpose: r.Purpose, PolicyVersion: r.PolicyVersion,
+			GrantedAt: r.GrantedAt, WithdrawnAt: tptr(r.WithdrawnAt),
+			ExpiresAt: tptr(r.ExpiresAt),
 		})
 	}
 	return out, nil
 }
 
 func (s *Repository) InsertConsent(ctx context.Context, tenantID, identityID, purpose, policyVersion string, evidence []byte) (*identitydomain.ConsentRecord, error) {
-	row, err := s.q(ctx).InsertConsent(ctx, gen.InsertConsentParams{
-		TenantID: tenantID, IdentityID: identityID, Purpose: purpose,
-		PolicyVersion: policyVersion, Evidence: database.OrEmptyJSON(evidence),
-	})
+	tid, ident, err := twoUUIDs(tenantID, identityID)
+	if err != nil {
+		return nil, err
+	}
+	n := consent.Create()
+	n.SetTenantID(tid)
+	n.SetIdentityID(ident)
+	n.SetPurpose(purpose)
+	n.SetPolicyVersion(policyVersion)
+	n.SetEvidence(runtime.JSON(database.OrEmptyJSON(evidence)))
+	row, err := n.Insert(ctx, s.ex(ctx))
 	if err != nil {
 		return nil, database.MapErr(err)
 	}
 	return &identitydomain.ConsentRecord{
-		ID: row.ID, IdentityID: identityID, Purpose: purpose,
+		ID: database.UUIDStr(row.ID), IdentityID: identityID, Purpose: purpose,
 		PolicyVersion: policyVersion, GrantedAt: row.GrantedAt,
 	}, nil
 }
 
+// WithdrawConsent stamps the row it withdraws; the guard makes the row count
+// distinguish "I withdrew it" from "it already was".
 func (s *Repository) WithdrawConsent(ctx context.Context, tenantID, id string) error {
-	n, err := s.q(ctx).WithdrawConsent(ctx, gen.WithdrawConsentParams{ID: id, TenantID: tenantID})
+	n, err := identityrquery.WithdrawConsent.Exec(ctx, s.ex(ctx), id, tenantID)
 	if err != nil {
 		return database.MapErr(err)
 	}

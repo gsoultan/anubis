@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # House rule: no folder holds more than 10 Go files. It forces the domain
 # carve to stay honest — when a package outgrows the limit, the answer is a
-# missing concept, not a bigger folder. Generated code is exempt (sqlc and
+# missing concept, not a bigger folder. Generated code is exempt (storm and
 # buf decide their own file counts; each context still gets its own package).
 set -euo pipefail
 cd "$(dirname "$0")/../.."
