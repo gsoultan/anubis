@@ -14,8 +14,9 @@ import (
 	"github.com/gsoultan/anubis/internal/shared/apperr"
 )
 
-// Querier is what the sqlc-generated packages need; both a pool and a
-// transaction satisfy it, which is how WithinTx stays invisible to callers.
+// Querier is the connection an adapter runs on; both a pool and a transaction
+// satisfy it, which is how WithinTx stays invisible to callers. Executor (see
+// storm.go) adapts whichever one this returns onto storm's port.
 type Querier interface {
 	Exec(context.Context, string, ...interface{}) (pgconn.CommandTag, error)
 	Query(context.Context, string, ...interface{}) (pgx.Rows, error)

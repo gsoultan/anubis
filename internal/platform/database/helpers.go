@@ -2,20 +2,17 @@ package database
 
 import "time"
 
-// Column helpers shared by every context adapter: sqlc types nullable
-// columns as pointers, and empty strings stand in for SQL NULL on input.
+// Column helpers shared by every context adapter.
+//
+// These are INPUT-side now. The output side used to need them too — sqlc typed
+// every nullable column as a pointer, so each read dereferenced one — and
+// storm reads a nullable column as runtime.Null[T], which the adapters unwrap
+// with their own two-line helper. Deref, DerefS, DerefBool and AuditIP went
+// with sqlc; nothing had called them since the last context migrated.
 
-func Deref(s *string) string {
-	if s == nil {
-		return ""
-	}
-	return *s
-}
-
-func DerefS(s *string) string { return Deref(s) }
-
-func DerefBool(b *bool) bool { return b != nil && *b }
-
+// OptStr turns an absent string into SQL NULL. Empty is not the same as
+// absent for a nullable column: ” is a value a unique index will collide on,
+// and NULL is the absence a partial index is written for.
 func OptStr(s string) *string {
 	if s == "" {
 		return nil
@@ -23,6 +20,7 @@ func OptStr(s string) *string {
 	return &s
 }
 
+// OptTime treats the zero time as absent, which is what the domain means by it.
 func OptTime(t *time.Time) *time.Time {
 	if t == nil || t.IsZero() {
 		return nil
@@ -30,6 +28,7 @@ func OptTime(t *time.Time) *time.Time {
 	return t
 }
 
+// OrEmptyJSON keeps a jsonb column valid when the caller has nothing to say.
 func OrEmptyJSON(b []byte) []byte {
 	if len(b) == 0 {
 		return []byte("{}")
@@ -58,6 +57,9 @@ func OrDefaultJSON(b []byte, d string) []byte {
 	return b
 }
 
+// EmptyIfNil sends '{}' rather than NULL for a text[] column: the columns
+// these feed are NOT NULL with a '{}' default, and a nil slice would write
+// NULL over it.
 func EmptyIfNil(v []string) []string {
 	if v == nil {
 		return []string{}
@@ -70,17 +72,4 @@ func MaxInt(a, b int) int {
 		return a
 	}
 	return b
-}
-
-// AuditIP tolerates either representation sqlc infers for host(ip)::text.
-func AuditIP(v any) string {
-	switch t := v.(type) {
-	case string:
-		return t
-	case *string:
-		if t != nil {
-			return *t
-		}
-	}
-	return ""
 }

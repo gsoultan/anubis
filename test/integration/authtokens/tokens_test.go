@@ -75,6 +75,13 @@ func repo(t *testing.T) *authpg.Repository {
 	return authpg.New(database.New(pool))
 }
 
+// repoForBench is repo(t) for a benchmark, which takes testing.TB rather than
+// *testing.T.
+func repoForBench(b testing.TB) *authpg.Repository {
+	b.Helper()
+	return authpg.New(database.New(pool))
+}
+
 func hash(t *testing.T) []byte {
 	t.Helper()
 	b := make([]byte, 32)
