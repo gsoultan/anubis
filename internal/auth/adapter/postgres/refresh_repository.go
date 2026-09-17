@@ -20,15 +20,21 @@ func (s *Repository) CreateRefresh(ctx context.Context, in authdomain.RefreshInp
 }
 
 // ClaimRefresh is the rotation core: exactly one caller can flip
-// active -> consumed. nil means the token was not claimable, and the caller
-// then reads it by hash — a consumed one is what theft looks like.
+// active -> consumed.
+//
+// An unclaimable token is an ERROR, not a nil result, and the distinction is
+// the whole of theft detection: the interactor reads `err != nil` as "claim
+// failed" and responds by revoking the family. Returning (nil, nil) instead
+// let the rotation fall through to the next line and dereference the nil —
+// so a stolen token produced a panic and NO family revocation, which is
+// precisely the hole this path exists to close.
 func (s *Repository) ClaimRefresh(ctx context.Context, hash []byte) (*authdomain.RefreshClaim, error) {
 	row, ok, err := authrquery.ClaimRefreshToken.One(ctx, s.ex(ctx), hash)
 	if err != nil {
 		return nil, database.MapErr(err)
 	}
 	if !ok {
-		return nil, nil
+		return nil, database.NotFound()
 	}
 	return &authdomain.RefreshClaim{
 		ID: row.ID, SessionID: row.SessionID, TenantID: row.TenantID,

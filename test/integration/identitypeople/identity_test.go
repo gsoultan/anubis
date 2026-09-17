@@ -195,7 +195,7 @@ func TestDisableAndEnableAreGuarded(t *testing.T) {
 // Right-to-erasure: the identifiers are blanked and the epoch bumped in ONE
 // statement. Blanking without bumping would leave live tokens for a person who
 // no longer exists.
-func TestAnonymizeIsAtomicAndIdempotent(t *testing.T) {
+func TestAnonymizeIsAtomicAndRefusesARepeat(t *testing.T) {
 	r := repo(t)
 	ctx := context.Background()
 	id := newIdentity(t, r, fmt.Sprintf("zzanon%d", time.Now().UnixNano()%1_000_000))
@@ -225,9 +225,12 @@ func TestAnonymizeIsAtomicAndIdempotent(t *testing.T) {
 			before.TokenEpoch, after.TokenEpoch)
 	}
 
-	// A second erasure is the requested outcome already being true.
-	if _, err := r.Anonymize(ctx, tenant, id); err != nil {
-		t.Fatalf("a second erasure errored: %v", err)
+	// A second erasure is an ERROR, not a quiet success. The caller emits an
+	// identity.erased audit event on the non-error path, and that record is
+	// the compliance evidence — a second "erased" entry for an erasure that
+	// did not happen is a false entry in the trail.
+	if _, err := r.Anonymize(ctx, tenant, id); err == nil {
+		t.Fatal("a second erasure reported success, which would log a second identity.erased event")
 	}
 }
 

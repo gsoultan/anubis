@@ -49,8 +49,11 @@ func (s *Repository) Anonymize(ctx context.Context, tenantID, identityID string)
 		return "", database.MapErr(err)
 	}
 	if !ok {
-		// Already anonymised: the requested outcome is the current state.
-		return "", nil
+		// Already anonymised is an ERROR, not a quiet success. The caller
+		// emits an identity.erased audit event on the non-error path, and
+		// that record is the compliance evidence — writing one for an
+		// erasure that did not happen puts a false entry in the trail.
+		return "", database.NotFound()
 	}
 	return nstr(row.PiiKeyID), nil
 }

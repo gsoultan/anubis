@@ -127,11 +127,11 @@ func TestClaimRefreshIsSingleUse(t *testing.T) {
 	if first == nil {
 		t.Fatal("the first claim of a live token failed")
 	}
-	second, err := r.ClaimRefresh(ctx, h)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if second != nil {
+	// An unclaimable token is an ERROR, and that is the contract theft
+	// detection is built on: the interactor reads err != nil as "claim
+	// failed" and responds by revoking the family. A nil-without-error would
+	// fall through and be treated as a successful rotation.
+	if _, err := r.ClaimRefresh(ctx, h); err == nil {
 		t.Fatal("a refresh token was claimed twice — the rotation guard is not guarding")
 	}
 
@@ -182,11 +182,7 @@ func TestRevokeRefreshFamilyKillsEveryGeneration(t *testing.T) {
 			t.Fatalf("generation %d reads %+v after a family revocation", i, info)
 		}
 		// And none of them can be claimed.
-		claim, err := r.ClaimRefresh(ctx, h)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if claim != nil {
+		if _, err := r.ClaimRefresh(ctx, h); err == nil {
 			t.Fatalf("a revoked token (generation %d) was still claimable", i)
 		}
 	}
@@ -222,12 +218,11 @@ func TestRevokeSessionClearsTheCookie(t *testing.T) {
 		t.Fatal("a revoked session's cookie still resolves")
 	}
 
-	// A second revocation changes nothing and says so.
-	again, err := r.RevokeSession(ctx, tenant, sess.ID, "test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if again != nil {
+	// A second revocation is an ERROR. Every caller reads err == nil as "it
+	// was really revoked, now do the follow-up", and the logout path
+	// dereferences the returned row to check ownership — so a
+	// nil-without-error panics there and skips that check.
+	if _, err := r.RevokeSession(ctx, tenant, sess.ID, "test"); err == nil {
 		t.Fatal("a session was revoked twice")
 	}
 }

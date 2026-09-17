@@ -72,15 +72,21 @@ func (s *Repository) SessionsByIdentity(ctx context.Context, identityID string) 
 }
 
 // RevokeSession ends one session and clears its cookie hash in the same
-// statement. nil means it was already revoked, which the caller distinguishes
-// from an error.
+// statement.
+//
+// A session that was already revoked is an ERROR, not a nil result. Every
+// caller reads `err == nil` as "it was really revoked, now do the follow-up" —
+// revoke its refresh tokens, check that it belonged to the caller — and the
+// logout path dereferences the returned row to make that ownership check.
+// Returning (nil, nil) made an already-revoked session panic there instead,
+// which skipped the ownership check on the way past.
 func (s *Repository) RevokeSession(ctx context.Context, tenantID, id, reason string) (*authdomain.RevokedSession, error) {
 	row, ok, err := authrquery.RevokeSession.One(ctx, s.ex(ctx), id, tenantID, reason)
 	if err != nil {
 		return nil, database.MapErr(err)
 	}
 	if !ok {
-		return nil, nil
+		return nil, database.NotFound()
 	}
 	return &authdomain.RevokedSession{
 		ID: row.ID, IdentityID: row.IdentityID,
