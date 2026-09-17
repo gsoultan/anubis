@@ -68,8 +68,15 @@ The storm executor and the uuid conversions moved to `platform/database`. They
 are plumbing, not policy, and one copy per context is one copy per context to
 forget when `database.Conn` grows a third producer.
 
-**Still sqlc:** identity, auth, scope, tenancy, gate, control, platform. The
-registry in `cmd/stormgen` is the record of how far this has got.
+The **control** context followed on the same pattern (2026-09-17): four tables
+it exclusively owns, builders for the CRUD, and raw declarations for the joins
+and for the guarded updates that set a SERVER-side expression — `revoked_at =
+now()` is not the same fact on a client clock, and `token_epoch = token_epoch +
+1` computed in Go is a read-modify-write that loses an increment under two
+concurrent disables. storm's `Mut` takes values, not expressions.
+
+**Still sqlc:** identity, auth, scope, tenancy, gate, platform. The registry in
+`cmd/stormgen` is the record of how far this has got.
 
 ## §5 Amendment (2026-08-25): storm in the authz context
 

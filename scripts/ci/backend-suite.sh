@@ -29,7 +29,7 @@ go run ./cmd/anubisd migrate
 # output path and hands storm only THAT context's models, so a query cannot
 # compile against a table its context does not own. Add a line when a context
 # moves off sqlc.
-for ctx in authz audit; do
+for ctx in authz audit control; do
   go run ./cmd/stormgen generate "internal/$ctx/adapter/postgres/rgen" \
     -raw-schema live -dsn "$ANUBIS_DB_URL" >/dev/null
 done

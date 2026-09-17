@@ -25,6 +25,8 @@ import (
 	auditrquery "github.com/gsoultan/anubis/internal/audit/adapter/postgres/rquery"
 	authzrmodel "github.com/gsoultan/anubis/internal/authz/adapter/postgres/rmodel"
 	authzrquery "github.com/gsoultan/anubis/internal/authz/adapter/postgres/rquery"
+	controlrmodel "github.com/gsoultan/anubis/internal/control/adapter/postgres/rmodel"
+	controlrquery "github.com/gsoultan/anubis/internal/control/adapter/postgres/rquery"
 	"github.com/gsoultan/storm"
 	"github.com/gsoultan/storm/tool"
 )
@@ -39,8 +41,9 @@ type declarations struct {
 // rmodel/rquery pair; the ones still on sqlc are absent, which is the whole
 // record of how far the migration has got.
 var contexts = map[string]declarations{
-	"authz": {authzrmodel.All(), authzrquery.Queries()},
-	"audit": {auditrmodel.All(), auditrquery.Queries()},
+	"authz":   {authzrmodel.All(), authzrquery.Queries()},
+	"audit":   {auditrmodel.All(), auditrquery.Queries()},
+	"control": {controlrmodel.All(), controlrquery.Queries()},
 }
 
 func main() {
