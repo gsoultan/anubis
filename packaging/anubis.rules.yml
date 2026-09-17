@@ -1,0 +1,222 @@
+# Prometheus alerting rules for Anubis.
+#
+# These are the rules documented in docs/alerting.md, in a form something can
+# actually load. The table was the specification and nothing had ever parsed
+# it — a rule naming a metric that does not exist never fires, and the place
+# you discover that is the incident it was written for.
+#
+# Every metric name and every label selector below was checked against a live
+# `/metrics` scrape before this file was committed. `promtool check rules`
+# runs in CI.
+#
+# Load it next to a scrape of the DEBUG listener (ANUBIS_DEBUG_LISTEN), not the
+# public API port:
+#
+#   rule_files:
+#     - anubis.rules.yml
+#   scrape_configs:
+#     - job_name: anubis
+#       static_configs:
+#         - targets: ['127.0.0.1:7450']
+#
+# Severity is the pager/dashboard split docs/alerting.md already draws:
+# `page` means wake somebody, `warn` means look at it in the morning.
+
+groups:
+  - name: anubis.page
+    rules:
+      - alert: AnubisAuditLogIncomplete
+        expr: increase(anubis_audit_dropped_total{action!="authorize"}[15m]) > 0
+        labels:
+          severity: page
+        annotations:
+          summary: 'Audit event dropped ({{ $labels.action }})'
+          description: >-
+            An audit event could not be written, so the log a regulator reads
+            now has a hole in it and the only other record is a log line. The
+            action label says which call; the server's error log says why.
+            Treat as an incident: a trail that silently loses entries is worse
+            than one that is visibly broken.
+          runbook: docs/alerting.md#page-immediately
+
+      - alert: AnubisAuthorizeOutrunningAuditWriter
+        expr: increase(anubis_audit_dropped_total{action="authorize"}[15m]) > 0
+        labels:
+          severity: page
+        annotations:
+          summary: 'Authorize decisions outrunning the audit writer'
+          description: >-
+            Capacity, not correctness. authorize is the one action allowed to
+            drop rather than block, because back-pressure there would turn a
+            slow database into a slow authorize(). Check database write latency
+            before assuming the rate is the problem.
+          runbook: docs/alerting.md#page-immediately
+
+      - alert: AnubisRefreshTokenReuse
+        expr: increase(anubis_audit_events_total{action="token.reuse_detected"}[5m]) > 0
+        labels:
+          severity: page
+        annotations:
+          summary: 'Refresh token reuse detected — a token was stolen'
+          description: >-
+            The highest-signal event in the system: a consumed refresh token
+            was replayed. Anubis has already revoked the family and the
+            session; the remaining work is establishing blast radius.
+          runbook: docs/operations.md#incident-refresh-token-reuse
+
+      # Match ANUBIS_SNAPSHOT_MAX_AGE if it is not the 300s default.
+      - alert: AnubisGateSnapshotStale
+        expr: time() - anubis_gate_snapshot_loaded_timestamp_seconds > 300
+        labels:
+          severity: page
+        annotations:
+          summary: 'Gate snapshot stale for {{ $labels.tenant }}'
+          description: >-
+            Past max age the gate fails closed, so this instance is denying
+            traffic it should allow. /readyz fails too, so the balancer should
+            already be pulling it — this alert is the "why did readiness fail"
+            answer. Check database connectivity and the `snapshot load failed`
+            log line.
+          runbook: docs/alerting.md#page-immediately
+
+      - alert: AnubisInternalErrorRate
+        expr: sum(rate(anubis_endpoint_requests_total{code="internal"}[5m])) > 0.1
+        labels:
+          severity: page
+        annotations:
+          summary: 'Internal errors on the API'
+          description: >-
+            Internal means a bug or a dependency down, never a caller mistake.
+            Correlate with request_id in the logs.
+          runbook: docs/alerting.md#page-immediately
+
+      - alert: AnubisMaintenanceJobFailing
+        expr: increase(anubis_job_runs_total{result="error"}[2h]) > 1
+        labels:
+          severity: page
+        annotations:
+          summary: 'Maintenance job {{ $labels.maintenance_job }} failing'
+          description: >-
+            partitions failing means rows land in the DEFAULT partition;
+            retention failing means PII outlives its deadline;
+            signing_key_expiry failing means nobody is watching key age.
+          runbook: docs/operations.md#maintenance-jobs
+
+  - name: anubis.warn
+    rules:
+      - alert: AnubisCredentialGuessingPressure
+        expr: sum by (endpoint) (rate(anubis_endpoint_requests_total{code="rate_limited"}[15m])) > 1
+        labels:
+          severity: warn
+        annotations:
+          summary: 'Sustained rate limiting on {{ $labels.endpoint }}'
+          description: >-
+            The limiter is doing its job; sustained pressure on auth.login or
+            platform.login is a campaign, not noise. Platform accounts are few
+            and named — check WHICH account in the logs.
+          runbook: docs/alerting.md#warn
+
+      - alert: AnubisLoginLatencyShift
+        expr: histogram_quantile(0.95, rate(anubis_endpoint_duration_seconds_bucket{endpoint="auth.login"}[15m])) > 0.2
+        labels:
+          severity: warn
+        annotations:
+          summary: 'Login p95 past 200 ms'
+          description: >-
+            Login is KDF-dominated (~50 ms) by design. A p95 past 200 ms means
+            pool saturation or database pressure — not something to "fix" by
+            weakening the KDF.
+          runbook: docs/alerting.md#warn
+
+      - alert: AnubisAuthorizeLatencyBudget
+        expr: histogram_quantile(0.95, rate(anubis_endpoint_duration_seconds_bucket{endpoint="authz.authorize"}[15m])) > 0.002
+        labels:
+          severity: warn
+        annotations:
+          summary: 'Authorize p95 past the 2 ms budget'
+          description: >-
+            The enforced budget is p95 < 2 ms. A breach here degrades every
+            consuming application at once.
+          runbook: docs/benchmarks.md
+
+      - alert: AnubisPoolSaturation
+        expr: rate(anubis_db_pool_empty_acquires_total[5m]) > 0
+        labels:
+          severity: warn
+        annotations:
+          summary: 'Callers waiting for database connections'
+          description: >-
+            Check the anubis_db_pool_* gauges against ANUBIS_DB_MAX_CONNS.
+            Size the pool to the database, not to the app.
+          runbook: docs/alerting.md#warn
+
+      - alert: AnubisVersionSkew
+        expr: count(count by (version) (anubis_build_info)) > 1
+        for: 1h
+        labels:
+          severity: warn
+        annotations:
+          summary: 'Two versions serving side by side'
+          description: >-
+            A rollout that never finished, long after a deploy window should
+            have closed.
+          runbook: docs/operations.md#deploying
+
+      # The doc states this one as prose — "rate(rebuilt|verify) == 0 while
+      # result=unchanged is climbing" — because the second half is what makes
+      # it mean anything: a tenant with no refreshes at all is idle, not
+      # broken. Both halves are needed, so both are here.
+      - alert: AnubisSnapshotNeverRebuilds
+        expr: |
+          rate(anubis_gate_snapshot_refresh_total{result=~"rebuilt|verify"}[30m]) == 0
+            and on (tenant)
+          rate(anubis_gate_snapshot_refresh_total{result="unchanged"}[30m]) > 0
+        for: 30m
+        labels:
+          severity: warn
+        annotations:
+          summary: 'Snapshot for {{ $labels.tenant }} is never rebuilt'
+          description: >-
+            The gate skips rebuilding a snapshot whose catalog version has not
+            moved (ADR-0015). A tenant that is NEVER rebuilt is either
+            genuinely idle, or an invalidation trigger was lost and the version
+            stopped moving — which looks identical from outside and means stale
+            authorization. The periodic verify rebuild bounds this to one
+            max-age window, so its absence is the signal.
+          runbook: docs/adr/0015-scope-hierarchy-at-scale.md
+
+      - alert: AnubisSnapshotLoadFailing
+        expr: rate(anubis_gate_snapshot_refresh_total{result="failed"}[15m]) > 0
+        labels:
+          severity: warn
+        annotations:
+          summary: 'Snapshot load failing for {{ $labels.tenant }}'
+          description: >-
+            The instance is serving the previous snapshot (fail-static) and
+            will fail closed once it passes max age. This fires BEFORE the
+            staleness page and names the tenant.
+          runbook: docs/alerting.md#warn
+
+      # Absence of success, not a count of failures: a source on a daily
+      # interval fails once a day, so a threshold on failures alone would never
+      # fire for it. Same shape as AnubisSnapshotNeverRebuilds, same reason.
+      - alert: AnubisStructureSyncFailing
+        expr: |
+          rate(anubis_scope_sync_runs_total{result="ok"}[6h]) == 0
+            and on (axis)
+          rate(anubis_scope_sync_runs_total{result="failed"}[6h]) > 0
+        for: 30m
+        labels:
+          severity: warn
+        annotations:
+          summary: 'Structure sync failing for axis {{ $labels.axis }}'
+          description: >-
+            A structure on a clock has been failing and has not succeeded once
+            in six hours. The tree the console shows is whatever the last good
+            sync left behind, and the access granted on it keeps working — a
+            department HR deleted is still a node, and the grants on it still
+            decide. NOT covered by AnubisMaintenanceJobFailing: RunDue returns
+            nil when a source fails so one bad feed cannot stop every other
+            tenant's, which leaves anubis_job_runs_total{job="scope_sync"} on
+            ok however many sources are broken.
+          runbook: docs/operations.md#maintenance-jobs

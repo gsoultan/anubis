@@ -102,7 +102,14 @@ func IncAuditDropped(action string) {
 	counter(key("audit_dropped", action)).Add(1)
 }
 
-// IncJob counts a maintenance job run by outcome: ok, error, or skipped
+// IncJob counts a maintenance job run by outcome: ok, error, or skipped.
+//
+// Exposed as the label `maintenance_job`, not `job`. Prometheus reserves `job`
+// and `instance` for the scrape target: an exporter that emits its own `job`
+// gets it silently renamed to `exported_job`, so every query and annotation
+// written against `job` matches the SCRAPE job name instead — which is to say
+// the alert that exists to name the failing job names the wrong thing, and
+// looks fine doing it.
 // (another replica held the advisory lock — normal, not a failure).
 func IncJob(job, result string) {
 	counter(key("job", job, result)).Add(1)
