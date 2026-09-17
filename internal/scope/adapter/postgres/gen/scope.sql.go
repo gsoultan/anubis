@@ -273,10 +273,12 @@ func (q *Queries) GetScopeAxis(ctx context.Context, code string) (GetScopeAxisRo
 }
 
 const getScopeNode = `-- name: GetScopeNode :one
-SELECT id, tenant_id, parent_id, is_axis_root, status, axis_code, node_type,
-       slug, name, external_ref
-FROM scope_nodes
-WHERE id = $1 AND tenant_id = $2
+SELECT n.id, n.tenant_id, n.parent_id, n.is_axis_root, n.status, n.axis_code,
+       n.node_type, n.slug, n.name, n.external_ref,
+       (SELECT count(*) FROM scope_nodes c
+         WHERE c.parent_id = n.id AND c.status = 'active')::int AS child_count
+FROM scope_nodes n
+WHERE n.id = $1 AND n.tenant_id = $2
 `
 
 type GetScopeNodeParams struct {
@@ -295,6 +297,7 @@ type GetScopeNodeRow struct {
 	Slug        string
 	Name        string
 	ExternalRef *string
+	ChildCount  int32
 }
 
 func (q *Queries) GetScopeNode(ctx context.Context, arg GetScopeNodeParams) (GetScopeNodeRow, error) {
@@ -311,16 +314,19 @@ func (q *Queries) GetScopeNode(ctx context.Context, arg GetScopeNodeParams) (Get
 		&i.Slug,
 		&i.Name,
 		&i.ExternalRef,
+		&i.ChildCount,
 	)
 	return i, err
 }
 
 const getScopeNodeByRef = `-- name: GetScopeNodeByRef :one
-SELECT id, tenant_id, parent_id, is_axis_root, status, axis_code, node_type,
-       slug, name, external_ref
-FROM scope_nodes
-WHERE tenant_id = $1 AND axis_code = $2
-  AND external_ref = $3
+SELECT n.id, n.tenant_id, n.parent_id, n.is_axis_root, n.status, n.axis_code,
+       n.node_type, n.slug, n.name, n.external_ref,
+       (SELECT count(*) FROM scope_nodes c
+         WHERE c.parent_id = n.id AND c.status = 'active')::int AS child_count
+FROM scope_nodes n
+WHERE n.tenant_id = $1 AND n.axis_code = $2
+  AND n.external_ref = $3
 `
 
 type GetScopeNodeByRefParams struct {
@@ -340,6 +346,7 @@ type GetScopeNodeByRefRow struct {
 	Slug        string
 	Name        string
 	ExternalRef *string
+	ChildCount  int32
 }
 
 func (q *Queries) GetScopeNodeByRef(ctx context.Context, arg GetScopeNodeByRefParams) (GetScopeNodeByRefRow, error) {
@@ -356,6 +363,7 @@ func (q *Queries) GetScopeNodeByRef(ctx context.Context, arg GetScopeNodeByRefPa
 		&i.Slug,
 		&i.Name,
 		&i.ExternalRef,
+		&i.ChildCount,
 	)
 	return i, err
 }
@@ -479,27 +487,31 @@ func (q *Queries) ListScopeNodeTypes(ctx context.Context, axisCode *string) ([]S
 }
 
 const listScopeNodes = `-- name: ListScopeNodes :many
-SELECT id, tenant_id, parent_id, is_axis_root, status, axis_code, node_type,
-       slug, name, external_ref
-FROM scope_nodes
-WHERE tenant_id = $1
-  AND axis_code = $2
-  AND ($3::uuid IS NULL OR parent_id = $3)
-  AND ($4::text IS NULL OR name ILIKE '%' || $4 || '%')
-  AND ($5::boolean OR status = 'active')
+SELECT n.id, n.tenant_id, n.parent_id, n.is_axis_root, n.status, n.axis_code,
+       n.node_type, n.slug, n.name, n.external_ref,
+       (SELECT count(*) FROM scope_nodes c
+         WHERE c.parent_id = n.id
+           AND ($1::boolean OR c.status = 'active'))::int
+         AS child_count
+FROM scope_nodes n
+WHERE n.tenant_id = $2
+  AND n.axis_code = $3
+  AND ($4::uuid IS NULL OR n.parent_id = $4)
+  AND ($5::text IS NULL OR n.name ILIKE '%' || $5 || '%')
+  AND ($1::boolean OR n.status = 'active')
   AND ($6::text IS NULL
-       OR name > $6::text
-       OR (name = $6::text AND id > $7::uuid))
-ORDER BY name, id
+       OR n.name > $6::text
+       OR (n.name = $6::text AND n.id > $7::uuid))
+ORDER BY n.name, n.id
 LIMIT $8
 `
 
 type ListScopeNodesParams struct {
+	IncludeArchived bool
 	TenantID        string
 	AxisCode        string
 	ParentID        *string
 	Query           *string
-	IncludeArchived bool
 	AfterName       *string
 	AfterID         *string
 	Lim             int32
@@ -516,6 +528,7 @@ type ListScopeNodesRow struct {
 	Slug        string
 	Name        string
 	ExternalRef *string
+	ChildCount  int32
 }
 
 // KEYSET paging, ordered by (name, id). Resume by passing the last row's
@@ -524,13 +537,20 @@ type ListScopeNodesRow struct {
 // skips, and it drops or repeats rows when a sync inserts ahead of the
 // cursor. name is not unique, which is why id is in both the ORDER BY and
 // the comparison. Index: scope_nodes_paging (migration 0039).
+//
+// child_count is what the expand affordance is drawn from, so it counts the
+// children THIS CALL would return -- same include_archived, same tenant. A
+// count that disagreed with the listing would draw a chevron that expands to
+// nothing, or hide one that had children behind it. Costs a per-row index
+// scan on scope_nodes_sibling_slug (parent_id, slug): measured 0.154 ms ->
+// 0.393 ms for a 200-row page of the 20k-node customer axis.
 func (q *Queries) ListScopeNodes(ctx context.Context, arg ListScopeNodesParams) ([]ListScopeNodesRow, error) {
 	rows, err := q.db.Query(ctx, listScopeNodes,
+		arg.IncludeArchived,
 		arg.TenantID,
 		arg.AxisCode,
 		arg.ParentID,
 		arg.Query,
-		arg.IncludeArchived,
 		arg.AfterName,
 		arg.AfterID,
 		arg.Lim,
@@ -553,6 +573,7 @@ func (q *Queries) ListScopeNodes(ctx context.Context, arg ListScopeNodesParams) 
 			&i.Slug,
 			&i.Name,
 			&i.ExternalRef,
+			&i.ChildCount,
 		); err != nil {
 			return nil, err
 		}
@@ -819,10 +840,12 @@ func (q *Queries) ScopeAncestors(ctx context.Context, arg ScopeAncestorsParams) 
 }
 
 const scopeNodesByIDs = `-- name: ScopeNodesByIDs :many
-SELECT id, tenant_id, parent_id, is_axis_root, status, axis_code, node_type,
-       slug, name, external_ref
-FROM scope_nodes
-WHERE tenant_id = $1 AND id = ANY($2::uuid[])
+SELECT n.id, n.tenant_id, n.parent_id, n.is_axis_root, n.status, n.axis_code,
+       n.node_type, n.slug, n.name, n.external_ref,
+       (SELECT count(*) FROM scope_nodes c
+         WHERE c.parent_id = n.id AND c.status = 'active')::int AS child_count
+FROM scope_nodes n
+WHERE n.tenant_id = $1 AND n.id = ANY($2::uuid[])
 `
 
 type ScopeNodesByIDsParams struct {
@@ -841,6 +864,7 @@ type ScopeNodesByIDsRow struct {
 	Slug        string
 	Name        string
 	ExternalRef *string
+	ChildCount  int32
 }
 
 // ScopeNodesByIDs resolves a HANDFUL of nodes by id — the names beside the
@@ -866,6 +890,7 @@ func (q *Queries) ScopeNodesByIDs(ctx context.Context, arg ScopeNodesByIDsParams
 			&i.Slug,
 			&i.Name,
 			&i.ExternalRef,
+			&i.ChildCount,
 		); err != nil {
 			return nil, err
 		}

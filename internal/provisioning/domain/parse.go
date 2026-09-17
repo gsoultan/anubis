@@ -163,6 +163,17 @@ func parseGrants(spec schema.SheetSpec, idx schema.HeaderIndex, t Table, issues 
 			inherit = v
 		}
 
+		exclude := false
+		if raw := idx.Value(cells, schema.ColScopeExclude); raw != "" {
+			v, err := parseBool(raw)
+			if err != nil {
+				issues = append(issues, RowIssue{Sheet: spec.Name, Row: line,
+					Column: schema.ColScopeExclude, Message: "must be true or false"})
+				bad = true
+			}
+			exclude = v
+		}
+
 		validUntilRaw := idx.Value(cells, schema.ColValidUntil)
 		if validUntilRaw != "" {
 			until, err := parseDate(validUntilRaw)
@@ -194,7 +205,8 @@ func parseGrants(spec schema.SheetSpec, idx schema.HeaderIndex, t Table, issues 
 			existing.Rows = append(existing.Rows, line)
 		}
 		if axis != "" && !hasScope(existing.Scopes, axis, ref) {
-			existing.Scopes = append(existing.Scopes, row.GrantScope{Axis: axis, Ref: ref, Inherit: inherit})
+			existing.Scopes = append(existing.Scopes, row.GrantScope{
+				Axis: axis, Ref: ref, Inherit: inherit, Exclude: exclude})
 		}
 	}
 

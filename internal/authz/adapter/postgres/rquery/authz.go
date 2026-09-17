@@ -83,12 +83,17 @@ type StrictSimRow struct {
 	Allow bool
 }
 
-// AuthorizeStrictSim is the 0013 decision with ONE axis hypothetically flipped
+// AuthorizeStrictSim is the 0046 decision with ONE axis hypothetically flipped
 // to default_effect='deny', so the report can be produced without touching
-// scope_axes. Kept textually parallel to migrations/0013 — if that file
+// scope_axes. Kept textually parallel to migrations/0046 — if that file
 // changes, this must change with it (the integration suite asserts parity for
 // the axis-unchanged case). $1 identity, $2 tenant, $3 permission (nullable),
 // $4 targets jsonb, $5 strict axis.
+//
+// The dry run is the report an operator reads before making an axis strict,
+// so it must count an exclusion the way the live engine will. Left on 0013's
+// includes-only aggregate it would have reported allows that the real
+// authorize() denies — the one number the report exists to get right.
 var AuthorizeStrictSim = storm.SQL[StrictSimRow](`
 WITH targets AS MATERIALIZED (
     SELECT t.key AS axis_code, t.value::uuid AS node_id
@@ -116,14 +121,19 @@ candidates AS (
        AND p.min_assurance <= i.assurance_level
 ),
 axis_eval AS (
+    -- 0 an exclude covers the target, 1 an include covers it, 2 silent.
+    -- min = 1 is "included and not excluded". See migrations/0046.
     SELECT gs.grant_id, gs.axis_code,
-           bool_or(EXISTS (SELECT 1
-                     FROM targets t
-                     JOIN scope_closure c
-                       ON c.descendant_id = t.node_id
-                      AND c.ancestor_id   = gs.scope_node_id
-                    WHERE t.axis_code = gs.axis_code
-                      AND (gs.inherit OR c.depth = 0))) AS satisfied
+           min(CASE WHEN NOT EXISTS (SELECT 1
+                         FROM targets t
+                         JOIN scope_closure c
+                           ON c.descendant_id = t.node_id
+                          AND c.ancestor_id   = gs.scope_node_id
+                        WHERE t.axis_code = gs.axis_code
+                          AND (gs.inherit OR c.depth = 0))   THEN 2
+                    WHEN gs.mode = 'exclude'                 THEN 0
+                    ELSE                                          1
+               END) = 1 AS satisfied
       FROM grant_scopes gs JOIN candidates cd ON cd.id = gs.grant_id
      GROUP BY gs.grant_id, gs.axis_code
 )

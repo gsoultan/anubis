@@ -2598,16 +2598,19 @@ func (x *CreateScopeNodeTypeResponse) GetType() *ScopeNodeType {
 }
 
 type ScopeNode struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	Axis          string                 `protobuf:"bytes,2,opt,name=axis,proto3" json:"axis,omitempty"`
-	NodeType      string                 `protobuf:"bytes,3,opt,name=node_type,json=nodeType,proto3" json:"node_type,omitempty"`
-	ParentId      string                 `protobuf:"bytes,4,opt,name=parent_id,json=parentId,proto3" json:"parent_id,omitempty"`
-	Slug          string                 `protobuf:"bytes,5,opt,name=slug,proto3" json:"slug,omitempty"`
-	Name          string                 `protobuf:"bytes,6,opt,name=name,proto3" json:"name,omitempty"`
-	ExternalRef   string                 `protobuf:"bytes,7,opt,name=external_ref,json=externalRef,proto3" json:"external_ref,omitempty"`
-	Status        string                 `protobuf:"bytes,8,opt,name=status,proto3" json:"status,omitempty"`
-	IsAxisRoot    bool                   `protobuf:"varint,9,opt,name=is_axis_root,json=isAxisRoot,proto3" json:"is_axis_root,omitempty"`
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	Id          string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Axis        string                 `protobuf:"bytes,2,opt,name=axis,proto3" json:"axis,omitempty"`
+	NodeType    string                 `protobuf:"bytes,3,opt,name=node_type,json=nodeType,proto3" json:"node_type,omitempty"`
+	ParentId    string                 `protobuf:"bytes,4,opt,name=parent_id,json=parentId,proto3" json:"parent_id,omitempty"`
+	Slug        string                 `protobuf:"bytes,5,opt,name=slug,proto3" json:"slug,omitempty"`
+	Name        string                 `protobuf:"bytes,6,opt,name=name,proto3" json:"name,omitempty"`
+	ExternalRef string                 `protobuf:"bytes,7,opt,name=external_ref,json=externalRef,proto3" json:"external_ref,omitempty"`
+	Status      string                 `protobuf:"bytes,8,opt,name=status,proto3" json:"status,omitempty"`
+	IsAxisRoot  bool                   `protobuf:"varint,9,opt,name=is_axis_root,json=isAxisRoot,proto3" json:"is_axis_root,omitempty"`
+	// How many children this node has. The console gates its expand chevron on
+	// this, so a ScopeNode that does not carry it is a tree that cannot open.
+	ChildCount    int32 `protobuf:"varint,10,opt,name=child_count,json=childCount,proto3" json:"child_count,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2703,6 +2706,13 @@ func (x *ScopeNode) GetIsAxisRoot() bool {
 		return x.IsAxisRoot
 	}
 	return false
+}
+
+func (x *ScopeNode) GetChildCount() int32 {
+	if x != nil {
+		return x.ChildCount
+	}
+	return 0
 }
 
 type ListScopeNodesRequest struct {
@@ -5784,12 +5794,24 @@ func (x *ListPermissionsResponse) GetPermissions() []*Permission {
 	return nil
 }
 
+// One place on one axis, and what the grant does with it.
+//
+// `exclude` is a bool and not a mode string on purpose. proto3's zero value
+// has to BE the safe reading, and a client that has never heard of exclusions
+// sends false — an include, exactly what it meant. A string field would leave
+// two ways to get this wrong: reject "" and break every old client, or coerce
+// "" to include and coerce a misspelt "exlcude" along with it, turning a
+// carve-out into a widening with no error anywhere. There is no string to
+// misspell here.
 type GrantScope struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Axis          string                 `protobuf:"bytes,1,opt,name=axis,proto3" json:"axis,omitempty"`
-	NodeId        string                 `protobuf:"bytes,2,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
-	NodeName      string                 `protobuf:"bytes,3,opt,name=node_name,json=nodeName,proto3" json:"node_name,omitempty"`
-	Inherit       bool                   `protobuf:"varint,4,opt,name=inherit,proto3" json:"inherit,omitempty"`
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	Axis     string                 `protobuf:"bytes,1,opt,name=axis,proto3" json:"axis,omitempty"`
+	NodeId   string                 `protobuf:"bytes,2,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	NodeName string                 `protobuf:"bytes,3,opt,name=node_name,json=nodeName,proto3" json:"node_name,omitempty"`
+	Inherit  bool                   `protobuf:"varint,4,opt,name=inherit,proto3" json:"inherit,omitempty"`
+	// Carved out of this grant's includes on the same axis — and out of no
+	// other grant. See ADR-0004.
+	Exclude       bool `protobuf:"varint,5,opt,name=exclude,proto3" json:"exclude,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -5848,6 +5870,13 @@ func (x *GrantScope) GetNodeName() string {
 func (x *GrantScope) GetInherit() bool {
 	if x != nil {
 		return x.Inherit
+	}
+	return false
+}
+
+func (x *GrantScope) GetExclude() bool {
+	if x != nil {
+		return x.Exclude
 	}
 	return false
 }
@@ -14332,7 +14361,7 @@ const file_anubis_v1_admin_proto_rawDesc = "" +
 	"\x1aCreateScopeNodeTypeRequest\x12,\n" +
 	"\x04type\x18\x01 \x01(\v2\x18.anubis.v1.ScopeNodeTypeR\x04type\"K\n" +
 	"\x1bCreateScopeNodeTypeResponse\x12,\n" +
-	"\x04type\x18\x01 \x01(\v2\x18.anubis.v1.ScopeNodeTypeR\x04type\"\xee\x01\n" +
+	"\x04type\x18\x01 \x01(\v2\x18.anubis.v1.ScopeNodeTypeR\x04type\"\x8f\x02\n" +
 	"\tScopeNode\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04axis\x18\x02 \x01(\tR\x04axis\x12\x1b\n" +
@@ -14343,7 +14372,10 @@ const file_anubis_v1_admin_proto_rawDesc = "" +
 	"\fexternal_ref\x18\a \x01(\tR\vexternalRef\x12\x16\n" +
 	"\x06status\x18\b \x01(\tR\x06status\x12 \n" +
 	"\fis_axis_root\x18\t \x01(\bR\n" +
-	"isAxisRoot\"\xc5\x01\n" +
+	"isAxisRoot\x12\x1f\n" +
+	"\vchild_count\x18\n" +
+	" \x01(\x05R\n" +
+	"childCount\"\xc5\x01\n" +
 	"\x15ListScopeNodesRequest\x12\x12\n" +
 	"\x04axis\x18\x01 \x01(\tR\x04axis\x12\x1b\n" +
 	"\tparent_id\x18\x02 \x01(\tR\bparentId\x12\x14\n" +
@@ -14562,13 +14594,14 @@ const file_anubis_v1_admin_proto_rawDesc = "" +
 	"\x10application_slug\x18\x01 \x01(\tR\x0fapplicationSlug\x12-\n" +
 	"\x12include_deprecated\x18\x02 \x01(\bR\x11includeDeprecated\"R\n" +
 	"\x17ListPermissionsResponse\x127\n" +
-	"\vpermissions\x18\x01 \x03(\v2\x15.anubis.v1.PermissionR\vpermissions\"p\n" +
+	"\vpermissions\x18\x01 \x03(\v2\x15.anubis.v1.PermissionR\vpermissions\"\x8a\x01\n" +
 	"\n" +
 	"GrantScope\x12\x12\n" +
 	"\x04axis\x18\x01 \x01(\tR\x04axis\x12\x17\n" +
 	"\anode_id\x18\x02 \x01(\tR\x06nodeId\x12\x1b\n" +
 	"\tnode_name\x18\x03 \x01(\tR\bnodeName\x12\x18\n" +
-	"\ainherit\x18\x04 \x01(\bR\ainherit\"\x80\x03\n" +
+	"\ainherit\x18\x04 \x01(\bR\ainherit\x12\x18\n" +
+	"\aexclude\x18\x05 \x01(\bR\aexclude\"\x80\x03\n" +
 	"\x05Grant\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1f\n" +
 	"\videntity_id\x18\x02 \x01(\tR\n" +

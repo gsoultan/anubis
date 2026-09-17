@@ -40,7 +40,7 @@ func (s *Repository) GrantScopes(ctx context.Context, grantIDs []string) ([]gran
 	for _, r := range rows {
 		out = append(out, grant.GrantScopeRecord{
 			GrantID: r.GrantID, Axis: r.AxisCode, NodeID: r.ScopeNodeID,
-			NodeName: r.NodeName, Inherit: r.Inherit,
+			NodeName: r.NodeName, Inherit: r.Inherit, Exclude: r.Exclude,
 		})
 	}
 	return out, nil
@@ -61,7 +61,7 @@ func (s *Repository) CreateGrant(ctx context.Context, in grant.GrantCreate) (str
 		id = row.ID
 		for _, sc := range in.Scopes {
 			if _, err := authzrquery.InsertGrantScope.Exec(ctx, s.rex(ctx),
-				id, in.TenantID, sc.Axis, sc.NodeID, sc.Inherit); err != nil {
+				id, in.TenantID, sc.Axis, sc.NodeID, sc.Inherit, sc.Exclude); err != nil {
 				return database.MapErr(err)
 			}
 		}

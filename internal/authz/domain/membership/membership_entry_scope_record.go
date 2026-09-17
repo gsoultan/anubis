@@ -6,4 +6,5 @@ type MembershipEntryScopeRecord struct {
 	NodeID   string
 	NodeName string
 	Inherit  bool
+	Exclude  bool
 }

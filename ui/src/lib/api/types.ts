@@ -79,7 +79,10 @@ export interface ScopeNode {
   /** Display metadata only. Never a decision input -- see ADR-0003. */
   attributes: Record<string, unknown>
   /** Denormalised for tree rendering; not authoritative. */
-  child_count?: number
+  /** Children this node has. NOT optional: the tree gates its expand chevron
+      on it, and an undefined that quietly reads as 0 is a tree that will not
+      open — which is exactly how it shipped. */
+  child_count: number
 }
 
 export interface RealmCategory {
@@ -143,11 +146,14 @@ export interface Role {
   deprecated: boolean
 }
 
-/** One axis constraint on a grant. `inherit` is per-axis, not per-grant. */
+/** One axis constraint on a grant. `inherit` is per-axis, not per-grant.
+    `exclude` carves this place back out of the includes on the SAME axis of
+    the SAME grant — it has no reach over any other grant. */
 export interface GrantScope {
   axis_code: string
   scope_node_id: Uuid
   inherit: boolean
+  exclude: boolean
 }
 
 export interface MembershipEntry {
@@ -205,6 +211,7 @@ export interface AuthorizeRequest {
 export type DenyReason =
   | 'no_grant'
   | 'scope_mismatch'
+  | 'scope_excluded'
   | 'axis_unresolved'
   | 'strict_axis_unaddressed'
   | 'assurance_too_low'
@@ -221,7 +228,7 @@ export interface AxisVerdict {
   granted_node_id: Uuid | null
   granted_node_name: string | null
   /** All nodes granted on this axis (OR semantics): the matched one flagged. */
-  granted_nodes?: { id: Uuid; name: string | null; matched: boolean; inherit: boolean }[]
+  granted_nodes?: { id: Uuid; name: string | null; matched: boolean; inherit: boolean; exclude: boolean }[]
   target_node_id: Uuid | null
   target_node_name: string | null
   inherit: boolean

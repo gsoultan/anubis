@@ -46,7 +46,25 @@ psql < bench/sync.sql 2>&1 | grep -E 'apply:|renamed applied|archived node|rerun
 
 echo "==> negative (all must be blocked by the schema)"
 psql < bench/negative.sql >"$TMP/neg.log" 2>&1
-echo "    $(grep -c '^ERROR' "$TMP/neg.log")/9 illegal writes rejected"
+# Per CASE, not per ERROR line. The count this replaced was "N/9" against a
+# file that had grown to twenty cases, so it read 21/9 and nobody could tell
+# which case had stopped being checked -- and the failure it has to catch is
+# exactly one case going quiet. That happens without any guard breaking: case
+# 13b matched zero rows on a database with no memberships in it, inserted
+# nothing, committed cleanly and printed nothing. A negative test that passes
+# by doing nothing looks identical to one that passes by being enforced.
+# 8c legitimately errors twice on a rerun, which is why this counts cases
+# with no error rather than errors.
+unguarded=$(awk '/^--- /{if (c != "" && n == 0) print c; c=$0; n=0}
+                 /^ERROR/{n++}
+                 END{if (c != "" && n == 0) print c}' "$TMP/neg.log")
+cases=$(grep -c '^--- ' "$TMP/neg.log")
+if [ -n "$unguarded" ]; then
+  echo "    FAIL: illegal writes that were NOT rejected:"
+  echo "$unguarded" | sed 's/^/      /'
+else
+  echo "    $cases/$cases illegal writes rejected"
+fi
 
 echo "==> performance"
 psql < bench/final.sql 2>&1 | grep -E "^Time:" | head -1 | sed 's/^/    20k decisions: /'

@@ -94,8 +94,8 @@ VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8,
         CASE WHEN $8 > 0 THEN now() ELSE NULL END)
 RETURNING id::text AS id`)
 	storm.RegisterStatement(`
-INSERT INTO grant_scopes (grant_id, tenant_id, axis_code, scope_node_id, inherit)
-VALUES ($1, $2, $3, $4, $5)`)
+INSERT INTO grant_scopes (grant_id, tenant_id, axis_code, scope_node_id, inherit, mode)
+VALUES ($1, $2, $3, $4, $5, CASE WHEN $6::boolean THEN 'exclude' ELSE 'include' END)`)
 	storm.RegisterStatement(`
 INSERT INTO grants (tenant_id, identity_id, role_id, granted_by, reason,
                     self_scoped, valid_until)
@@ -107,8 +107,8 @@ VALUES ($1, $2, $3)
 RETURNING id::text AS id`)
 	storm.RegisterStatement(`
 INSERT INTO membership_entry_scopes (entry_id, tenant_id, axis_code,
-                                     scope_node_id, inherit)
-VALUES ($1, $2, $3, $4, $5)`)
+                                     scope_node_id, inherit, mode)
+VALUES ($1, $2, $3, $4, $5, CASE WHEN $6::boolean THEN 'exclude' ELSE 'include' END)`)
 	storm.RegisterStatement(`
 INSERT INTO memberships (tenant_id, name, description)
 VALUES ($1, $2, $3)
@@ -279,11 +279,12 @@ SELECT g.id::text AS id, g.identity_id::text AS identity_id, i.username,
 	storm.RegisterStatement(`
 SELECT gs.grant_id::text AS grant_id, gs.axis_code,
        gs.scope_node_id::text AS scope_node_id, gs.inherit,
+       gs.mode = 'exclude' AS exclude,
        sn.name AS node_name
 FROM grant_scopes gs
 JOIN scope_nodes sn ON sn.id = gs.scope_node_id
 WHERE gs.grant_id = ANY($1::uuid[])
-ORDER BY gs.grant_id, gs.axis_code, sn.name`)
+ORDER BY gs.grant_id, gs.axis_code, gs.mode DESC, sn.name`)
 	storm.RegisterStatement(`
 SELECT id::text AS id FROM permissions
 WHERE tenant_id = $1 AND key = $2
@@ -327,10 +328,12 @@ SELECT membership_unassign($1, $2) AS grants_revoked`)
 	storm.RegisterStatement(`
 SELECT mes.entry_id::text AS entry_id, mes.axis_code,
        mes.scope_node_id::text AS scope_node_id, mes.inherit,
+       mes.mode = 'exclude' AS exclude,
        sn.name AS node_name
 FROM membership_entry_scopes mes
 JOIN scope_nodes sn ON sn.id = mes.scope_node_id
-WHERE mes.entry_id = ANY($1::uuid[])`)
+WHERE mes.entry_id = ANY($1::uuid[])
+ORDER BY mes.entry_id, mes.axis_code, mes.mode DESC, sn.name`)
 	storm.RegisterStatement(`
 SELECT p.id::text AS id, p.key, p.app_slug, p.resource, p.action, p.risk,
        p.description, p.min_assurance, p.requires_amr,
@@ -467,14 +470,19 @@ candidates AS (
        AND p.min_assurance <= i.assurance_level
 ),
 axis_eval AS (
+    -- 0 an exclude covers the target, 1 an include covers it, 2 silent.
+    -- min = 1 is "included and not excluded". See migrations/0046.
     SELECT gs.grant_id, gs.axis_code,
-           bool_or(EXISTS (SELECT 1
-                     FROM targets t
-                     JOIN scope_closure c
-                       ON c.descendant_id = t.node_id
-                      AND c.ancestor_id   = gs.scope_node_id
-                    WHERE t.axis_code = gs.axis_code
-                      AND (gs.inherit OR c.depth = 0))) AS satisfied
+           min(CASE WHEN NOT EXISTS (SELECT 1
+                         FROM targets t
+                         JOIN scope_closure c
+                           ON c.descendant_id = t.node_id
+                          AND c.ancestor_id   = gs.scope_node_id
+                        WHERE t.axis_code = gs.axis_code
+                          AND (gs.inherit OR c.depth = 0))   THEN 2
+                    WHEN gs.mode = 'exclude'                 THEN 0
+                    ELSE                                          1
+               END) = 1 AS satisfied
       FROM grant_scopes gs JOIN candidates cd ON cd.id = gs.grant_id
      GROUP BY gs.grant_id, gs.axis_code
 )
@@ -616,7 +624,8 @@ func scanGrantScopeRow(rv [][]byte, r *authzrquery.GrantScopeRow, sl *runtime.Sl
 	r.AxisCode = sl.Str(rv[1])
 	r.ScopeNodeID = sl.Str(rv[2])
 	r.Inherit = runtime.Bool(rv[3])
-	r.NodeName = sl.Str(rv[4])
+	r.Exclude = runtime.Bool(rv[4])
+	r.NodeName = sl.Str(rv[5])
 	return nil
 }
 
@@ -689,7 +698,8 @@ func scanEntryScopeRow(rv [][]byte, r *authzrquery.EntryScopeRow, sl *runtime.Sl
 	r.AxisCode = sl.Str(rv[1])
 	r.ScopeNodeID = sl.Str(rv[2])
 	r.Inherit = runtime.Bool(rv[3])
-	r.NodeName = sl.Str(rv[4])
+	r.Exclude = runtime.Bool(rv[4])
+	r.NodeName = sl.Str(rv[5])
 	return nil
 }
 

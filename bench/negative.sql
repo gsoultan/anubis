@@ -100,3 +100,54 @@ INSERT INTO grants (tenant_id, identity_id, role_id, granted_by)
 SELECT g.tenant_id, g.identity_id, g.role_id, g.granted_by
   FROM grants g WHERE g.revoked_at IS NULL LIMIT 1;
 ROLLBACK;
+
+-- ---------------------------------------------------------------------------
+-- 13. Exclusions (0046). An exclusion is a carve-out of something the grant
+--     already includes. An axis holding only exclusions would read as
+--     "anywhere except here" — a blanket allow wearing a carve-out's clothes,
+--     and on a strict axis the precise defeat of what strict exists to force.
+--     The guard is DEFERRED, so both of these fail at COMMIT, not at INSERT.
+-- ---------------------------------------------------------------------------
+\echo '--- 13. an exclusion on an axis the grant does not include ---'
+BEGIN;
+INSERT INTO grant_scopes (grant_id, tenant_id, axis_code, scope_node_id, mode)
+SELECT g.id, g.tenant_id, n.axis_code, n.id, 'exclude'
+  FROM grants g, scope_nodes n
+ WHERE n.tenant_id = g.tenant_id
+   AND n.axis_code NOT IN (SELECT axis_code FROM grant_scopes WHERE grant_id = g.id)
+ LIMIT 1;
+COMMIT;
+
+-- Builds its own membership rather than looking for one. Written against the
+-- existing tables it inserted zero rows on a database with no memberships in
+-- it, committed cleanly, and printed nothing -- a negative test that passes by
+-- doing nothing is indistinguishable from a guard that works. The failing
+-- COMMIT rolls the fixture back with it.
+\echo '--- 13b. a membership entry that only excludes ---'
+BEGIN;
+WITH pick AS (
+  -- one row that already satisfies every join below, so no step can quietly
+  -- match nothing: picking a tenant first found one with no roles, inserted a
+  -- membership and no entry, and committed.
+  SELECT r.tenant_id, r.id AS role_id, n.axis_code, n.id AS node_id
+    FROM roles r
+    JOIN scope_nodes n ON n.tenant_id = r.tenant_id
+   ORDER BY r.id, n.id
+   LIMIT 1
+), m AS (
+  INSERT INTO memberships (tenant_id, name, description)
+  SELECT tenant_id, '_negtest_exclusion', 'negative suite' FROM pick
+  RETURNING id, tenant_id
+), e AS (
+  INSERT INTO membership_entries (membership_id, tenant_id, role_id)
+  SELECT m.id, m.tenant_id, pick.role_id FROM m, pick
+  RETURNING id, tenant_id
+)
+INSERT INTO membership_entry_scopes (entry_id, tenant_id, axis_code, scope_node_id, mode)
+SELECT e.id, e.tenant_id, pick.axis_code, pick.node_id, 'exclude' FROM e, pick;
+COMMIT;
+
+\echo '--- 13c. a mode that is neither include nor exclude ---'
+INSERT INTO grant_scopes (grant_id, tenant_id, axis_code, scope_node_id, mode)
+SELECT gs.grant_id, gs.tenant_id, gs.axis_code, gs.scope_node_id, 'maybe'
+  FROM grant_scopes gs LIMIT 1;

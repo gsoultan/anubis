@@ -47,7 +47,7 @@ func (s *Repository) ListScopeNodes(ctx context.Context, tenantID string, f scop
 	out := make([]scopedomain.ScopeNodeRecord, 0, len(rows))
 	for _, r := range rows {
 		out = append(out, scopeNodeFromRow(r.ID, r.AxisCode, r.NodeType,
-			database.Deref(r.ParentID), r.Slug, r.Name, database.Deref(r.ExternalRef), r.Status, r.IsAxisRoot))
+			database.Deref(r.ParentID), r.Slug, r.Name, database.Deref(r.ExternalRef), r.Status, r.IsAxisRoot, r.ChildCount))
 	}
 	return out, nil
 }
@@ -58,7 +58,7 @@ func (s *Repository) ScopeNode(ctx context.Context, tenantID, id string) (*scope
 		return nil, database.MapErr(err)
 	}
 	rec := scopeNodeFromRow(r.ID, r.AxisCode, r.NodeType, database.Deref(r.ParentID),
-		r.Slug, r.Name, database.Deref(r.ExternalRef), r.Status, r.IsAxisRoot)
+		r.Slug, r.Name, database.Deref(r.ExternalRef), r.Status, r.IsAxisRoot, r.ChildCount)
 	return &rec, nil
 }
 
@@ -76,7 +76,7 @@ func (s *Repository) ScopeNodesByIDs(ctx context.Context, tenantID string, ids [
 	out := make([]scopedomain.ScopeNodeRecord, 0, len(rows))
 	for _, r := range rows {
 		out = append(out, scopeNodeFromRow(r.ID, r.AxisCode, r.NodeType, database.Deref(r.ParentID),
-			r.Slug, r.Name, database.Deref(r.ExternalRef), r.Status, r.IsAxisRoot))
+			r.Slug, r.Name, database.Deref(r.ExternalRef), r.Status, r.IsAxisRoot, r.ChildCount))
 	}
 	return out, nil
 }
@@ -89,7 +89,7 @@ func (s *Repository) ScopeNodeByRef(ctx context.Context, tenantID, axis, ref str
 		return nil, database.MapErr(err)
 	}
 	rec := scopeNodeFromRow(r.ID, r.AxisCode, r.NodeType, database.Deref(r.ParentID),
-		r.Slug, r.Name, database.Deref(r.ExternalRef), r.Status, r.IsAxisRoot)
+		r.Slug, r.Name, database.Deref(r.ExternalRef), r.Status, r.IsAxisRoot, r.ChildCount)
 	return &rec, nil
 }
 

@@ -104,7 +104,7 @@ func (s *Repository) LoadSnapshot(ctx context.Context, tenantID, tenantSlug stri
 	for _, gs := range gscopes {
 		if g, ok := byGrant[gs.GrantID]; ok {
 			g.Scopes[gs.AxisCode] = append(g.Scopes[gs.AxisCode], snapshot.ScopeConstraint{
-				NodeID: gs.ScopeNodeID, Inherit: gs.Inherit,
+				NodeID: gs.ScopeNodeID, Inherit: gs.Inherit, Exclude: gs.Exclude,
 			})
 		}
 	}

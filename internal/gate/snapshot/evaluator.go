@@ -2,10 +2,11 @@ package snapshot
 
 import "time"
 
-// Evaluate mirrors migrations/0013 authorize() over the frozen data:
+// Evaluate mirrors migrations/0046 authorize() over the frozen data:
 //   - identity state + assurance gates (0009 gates 1-2)
 //   - candidates: live grants whose role confers the permission
-//   - OR within an axis (any granted node covers the target), AND across axes
+//   - OR within an axis over the includes, minus anything an exclude covers;
+//     AND across axes
 //   - fail-closed: a constrained axis without a target is unsatisfied; a
 //     strict axis a grant does not address denies the grant
 //   - self-scope: reserved "_owner" target must equal the subject
@@ -51,8 +52,9 @@ func (d *Data) Evaluate(identityID, permission string, targets map[string]string
 	return false
 }
 
-// grantScopesSatisfied: every constrained axis must have at least one granted
-// node covering the target (ancestor-or-self; depth 0 only when inherit=false).
+// grantScopesSatisfied: every constrained axis must have at least one included
+// node covering the target (ancestor-or-self; depth 0 only when inherit=false)
+// and no excluded node covering it.
 func (d *Data) grantScopesSatisfied(g Grant, targets map[string]string) bool {
 	for axis, constraints := range g.Scopes {
 		target, supplied := targets[axis]

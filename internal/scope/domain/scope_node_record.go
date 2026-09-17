@@ -16,6 +16,10 @@ type ScopeNodeRecord struct {
 	ExternalRef string
 	Status      string
 	IsAxisRoot  bool
+	// ChildCount is how many children the same read would return. The console
+	// draws its expand affordance from it, so zero must mean "no children",
+	// never "nobody counted".
+	ChildCount int
 }
 
 // DefaultScopeNodePage / MaxScopeNodePage bound one page of a node listing.

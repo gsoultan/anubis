@@ -344,7 +344,8 @@ func (u *importInteractor) scopeInputs(ctx context.Context, res *resolver, g row
 		if !ok {
 			return nil, rowErr(schema.SheetGrants, g.Line(), apperr.ErrNotFound.With("scope_ref", s.Ref))
 		}
-		out = append(out, grant.GrantScopeInput{Axis: s.Axis, NodeID: nodeID, Inherit: s.Inherit})
+		out = append(out, grant.GrantScopeInput{
+			Axis: s.Axis, NodeID: nodeID, Inherit: s.Inherit, Exclude: s.Exclude})
 	}
 	return out, nil
 }

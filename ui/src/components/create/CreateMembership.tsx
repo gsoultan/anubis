@@ -7,7 +7,7 @@ import { qk } from '@/lib/query/keys'
 import { queryClient } from '@/lib/query/client'
 import { useCreate } from '@/stores/create'
 import { AxisIcon } from '@/components/scope/AxisIcon'
-import { AxisConstraintRow, type NodeSel } from './GrantFields'
+import { AxisConstraintRow, axisNeedsAnInclude, type NodeSel } from './GrantFields'
 import { CreateShell, CancelSubmit, notifyCreated, notifyRejected } from './shell'
 import type { GrantScope } from '@/lib/api/types'
 
@@ -27,11 +27,18 @@ export function CreateMembership({ opened }: { opened: boolean }) {
   const [constraints, setConstraints] = useState<Record<string, NodeSel[]>>({})
   const [busy, setBusy] = useState(false)
 
+  /* An entry's scopes are copied verbatim onto every grant the membership
+     materialises (migration 0046), carve-outs included — so the same rule the
+     grant form enforces has to hold here, one step earlier. */
+  const orphanExclusions = Object.values(constraints).some(axisNeedsAnInclude)
+
   const addEntry = () => {
     const role = roles?.find((r) => r.id === roleId)
-    if (!role) return
+    if (!role || orphanExclusions) return
     const scopes: GrantScope[] = Object.entries(constraints).flatMap(([axis_code, list]) =>
-      list.map((c) => ({ axis_code, scope_node_id: c.id, inherit: c.inherit })))
+      list.map((c) => ({
+        axis_code, scope_node_id: c.id, inherit: c.inherit, exclude: c.exclude,
+      })))
     setEntries((e) => [...e, { role_id: role.id, role_name: role.name, scopes }])
     setRoleId(null); setConstraints({})
   }
@@ -72,8 +79,18 @@ export function CreateMembership({ opened }: { opened: boolean }) {
                 <div key={i} className="panel-inset flex items-center justify-between gap-2 px-2.5 py-2">
                   <span className="t-body min-w-0 truncate" style={{ fontWeight: 530 }}>
                     {e.role_name}
+                    {/* Carve-outs counted apart from places. A bare
+                        scopes.length reads "2 places" for one office with a
+                        department taken out of it — a summary that says the
+                        entry reaches somewhere it does not. */}
                     <span className="t-xs" style={{ marginLeft: 6 }}>
-                      {e.scopes.length ? `· ${e.scopes.length} place${e.scopes.length > 1 ? 's' : ''}` : '· everywhere'}
+                      {(() => {
+                        const carved = e.scopes.filter((sc) => sc.exclude).length
+                        const pinned = e.scopes.length - carved
+                        if (!e.scopes.length) return '· everywhere'
+                        return `· ${pinned} place${pinned === 1 ? '' : 's'}`
+                          + (carved ? `, except ${carved}` : '')
+                      })()}
                     </span>
                   </span>
                   <button onClick={() => setEntries((x) => x.filter((_, j) => j !== i))}
@@ -106,7 +123,7 @@ export function CreateMembership({ opened }: { opened: boolean }) {
               })} />
           ))}
           <Button size="xs" variant="light" leftSection={<IconPlus size={13} />}
-            disabled={!roleId} onClick={addEntry}>
+            disabled={!roleId || orphanExclusions} onClick={addEntry}>
             Add to bundle
           </Button>
         </div>

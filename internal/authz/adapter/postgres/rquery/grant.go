@@ -42,18 +42,25 @@ type GrantScopeRow struct {
 	AxisCode    string
 	ScopeNodeID string
 	Inherit     bool
+	Exclude     bool
 	NodeName    string
 }
 
 // ListGrantScopes fans out over a page of grants in ONE query.
+//
+// Includes sort before excludes within an axis ('exclude' < 'include', so
+// DESC), because that is the order the sentence is read in: here, except
+// there. A list that interleaves them by name reads as a set of unrelated
+// pins.
 var ListGrantScopes = storm.SQL[GrantScopeRow](`
 SELECT gs.grant_id::text AS grant_id, gs.axis_code,
        gs.scope_node_id::text AS scope_node_id, gs.inherit,
+       gs.mode = 'exclude' AS exclude,
        sn.name AS node_name
 FROM grant_scopes gs
 JOIN scope_nodes sn ON sn.id = gs.scope_node_id
 WHERE gs.grant_id = ANY($1::uuid[])
-ORDER BY gs.grant_id, gs.axis_code, sn.name`)
+ORDER BY gs.grant_id, gs.axis_code, gs.mode DESC, sn.name`)
 
 // CreatedGrantRow is a fresh grant's identity.
 type CreatedGrantRow struct {
@@ -69,10 +76,15 @@ INSERT INTO grants (tenant_id, identity_id, role_id, granted_by, reason,
 VALUES ($1, $2, $3, $4, nullif($5, ''), $6, $7)
 RETURNING id::text AS id, valid_from`)
 
-// InsertGrantScope pins one axis of a grant.
+// InsertGrantScope pins one axis of a grant. $6 exclude.
+//
+// The bool→mode mapping lives here rather than in Go so there is exactly one
+// place that can produce the string, and no call site that could produce a
+// different one. A grant whose every axis is excludes is refused at COMMIT by
+// grant_scopes_exclusion_guard (0046).
 var InsertGrantScope = storm.SQLExec(`
-INSERT INTO grant_scopes (grant_id, tenant_id, axis_code, scope_node_id, inherit)
-VALUES ($1, $2, $3, $4, $5)`)
+INSERT INTO grant_scopes (grant_id, tenant_id, axis_code, scope_node_id, inherit, mode)
+VALUES ($1, $2, $3, $4, $5, CASE WHEN $6::boolean THEN 'exclude' ELSE 'include' END)`)
 
 // RevokedGrantRow identifies the grant a revocation touched.
 type RevokedGrantRow struct {

@@ -35,6 +35,7 @@ export const Route = createFileRoute('/playground')({
 const REASON: Record<string, string> = {
   no_grant: 'No live grant confers this permission on this identity.',
   scope_mismatch: 'A grant exists, but the target sits outside its scope on at least one axis.',
+  scope_excluded: 'A grant does reach this target — and carves it back out. Edit the exclusion, not the scope.',
   axis_unresolved: 'A grant constrains an axis for which no target was supplied. Unresolved axes deny.',
   strict_axis_unaddressed: 'An axis is strict and this grant does not address it.',
   assurance_too_low: 'The identity’s assurance level is below what this permission requires.',
@@ -48,20 +49,36 @@ const REASON: Record<string, string> = {
 function Gate({ v }: { v: AxisVerdict }) {
   const skipped = !v.constrained && v.satisfied
   const cls = skipped ? 'gate gate-skip' : v.satisfied ? 'gate gate-pass' : 'gate gate-fail'
+  /* An excluded node is not one of the places the grant reaches, so it is
+     listed apart from them. Under "granted any of" it reads as one more way
+     to pass the gate that happens not to have matched — which is the reading
+     that sends someone to debug the wrong grant. */
+  const granted = (v.granted_nodes ?? []).filter((n) => !n.exclude)
+  const carved = (v.granted_nodes ?? []).filter((n) => n.exclude)
   return (
     <Tooltip
       label={
         <div className="flex flex-col gap-1">
           <div style={{ fontWeight: 600 }}>{v.axis_code}</div>
           {v.constrained ? (
-            (v.granted_nodes?.length ?? 0) > 1 ? (
+            granted.length > 1 || carved.length > 0 ? (
               <div>
                 <div>granted <b>any of</b>:</div>
-                {v.granted_nodes!.map((n) => (
+                {granted.map((n) => (
                   <div key={n.id} style={{ paddingLeft: 8 }}>
                     {n.matched ? '✓' : '·'} {n.name}{!n.inherit ? ' (exact)' : ''}
                   </div>
                 ))}
+                {carved.length > 0 && (
+                  <>
+                    <div style={{ color: 'var(--deny)' }}>except:</div>
+                    {carved.map((n) => (
+                      <div key={n.id} style={{ paddingLeft: 8, color: 'var(--deny)' }}>
+                        · {n.name}{!n.inherit ? ' (exact)' : ''}
+                      </div>
+                    ))}
+                  </>
+                )}
                 <div>target <b>{v.target_node_name ?? '(not supplied)'}</b></div>
               </div>
             ) : (
@@ -93,9 +110,11 @@ function Gate({ v }: { v: AxisVerdict }) {
         </div>
         <div className="truncate" style={{ fontSize: 10, color: 'var(--ink-3)' }}>
           {!v.constrained ? 'unconstrained'
-            : (v.granted_nodes?.length ?? 0) > 1
-              ? `any of ${v.granted_nodes!.length} · ${v.target_node_name ?? 'not supplied'}`
-              : (v.target_node_name ?? 'not supplied')}
+            : carved.length > 0
+              ? `${granted.length} except ${carved.length} · ${v.target_node_name ?? 'not supplied'}`
+              : granted.length > 1
+                ? `any of ${granted.length} · ${v.target_node_name ?? 'not supplied'}`
+                : (v.target_node_name ?? 'not supplied')}
         </div>
       </div>
     </Tooltip>

@@ -181,6 +181,8 @@ type GrantScope struct {
 	ScopeNodeID string
 	Inherit     bool
 	AxisCode    string
+	// include = the grant applies here; exclude = carved out of this grant's includes on the same axis.
+	Mode string
 }
 
 type Identity struct {
@@ -237,6 +239,8 @@ type MembershipEntryScope struct {
 	ScopeNodeID string
 	Inherit     bool
 	AxisCode    string
+	// Copied verbatim onto every grant this entry materialises. See grant_scopes.mode.
+	Mode string
 }
 
 type MembershipMember struct {

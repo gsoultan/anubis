@@ -131,15 +131,54 @@ func (h *AuthzAdminHandler) ListPermissions(ctx context.Context, req *connect.Re
 	return connect.NewResponse(resp), nil
 }
 
+// scopeProto is the ONE place a GrantScope message is built, and scopeInputs
+// below the ONE place one is read.
+//
+// Sharing only the outbound half is not sharing. That is precisely how 0045's
+// interval_seconds shipped on list and went missing on create: the outbound
+// mapping was factored out with a comment explaining why, and every call site
+// still wrote the inbound direction by hand. The failure was silent — no
+// error, no log, a source that simply never ran.
+//
+// A dropped `exclude` is the same shape and worse. The carve-out disappears,
+// the grant is written WIDER than the operator asked for, and the only thing
+// that would have said so is the screen they just left. Both directions are
+// shared here, and scope_mapping_test.go fails if either drops a field.
+func scopeProto(axis, nodeID, nodeName string, inherit, exclude bool) *anubisv1.GrantScope {
+	return &anubisv1.GrantScope{
+		Axis: axis, NodeId: nodeID, NodeName: nodeName,
+		Inherit: inherit, Exclude: exclude,
+	}
+}
+
+func scopeInputs(scopes []*anubisv1.GrantScope) []grant.GrantScopeInput {
+	out := make([]grant.GrantScopeInput, 0, len(scopes))
+	for _, s := range scopes {
+		out = append(out, grant.GrantScopeInput{
+			Axis: s.Axis, NodeID: s.NodeId, Inherit: s.Inherit, Exclude: s.Exclude,
+		})
+	}
+	return out
+}
+
 func grantScopeProtos(scopes []grant.GrantScopeRecord, grantID string) []*anubisv1.GrantScope {
 	var out []*anubisv1.GrantScope
 	for _, s := range scopes {
 		if s.GrantID != grantID {
 			continue
 		}
-		out = append(out, &anubisv1.GrantScope{
-			Axis: s.Axis, NodeId: s.NodeID, NodeName: s.NodeName, Inherit: s.Inherit,
-		})
+		out = append(out, scopeProto(s.Axis, s.NodeID, s.NodeName, s.Inherit, s.Exclude))
+	}
+	return out
+}
+
+func entryScopeProtos(scopes []membership.MembershipEntryScopeRecord, entryID string) []*anubisv1.GrantScope {
+	var out []*anubisv1.GrantScope
+	for _, s := range scopes {
+		if s.EntryID != entryID {
+			continue
+		}
+		out = append(out, scopeProto(s.Axis, s.NodeID, s.NodeName, s.Inherit, s.Exclude))
 	}
 	return out
 }
@@ -185,11 +224,7 @@ func (h *AuthzAdminHandler) CreateGrant(ctx context.Context, req *connect.Reques
 			t := time.Unix(req.Msg.ValidUntil, 0)
 			in.ValidUntil = &t
 		}
-		for _, s := range req.Msg.Scopes {
-			in.Scopes = append(in.Scopes, grant.GrantScopeInput{
-				Axis: s.Axis, NodeID: s.NodeId, Inherit: s.Inherit,
-			})
-		}
+		in.Scopes = scopeInputs(req.Msg.Scopes)
 		return h.svc.CreateGrant(ctx, in)
 	})
 	if err != nil {
@@ -225,15 +260,10 @@ func (h *AuthzAdminHandler) ListMemberships(ctx context.Context, _ *connect.Requ
 				if e.MembershipID != m.ID {
 					continue
 				}
-				pe := &anubisv1.MembershipEntry{Id: e.ID, RoleId: e.RoleID, RoleName: e.RoleName}
-				for _, s := range scopes {
-					if s.EntryID == e.ID {
-						pe.Scopes = append(pe.Scopes, &anubisv1.GrantScope{
-							Axis: s.Axis, NodeId: s.NodeID, NodeName: s.NodeName, Inherit: s.Inherit,
-						})
-					}
-				}
-				pm.Entries = append(pm.Entries, pe)
+				pm.Entries = append(pm.Entries, &anubisv1.MembershipEntry{
+					Id: e.ID, RoleId: e.RoleID, RoleName: e.RoleName,
+					Scopes: entryScopeProtos(scopes, e.ID),
+				})
 			}
 			resp.Memberships = append(resp.Memberships, pm)
 		}
@@ -262,13 +292,9 @@ func (h *AuthzAdminHandler) SetMembershipEntries(ctx context.Context, req *conne
 	out, err := h.f.Do(ctx, "admin.membership.set_entries", func(ctx context.Context) (any, error) {
 		entries := make([]membership.MembershipEntryInput, 0, len(req.Msg.Entries))
 		for _, e := range req.Msg.Entries {
-			in := membership.MembershipEntryInput{RoleID: e.RoleId}
-			for _, s := range e.Scopes {
-				in.Scopes = append(in.Scopes, grant.GrantScopeInput{
-					Axis: s.Axis, NodeID: s.NodeId, Inherit: s.Inherit,
-				})
-			}
-			entries = append(entries, in)
+			entries = append(entries, membership.MembershipEntryInput{
+				RoleID: e.RoleId, Scopes: scopeInputs(e.Scopes),
+			})
 		}
 		return h.svc.SetMembershipEntries(ctx, req.Msg.MembershipId, entries)
 	})

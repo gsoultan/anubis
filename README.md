@@ -137,6 +137,10 @@ Expected output:
      permission not held -> DENY       | f   | f
      FAIL-CLOSED: axis omitted -> DENY | f   | f
      cross-tenant identity -> DENY     | f   | f
+     the included office -> ALLOW       | t   | t
+     the carved-out department -> DENY  | f   | f
+     a team UNDER the carve-out -> DENY | f   | f
+     a SIBLING department -> ALLOW      | t   | t
 ==> external populations (suppliers, applicants)
      supplier reads own company PO -> ALLOW             | t   | t
      supplier reads ANOTHER company PO -> DENY          | f   | f
@@ -149,7 +153,7 @@ Expected output:
      same username across 3 realms |   3 |    3
     2/2 escalation attempts rejected
 ==> negative (all must be blocked by the schema)
-    7/7 illegal writes rejected
+    20/20 illegal writes rejected
 ==> performance
     20k decisions: Time: 891.963 ms
 ```

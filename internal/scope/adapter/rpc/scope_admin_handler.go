@@ -48,6 +48,7 @@ func nodeProto(n scopedomain.ScopeNodeRecord) *anubisv1.ScopeNode {
 		Id: n.ID, Axis: n.Axis, NodeType: n.NodeType, ParentId: n.ParentID,
 		Slug: n.Slug, Name: n.Name, ExternalRef: n.ExternalRef,
 		Status: n.Status, IsAxisRoot: n.IsAxisRoot,
+		ChildCount: int32(n.ChildCount),
 	}
 }
 

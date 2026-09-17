@@ -69,9 +69,13 @@ export type AuthorizeResponse = Message<"anubis.v1.AuthorizeResponse"> & {
   allow: boolean;
 
   /**
-   * On deny: "scope_mismatch" | "permission_not_held" | "identity_inactive" |
-   * "insufficient_assurance" | "self_scope_required" | "axis_unresolved" |
-   * "step_up_required" | ...
+   * On deny: "scope_mismatch" | "scope_excluded" | "permission_not_held" |
+   * "identity_inactive" | "insufficient_assurance" | "self_scope_required" |
+   * "axis_unresolved" | "step_up_required" | ...
+   *
+   * scope_excluded is separate from scope_mismatch on purpose: a grant DID
+   * reach this target and an exclusion took it back (0046). The two need
+   * opposite fixes, and one string for both hides which.
    *
    * @generated from field: string reason = 2;
    */

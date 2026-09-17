@@ -127,6 +127,46 @@ strict precedence (deny wins, evaluated across the full ancestor chain) and an
 explain endpoint. Getting this wrong produces outages that look like security
 incidents.
 
+### Amended by 0046: scope exclusions, which are not deny rules
+
+Migration 0046 adds `grant_scopes.mode`, so one grant can say "everywhere under
+Jakarta **except** the Surabaya branch". The paragraph above still stands, and
+this is deliberately on the other side of the line it draws.
+
+The thing that made deny unaffordable was **cross-grant precedence**: a rule
+somewhere else in the system quietly overriding a grant you are looking at. An
+exclusion cannot do that. It is scoped to the axis of the grant it sits on:
+
+```
+satisfied(grant, axis) = (some include covers the target)
+                     AND (no exclude covers the target)
+```
+
+Grants still compose by union, untouched. A second grant covering Surabaya
+grants Surabaya — the first grant's carve-out has no reach over it. So the
+property the deferral was protecting survives intact: to know why someone has
+access you read the grants that give it, and each grant reads on its own. There
+is no precedence order to learn, because nothing outranks anything.
+
+Three constraints keep it there, and each is enforced rather than documented:
+
+- **An exclusion needs an include on the same axis.** Otherwise "anywhere
+  except here" is a blanket allow wearing a carve-out's clothes, and on a
+  strict axis it defeats the one thing strict exists to force. A deferred
+  constraint trigger refuses it; the aggregate evaluates it to `false` if one
+  ever appears anyway. "Everything except X" is still expressible — include the
+  axis root, exclude X — which is also how it should read on screen.
+- **Strict axes are unchanged.** Every axis carrying rows carries at least one
+  include, so the existing "does this grant address the axis" check needs no
+  amendment.
+- **Nothing existing changes behaviour.** Every pre-0046 row is an include, and
+  with no exclude rows in a group the added conjunct is `NOT bool_or(false)`.
+  Measured, not assumed: 6,000 decisions replayed across the migration on a
+  270k-scope database → **0 changed verdicts.**
+
+If cross-grant deny is ever wanted, it is still the deferred decision above.
+This is not a step toward it.
+
 ## Permission resolution
 
 Roles compose (`role_parents`), and roles may grant wildcards

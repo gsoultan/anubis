@@ -71,7 +71,8 @@ func (q *Queries) SnapshotCatalogVersion(ctx context.Context, tenantID string) (
 }
 
 const snapshotGrantScopes = `-- name: SnapshotGrantScopes :many
-SELECT gs.grant_id, gs.axis_code, gs.scope_node_id, gs.inherit
+SELECT gs.grant_id, gs.axis_code, gs.scope_node_id, gs.inherit,
+       gs.mode = 'exclude' AS exclude
 FROM grant_scopes gs
 WHERE gs.tenant_id = $1
 `
@@ -81,8 +82,14 @@ type SnapshotGrantScopesRow struct {
 	AxisCode    string
 	ScopeNodeID string
 	Inherit     bool
+	Exclude     bool
 }
 
+// mode arrives as the bool the evaluator actually branches on. A gate that
+// loaded the includes and dropped the excludes would allow, in memory and at
+// p99 < 1 ms, exactly what the database denies -- the worst direction for
+// these two to disagree in. snapshot_parity_test.go probes carve-outs for
+// this reason.
 func (q *Queries) SnapshotGrantScopes(ctx context.Context, tenantID string) ([]SnapshotGrantScopesRow, error) {
 	rows, err := q.db.Query(ctx, snapshotGrantScopes, tenantID)
 	if err != nil {
@@ -97,6 +104,7 @@ func (q *Queries) SnapshotGrantScopes(ctx context.Context, tenantID string) ([]S
 			&i.AxisCode,
 			&i.ScopeNodeID,
 			&i.Inherit,
+			&i.Exclude,
 		); err != nil {
 			return nil, err
 		}
