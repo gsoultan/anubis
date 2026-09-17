@@ -323,7 +323,12 @@ func TestSnapshotTablesAreClassifiedPushOrPoll(t *testing.T) {
 		"tenants": true, "catalog_version": true,
 	}
 
-	raw, err := os.ReadFile(filepath.Join("..", "..", "db", "queries", "gate", "snapshot.sql"))
+	// The snapshot's SQL moved from db/queries/gate/snapshot.sql into the
+	// gate's designated rquery package (ADR-0009 §5). The parse is the same:
+	// the statements are still SQL text in one file, and the check below still
+	// asks PostgreSQL which of the matched identifiers are real tables.
+	raw, err := os.ReadFile(filepath.Join("..", "..", "internal", "gate",
+		"adapter", "postgres", "rquery", "snapshot.go"))
 	if err != nil {
 		t.Fatalf("read snapshot queries: %v", err)
 	}

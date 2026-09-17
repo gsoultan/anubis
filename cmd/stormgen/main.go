@@ -29,6 +29,7 @@ import (
 	authzrquery "github.com/gsoultan/anubis/internal/authz/adapter/postgres/rquery"
 	controlrmodel "github.com/gsoultan/anubis/internal/control/adapter/postgres/rmodel"
 	controlrquery "github.com/gsoultan/anubis/internal/control/adapter/postgres/rquery"
+	gaterquery "github.com/gsoultan/anubis/internal/gate/adapter/postgres/rquery"
 	platformrquery "github.com/gsoultan/anubis/internal/platform/database/rquery"
 	scopermodel "github.com/gsoultan/anubis/internal/scope/adapter/postgres/rmodel"
 	scopermquery "github.com/gsoultan/anubis/internal/scope/adapter/postgres/rquery"
@@ -54,6 +55,10 @@ var contexts = map[string]declarations{
 	"tenancy": {tenancyrmodel.All(), tenancyrquery.Queries()},
 	"scope":   {scopermodel.All(), scopermquery.Queries()},
 	"auth":    {authrmodel.All(), authrquery.Queries()},
+	// No models: the gate owns no table. It READS eight of them to freeze a
+	// snapshot, and modelling another context's tables here would put their
+	// shape in this package's hands.
+	"gate": {nil, gaterquery.Queries()},
 	// No models: the technical context's two statements are advisory locks,
 	// which belong to no table.
 	"platform": {nil, platformrquery.Queries()},

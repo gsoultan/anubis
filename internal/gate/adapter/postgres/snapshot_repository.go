@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"time"
 
-	gen "github.com/gsoultan/anubis/internal/gate/adapter/postgres/gen"
+	gaterquery "github.com/gsoultan/anubis/internal/gate/adapter/postgres/rquery"
 	"github.com/gsoultan/anubis/internal/gate/snapshot"
 	"github.com/gsoultan/anubis/internal/platform/database"
 	"github.com/gsoultan/anubis/internal/shared/apperr"
@@ -36,7 +36,10 @@ func (s *Repository) LoadSnapshot(ctx context.Context, tenantID, tenantSlug stri
 		return nil, apperr.ErrInternal.Wrap(errIsolation(iso))
 	}
 
-	q := gen.New(tx)
+	// Bound to the TRANSACTION, not the pool: every read below has to see the
+	// same MVCC snapshot, which is the whole point of the isolation asserted
+	// above.
+	ex := database.Executor(tx)
 	d := &snapshot.Data{
 		TenantID:         tenantID,
 		TenantSlug:       tenantSlug,
@@ -50,11 +53,11 @@ func (s *Repository) LoadSnapshot(ctx context.Context, tenantID, tenantSlug stri
 		RevokedSessions:  map[string]bool{},
 	}
 
-	if v, err := q.SnapshotCatalogVersion(ctx, tenantID); err == nil {
+	if v, ok, err := gaterquery.SnapshotCatalogVersion.One(ctx, ex, tenantID); err == nil && ok {
 		d.Version = v.Version
 	}
 
-	axes, err := q.SnapshotAxes(ctx)
+	axes, err := gaterquery.SnapshotAxes.Query(ctx, ex)
 	if err != nil {
 		return nil, database.MapErr(err)
 	}
@@ -67,20 +70,20 @@ func (s *Repository) LoadSnapshot(ctx context.Context, tenantID, tenantSlug stri
 	// Parent pointers, not the closure: one row per node instead of one per
 	// (node, ancestor) pair. ScopeIndex walks them to answer the same
 	// question the closure answered by lookup.
-	nodes, err := q.SnapshotNodes(ctx, tenantID)
+	nodes, err := gaterquery.SnapshotNodes.Query(ctx, ex, tenantID)
 	if err != nil {
 		return nil, database.MapErr(err)
 	}
 	hierarchy := make([]snapshot.ScopeNode, len(nodes))
 	for i, n := range nodes {
 		hierarchy[i] = snapshot.ScopeNode{ID: n.ID}
-		if n.ParentID != nil {
-			hierarchy[i].Parent = *n.ParentID
+		if p, ok := n.ParentID.Get(); ok {
+			hierarchy[i].Parent = p
 		}
 	}
 	d.Scope = snapshot.NewScopeIndex(hierarchy)
 
-	grants, err := q.SnapshotGrants(ctx, tenantID)
+	grants, err := gaterquery.SnapshotGrants.Query(ctx, ex, tenantID)
 	if err != nil {
 		return nil, database.MapErr(err)
 	}
@@ -91,13 +94,13 @@ func (s *Repository) LoadSnapshot(ctx context.Context, tenantID, tenantSlug stri
 			ID: g.ID, RoleID: g.RoleID, SelfScoped: g.SelfScoped,
 			ValidFrom: g.ValidFrom, Scopes: map[string][]snapshot.ScopeConstraint{},
 		}
-		if g.ValidUntil != nil {
-			sg.ValidUntil = *g.ValidUntil
+		if v, ok := g.ValidUntil.Get(); ok {
+			sg.ValidUntil = v
 		}
 		byGrant[g.ID] = &sg
 		order[g.ID] = g.IdentityID
 	}
-	gscopes, err := q.SnapshotGrantScopes(ctx, tenantID)
+	gscopes, err := gaterquery.SnapshotGrantScopes.Query(ctx, ex, tenantID)
 	if err != nil {
 		return nil, database.MapErr(err)
 	}
@@ -117,7 +120,7 @@ func (s *Repository) LoadSnapshot(ctx context.Context, tenantID, tenantSlug stri
 	// see ScopeConstraint.node), so it must not move above either load.
 	d.InternGrantScopes()
 
-	rps, err := q.SnapshotRolePermissions(ctx, tenantID)
+	rps, err := gaterquery.SnapshotRolePermissions.Query(ctx, ex, tenantID)
 	if err != nil {
 		return nil, database.MapErr(err)
 	}
@@ -127,60 +130,53 @@ func (s *Repository) LoadSnapshot(ctx context.Context, tenantID, tenantSlug stri
 			m = map[string]bool{}
 			d.RolePermissions[rp.RoleID] = m
 		}
-		if rp.Key != nil {
-			m[*rp.Key] = true
-		}
+		m[rp.Key] = true
 	}
 
-	perms, err := q.SnapshotPermissions(ctx, tenantID)
+	perms, err := gaterquery.SnapshotPermissions.Query(ctx, ex, tenantID)
 	if err != nil {
 		return nil, database.MapErr(err)
 	}
 	for _, p := range perms {
-		if p.Key == nil {
-			continue
-		}
 		sp := snapshot.Permission{
-			Key: *p.Key, MinAssurance: int(p.MinAssurance),
+			Key: p.Key, MinAssurance: int(p.MinAssurance),
 			RequiresAMR: p.RequiresAmr, Risk: p.Risk,
 		}
 		sp.MaxAuthAgeSecs = p.MaxAuthAgeSecs
-		d.Permissions[*p.Key] = sp
+		d.Permissions[p.Key] = sp
 	}
 
-	idents, err := q.SnapshotIdentities(ctx, tenantID)
+	idents, err := gaterquery.SnapshotIdentities.Query(ctx, ex, tenantID)
 	if err != nil {
 		return nil, database.MapErr(err)
 	}
 	for _, i := range idents {
 		d.Identities[i.ID] = snapshot.Identity{
 			TokenEpoch:     int(i.TokenEpoch),
-			Blocked:        database.DerefBool(i.Blocked) || i.Status != "active",
+			Blocked:        i.Blocked || i.Status != "active",
 			AssuranceLevel: int(i.AssuranceLevel),
 		}
 	}
 
-	revoked, err := q.SnapshotRevokedSessions(ctx, gen.SnapshotRevokedSessionsParams{
-		TenantID: tenantID, RevokedWindow: revokedWindow.String(),
-	})
+	revoked, err := gaterquery.SnapshotRevokedSessions.Query(ctx, ex, tenantID, revokedWindow.String())
 	if err != nil {
 		return nil, database.MapErr(err)
 	}
-	for _, sid := range revoked {
-		d.RevokedSessions[sid] = true
+	for _, r := range revoked {
+		d.RevokedSessions[r.ID] = true
 	}
 
-	routes, err := q.SnapshotRoutes(ctx, tenantID)
+	routes, err := gaterquery.SnapshotRoutes.Query(ctx, ex, tenantID)
 	if err != nil {
 		return nil, database.MapErr(err)
 	}
 	for _, r := range routes {
 		var bindings map[string]string
-		_ = json.Unmarshal(r.ScopeBindings, &bindings)
+		_ = json.Unmarshal([]byte(r.ScopeBindings), &bindings)
 		d.Routes = append(d.Routes, snapshot.Route{
 			AppSlug: r.ApplicationSlug, Priority: int(r.Priority), Effect: r.Effect,
-			PathPattern: r.PathPattern, HostPattern: database.Deref(r.HostPattern),
-			Methods: r.Methods, PermissionKey: database.Deref(r.PermissionKey),
+			PathPattern: r.PathPattern, HostPattern: nstr(r.HostPattern),
+			Methods: r.Methods, PermissionKey: nstr(r.PermissionKey),
 			ScopeBindings: bindings,
 		})
 	}
@@ -199,9 +195,14 @@ func (e errIsolation) Error() string {
 // table carrying authorization state bumps the counter (migrations 0005/0006
 // and 0040); TestSnapshotTablesAreClassifiedPushOrPoll pins that.
 func (s *Repository) CatalogVersion(ctx context.Context, tenantID string) (int64, error) {
-	v, err := gen.New(s.Pool()).SnapshotCatalogVersion(ctx, tenantID)
+	v, ok, err := gaterquery.SnapshotCatalogVersion.One(ctx, s.ex(ctx), tenantID)
 	if err != nil {
 		return 0, database.MapErr(err)
+	}
+	if !ok {
+		// No row yet means nothing has bumped the counter for this tenant,
+		// which is version zero rather than an error.
+		return 0, nil
 	}
 	return v.Version, nil
 }
