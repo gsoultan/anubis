@@ -81,8 +81,21 @@ joins that resolve an auth page's binding, the interval renderings, the
 predicate DELETEs storm has no builder form for, and `signin_pages` — which is
 a VIEW, and storm models tables.
 
-**Still sqlc:** identity, auth, scope, gate, platform. The registry in
-`cmd/stormgen` is the record of how far this has got.
+**scope** and **platform** followed (2026-09-17). scope is mostly SQL and that
+is the right shape for it: the tree's writes are database FUNCTIONS —
+scope_add_node, scope_move_node, scope_ensure_root, scope_sync_apply — because
+a move rewrites the closure table and re-checks the type rules in one
+statement, and the closure table is what authorize() reads, so a half-applied
+move is a wrong ANSWER rather than a slow one.
+
+platform has no models at all: two advisory locks, which belong to no table.
+They are SESSION-scoped, so they run on one pinned connection —
+`database.Executor` maps `*pgxpool.Conn` onto storm's connection adapter, added
+upstream in v0.15.0 for exactly this. Released through the pool, the lock would
+be released on whichever connection came back next, which releases nothing.
+
+**Still sqlc:** identity, auth, gate. The registry in `cmd/stormgen` is the
+record of how far this has got.
 
 ## §5 Amendment (2026-08-25): storm in the authz context
 

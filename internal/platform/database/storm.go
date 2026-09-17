@@ -27,6 +27,12 @@ func Executor(c Querier) runtime.Executor {
 		return pgxdrv.Tx{T: t}
 	case *pgxpool.Pool:
 		return pgxdrv.Pool{P: t}
+	case *pgxpool.Conn:
+		// One pinned connection. Session state — an advisory lock — lives on
+		// the connection that created it, so it cannot go through the pool:
+		// releasing through the pool releases on whichever connection came
+		// back next, which releases nothing.
+		return pgxdrv.Conn{C: t}
 	default:
 		// Unreachable while Conn keeps its two branches. Failing closed per
 		// call rather than panicking means a future refactor of Conn degrades

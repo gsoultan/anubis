@@ -4,16 +4,6 @@ version: "2"
 sql:
   - engine: "postgresql"
     schema: "migrations"
-    queries: "db/queries/platform"
-    gen:
-      go:
-        package: "gen"
-        out: "internal/platform/database/gen"
-        sql_package: "pgx/v5"
-        emit_json_tags: false
-        emit_pointers_for_null_types: true
-  - engine: "postgresql"
-    schema: "migrations"
     queries: "db/queries/identity"
     gen:
       go:
@@ -44,31 +34,6 @@ sql:
       go:
         package: "gen"
         out: "internal/auth/adapter/postgres/gen"
-        sql_package: "pgx/v5"
-        emit_json_tags: false
-        emit_pointers_for_null_types: true
-        overrides:
-          - db_type: "uuid"
-            go_type: "string"
-          - db_type: "uuid"
-            nullable: true
-            go_type:
-              type: "string"
-              pointer: true
-          - db_type: "timestamptz"
-            go_type: "time.Time"
-          - db_type: "timestamptz"
-            nullable: true
-            go_type:
-              type: "time.Time"
-              pointer: true
-  - engine: "postgresql"
-    schema: "migrations"
-    queries: "db/queries/scope"
-    gen:
-      go:
-        package: "gen"
-        out: "internal/scope/adapter/postgres/gen"
         sql_package: "pgx/v5"
         emit_json_tags: false
         emit_pointers_for_null_types: true

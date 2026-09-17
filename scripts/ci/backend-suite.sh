@@ -29,13 +29,22 @@ go run ./cmd/anubisd migrate
 # output path and hands storm only THAT context's models, so a query cannot
 # compile against a table its context does not own. Add a line when a context
 # moves off sqlc.
-for ctx in authz audit control tenancy; do
-  go run ./cmd/stormgen generate "internal/$ctx/adapter/postgres/rgen" \
-    -raw-schema live -dsn "$ANUBIS_DB_URL" >/dev/null
+# Full paths, not a context name plus a template: the technical context's
+# generated package lives under internal/platform/database, not under an
+# adapter/postgres that it does not have.
+for out in \
+  internal/authz/adapter/postgres/rgen \
+  internal/audit/adapter/postgres/rgen \
+  internal/control/adapter/postgres/rgen \
+  internal/tenancy/adapter/postgres/rgen \
+  internal/scope/adapter/postgres/rgen \
+  internal/platform/database/rgen \
+; do
+  go run ./cmd/stormgen generate "$out" -raw-schema live -dsn "$ANUBIS_DB_URL" >/dev/null
 done
-if ! git diff --exit-code --quiet internal/*/adapter/postgres/rgen; then
+if ! git diff --exit-code --quiet internal/*/adapter/postgres/rgen internal/platform/database/rgen; then
   echo "FAIL: storm generated code drifted — regenerate and commit (see cmd/stormgen)" >&2
-  git --no-pager diff --stat internal/*/adapter/postgres/rgen >&2
+  git --no-pager diff --stat internal/*/adapter/postgres/rgen internal/platform/database/rgen >&2
   exit 1
 fi
 
