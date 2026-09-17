@@ -57,6 +57,36 @@ map.
 
 ---
 
+## The request-path reads, through storm (2026-09-18)
+
+`TestAuthorizeLatencyBudget` probes `SELECT authorize(...)` through the pool
+DIRECTLY: it measures the engine and the round trip, neither of which the move
+from sqlc to storm touched. Nothing measured the reads on the way IN, and every
+authenticated request resolves a session.
+
+    BenchmarkSessionLive-15           137414 ns/op   2349 B/op   13 allocs/op
+    BenchmarkSessionByCookieHash-15   112146 ns/op   1145 B/op   10 allocs/op
+    BenchmarkSessionState-15          110671 ns/op    757 B/op    9 allocs/op
+
+    ANUBIS_DB_URL=... go test -tags integration -run '^$' -bench . -benchmem \
+      ./test/integration/authtokens/
+
+Read these two ways. The nanoseconds are a local round trip and say little
+about the code — the same query against a database across a network would cost
+an order of magnitude more, and against a unix socket rather less. The
+ALLOCATIONS are the number that belongs to us: nine to thirteen per query, and
+they are the returned row's strings and slices rather than anything spent
+building the statement, which is what storm's prepared-shape cache is for. A
+jump in that column is a regression in our code; a jump in the first column
+probably is not.
+
+These are a BASELINE, not a comparison. There is no before-number: the sqlc
+code they replaced is deleted. Their value is the next change to the auth
+adapter, when `benchstat` has two sides.
+
+For scale: the gate's budget is p99 < 1 ms for a whole decision, and
+SessionLive is one query at roughly a seventh of it.
+
 ## Storage
 
 | Table | Rows | Heap | Indexes | Total | Bytes/row |
