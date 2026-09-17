@@ -75,7 +75,13 @@ now()` is not the same fact on a client clock, and `token_epoch = token_epoch +
 1` computed in Go is a read-modify-write that loses an increment under two
 concurrent disables. storm's `Mut` takes values, not expressions.
 
-**Still sqlc:** identity, auth, scope, tenancy, gate, platform. The registry in
+The **tenancy** context followed (2026-09-17): five tables it owns, builders
+for the reads and writes that stay on one table, raw declarations for the LEFT
+joins that resolve an auth page's binding, the interval renderings, the
+predicate DELETEs storm has no builder form for, and `signin_pages` — which is
+a VIEW, and storm models tables.
+
+**Still sqlc:** identity, auth, scope, gate, platform. The registry in
 `cmd/stormgen` is the record of how far this has got.
 
 ## §5 Amendment (2026-08-25): storm in the authz context

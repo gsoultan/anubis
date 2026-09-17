@@ -27,6 +27,8 @@ import (
 	authzrquery "github.com/gsoultan/anubis/internal/authz/adapter/postgres/rquery"
 	controlrmodel "github.com/gsoultan/anubis/internal/control/adapter/postgres/rmodel"
 	controlrquery "github.com/gsoultan/anubis/internal/control/adapter/postgres/rquery"
+	tenancyrmodel "github.com/gsoultan/anubis/internal/tenancy/adapter/postgres/rmodel"
+	tenancyrquery "github.com/gsoultan/anubis/internal/tenancy/adapter/postgres/rquery"
 	"github.com/gsoultan/storm"
 	"github.com/gsoultan/storm/tool"
 )
@@ -44,6 +46,7 @@ var contexts = map[string]declarations{
 	"authz":   {authzrmodel.All(), authzrquery.Queries()},
 	"audit":   {auditrmodel.All(), auditrquery.Queries()},
 	"control": {controlrmodel.All(), controlrquery.Queries()},
+	"tenancy": {tenancyrmodel.All(), tenancyrquery.Queries()},
 }
 
 func main() {
