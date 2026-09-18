@@ -38,6 +38,42 @@ and quoted through `pgx.Identifier.Sanitize()`. Neither path can touch
 Anubis's own schema — a different connection, a different database.
 Everything reading Anubis's tables still goes through `db/queries`.
 
+## §7 Amendment (2026-09-18): the model is the schema of record
+
+`internal/platform/schema` declares the whole database — 45 tables, 28
+functions, 38 triggers, one view, both partitioned tables — and
+`cmd/stormddl` turns a change to it into the next numbered file in
+`migrations/`. §5.3's "storm's DDL generation is not used" no longer holds:
+it is used, and it is the source of truth.
+
+**What did NOT change.** `migrations/` is still forward-only, still
+checksummed, still what runs, and still reviewed as SQL before it is applied.
+`anubisd migrate` is unchanged. `stormddl` writes a migration and applies
+nothing, which is the whole difference between this and an automigrate.
+Migrations 0001–0046 predate the model and stay exactly as they are — the model
+describes the schema they produce and owns everything after them.
+
+**Why the model is one package and not seven.** Each context's `rmodel` is a
+PROJECTION: it models the tables that context queries and declares another
+context's tables as plain columns, because `scripts/check/context-boundary.sh`
+forbids one context's adapter importing another's. A composite foreign key that
+carries a tenant across that line — grants → identities → realms → tenants —
+cannot be declared from inside either context. So there are two kinds of model
+and one schema: this package is the schema, the rmodels are views onto it.
+
+**Why two models is safe here.** Neither can drift from the database without CI
+saying so. `stormddl -check` fails if the schema of record and the live schema
+disagree — in either direction: a model edited without a migration, or a
+migration applied without the model following it. `cmd/stormgen` PREPAREs every
+context's raw queries against that same schema. Both are anchored to the
+database, so they can only differ in the way a projection is allowed to, by
+describing less.
+
+**The exemption this adds.** `no-sql-in-go.sh` exempts
+`internal/platform/schema`, whose function and trigger bodies are PL/pgSQL by
+definition. That SQL still reaches `migrations/` and is still reviewed there
+before it runs.
+
 ## §6 Amendment (2026-09-17): the audit context, and builders over raw SQL
 
 The audit context moves off sqlc. Unlike authz — which migrated as raw
