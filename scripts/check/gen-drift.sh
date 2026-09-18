@@ -41,15 +41,12 @@ if [ -n "${ANUBIS_DB_URL:-}" ]; then
     git --no-pager diff --stat "${storm_outs[@]}" >&2
     exit 1
   fi
-  # The SCHEMA OF RECORD must agree with the database it describes. A model
-  # edited without a migration fails here, and so does a migration applied
-  # without the model following it — which is the property that makes
-  # internal/platform/schema the source of truth rather than documentation.
-  if ! go run ./cmd/stormddl -check -dsn "$ANUBIS_DB_URL"; then
-    echo "FAIL: the schema of record and the database disagree — see above" >&2
-    exit 1
-  fi
-  echo "ok: generated code matches sources (buf, storm) and the schema of record matches the database"
+  # The schema of record is checked in scripts/ci/backend-suite.sh rather than
+  # here. Both need a database, but the suite's is built from migrations/ a
+  # moment earlier, which is what makes the check mean "the model and the
+  # migrations agree" rather than "the model matches whatever this database
+  # happens to be".
+  echo "ok: generated code matches sources (buf, storm)"
 else
-  echo "ok: generated code matches sources (buf; storm and schema-of-record skipped — no ANUBIS_DB_URL)"
+  echo "ok: generated code matches sources (buf; storm skipped — no ANUBIS_DB_URL)"
 fi

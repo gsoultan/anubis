@@ -45,6 +45,16 @@ for out in \
 ; do
   go run ./cmd/stormgen generate "$out" -raw-schema live -dsn "$ANUBIS_DB_URL" >/dev/null
 done
+# The SCHEMA OF RECORD against a database built from migrations/ a moment ago.
+#
+# This is the strongest place for it: the database here is exactly what the
+# migrations produce, so a disagreement means the model and the migrations have
+# parted company — a model edited without a migration, or a migration written
+# without the model following it. In the `checks` job this cannot run at all,
+# because that job has no database; putting it only there would have made it
+# skip silently and look like a pass.
+go run ./cmd/stormddl -check -dsn "$ANUBIS_DB_URL"
+
 if ! git diff --exit-code --quiet internal/*/adapter/postgres/rgen internal/platform/database/rgen; then
   echo "FAIL: storm generated code drifted — regenerate and commit (see cmd/stormgen)" >&2
   git --no-pager diff --stat internal/*/adapter/postgres/rgen internal/platform/database/rgen >&2
