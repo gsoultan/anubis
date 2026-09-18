@@ -22,6 +22,18 @@
 // that same schema. They are both anchored to the database, which is what
 // makes two models safe rather than two sources of truth.
 //
+// # Reading a declaration
+//
+// A `t.Name(...)` line is not decoration: storm derives a table name from the
+// Go type by naive pluralisation, and where English does not follow those
+// rules — audit_log, catalog_version, scope_axes, role_permissions_effective —
+// the name is pinned so a diff never proposes renaming a live table.
+//
+// Twenty-five of these tables also appear in a context's `rmodel`, where their
+// invariants are written down against the queries that depend on them. Those
+// declarations say so and do not repeat the prose. The twenty that appear only
+// here are documented here, because there is nowhere else they are explained.
+//
 // # The migrations already applied
 //
 // migrations/0001 through 0046 predate this package and stay exactly as they
@@ -37,10 +49,8 @@ import (
 	"github.com/gsoultan/storm"
 )
 
-// APIKey is table api_keys.
-//
-// The table name is not what storm would derive from the type, so it is
-// set explicitly in Schema — otherwise the first diff would rename it.
+// APIKey is public.api_keys. The authrmodel package documents this table's
+// invariants; this declaration is the DDL half of the same thing.
 type APIKey struct {
 	CreatedAt  time.Time
 	ID         [16]byte
@@ -70,7 +80,8 @@ func (m *APIKey) Schema(t *storm.Table) {
 	t.Index(&m.Tenant, &m.RevokedAt).Named("api_keys_tenant")
 }
 
-// Application is table applications.
+// Application is public.applications. The tenancyrmodel package documents this table's
+// invariants; this declaration is the DDL half of the same thing.
 type Application struct {
 	storm.Model
 
@@ -109,10 +120,8 @@ func (m *Application) Schema(t *storm.Table) {
 	t.CheckNamed("applications_token_format_check", "token_format = ANY (ARRAY['v4.public'::text, 'jws.eddsa'::text])")
 }
 
-// AuditLog is table audit_log.
-//
-// The table name is not what storm would derive from the type, so it is
-// set explicitly in Schema — otherwise the first diff would rename it.
+// AuditLog is public.audit_log. The auditrmodel package documents this table's
+// invariants; this declaration is the DDL half of the same thing.
 type AuditLog struct {
 	OccurredAt time.Time
 	ID         [16]byte
@@ -146,7 +155,8 @@ func (m *AuditLog) Schema(t *storm.Table) {
 	t.PartitionBy(storm.RangePartition, &m.OccurredAt)
 }
 
-// AuthPage is table auth_pages.
+// AuthPage is public.auth_pages. The tenancyrmodel package documents this table's
+// invariants; this declaration is the DDL half of the same thing.
 type AuthPage struct {
 	storm.Model
 
@@ -183,7 +193,11 @@ func (m *AuthPage) Schema(t *storm.Table) {
 	t.ForeignKey(&m.RealmID, &m.Tenant).References(&ref1, &ref1.ID, &ref1.Tenant).Named("auth_pages_realm_fkey").OnDelete(storm.SetNull)
 }
 
-// CatalogSyncRun is table catalog_sync_runs.
+// CatalogSyncRun is what one catalog sync attempt did.
+//
+// document_sha is the digest of the manifest that was applied: re-applying an
+// unchanged document is a no-op the run log can prove, which is what makes a
+// nightly sync safe to leave running.
 type CatalogSyncRun struct {
 	StartedAt   time.Time
 	FinishedAt  *time.Time
@@ -216,7 +230,12 @@ func (m *CatalogSyncRun) Schema(t *storm.Table) {
 	t.Index(&m.Source, storm.Desc(&m.StartedAt)).Named("catalog_sync_runs_by_source")
 }
 
-// CatalogSyncSource is table catalog_sync_sources.
+// CatalogSyncSource is a feed that keeps an application's permission catalog
+// in step with what the application actually declares.
+//
+// The alternative is an operator retyping permission keys, which drifts the
+// day somebody ships a new endpoint. next_run_at drives the scheduler the same
+// way a scope sync source does.
 type CatalogSyncSource struct {
 	storm.Model
 
@@ -248,10 +267,8 @@ func (m *CatalogSyncSource) Schema(t *storm.Table) {
 	t.ForeignKey(&m.ApplicationID, &m.Tenant).References(&ref0, &ref0.ID, &ref0.Tenant).Named("catalog_sync_sources_application_id_tenant_id_fkey").OnDelete(storm.Cascade).NoIndex()
 }
 
-// CatalogVersion is table catalog_version.
-//
-// The table name is not what storm would derive from the type, so it is
-// set explicitly in Schema — otherwise the first diff would rename it.
+// CatalogVersion is public.catalog_version. The tenancyrmodel package documents this table's
+// invariants; this declaration is the DDL half of the same thing.
 type CatalogVersion struct {
 	ChangedAt time.Time
 	Version   int64
@@ -267,7 +284,8 @@ func (m *CatalogVersion) Schema(t *storm.Table) {
 	t.Col(&m.Tenant).OnDelete(storm.Cascade)
 }
 
-// Consent is table consents.
+// Consent is public.consents. The identityrmodel package documents this table's
+// invariants; this declaration is the DDL half of the same thing.
 type Consent struct {
 	GrantedAt     time.Time
 	WithdrawnAt   *time.Time
@@ -290,7 +308,8 @@ func (m *Consent) Schema(t *storm.Table) {
 	t.ForeignKey(&m.IdentityID, &m.TenantID).References(&ref0, &ref0.ID, &ref0.Tenant).Named("consents_identity_id_tenant_id_fkey").OnDelete(storm.Cascade)
 }
 
-// Credential is table credentials.
+// Credential is public.credentials. The identityrmodel package documents this table's
+// invariants; this declaration is the DDL half of the same thing.
 type Credential struct {
 	storm.Model
 
@@ -319,7 +338,16 @@ func (m *Credential) Schema(t *storm.Table) {
 	t.ForeignKey(&m.IdentityID, &m.TenantID).References(&ref0, &ref0.ID, &ref0.Tenant).Named("credentials_identity_id_tenant_id_fkey").OnDelete(storm.Cascade)
 }
 
-// GrantScope is table grant_scopes.
+// GrantScope binds a grant to a place in one axis's tree.
+//
+// mode is 'include' or 'exclude' and the two are not symmetric: a grant with
+// no rows on an axis reaches everywhere on it, includes narrow it to the named
+// subtrees, and an exclude carves a hole out of what the includes reached. The
+// gate loads mode as a bool for exactly this reason — a snapshot that dropped
+// the excludes would allow, in memory, what the database denies.
+//
+// inherit says whether the binding covers the node's descendants or only the
+// node itself.
 type GrantScope struct {
 	GrantID     [16]byte
 	TenantID    [16]byte
@@ -345,7 +373,19 @@ func (m *GrantScope) Schema(t *storm.Table) {
 	t.ForeignKey(&m.ScopeNodeID, &m.TenantID, &m.AxisCode).References(&ref1, &ref1.ID, &ref1.Tenant, &ref1.AxisCode).Named("grant_scopes_scope_node_id_tenant_id_axis_code_fkey").OnDelete(storm.Restrict)
 }
 
-// Grant is table grants.
+// Grant is one role given to one identity, optionally scoped.
+//
+// This is the row authorize() reads. A grant is alive when revoked_at is null
+// and now() is inside [valid_from, valid_until) — expiry is a COLUMN rather
+// than a sweep, so a lapsed grant stops granting at the instant it lapses and
+// not whenever a job next runs.
+//
+// self_scoped means "only over the identity's own records", which is a
+// different thing from having no scope rows at all: no rows means everywhere.
+//
+// ViaMembership and ViaEntry are set when the grant was fanned out from a
+// membership rather than given directly. They are what lets unassigning a
+// membership find exactly the grants it created and leave direct ones alone.
 type Grant struct {
 	CreatedAt     time.Time
 	ValidFrom     time.Time
@@ -388,7 +428,18 @@ func (m *Grant) Schema(t *storm.Table) {
 	t.ForeignKey(&m.RoleID, &m.Tenant).References(&ref1, &ref1.ID, &ref1.Tenant).Named("grants_role_id_tenant_id_fkey").OnDelete(storm.Restrict)
 }
 
-// Identity is table identities.
+// Identity is one person (or service principal) inside one tenant.
+//
+// token_epoch is the revocation lever: every issued token carries the epoch it
+// was minted under, so bumping it invalidates all of them at once without
+// touching a session row. Disabling, anonymising and an explicit revocation all
+// bump it.
+//
+// anonymized_at is erasure, and erasure here does not DELETE: the row and its
+// referential integrity survive so the audit trail stays readable, while the
+// direct identifiers are blanked and authorize() denies from that moment
+// (migrations/0009 gate 1). retention_until is the statutory clock that
+// triggers it.
 type Identity struct {
 	storm.Model
 
@@ -436,7 +487,11 @@ func (m *Identity) Schema(t *storm.Table) {
 	t.ForeignKey(&m.RealmID, &m.Tenant).References(&ref1, &ref1.ID, &ref1.Tenant).Named("identities_realm_fk").OnDelete(storm.Restrict).NoIndex()
 }
 
-// IdentityLink is table identity_links.
+// IdentityLink records that two identities are the same person.
+//
+// A link, not a merge: both rows keep their grants and their audit history,
+// because merging them would rewrite history to say things that did not
+// happen. method and evidence record HOW the claim was established.
 type IdentityLink struct {
 	LinkedAt    time.Time
 	ID          [16]byte
@@ -462,7 +517,8 @@ func (m *IdentityLink) Schema(t *storm.Table) {
 	t.ForeignKey(&m.SecondaryID, &m.TenantID).References(&ref1, &ref1.ID, &ref1.Tenant).Named("identity_links_secondary_id_tenant_id_fkey").OnDelete(storm.Cascade).NoIndex()
 }
 
-// MembershipEntry is table membership_entries.
+// MembershipEntry is one role inside a membership — the template a Grant is
+// fanned out from.
 type MembershipEntry struct {
 	ID           [16]byte
 	MembershipID [16]byte
@@ -480,7 +536,11 @@ func (m *MembershipEntry) Schema(t *storm.Table) {
 	t.ForeignKey(&m.RoleID, &m.TenantID).References(&ref1, &ref1.ID, &ref1.Tenant).Named("membership_entries_role_id_tenant_id_fkey").OnDelete(storm.Restrict).NoIndex()
 }
 
-// MembershipEntryScope is table membership_entry_scopes.
+// MembershipEntryScope is the scope binding on one membership entry, carrying
+// the same include/exclude and inherit semantics a GrantScope does.
+//
+// It has to, because the grants fanned out from this entry get these rows
+// copied onto them verbatim.
 type MembershipEntryScope struct {
 	EntryID     [16]byte
 	TenantID    [16]byte
@@ -505,7 +565,11 @@ func (m *MembershipEntryScope) Schema(t *storm.Table) {
 	t.ForeignKey(&m.ScopeNodeID, &m.TenantID, &m.AxisCode).References(&ref1, &ref1.ID, &ref1.Tenant, &ref1.AxisCode).Named("membership_entry_scopes_scope_node_id_tenant_id_axis_code_fkey").OnDelete(storm.Restrict).NoIndex()
 }
 
-// MembershipMember is table membership_members.
+// MembershipMember is one identity's assignment to a membership.
+//
+// assigned_by and assigned_at are kept because removing somebody from a
+// membership revokes real grants, and "who put them in and when" is the
+// question asked afterwards.
 type MembershipMember struct {
 	AssignedAt   time.Time
 	MembershipID [16]byte
@@ -523,7 +587,12 @@ func (m *MembershipMember) Schema(t *storm.Table) {
 	t.ForeignKey(&m.MembershipID, &m.TenantID).References(&ref1, &ref1.ID, &ref1.Tenant).Named("membership_members_membership_id_tenant_id_fkey").OnDelete(storm.Cascade)
 }
 
-// Membership is table memberships.
+// Membership is a named, reusable bundle of role-and-scope assignments.
+//
+// Assigning one fans its entries out into real Grant rows rather than creating
+// a layer the decision path has to consult: authorize() reads grants and knows
+// nothing about memberships. That is why a membership can be changed and
+// re-synced without the gate learning a second way to be granted.
 type Membership struct {
 	CreatedAt   time.Time
 	ID          [16]byte
@@ -543,7 +612,8 @@ func (m *Membership) Schema(t *storm.Table) {
 	t.UniqueNamed("memberships_tenant_id_name_key", &m.Tenant, &m.Name)
 }
 
-// OneTimeToken is table one_time_tokens.
+// OneTimeToken is public.one_time_tokens. The authrmodel package documents this table's
+// invariants; this declaration is the DDL half of the same thing.
 type OneTimeToken struct {
 	CreatedAt time.Time
 	ExpiresAt time.Time
@@ -568,7 +638,17 @@ func (m *OneTimeToken) Schema(t *storm.Table) {
 	t.Index(&m.ExpiresAt).Named("one_time_tokens_expiry")
 }
 
-// Permission is table permissions.
+// Permission is one thing that can be granted, and the assurance it demands.
+//
+// key is the dotted name a request carries. min_assurance, requires_amr and
+// max_auth_age are the step-up policy: a permission can demand a stronger
+// factor or a more recent authentication than the session currently has, which
+// is how a privileged action forces re-authentication without every session
+// being privileged.
+//
+// deprecated_at retires a permission from the catalog without deleting it:
+// grants that already name it keep working, and nothing new can be written
+// against it.
 type Permission struct {
 	CreatedAt    time.Time
 	DeprecatedAt *time.Time
@@ -607,7 +687,11 @@ func (m *Permission) Schema(t *storm.Table) {
 	t.ForeignKey(&m.Application, &m.TenantID).References(&ref1, &ref1.ID, &ref1.Tenant).Named("permissions_application_id_tenant_id_fkey").OnDelete(storm.Cascade)
 }
 
-// PiiKeyTombstone is table pii_key_tombstones.
+// PiiKeyTombstone is the record that a PII key was destroyed.
+//
+// Crypto-shredding leaves nothing to point at, so the proof that an erasure
+// happened has to be a row somewhere else. This is that row: which key, when,
+// and under what reason.
 type PiiKeyTombstone struct {
 	ShreddedAt time.Time
 	KeyID      [16]byte
@@ -621,7 +705,8 @@ func (m *PiiKeyTombstone) Schema(t *storm.Table) {
 	t.CheckNamed("pii_key_tombstones_reason_check", "reason = ANY (ARRAY['erasure_request'::text, 'retention'::text, 'admin'::text])")
 }
 
-// PiiKey is table pii_keys.
+// PiiKey is public.pii_keys. The identityrmodel package documents this table's
+// invariants; this declaration is the DDL half of the same thing.
 type PiiKey struct {
 	CreatedAt  time.Time
 	ShreddedAt *time.Time
@@ -641,10 +726,8 @@ func (m *PiiKey) Schema(t *storm.Table) {
 	t.Index(&m.Tenant).Named("pii_keys_tenant")
 }
 
-// PlatformAPIKey is table platform_api_keys.
-//
-// The table name is not what storm would derive from the type, so it is
-// set explicitly in Schema — otherwise the first diff would rename it.
+// PlatformAPIKey is public.platform_api_keys. The controlrmodel package documents this table's
+// invariants; this declaration is the DDL half of the same thing.
 type PlatformAPIKey struct {
 	ID           [16]byte
 	PlatformUser PlatformUser
@@ -674,7 +757,8 @@ func (m *PlatformAPIKey) Schema(t *storm.Table) {
 	t.Index(&m.PlatformUser, &m.RevokedAt).Named("platform_api_keys_owner")
 }
 
-// PlatformAssignment is table platform_assignments.
+// PlatformAssignment is public.platform_assignments. The controlrmodel package documents this table's
+// invariants; this declaration is the DDL half of the same thing.
 type PlatformAssignment struct {
 	storm.Model
 
@@ -705,7 +789,8 @@ func (m *PlatformAssignment) Schema(t *storm.Table) {
 	t.Index(&m.Operator, &m.Tenant, &m.RevokedAt).Named("platform_assignments_lookup")
 }
 
-// PlatformRefreshToken is table platform_refresh_tokens.
+// PlatformRefreshToken is public.platform_refresh_tokens. The controlrmodel package documents this table's
+// invariants; this declaration is the DDL half of the same thing.
 type PlatformRefreshToken struct {
 	ID           [16]byte
 	PlatformUser PlatformUser
@@ -730,7 +815,8 @@ func (m *PlatformRefreshToken) Schema(t *storm.Table) {
 	t.Index(&m.TokenHash).Unique().Named("platform_refresh_by_hash")
 }
 
-// PlatformUser is table platform_users.
+// PlatformUser is public.platform_users. The controlrmodel package documents this table's
+// invariants; this declaration is the DDL half of the same thing.
 type PlatformUser struct {
 	storm.Model
 
@@ -758,7 +844,8 @@ func (m *PlatformUser) Schema(t *storm.Table) {
 	t.Index(storm.Lower(&m.Username)).Unique().Named("platform_users_username")
 }
 
-// RealmCategory is table realm_categories.
+// RealmCategory is public.realm_categories. The identityrmodel package documents this table's
+// invariants; this declaration is the DDL half of the same thing.
 type RealmCategory struct {
 	CreatedAt   time.Time
 	SortOrder   int32
@@ -781,7 +868,16 @@ func (m *RealmCategory) Schema(t *storm.Table) {
 	t.ForeignKey(&m.RealmID, &m.TenantID).References(&ref0, &ref0.ID, &ref0.Tenant).Named("realm_categories_realm_id_tenant_id_fkey").OnDelete(storm.Cascade)
 }
 
-// Realm is table realms.
+// Realm is a POPULATION and the policy that governs it — employees,
+// customers, suppliers — inside one tenant.
+//
+// code and kind decide which roles the realm's members may hold, and
+// migrations/0010 enforces that on every grant. That is why neither is
+// editable once the realm has members: changing them would retroactively
+// re-decide access that has already been granted and evaluated.
+//
+// The three TTLs and the factor policy are per-population because a supplier's
+// session should not last as long as an employee's.
 type Realm struct {
 	storm.Model
 
@@ -824,7 +920,8 @@ func (m *Realm) Schema(t *storm.Table) {
 	t.CheckNamed("realms_min_assurance_check", "(min_assurance >= 1) AND (min_assurance <= 3)")
 }
 
-// RefreshToken is table refresh_tokens.
+// RefreshToken is public.refresh_tokens. The authrmodel package documents this table's
+// invariants; this declaration is the DDL half of the same thing.
 type RefreshToken struct {
 	CreatedAt   time.Time
 	ExpiresAt   time.Time
@@ -855,10 +952,11 @@ func (m *RefreshToken) Schema(t *storm.Table) {
 	t.PartitionBy(storm.RangePartition, &m.ExpiresAt)
 }
 
-// RoleGrantable is table role_grantable.
+// RoleGrantable says which roles a role's holder may grant to somebody else.
 //
-// The table name is not what storm would derive from the type, so it is
-// set explicitly in Schema — otherwise the first diff would rename it.
+// Separate from inheritance on purpose: being able to USE a permission and
+// being able to HAND IT OUT are different authorities, and conflating them is
+// how an ordinary role quietly becomes an administrative one.
 type RoleGrantable struct {
 	Role      Role
 	Grantable Role
@@ -875,7 +973,14 @@ func (m *RoleGrantable) Schema(t *storm.Table) {
 	t.CheckNamed("role_grantable_check", "role_id <> grantable_id")
 }
 
-// RoleParent is table role_parents.
+// RoleParent is one edge of the role inheritance graph: role gets everything
+// parent has.
+//
+// A role may have several parents. A cycle is TOLERATED rather than refused:
+// the effective-set recompute in migrations/0004 walks the graph with
+// PostgreSQL's CYCLE clause, which stops the recursion at a repeat instead of
+// running forever. Nothing rejects the edge that closes the loop, so a cycle
+// is a modelling mistake the schema survives rather than one it prevents.
 type RoleParent struct {
 	Role   Role
 	Parent Role
@@ -891,7 +996,12 @@ func (m *RoleParent) Schema(t *storm.Table) {
 	t.Index(&m.Parent).Named("role_parents_parent")
 }
 
-// RolePermissionPattern is table role_permission_patterns.
+// RolePermissionPattern is a glob a role grants rather than a named permission.
+//
+// It exists so a role can say "every read in this application" and keep meaning
+// that as the application adds permissions. The expansion is recomputed by
+// trigger when either side moves, which is why a new permission joins the roles
+// that match it without anyone re-saving a role.
 type RolePermissionPattern struct {
 	ID      [16]byte
 	Role    Role
@@ -907,7 +1017,11 @@ func (m *RolePermissionPattern) Schema(t *storm.Table) {
 	t.CheckNamed("role_permission_patterns_pattern_check", "pattern ~ '^[a-z0-9_:*-]+$'::text")
 }
 
-// RolePermission is table role_permissions.
+// RolePermission is a permission named DIRECTLY on a role.
+//
+// The other two ways a role acquires permissions are a pattern
+// (RolePermissionPattern) and inheritance from a parent (RoleParent). All
+// three are folded into RolePermissionsEffective by trigger.
 type RolePermission struct {
 	Role       Role
 	Permission Permission
@@ -922,10 +1036,17 @@ func (m *RolePermission) Schema(t *storm.Table) {
 	t.Col(&m.Permission).NoIndex()
 }
 
-// RolePermissionsEffective is table role_permissions_effective.
+// RolePermissionsEffective is the DERIVED closure: every permission every role
+// actually has, from all three sources — direct, pattern, and inherited.
 //
-// The table name is not what storm would derive from the type, so it is
-// set explicitly in Schema — otherwise the first diff would rename it.
+// Maintained entirely by trigger (migrations 0005/0006). Nothing in Go writes
+// it. The gate snapshot reads this table rather than recomputing the closure
+// per request, which is the difference between a decision that costs one map
+// lookup and one that walks a role graph.
+//
+// via_role records WHICH role in the inheritance chain contributed the
+// permission, which is what makes a decision explainable rather than merely
+// correct.
 type RolePermissionsEffective struct {
 	Role       Role
 	Permission Permission
@@ -945,7 +1066,8 @@ func (m *RolePermissionsEffective) Schema(t *storm.Table) {
 	t.Index(&m.Permission, &m.Role).Named("rpe_permission")
 }
 
-// Role is table roles.
+// Role is public.roles. The authzrmodel package documents this table's
+// invariants; this declaration is the DDL half of the same thing.
 type Role struct {
 	storm.Model
 
@@ -973,7 +1095,8 @@ func (m *Role) Schema(t *storm.Table) {
 	t.ForeignKey(&m.ApplicationID, &m.Tenant).References(&ref0, &ref0.ID, &ref0.Tenant).Named("roles_application_id_tenant_id_fkey").OnDelete(storm.Cascade).NoIndex()
 }
 
-// RoutePolicy is table route_policies.
+// RoutePolicy is public.route_policies. The tenancyrmodel package documents this table's
+// invariants; this declaration is the DDL half of the same thing.
 type RoutePolicy struct {
 	CreatedAt     time.Time
 	ID            [16]byte
@@ -1005,7 +1128,12 @@ func (m *RoutePolicy) Schema(t *storm.Table) {
 	t.ForeignKey(&m.ApplicationID, &m.TenantID).References(&ref0, &ref0.ID, &ref0.Tenant).Named("route_policies_application_id_tenant_id_fkey").OnDelete(storm.Cascade)
 }
 
-// SchemaMigration is table schema_migrations.
+// SchemaMigration is the migration runner's ledger: which files have been
+// applied, and the checksum each had when it ran.
+//
+// The checksum is the point. A migration edited after it was applied is a
+// database that no longer matches its own history, and the runner refuses to
+// proceed rather than guessing which version is real.
 type SchemaMigration struct {
 	AppliedAt time.Time
 	Version   string
@@ -1017,7 +1145,8 @@ func (m *SchemaMigration) Schema(t *storm.Table) {
 	t.Col(&m.AppliedAt).Default("now()")
 }
 
-// ScopeAx is table scope_axes.
+// ScopeAx is public.scope_axes. The scopermodel package documents this table's
+// invariants; this declaration is the DDL half of the same thing.
 type ScopeAx struct {
 	CreatedAt     time.Time
 	SortOrder     int32
@@ -1042,10 +1171,17 @@ func (m *ScopeAx) Schema(t *storm.Table) {
 	t.CheckNamed("scope_axes_status_check", "status = ANY (ARRAY['active'::text, 'deprecated'::text])")
 }
 
-// ScopeClosure is table scope_closure.
+// ScopeClosure is the DERIVED ancestor-of relation over the scope trees, one
+// row per (ancestor, descendant, depth).
 //
-// The table name is not what storm would derive from the type, so it is
-// set explicitly in Schema — otherwise the first diff would rename it.
+// Maintained entirely by trigger; nothing in Go writes it. authorize() probes
+// it to answer "does a grant on node A reach target B" as an index lookup
+// rather than a recursive walk, which is what keeps the decision flat as the
+// tree deepens.
+//
+// The gate does NOT load this table — it loads parent pointers and walks them,
+// because one row per node beats one row per pair at a million nodes. The two
+// must agree, and snapshot_parity_test.go is what proves they do.
 type ScopeClosure struct {
 	Ancestor   ScopeNode
 	Descendant ScopeNode
@@ -1063,7 +1199,8 @@ func (m *ScopeClosure) Schema(t *storm.Table) {
 	t.Index(&m.Descendant, &m.Ancestor).Include(&m.Depth).Named("scope_closure_up")
 }
 
-// ScopeNodeType is table scope_node_types.
+// ScopeNodeType is public.scope_node_types. The scopermodel package documents this table's
+// invariants; this declaration is the DDL half of the same thing.
 type ScopeNodeType struct {
 	Code        string
 	AxisCode    ScopeAx
@@ -1082,7 +1219,8 @@ func (m *ScopeNodeType) Schema(t *storm.Table) {
 	t.CheckNamed("scope_node_types_code_check", "code ~ '^[a-z][a-z0-9_]{1,30}$'::text")
 }
 
-// ScopeNode is table scope_nodes.
+// ScopeNode is public.scope_nodes. The scopermodel package documents this table's
+// invariants; this declaration is the DDL half of the same thing.
 type ScopeNode struct {
 	storm.Model
 
@@ -1121,7 +1259,8 @@ func (m *ScopeNode) Schema(t *storm.Table) {
 	t.ForeignKey(&m.ParentID, &m.Tenant, &m.AxisCode).References(&ref1, &ref1.ID, &ref1.Tenant, &ref1.AxisCode).Named("scope_nodes_parent_id_tenant_id_axis_code_fkey").OnDelete(storm.Restrict)
 }
 
-// ScopeSyncRun is table scope_sync_runs.
+// ScopeSyncRun is public.scope_sync_runs. The scopermodel package documents this table's
+// invariants; this declaration is the DDL half of the same thing.
 type ScopeSyncRun struct {
 	StartedAt  time.Time
 	FinishedAt *time.Time
@@ -1145,7 +1284,8 @@ func (m *ScopeSyncRun) Schema(t *storm.Table) {
 	t.Index(&m.Source, storm.Desc(&m.StartedAt)).Named("scope_sync_runs_src")
 }
 
-// ScopeSyncSource is table scope_sync_sources.
+// ScopeSyncSource is public.scope_sync_sources. The scopermodel package documents this table's
+// invariants; this declaration is the DDL half of the same thing.
 type ScopeSyncSource struct {
 	CreatedAt       time.Time
 	LastRunAt       *time.Time
@@ -1178,7 +1318,8 @@ func (m *ScopeSyncSource) Schema(t *storm.Table) {
 	t.Index(&m.NextRunAt).Where("(status = 'active'::text) AND (next_run_at IS NOT NULL)").Named("scope_sync_sources_due")
 }
 
-// Session is table sessions.
+// Session is public.sessions. The authrmodel package documents this table's
+// invariants; this declaration is the DDL half of the same thing.
 type Session struct {
 	CreatedAt     time.Time
 	LastSeenAt    time.Time
@@ -1216,7 +1357,8 @@ func (m *Session) Schema(t *storm.Table) {
 	t.ForeignKey(&m.IdentityID, &m.TenantID).References(&ref1, &ref1.ID, &ref1.Tenant).Named("sessions_identity_id_tenant_id_fkey").OnDelete(storm.Cascade)
 }
 
-// SigningKey is table signing_keys.
+// SigningKey is public.signing_keys. The authrmodel package documents this table's
+// invariants; this declaration is the DDL half of the same thing.
 type SigningKey struct {
 	CreatedAt     time.Time
 	NotBefore     time.Time
@@ -1248,7 +1390,8 @@ func (m *SigningKey) Schema(t *storm.Table) {
 	t.Index(&m.Purpose).Unique().Where("status = 'active'::text").Named("signing_keys_one_active")
 }
 
-// Tenant is table tenants.
+// Tenant is public.tenants. The tenancyrmodel package documents this table's
+// invariants; this declaration is the DDL half of the same thing.
 type Tenant struct {
 	storm.Model
 
