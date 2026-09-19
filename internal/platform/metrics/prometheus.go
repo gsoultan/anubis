@@ -98,11 +98,11 @@ func writeCounterFamily(b *strings.Builder, family, help, prefix, label string) 
 }
 
 func writeJobFamily(b *strings.Builder) {
-	fmt.Fprint(b, "# HELP anubis_job_runs_total Maintenance job runs by outcome (skipped = another replica held the lock).\n")
+	fmt.Fprint(b, "# HELP anubis_job_runs_total Maintenance job runs by outcome (skipped = another replica held the lock). Labelled maintenance_job: `job` is reserved by Prometheus for the scrape job.\n")
 	fmt.Fprint(b, "# TYPE anubis_job_runs_total counter\n")
 	for _, k := range familyKeys(&counters, "job") {
 		v, _ := counters.Load(k)
-		fmt.Fprintf(b, "anubis_job_runs_total{job=%q,result=%q} %d\n",
+		fmt.Fprintf(b, "anubis_job_runs_total{maintenance_job=%q,result=%q} %d\n",
 			labelOf(k, 0), labelOf(k, 1), v.(interface{ Load() uint64 }).Load())
 	}
 }

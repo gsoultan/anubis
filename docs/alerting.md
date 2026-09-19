@@ -1,5 +1,27 @@
 # Alerting
 
+The rules below ship as [`packaging/anubis.rules.yml`](../packaging/anubis.rules.yml),
+which `scripts/check/alert-rules.sh` parses on every push. This table was the
+specification for as long as the rules existed and nothing ever loaded one — a
+rule naming a metric that does not exist, or selecting a label the exporter
+never emits, evaluates to "ok" with an empty result, which is
+indistinguishable from a condition that is merely false. Loading them against a
+live scrape for the first time found exactly that: `anubis_job_runs_total`
+emitted a `job` label, which Prometheus reserves for the scrape target and
+silently renames to `exported_job`, so the alert whose whole purpose is naming
+the failing job named the scrape job instead. It is `maintenance_job` now.
+
+Scrape the **debug** listener, not the API port:
+
+```yaml
+rule_files:
+  - anubis.rules.yml
+scrape_configs:
+  - job_name: anubis
+    static_configs:
+      - targets: ['127.0.0.1:7450']   # ANUBIS_DEBUG_LISTEN
+```
+
 Every rule pairs a metric with the runbook section that answers it. Metrics
 are served in Prometheus text format at `/metrics` on the **debug listener**
 (`ANUBIS_DEBUG_LISTEN`) — they describe the installation's operation and stay
@@ -15,7 +37,7 @@ IP and restrict it with a NetworkPolicy; the scraper is the only client.
 | **Refresh token stolen** | `increase(anubis_audit_events_total{action="token.reuse_detected"}[5m]) > 0` | The highest-signal event in the system: a consumed refresh token was replayed. Anubis already revoked the family and session. Run [operations.md — Incident: refresh token reuse](operations.md#incident-refresh-token-reuse). |
 | **Gate snapshot stale** | `time() - anubis_gate_snapshot_loaded_timestamp_seconds > 300` (match `ANUBIS_SNAPSHOT_MAX_AGE`) | Past max age the gate **fails closed**: the instance is denying traffic it should allow. `/readyz` also fails, so the balancer should already be pulling it — this alert is the "why did readiness fail" answer. Check database connectivity and the `snapshot load failed` log line. |
 | **Internal error rate** | `sum(rate(anubis_endpoint_requests_total{code="internal"}[5m])) > 0.1` | Internal means a bug or a dependency down, never a caller mistake. Correlate with `request_id` in logs. |
-| **Maintenance job failing** | `increase(anubis_job_runs_total{result="error"}[2h]) > 1` | `partitions` failing means rows land in the DEFAULT partition; `retention` failing means PII outlives its deadline; `signing_key_expiry` failing means nobody is watching key age. Job name is in the label; each has a section in [operations.md](operations.md#maintenance-jobs). |
+| **Maintenance job failing** | `increase(anubis_job_runs_total{result="error"}[2h]) > 1` | `partitions` failing means rows land in the DEFAULT partition; `retention` failing means PII outlives its deadline; `signing_key_expiry` failing means nobody is watching key age. The failing job is in the `maintenance_job` label — **not** `job`, which Prometheus reserves for the scrape target; each has a section in [operations.md](operations.md#maintenance-jobs). |
 
 ## Warn
 
