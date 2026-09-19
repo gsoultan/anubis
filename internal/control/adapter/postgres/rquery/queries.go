@@ -9,16 +9,22 @@
 //   - The JOINS. Reading a key or an assignment alongside its owner's status
 //     is one query on purpose — checking the owner separately is a second
 //     round trip AND a window where the two disagree.
-//   - The guarded UPDATES that set a SERVER-side expression. `revoked_at =
-//     now()` on a client clock is not the same fact: app servers skew, and a
-//     revocation that appears to precede the token it revokes is unreadable
-//     afterwards. `token_epoch = token_epoch + 1` is stronger still — computed
-//     in Go it is a read-modify-write, and two concurrent disables would lose
-//     one increment and leave one operator's tokens live.
+//   - The GUARDED updates. `SET revoked_at = now() WHERE family_id = $1 AND
+//     revoked_at IS NULL` addresses rows by something other than the primary
+//     key, and the guard has to be in the statement: a read-then-write is the
+//     window the guard exists to close.
 //
-// storm has no way to SET a column to an expression (its Mut takes values), so
-// these stay SQL. That is the correct home for them either way: they are three
-// lines of SQL that say exactly what they mean.
+// The server-side expressions themselves are no longer the reason. storm can
+// say `revoked_at = now()` and `token_epoch = token_epoch + 1` since v0.16.0
+// (SetRevokedAtNow, IncTokenEpoch), and it still matters that the DATABASE
+// computes them — a client clock makes a revocation that appears to precede
+// the token it revoked, and an increment computed in Go is a read-modify-write
+// where two concurrent disables lose one and leave an operator's tokens live.
+// What keeps these in SQL is the WHERE, not the SET.
+//
+// The single-row form went the other way: a lookup by lower(username) is
+// platformuser.Username.EqLower now, because EqLower lowers to the expression
+// the unique index is built on.
 package controlrquery
 
 import "github.com/gsoultan/storm"
@@ -35,7 +41,7 @@ func Queries() []storm.RawDecl {
 		// assignment.go
 		ListAssignments, ListAssignmentsForOperator, RevokeAssignment, HasAnyPlatformOwner,
 		// user.go
-		GetPlatformUserByUsername, ListPlatformUsers,
+		ListPlatformUsers,
 		SetPlatformUserStatus, TouchPlatformUserLogin,
 		StageTotpSecret, ConfirmTotpEnrolment, AdvanceTotpStep, ClearTotp,
 		// refresh.go

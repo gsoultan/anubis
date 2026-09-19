@@ -26,7 +26,7 @@ func Queries() []storm.RawDecl {
 	return []storm.RawDecl{
 		// session.go
 		CreateSession, GetSessionLive, GetSessionState, ListSessionsByIdentity,
-		RevokeSession, RevokeAllSessions, TouchSession, UpdateSessionScopes,
+		RevokeSession, RevokeAllSessions, UpdateSessionScopes,
 		UpgradeSessionAmr, SetSessionCookieHash, GetSessionByCookieHash,
 		// refresh.go
 		CreateRefreshToken, ClaimRefreshToken, SetRefreshSuccessor,
@@ -35,7 +35,7 @@ func Queries() []storm.RawDecl {
 		// one_time.go
 		ConsumeOneTimeToken, SweepOneTimeTokens,
 		// api_key.go
-		GetAPIKeyByLookup, ListAPIKeys, RevokeAPIKey, TouchAPIKeyUsed,
+		GetAPIKeyByLookup, ListAPIKeys, RevokeAPIKey,
 		// signing_key.go
 		SetSigningKeyStatus, PromotePendingKey, DemoteActiveKey,
 	}

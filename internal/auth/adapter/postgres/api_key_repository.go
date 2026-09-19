@@ -93,5 +93,11 @@ func (s *Repository) RevokeAPIKey(ctx context.Context, tenantID, id string) erro
 // TouchAPIKeyUsed is best effort: a request that authenticated must not fail
 // because its usage timestamp did not land.
 func (s *Repository) TouchAPIKeyUsed(ctx context.Context, id string) {
-	_, _ = authrquery.TouchAPIKeyUsed.Exec(ctx, s.ex(ctx), id)
+	kid, err := database.ParseUUID(id)
+	if err != nil {
+		return // not an id, so there is no row to touch
+	}
+	m := apikey.MutateKey(kid)
+	m.SetLastUsedAtNow()
+	_ = m.Update(ctx, s.ex(ctx))
 }

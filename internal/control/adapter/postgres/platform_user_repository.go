@@ -36,25 +36,20 @@ func (s *Repository) CreatePlatformUser(ctx context.Context, username, email, pa
 // here, which is what lets console sign-in ask for one without a tenant.
 //
 // The match is on lower(username), which is the expression the unique index is
-// built on — comparing any other way would either miss a row or scan.
+// built on — comparing any other way would either miss a row or scan. EqLower
+// is the predicate that says so; a plain Eq here is a sequential scan on every
+// sign-in attempt, and it looks identical at the call site.
 func (s *Repository) PlatformUserByUsername(ctx context.Context, username string) (*controldomain.PlatformUser, string, error) {
-	row, ok, err := controlrquery.GetPlatformUserByUsername.One(ctx, s.ex(ctx), username)
+	row, ok, err := platformuser.New().
+		Where(platformuser.Username.EqLower(username)).
+		One(ctx, s.ex(ctx))
 	if err != nil {
 		return nil, "", database.MapErr(err)
 	}
 	if !ok {
 		return nil, "", nil
 	}
-	u := &controldomain.PlatformUser{
-		ID: row.ID, Username: row.Username, Status: row.Status,
-		TokenEpoch: int(row.TokenEpoch), CreatedAt: row.CreatedAt,
-		LastLoginAt: tptr(row.LastLoginAt), DisabledAt: tptr(row.DisabledAt),
-		TOTPEnrolledAt: tptr(row.TotpEnrolledAt), TOTPLastStep: uint64(row.TotpLastStep),
-	}
-	if e, ok := row.Email.Get(); ok {
-		u.Email = e
-	}
-	return u, row.PasswordHash, nil
+	return userOf(row), row.PasswordHash, nil
 }
 
 // PlatformUserByID is the lookup a challenge resolves against.

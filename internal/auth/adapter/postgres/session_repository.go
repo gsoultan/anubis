@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/gsoultan/anubis/internal/auth/adapter/postgres/rgen/session"
 	authrquery "github.com/gsoultan/anubis/internal/auth/adapter/postgres/rquery"
 	authdomain "github.com/gsoultan/anubis/internal/auth/domain"
 	"github.com/gsoultan/anubis/internal/platform/database"
@@ -111,8 +112,18 @@ func (s *Repository) RevokeAllSessions(ctx context.Context, tenantID, identityID
 
 // TouchSession is best effort: a request that authenticated must not fail
 // because its activity timestamp did not land.
+//
+// MutateKey addresses the row without reading it: the new value is now(),
+// which needs no prior one. Reading the session first would double the cost of
+// a write that is already best effort.
 func (s *Repository) TouchSession(ctx context.Context, id string) {
-	_, _ = authrquery.TouchSession.Exec(ctx, s.ex(ctx), id)
+	sid, err := database.ParseUUID(id)
+	if err != nil {
+		return // not an id, so there is no row to touch
+	}
+	m := session.MutateKey(sid)
+	m.SetLastSeenAtNow()
+	_ = m.Update(ctx, s.ex(ctx))
 }
 
 func (s *Repository) UpdateSessionScopes(ctx context.Context, id string, scopes []byte) error {

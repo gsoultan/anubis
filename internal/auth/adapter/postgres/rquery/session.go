@@ -148,11 +148,6 @@ SET revoked_at = now(), revoke_reason = $3, cookie_hash = NULL
 WHERE identity_id = $1 AND tenant_id = $2 AND revoked_at IS NULL
 RETURNING id::text AS id, application_id::text AS application_id`)
 
-// TouchSession records activity. Server clock, so "last seen" is comparable
-// across app servers.
-var TouchSession = storm.SQLExec(`
-UPDATE sessions SET last_seen_at = now() WHERE id = $1`)
-
 var UpdateSessionScopes = storm.SQLExec(`
 UPDATE sessions SET active_scopes = $2::jsonb WHERE id = $1`)
 

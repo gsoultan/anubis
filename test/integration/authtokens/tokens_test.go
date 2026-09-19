@@ -20,6 +20,7 @@ import (
 	"time"
 
 	authpg "github.com/gsoultan/anubis/internal/auth/adapter/postgres"
+	"github.com/gsoultan/anubis/internal/auth/adapter/postgres/rgen/refreshtoken"
 	authdomain "github.com/gsoultan/anubis/internal/auth/domain"
 	"github.com/gsoultan/anubis/internal/platform/database"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -102,6 +103,52 @@ func newSession(t *testing.T, r *authpg.Repository) *authdomain.Session {
 		t.Fatalf("create session: %v", err)
 	}
 	return s
+}
+
+// A bytea predicate from a BUILDER, not a raw declaration.
+//
+// storm had none until v0.16.0 — bytea was excluded from Eq alongside jsonb
+// and arrays, whose equality genuinely surprises. bytea's does not: it is byte
+// for byte, which is exactly what a hash lookup means. Without it every
+// digest-keyed table in this schema was unreachable from a builder.
+func TestRefreshLookupByHashFromABuilder(t *testing.T) {
+	r := repo(t)
+	ctx := context.Background()
+	sess := newSession(t, r)
+	h := hash(t)
+	other := hash(t)
+	expires := time.Now().Add(24 * time.Hour)
+
+	if _, err := r.CreateRefresh(ctx, authdomain.RefreshInput{
+		SessionID: sess.ID, TenantID: tenant, FamilyID: sess.ID,
+		Generation: 0, TokenHash: h, ExpiresAt: expires,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	ex := database.Executor(pool)
+	got, ok, err := refreshtoken.New().
+		Where(refreshtoken.TokenHash.Eq(h)).
+		One(ctx, ex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok {
+		t.Fatal("a builder could not find a row by its hash")
+	}
+	if database.UUIDStr(got.SessionID) != sess.ID {
+		t.Fatalf("matched the wrong row: session %s", database.UUIDStr(got.SessionID))
+	}
+
+	// And a DIFFERENT hash must not match — an equality that matched
+	// everything would pass the assertion above.
+	if _, ok, err := refreshtoken.New().
+		Where(refreshtoken.TokenHash.Eq(other)).
+		One(ctx, ex); err != nil {
+		t.Fatal(err)
+	} else if ok {
+		t.Fatal("a hash that was never written matched a row")
+	}
 }
 
 // The rotation core. Exactly one caller may consume a token; the second gets

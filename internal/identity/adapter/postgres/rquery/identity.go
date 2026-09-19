@@ -24,11 +24,12 @@ type LoginRow struct {
 }
 
 // GetIdentityForLogin matches on lower(username), which is the expression the
-// unique index is built on — a builder comparison would be a different
-// expression and would seq-scan every sign-in attempt.
+// unique index is built on. storm can say that now — EqLower — so the
+// predicate is not what keeps this in SQL.
 //
-// LEFT JOIN so an identity predating realm assignment still resolves; the
-// realm's policy rides along to avoid a second round trip on the hot path.
+// The LEFT JOIN is: an identity predating realm assignment still has to
+// resolve, and the realm's policy rides along to avoid a second round trip on
+// the hot path. storm's builder reads one table.
 var GetIdentityForLogin = storm.SQL[LoginRow](`
 SELECT i.id::text AS id, i.tenant_id::text AS tenant_id, i.token_epoch, i.status,
        i.username, i.email, i.assurance_level, i.disabled_at, i.anonymized_at,

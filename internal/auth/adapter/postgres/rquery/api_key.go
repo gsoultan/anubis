@@ -58,7 +58,3 @@ SELECT k.id::text AS id, k.label, k.lookup, k.created_at, k.last_used_at,
 var RevokeAPIKey = storm.SQLExec(`
 UPDATE api_keys SET revoked_at = now()
  WHERE id = $1 AND tenant_id = $2 AND revoked_at IS NULL`)
-
-// TouchAPIKeyUsed records a use against the server clock.
-var TouchAPIKeyUsed = storm.SQLExec(`
-UPDATE api_keys SET last_used_at = now() WHERE id = $1`)

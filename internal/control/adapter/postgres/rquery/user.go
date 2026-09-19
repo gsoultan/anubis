@@ -21,35 +21,6 @@ type PlatformUserListRow struct {
 	TotpEnrolledAt runtime.Null[time.Time]
 }
 
-// PlatformUserRow is one operator with the credential columns sign-in needs.
-type PlatformUserRow struct {
-	ID             string
-	Username       string
-	Email          runtime.Null[string]
-	PasswordHash   string
-	Status         string
-	TokenEpoch     int32
-	LastLoginAt    runtime.Null[time.Time]
-	DisabledAt     runtime.Null[time.Time]
-	CreatedAt      time.Time
-	TotpSecretEnc  []byte
-	TotpEnrolledAt runtime.Null[time.Time]
-	TotpLastStep   int64
-}
-
-// GetPlatformUserByUsername is the sign-in lookup.
-//
-// lower(username) = lower($1), not a builder predicate, because the unique
-// index is ON lower(username): storm can DECLARE an expression index but has
-// no predicate that applies a function to a column, so a builder comparison
-// would be a different expression and would not use it. On a table of
-// operators that is a sequential scan on every sign-in attempt.
-var GetPlatformUserByUsername = storm.SQL[PlatformUserRow](`
-SELECT id::text AS id, username, email, password_hash, status, token_epoch,
-       last_login_at, disabled_at, created_at,
-       totp_secret_enc, totp_enrolled_at, totp_last_step
-  FROM platform_users WHERE lower(username) = lower($1)`)
-
 // ListPlatformUsers is keyset-paginated on username.
 //
 // OFFSET over a growing table re-scans everything it skips and can show a row
