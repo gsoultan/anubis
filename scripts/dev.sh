@@ -21,11 +21,16 @@ for arg in "$@"; do
 done
 
 PIDS=()
+# INT/TERM/HUP run cleanup and then fall through to EXIT, which would run it a
+# second time; the guard keeps that from printing "stopped" twice.
+CLEANED=0
 cleanup() {
+  if [ "$CLEANED" = 1 ]; then return; fi
+  CLEANED=1
   [ ${#PIDS[@]} -gt 0 ] && kill "${PIDS[@]}" 2>/dev/null || true
   printf '\n'; dim "stopped (database left running — scripts/db.sh down to stop it)"
 }
-trap cleanup EXIT INT TERM
+trap cleanup EXIT INT TERM HUP
 
 printf '%s' "$C_BLD"
 cat <<'BANNER'
@@ -49,5 +54,10 @@ if [ "$WITH_API" = 1 ]; then
 fi
 
 # The console runs in the foreground so its output is the one you watch and
-# Ctrl-C reaches it directly.
-exec "$ROOT/scripts/ui.sh"
+# Ctrl-C reaches it directly. Deliberately not exec'd: exec replaces this shell
+# and takes the cleanup trap with it, so anything started above would outlive
+# the session on every exit that is not a Ctrl-C the terminal broadcasts to the
+# whole process group — closing the terminal used to strand the api on its port
+# and block the next start.
+"$ROOT/scripts/ui.sh" & PIDS+=($!)
+wait $! || true
