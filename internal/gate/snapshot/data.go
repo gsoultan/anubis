@@ -61,13 +61,17 @@ type Grant struct {
 	SelfScoped bool
 	ValidFrom  time.Time
 	ValidUntil time.Time // zero = open-ended
-	// Scopes per axis: OR within the axis, AND across axes.
+	// Scopes per axis: OR within the axis over the includes, minus anything
+	// an exclude covers; AND across axes.
 	Scopes map[string][]ScopeConstraint
 }
 
 type ScopeConstraint struct {
 	NodeID  string
 	Inherit bool
+	// Exclude vetoes this axis for this grant when it covers the target,
+	// whatever the includes beside it say. See migrations/0046.
+	Exclude bool
 	// node is the ScopeIndex index PLUS ONE. The offset is deliberate: the
 	// zero value has to mean "not yet interned", because a plain 0 would be
 	// a VALID index and an un-interned constraint would silently match

@@ -85,7 +85,9 @@ function MembershipCard({ m }: { m: Membership }) {
         {m.entries.map((e) => {
           /* Group per structure: "or" is only correct WITHIN one structure.
              Across structures the semantics are AND — joining everything with
-             "or" would display the opposite of what the engine enforces. */
+             "or" would display the opposite of what the engine enforces. The
+             same applies to an exclusion inside one structure: it subtracts
+             from the list beside it, so it reads "except", not "or". */
           const byAxis = new Map<string, typeof e.scopes>()
           for (const sc of e.scopes) {
             const list = byAxis.get(sc.axis_code) ?? []
@@ -102,7 +104,13 @@ function MembershipCard({ m }: { m: Membership }) {
                     <span key={axis}>
                       {i > 0 && <span style={{ margin: '0 4px', color: 'var(--ink-4)' }}>·</span>}
                       <span className="chip" style={{ marginRight: 4, fontSize: 9.5 }}>{axis}</span>
-                      {list.map((sc) => nodeName(sc.scope_node_id)).join(' or ')}
+                      {list.filter((sc) => !sc.exclude).map((sc) => nodeName(sc.scope_node_id)).join(' or ')}
+                      {list.some((sc) => sc.exclude) && (
+                        <span style={{ color: 'var(--deny)' }}>
+                          {' except '}
+                          {list.filter((sc) => sc.exclude).map((sc) => nodeName(sc.scope_node_id)).join(' and ')}
+                        </span>
+                      )}
                     </span>
                   ))}
                 </span>

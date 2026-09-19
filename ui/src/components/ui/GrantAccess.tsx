@@ -9,8 +9,9 @@ import type { Grant, ScopeAxis, Membership } from '@/lib/api/types'
  * they do. Within an axis the scopes are OR'd; across axes they are AND'ed, so
  * an axis the grant never mentions is UNLIMITED rather than empty, which is
  * why silent axes are spelled out instead of omitted. `inherit` false means
- * exactly that node and nothing beneath it. No scopes at all, with no
- * self-scope, means everywhere.
+ * exactly that node and nothing beneath it. An excluded scope is carved back
+ * OUT of the includes on its axis, so it is rendered as "except", never as one
+ * more place in the OR. No scopes at all, with no self-scope, means everywhere.
  *
  * They live here because the Access screen and a person's detail answer the
  * same question about the same row. Rendered separately they would drift, and
@@ -75,8 +76,12 @@ export function GrantScopes({ grant: g, axes, nodeName, maxSilent }: {
           <span className="chip" style={{ minWidth: 62, justifyContent: 'center', marginTop: 1 }}>
             {axisCode}
           </span>
+          {/* Includes join with "or"; exclusions do NOT. Run through the same
+              list an exclusion reads as one more place access reaches, which is
+              the exact opposite of what it is — and on this screen that is the
+              sentence an auditor takes at face value. */}
           <span className="t-body min-w-0">
-            {list.map((s, i) => (
+            {list.filter((s) => !s.exclude).map((s, i) => (
               <span key={s.scope_node_id}>
                 {i > 0 && <span className="t-xs" style={{ margin: '0 5px', fontStyle: 'italic' }}>or</span>}
                 {nodeName(s.scope_node_id)}
@@ -88,6 +93,23 @@ export function GrantScopes({ grant: g, axes, nodeName, maxSilent }: {
                 )}
               </span>
             ))}
+            {list.some((s) => s.exclude) && (
+              <span style={{ color: 'var(--deny)' }}>
+                <span className="t-xs" style={{ margin: '0 5px', fontStyle: 'italic' }}>except</span>
+                {list.filter((s) => s.exclude).map((s, i) => (
+                  <span key={s.scope_node_id}>
+                    {i > 0 && <span className="t-xs" style={{ margin: '0 5px', fontStyle: 'italic' }}>and</span>}
+                    {nodeName(s.scope_node_id)}
+                    {!s.inherit && (
+                      <Tooltip label="Exactly this place — what is inside it stays granted.">
+                        <span className="chip" style={{ marginLeft: 4, color: 'var(--deny)',
+                          borderColor: 'color-mix(in srgb, var(--deny) 20%, transparent)' }}>exact</span>
+                      </Tooltip>
+                    )}
+                  </span>
+                ))}
+              </span>
+            )}
           </span>
         </div>
       ))}

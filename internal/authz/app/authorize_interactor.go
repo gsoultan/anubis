@@ -115,7 +115,17 @@ func (u *authorizeInteractor) explainDenial(ctx context.Context, tenantID string
 		}
 		if parsed.FailingAxis != nil {
 			d.FailingAxis = *parsed.FailingAxis
-			d.Message = "no grant at or above the requested " + *parsed.FailingAxis + " node"
+			// An exclusion is the one denial where a grant DOES reach the
+			// target. "no grant at or above" is false of it, and it sends
+			// whoever reads it to widen a grant that already covers the node
+			// — the carve-out they actually have to edit is the half the
+			// sentence never mentions.
+			if d.Reason == "scope_excluded" {
+				d.Message = "a grant covers the requested " + *parsed.FailingAxis +
+					" node and excludes it"
+			} else {
+				d.Message = "no grant at or above the requested " + *parsed.FailingAxis + " node"
+			}
 		}
 	}
 	return d

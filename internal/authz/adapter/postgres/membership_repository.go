@@ -75,7 +75,7 @@ func (s *Repository) MembershipEntryScopes(ctx context.Context, entryIDs []strin
 	for _, r := range rows {
 		out = append(out, membership.MembershipEntryScopeRecord{
 			EntryID: r.EntryID, Axis: r.AxisCode, NodeID: r.ScopeNodeID,
-			NodeName: r.NodeName, Inherit: r.Inherit,
+			NodeName: r.NodeName, Inherit: r.Inherit, Exclude: r.Exclude,
 		})
 	}
 	return out, nil
@@ -97,7 +97,7 @@ func (s *Repository) ReplaceMembershipEntries(ctx context.Context, tenantID, mem
 			}
 			for _, sc := range e.Scopes {
 				if _, err := authzrquery.InsertMembershipEntryScope.Exec(ctx, s.rex(ctx),
-					row.ID, tenantID, sc.Axis, sc.NodeID, sc.Inherit); err != nil {
+					row.ID, tenantID, sc.Axis, sc.NodeID, sc.Inherit, sc.Exclude); err != nil {
 					return database.MapErr(err)
 				}
 			}

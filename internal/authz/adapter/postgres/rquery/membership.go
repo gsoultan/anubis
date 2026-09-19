@@ -67,6 +67,7 @@ type EntryScopeRow struct {
 	AxisCode    string
 	ScopeNodeID string
 	Inherit     bool
+	Exclude     bool
 	NodeName    string
 }
 
@@ -74,10 +75,12 @@ type EntryScopeRow struct {
 var ListMembershipEntryScopes = storm.SQL[EntryScopeRow](`
 SELECT mes.entry_id::text AS entry_id, mes.axis_code,
        mes.scope_node_id::text AS scope_node_id, mes.inherit,
+       mes.mode = 'exclude' AS exclude,
        sn.name AS node_name
 FROM membership_entry_scopes mes
 JOIN scope_nodes sn ON sn.id = mes.scope_node_id
-WHERE mes.entry_id = ANY($1::uuid[])`)
+WHERE mes.entry_id = ANY($1::uuid[])
+ORDER BY mes.entry_id, mes.axis_code, mes.mode DESC, sn.name`)
 
 // DeleteMembershipEntries clears a membership's entries before a replace.
 var DeleteMembershipEntries = storm.SQLExec(`
@@ -94,11 +97,15 @@ INSERT INTO membership_entries (membership_id, tenant_id, role_id)
 VALUES ($1, $2, $3)
 RETURNING id::text AS id`)
 
-// InsertMembershipEntryScope pins one axis of an entry.
+// InsertMembershipEntryScope pins one axis of an entry. $6 exclude.
+//
+// membership_assign / membership_resync (0046) copy mode onto every grant
+// they materialise, so an entry's carve-out reaches the grants rather than
+// being quietly dropped into a wider grant than the entry described.
 var InsertMembershipEntryScope = storm.SQLExec(`
 INSERT INTO membership_entry_scopes (entry_id, tenant_id, axis_code,
-                                     scope_node_id, inherit)
-VALUES ($1, $2, $3, $4, $5)`)
+                                     scope_node_id, inherit, mode)
+VALUES ($1, $2, $3, $4, $5, CASE WHEN $6::boolean THEN 'exclude' ELSE 'include' END)`)
 
 // AssignRow reports how many grants an assignment materialized.
 type AssignRow struct {

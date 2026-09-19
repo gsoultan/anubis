@@ -22,6 +22,8 @@ references". New topics live in their own file from 2026-09-11 on:
   crossed, the contrast floors, and why density is one token.
 - [[scope-sync-schedule]] — structures on a clock (0045), the hot-loop guard,
   and why a scheduled run may not wear an operator's identity.
+- [[scope-exclusions]] — carve-outs on a grant (0046), why they are not the
+  deny ADR-0004 deferred, and the aggregate that costs 1.1% instead of 9.2%.
 - [[console-tables]] — the one table primitive in `ui/`, why `.panel` must
   use `overflow: clip`, and the column rules the People screen follows.
 - [[console-person-page]] — why a record you can act on is a page, the

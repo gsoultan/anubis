@@ -29,6 +29,7 @@ const (
 	ColScopeAxis    = "scope_axis"
 	ColScopeRef     = "scope_ref"
 	ColScopeInherit = "scope_inherit"
+	ColScopeExclude = "scope_exclude"
 	ColValidUntil   = "valid_until"
 	ColReason       = "reason"
 
@@ -81,6 +82,8 @@ func Workbook() []SheetSpec {
 					Help: "External reference of the scope node. Required when scope_axis is filled in."},
 				{Key: ColScopeInherit, Width: 15, Allowed: boolValues, Example: "true",
 					Help: "Whether the grant also covers everything beneath that node. Blank means true."},
+				{Key: ColScopeExclude, Width: 15, Allowed: boolValues, Example: "false",
+					Help: "true carves this node out of the grant instead of adding it. The same axis must also name a node to include. Blank means false."},
 				{Key: ColValidUntil, Width: 18, Example: "2027-01-31",
 					Help: "Date the grant expires, as YYYY-MM-DD. Blank means it does not expire."},
 				{Key: ColReason, Width: 28, Example: "onboarding",

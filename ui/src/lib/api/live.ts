@@ -286,7 +286,7 @@ function toGrant(g: {
   id: string; identityId: string; roleId: string; roleName: string
   viaMembershipId: string; selfScoped: boolean; validFrom: bigint
   validUntil: bigint; revokedAt: bigint; grantedBy: string; reason: string
-  scopes: { axis: string; nodeId: string; inherit: boolean }[]
+  scopes: { axis: string; nodeId: string; inherit: boolean; exclude: boolean }[]
 }): Grant {
   return {
     id: g.id,
@@ -302,6 +302,7 @@ function toGrant(g: {
     reason: g.reason || null,
     scopes: g.scopes.map((s): GrantScope => ({
       axis_code: s.axis, scope_node_id: s.nodeId, inherit: s.inherit,
+      exclude: s.exclude,
     })),
   }
 }
@@ -373,6 +374,7 @@ export async function memberships(): Promise<Membership[]> {
       role_name: e.roleName,
       scopes: e.scopes.map((sc): GrantScope => ({
         axis_code: sc.axis, scope_node_id: sc.nodeId, inherit: sc.inherit,
+        exclude: sc.exclude,
       })),
     })),
     /* The API reports how many members there are, not who they are: a
@@ -658,6 +660,7 @@ export async function nodeTypes(): Promise<ScopeNodeType[]> {
 function toNode(n: {
   id: string; axis: string; nodeType: string; parentId: string; slug: string
   name: string; externalRef: string; status: string; isAxisRoot: boolean
+  childCount: number
 }): ScopeNode {
   return {
     id: n.id,
@@ -669,6 +672,7 @@ function toNode(n: {
     name: n.name,
     external_ref: n.externalRef || null,
     is_axis_root: n.isAxisRoot,
+    child_count: n.childCount,
     status: (n.status || 'active') as ScopeNode['status'],
     attributes: {},
   }
@@ -939,7 +943,11 @@ type ExplainGrant = {
   via_role: string | null
   self_scoped: boolean
   self_ok: boolean
-  axes: { axis: string; satisfied: boolean; nodes: { node_id: string; node: string; inherit: boolean }[] }[]
+  axes: {
+    axis: string; satisfied: boolean
+    included?: boolean; excluded?: boolean
+    nodes: { node_id: string; node: string; inherit: boolean; mode?: string }[]
+  }[]
   axes_ok: boolean
   strict_missing: string[]
   allowed: boolean
@@ -978,7 +986,12 @@ export async function authorize(req: AuthorizeRequest): Promise<AuthorizeRespons
   const evaluations: GrantEvaluation[] = (detail.grants ?? []).map((g) => {
     const axes: AxisVerdict[] = g.axes.map((a) => {
       const target = req.scopes[a.axis] ?? null
-      const single = a.nodes.length === 1 ? a.nodes[0] : undefined
+      /* "the single granted node" is only meaningful when the axis holds ONE
+         include. With a carve-out present the axis has two nodes that mean
+         opposite things, and naming either of them alone reads as the whole
+         constraint. */
+      const includes = a.nodes.filter((n) => n.mode !== 'exclude')
+      const single = includes.length === 1 && a.nodes.length === 1 ? includes[0] : undefined
       return {
         axis_code: a.axis,
         constrained: true,
@@ -987,6 +1000,7 @@ export async function authorize(req: AuthorizeRequest): Promise<AuthorizeRespons
         granted_node_name: single?.node ?? null,
         granted_nodes: a.nodes.map((n) => ({
           id: n.node_id, name: n.node, inherit: n.inherit,
+          exclude: n.mode === 'exclude',
           /* Which of several granted nodes matched is not in the explain
              output; claiming one did would be a guess. */
           matched: false,
@@ -996,9 +1010,15 @@ export async function authorize(req: AuthorizeRequest): Promise<AuthorizeRespons
         inherit: single?.inherit ?? a.nodes.some((n) => n.inherit),
         path: [],
         ...(a.satisfied ? {} : {
-          note: target
-            ? 'no granted node is at or above this target'
-            : 'the grant constrains this axis and no target was supplied — unresolved axes deny',
+          /* An exclusion that decided the axis gets said outright. "no granted
+             node is at or above this target" is true of the includes and sends
+             the operator to widen a grant that already reached here — the
+             wrong half to edit. */
+          note: a.excluded && a.included
+            ? 'this target is inside a place this grant excludes'
+            : target
+              ? 'no granted node is at or above this target'
+              : 'the grant constrains this axis and no target was supplied — unresolved axes deny',
         }),
       }
     })
@@ -1127,7 +1147,7 @@ export async function createGrant(i: NewGrantInput): Promise<void> {
     scopes: i.scopes.map((sc) => ({
       $typeName: 'anubis.v1.GrantScope' as const,
       axis: sc.axis_code, nodeId: sc.scope_node_id, inherit: sc.inherit,
-      nodeName: '',
+      exclude: sc.exclude, nodeName: '',
     })),
   })
 }
@@ -1151,7 +1171,8 @@ export async function createMembership(i: {
         id: '', roleId: e.role_id, roleName: '',
         scopes: e.scopes.map((sc) => ({
           $typeName: 'anubis.v1.GrantScope' as const,
-          axis: sc.axis_code, nodeId: sc.scope_node_id, inherit: sc.inherit, nodeName: '',
+          axis: sc.axis_code, nodeId: sc.scope_node_id, inherit: sc.inherit,
+          exclude: sc.exclude, nodeName: '',
         })),
       })),
     })

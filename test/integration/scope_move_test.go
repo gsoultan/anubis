@@ -12,6 +12,10 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+
+	"github.com/gsoultan/anubis/internal/platform/database"
+	scopepg "github.com/gsoultan/anubis/internal/scope/adapter/postgres"
+	scopedomain "github.com/gsoultan/anubis/internal/scope/domain"
 )
 
 // ROADMAP CLAIM (unproven): "scope_move_node is safe under concurrency —
@@ -424,4 +428,92 @@ func nullIfEmpty(s string) *string {
 		return nil
 	}
 	return &s
+}
+
+// child_count is the number the console's tree draws its expand chevron from,
+// and it shipped in `ui/src/lib/api/types.ts` as an OPTIONAL field that
+// nothing on the server ever set. `(node.child_count ?? 0) > 0` was therefore
+// false for every node ever loaded, so the chevron was permanently disabled
+// and no tree in the console could open — a picker that could only ever offer
+// the axis root, and an inspector that reported "0 children" for a node with
+// twenty.
+//
+// Nothing failed. There was no error, no console warning, no failing test:
+// the tree rendered, it just rendered one row. That is the whole reason this
+// test exists — the field has to be asserted against the rows it counts,
+// because a count nobody checks reads exactly like a node with no children.
+//
+// Written against the SQL rather than the RPC deliberately: the query is
+// where the count is computed, and a test that went through the transport
+// would also pass if the transport dropped it (see scope_mapping_test.go for
+// that half).
+func TestScopeNodeChildCountMatchesTheRows(t *testing.T) {
+	skipWithoutDB(t)
+	ctx := context.Background()
+
+	// A parent that actually has children, so the assertion cannot pass by
+	// agreeing that zero equals zero.
+	var tenant, axis, parent string
+	var want int
+	if err := pool.QueryRow(ctx, `
+		SELECT n.tenant_id::text, n.axis_code, n.id::text, count(c.id)::int
+		  FROM scope_nodes n JOIN scope_nodes c ON c.parent_id = n.id
+		 WHERE c.status = 'active'
+		 GROUP BY n.tenant_id, n.axis_code, n.id
+		HAVING count(c.id) > 1
+		 ORDER BY n.id
+		 LIMIT 1`).Scan(&tenant, &axis, &parent, &want); err != nil {
+		t.Skipf("no node with children to count: %v", err)
+	}
+
+	repo := scopepg.New(database.New(pool))
+
+	// Through ListScopeNodes, the call the tree actually makes: ask for this
+	// parent's siblings and find it among them.
+	var node *scopedomain.ScopeNodeRecord
+	nodes, err := repo.ListScopeNodes(ctx, tenant, scopedomain.ScopeNodeFilter{Axis: axis})
+	if err != nil {
+		t.Fatalf("list nodes: %v", err)
+	}
+	for i := range nodes {
+		if nodes[i].ID == parent {
+			node = &nodes[i]
+			break
+		}
+	}
+	if node == nil {
+		t.Skip("the parent did not land on the first page of its axis")
+	}
+	if node.ChildCount != want {
+		t.Errorf("ListScopeNodes reported child_count=%d for %s; the table holds %d children",
+			node.ChildCount, parent, want)
+	}
+
+	// And through the single-node read the inspector uses, which counts
+	// separately and so can drift on its own.
+	one, err := repo.ScopeNode(ctx, tenant, parent)
+	if err != nil {
+		t.Fatalf("get node: %v", err)
+	}
+	if one.ChildCount != want {
+		t.Errorf("ScopeNode reported child_count=%d; the table holds %d", one.ChildCount, want)
+	}
+
+	// A leaf must count zero, or every chevron would be drawn.
+	var leaf string
+	if err := pool.QueryRow(ctx, `
+		SELECT n.id::text FROM scope_nodes n
+		 WHERE n.tenant_id = $1::uuid
+		   AND NOT EXISTS (SELECT 1 FROM scope_nodes c WHERE c.parent_id = n.id)
+		 ORDER BY n.id LIMIT 1`, tenant).Scan(&leaf); err != nil {
+		t.Skipf("no leaf node: %v", err)
+	}
+	leafRec, err := repo.ScopeNode(ctx, tenant, leaf)
+	if err != nil {
+		t.Fatalf("get leaf: %v", err)
+	}
+	if leafRec.ChildCount != 0 {
+		t.Errorf("a leaf reported %d children", leafRec.ChildCount)
+	}
+	t.Logf("parent %s: %d children; leaf %s: 0", parent, want, leaf)
 }

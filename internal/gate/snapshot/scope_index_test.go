@@ -230,3 +230,151 @@ func TestTheCycleGuardDoesNotTruncateALongChain(t *testing.T) {
 		t.Errorf("a root grant stopped covering a node %d levels down", depth)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Exclusions (migration 0046). Every case below is also a row in
+// bench/negative.sql, because these two implementations answering differently
+// is the failure this file exists to prevent — and the direction it would
+// fail in is the gate allowing what the database denies.
+// ---------------------------------------------------------------------------
+
+// The case the feature is for: everything under n0 except the n2 subtree.
+func TestExcludeCarvesOutASubtree(t *testing.T) {
+	x := chain(5)
+	cs := interned(x,
+		ScopeConstraint{NodeID: "n0", Inherit: true},
+		ScopeConstraint{NodeID: "n2", Inherit: true, Exclude: true},
+	)
+	for _, id := range []string{"n0", "n1"} {
+		if !x.CoveredBy(mustResolve(t, x, id), cs) {
+			t.Errorf("%s is above the carve-out and must still be covered", id)
+		}
+	}
+	for _, id := range []string{"n2", "n3", "n4"} {
+		if x.CoveredBy(mustResolve(t, x, id), cs) {
+			t.Errorf("%s is inside the carve-out and must NOT be covered", id)
+		}
+	}
+}
+
+// An exclusion reaches only where it is anchored. Without this the cheap
+// implementation — "any exclude in the set denies" — passes the test above.
+func TestExcludeDoesNotLeakToSiblings(t *testing.T) {
+	x := chain(5)
+	cs := interned(x,
+		ScopeConstraint{NodeID: "root", Inherit: true},
+		ScopeConstraint{NodeID: "n0", Inherit: true, Exclude: true},
+	)
+	if !x.CoveredBy(mustResolve(t, x, "cousin"), cs) {
+		t.Error("cousin is not under the excluded node and must stay covered")
+	}
+	if x.CoveredBy(mustResolve(t, x, "n3"), cs) {
+		t.Error("n3 is under the excluded node")
+	}
+}
+
+// inherit=false on an exclusion removes exactly one node, the mirror of
+// TestInheritFalseIsSelfOnly.
+func TestExcludeWithoutInheritIsSelfOnly(t *testing.T) {
+	x := chain(5)
+	cs := interned(x,
+		ScopeConstraint{NodeID: "n0", Inherit: true},
+		ScopeConstraint{NodeID: "n2", Inherit: false, Exclude: true},
+	)
+	if x.CoveredBy(mustResolve(t, x, "n2"), cs) {
+		t.Error("n2 itself is excluded")
+	}
+	if !x.CoveredBy(mustResolve(t, x, "n3"), cs) {
+		t.Error("a non-inheriting exclusion must not take the children with it")
+	}
+}
+
+// An exclusion above the include wins: the grant's own include is inside the
+// carve-out. Reads oddly and an operator will not write it on purpose, but the
+// SQL aggregate answers deny and this must agree.
+func TestExcludeAboveTheIncludeStillVetoes(t *testing.T) {
+	x := chain(5)
+	cs := interned(x,
+		ScopeConstraint{NodeID: "n2", Inherit: true},
+		ScopeConstraint{NodeID: "n0", Inherit: true, Exclude: true},
+	)
+	for _, id := range []string{"n2", "n3", "n4"} {
+		if x.CoveredBy(mustResolve(t, x, id), cs) {
+			t.Errorf("%s: an exclusion covering the include vetoes the axis", id)
+		}
+	}
+}
+
+// Fail-closed on a shape the database refuses to store. 0046's constraint
+// trigger rejects an exclusion with no include on the axis; if one ever
+// reaches the gate anyway it must deny, never read as "anywhere except here".
+func TestExcludeWithNoIncludeDenies(t *testing.T) {
+	x := chain(5)
+	cs := interned(x, ScopeConstraint{NodeID: "n2", Inherit: true, Exclude: true})
+	for _, id := range []string{"root", "cousin", "n0", "n2", "n4"} {
+		if x.CoveredBy(mustResolve(t, x, id), cs) {
+			t.Errorf("%s: an exclude-only axis must deny, not allow everywhere else", id)
+		}
+	}
+}
+
+// End to end through Evaluate: the carve-out has to survive the trip through
+// grantScopesSatisfied, not just CoveredBy.
+func TestEvaluateHonoursACarveOut(t *testing.T) {
+	const identity, role, perm = "usr", "role", "app:doc:read"
+	d := &Data{
+		StrictAxes:      map[string]bool{},
+		Scope:           chain(5),
+		RolePermissions: map[string]map[string]bool{role: {perm: true}},
+		Permissions:     map[string]Permission{perm: {Key: perm, MinAssurance: 1}},
+		Identities:      map[string]Identity{identity: {TokenEpoch: 1, AssuranceLevel: 3}},
+		GrantsByIdentity: map[string][]Grant{identity: {{
+			ID: "g1", RoleID: role, ValidFrom: time.Now().Add(-time.Hour),
+			Scopes: map[string][]ScopeConstraint{"org": {
+				{NodeID: "n0", Inherit: true},
+				{NodeID: "n2", Inherit: true, Exclude: true},
+			}},
+		}}},
+	}
+	d.InternGrantScopes()
+	if !d.Evaluate(identity, perm, map[string]string{"org": "n1"}, time.Now()) {
+		t.Error("n1 is outside the carve-out and must be allowed")
+	}
+	if d.Evaluate(identity, perm, map[string]string{"org": "n3"}, time.Now()) {
+		t.Error("n3 is inside the carve-out and must be denied")
+	}
+}
+
+// A second grant covering the excluded place restores access. This is the
+// property that keeps 0046 out of ADR-0004's territory: an exclusion narrows
+// the grant it sits on and has no reach over any other.
+func TestASecondGrantIsNotNarrowedByTheFirstsExclusion(t *testing.T) {
+	const identity, role, perm = "usr", "role", "app:doc:read"
+	d := &Data{
+		StrictAxes:      map[string]bool{},
+		Scope:           chain(5),
+		RolePermissions: map[string]map[string]bool{role: {perm: true}},
+		Permissions:     map[string]Permission{perm: {Key: perm, MinAssurance: 1}},
+		Identities:      map[string]Identity{identity: {TokenEpoch: 1, AssuranceLevel: 3}},
+		GrantsByIdentity: map[string][]Grant{identity: {
+			{
+				ID: "g1", RoleID: role, ValidFrom: time.Now().Add(-time.Hour),
+				Scopes: map[string][]ScopeConstraint{"org": {
+					{NodeID: "n0", Inherit: true},
+					{NodeID: "n2", Inherit: true, Exclude: true},
+				}},
+			},
+			{
+				ID: "g2", RoleID: role, ValidFrom: time.Now().Add(-time.Hour),
+				Scopes: map[string][]ScopeConstraint{"org": {{NodeID: "n3", Inherit: true}}},
+			},
+		}},
+	}
+	d.InternGrantScopes()
+	if !d.Evaluate(identity, perm, map[string]string{"org": "n3"}, time.Now()) {
+		t.Error("g2 covers n3 on its own terms; g1's carve-out must not reach it")
+	}
+	if d.Evaluate(identity, perm, map[string]string{"org": "n2"}, time.Now()) {
+		t.Error("neither grant covers n2: g1 excludes it, g2 starts below it")
+	}
+}

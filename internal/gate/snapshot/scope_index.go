@@ -102,24 +102,41 @@ func (x ScopeIndex) Intern(cs []ScopeConstraint) {
 	}
 }
 
-// CoveredBy reports whether any constraint covers target, mirroring the
-// closure probe in migration 0013:  covered && (inherit OR depth = 0).
+// CoveredBy reports whether the constraints admit target, mirroring
+// migration 0046: some include covers it (inherit OR depth 0) and no exclude
+// does. An exclude wins wherever it reaches, and nothing below it can undo
+// that — which is why a veto returns immediately and an include does not.
 //
 // One walk serves every constraint. The exact (depth 0) case is settled
 // before ascending, so a grant with no inheriting constraint never walks.
+//
+// hasExclude is the whole reason this did not get slower. Without an exclude
+// in the set the answer cannot change once an include matches, so the two
+// early returns below are 0013's exactly — which is every grant written
+// before 0046 and every grant without a carve-out. Only a set that actually
+// holds an exclusion pays for the full ascent, and it pays it because it must:
+// stopping at the first include would miss an exclude further up the path,
+// and missing an exclude fails OPEN.
 func (x ScopeIndex) CoveredBy(target int32, cs []ScopeConstraint) bool {
 	if target < 0 || int(target) >= len(x.parent) {
 		return false
 	}
-	inherits := false
+	included, inherits, hasExclude := false, false, false
 	for i := range cs {
+		hasExclude = hasExclude || cs[i].Exclude
 		if cs[i].node == target+1 {
-			return true // depth 0 satisfies with or without inherit
+			if cs[i].Exclude {
+				return false // vetoed at depth 0; no include outranks it
+			}
+			included = true // depth 0 satisfies with or without inherit
 		}
 		inherits = inherits || cs[i].Inherit
 	}
+	if included && !hasExclude {
+		return true
+	}
 	if !inherits {
-		return false
+		return included
 	}
 	// The step bound is a cycle guard, not an optimisation. A simple path to
 	// the root visits at most len(parent) nodes, so exceeding that means
@@ -132,9 +149,15 @@ func (x ScopeIndex) CoveredBy(target int32, cs []ScopeConstraint) bool {
 	for n, steps := x.parent[target], 0; n >= 0 && steps < len(x.parent); n, steps = x.parent[n], steps+1 {
 		for i := range cs {
 			if cs[i].node == n+1 && cs[i].Inherit {
-				return true
+				if cs[i].Exclude {
+					return false
+				}
+				if !hasExclude {
+					return true
+				}
+				included = true
 			}
 		}
 	}
-	return false
+	return included
 }

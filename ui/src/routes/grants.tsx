@@ -175,6 +175,8 @@ function Grants() {
           <div className="t-xs">
             <b style={{ color: 'var(--ink-2)' }}>inherit</b> is per-axis, not per-grant — “everything
             under Jakarta, but only Rigid Packaging itself and not its SKUs” is expressible.
+            An <b style={{ color: 'var(--ink-2)' }}>except</b> place is carved out of that grant and
+            that grant only — another grant covering it still applies, so this is not a deny rule.
             Self-scoped grants cannot carry axis constraints; the database rejects the combination.
           </div>
         </div>

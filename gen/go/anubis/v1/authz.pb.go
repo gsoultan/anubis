@@ -101,9 +101,13 @@ func (x *AuthorizeRequest) GetAuthTime() int64 {
 type AuthorizeResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	Allow bool                   `protobuf:"varint,1,opt,name=allow,proto3" json:"allow,omitempty"`
-	// On deny: "scope_mismatch" | "permission_not_held" | "identity_inactive" |
-	// "insufficient_assurance" | "self_scope_required" | "axis_unresolved" |
-	// "step_up_required" | ...
+	// On deny: "scope_mismatch" | "scope_excluded" | "permission_not_held" |
+	// "identity_inactive" | "insufficient_assurance" | "self_scope_required" |
+	// "axis_unresolved" | "step_up_required" | ...
+	//
+	// scope_excluded is separate from scope_mismatch on purpose: a grant DID
+	// reach this target and an exclusion took it back (0046). The two need
+	// opposite fixes, and one string for both hides which.
 	Reason      string `protobuf:"bytes,2,opt,name=reason,proto3" json:"reason,omitempty"`
 	FailingAxis string `protobuf:"bytes,3,opt,name=failing_axis,json=failingAxis,proto3" json:"failing_axis,omitempty"`
 	Message     string `protobuf:"bytes,4,opt,name=message,proto3" json:"message,omitempty"`

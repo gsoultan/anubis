@@ -98,6 +98,62 @@ SELECT 'under an UNGRANTED third office -> DENY',
 DELETE FROM identities WHERE username='or_axis_probe';
 
 \echo ''
+\echo '=== CARVE-OUT (0046) ==='
+-- The same one-grant-two-offices shape, with the second office carved back
+-- out. The point of building it from the OR fixture is that OR and the veto
+-- share an aggregate now: a change that breaks one of them here breaks the
+-- other four rows up, and both sets are in front of you.
+CREATE TEMP TABLE cg AS
+WITH r AS (SELECT id AS realm_id, tenant_id FROM realms WHERE code='internal' LIMIT 1),
+i AS (INSERT INTO identities (tenant_id, realm_id, assurance_level, username, email)
+      SELECT tenant_id, realm_id, 3, 'carveout_probe', 'carveout@test.local' FROM r
+      RETURNING id, tenant_id),
+g AS (INSERT INTO grants (tenant_id, identity_id, role_id, granted_by)
+      SELECT i.tenant_id, i.id, (SELECT role_id FROM grants WHERE id=(SELECT grant_id FROM probe)), i.id
+        FROM i RETURNING id, tenant_id, identity_id),
+offs AS (SELECT id, row_number() OVER (ORDER BY id) rn FROM scope_nodes
+          WHERE node_type='office' AND tenant_id=(SELECT tenant_id FROM g) LIMIT 2),
+-- one office included, a department inside it carved out
+dept AS (SELECT c.descendant_id AS id FROM scope_closure c JOIN scope_nodes n
+           ON n.id=c.descendant_id AND n.node_type='department'
+          WHERE c.ancestor_id=(SELECT id FROM offs WHERE rn=1) LIMIT 1),
+sc AS (INSERT INTO grant_scopes (grant_id, tenant_id, axis_code, scope_node_id, mode)
+       SELECT g.id, g.tenant_id, 'org', o.id, 'include' FROM g JOIN offs o ON o.rn=1
+       RETURNING grant_id),
+xc AS (INSERT INTO grant_scopes (grant_id, tenant_id, axis_code, scope_node_id, mode)
+       SELECT g.id, g.tenant_id, 'org', dept.id, 'exclude' FROM g, dept
+       RETURNING grant_id)
+SELECT g.identity_id, g.tenant_id, (SELECT perm FROM probe) AS perm,
+  (SELECT id FROM offs WHERE rn=1) AS office,
+  (SELECT id FROM dept) AS carved,
+  (SELECT c.descendant_id FROM scope_closure c, dept
+    WHERE c.ancestor_id=dept.id AND c.depth>0 LIMIT 1) AS under_carved,
+  (SELECT c.descendant_id FROM scope_closure c JOIN scope_nodes n
+     ON n.id=c.descendant_id AND n.node_type='department'
+    WHERE c.ancestor_id=(SELECT id FROM offs WHERE rn=1)
+      AND c.descendant_id <> (SELECT id FROM dept) LIMIT 1) AS sibling
+FROM g, sc, xc LIMIT 1;
+
+SELECT 'the included office -> ALLOW' AS case,
+       authorize(identity_id, tenant_id, perm, jsonb_build_object('org', office)) AS got,
+       true AS want FROM cg
+UNION ALL
+SELECT 'the carved-out department -> DENY',
+       authorize(identity_id, tenant_id, perm, jsonb_build_object('org', carved)), false FROM cg
+UNION ALL
+SELECT 'a team UNDER the carve-out -> DENY',
+       authorize(identity_id, tenant_id, perm, jsonb_build_object('org', under_carved)), false FROM cg
+UNION ALL
+SELECT 'a SIBLING department -> ALLOW',
+       authorize(identity_id, tenant_id, perm, jsonb_build_object('org', sibling)), true FROM cg
+UNION ALL
+SELECT 'explain names it an exclusion',
+       authorize_explain(identity_id, tenant_id, perm,
+         jsonb_build_object('org', carved))->>'reason' = 'scope_excluded', true FROM cg;
+
+DELETE FROM identities WHERE username='carveout_probe';
+
+\echo ''
 \echo '=== THROUGHPUT: 20,000 decisions ==='
 \timing on
 SELECT count(*) FILTER (WHERE ok) AS allowed, count(*) FILTER (WHERE NOT ok) AS denied

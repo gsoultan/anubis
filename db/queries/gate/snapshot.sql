@@ -30,7 +30,13 @@ FROM grants g
 WHERE g.tenant_id = sqlc.arg(tenant_id) AND g.revoked_at IS NULL;
 
 -- name: SnapshotGrantScopes :many
-SELECT gs.grant_id, gs.axis_code, gs.scope_node_id, gs.inherit
+-- mode arrives as the bool the evaluator actually branches on. A gate that
+-- loaded the includes and dropped the excludes would allow, in memory and at
+-- p99 < 1 ms, exactly what the database denies -- the worst direction for
+-- these two to disagree in. snapshot_parity_test.go probes carve-outs for
+-- this reason.
+SELECT gs.grant_id, gs.axis_code, gs.scope_node_id, gs.inherit,
+       gs.mode = 'exclude' AS exclude
 FROM grant_scopes gs
 WHERE gs.tenant_id = sqlc.arg(tenant_id);
 

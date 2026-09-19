@@ -708,3 +708,141 @@ func TestABulkRevokeCostsOneBump(t *testing.T) {
 			"— the trigger is firing per row", sessions, delta)
 	}
 }
+
+// The same agreement demand as TestSnapshotAgreesWithAuthorizeEngine, aimed at
+// the one shape that test cannot reach: a carve-out.
+//
+// It builds its probes from grants that already exist, and no grant in any
+// seed has an exclusion, so the whole of migration 0046 would sail through it
+// green. That is the dangerous half of this feature — a gate that loads the
+// includes and drops the excludes answers at p99 < 1 ms, in memory, that
+// someone may act inside a subtree the database says they may not. So: write
+// one exclusion, reload a real snapshot over it, and require both engines to
+// agree at the parent, at the excluded node, below it, and beside it.
+func TestSnapshotAgreesOnACarveOut(t *testing.T) {
+	skipWithoutDB(t)
+	ctx := context.Background()
+	tenant, slug := firstTenantWithSlug(ctx, t)
+
+	// A live grant, one axis of it whose node has at least two children, and
+	// the full target map the grant needs to be satisfied at all (every other
+	// axis it constrains has to be supplied or the probe fails closed for an
+	// unrelated reason).
+	var grantID, identity, perm, axis, parent, branchA, branchB, fullTargets string
+	err := pool.QueryRow(ctx, `
+		SELECT g.id::text, g.identity_id::text, p.key, gs.axis_code,
+		       gs.scope_node_id::text,
+		       (SELECT c.descendant_id::text FROM scope_closure c
+		         WHERE c.ancestor_id = gs.scope_node_id AND c.depth = 1
+		         ORDER BY c.descendant_id LIMIT 1),
+		       (SELECT c.descendant_id::text FROM scope_closure c
+		         WHERE c.ancestor_id = gs.scope_node_id AND c.depth = 1
+		         ORDER BY c.descendant_id DESC LIMIT 1),
+		       (SELECT jsonb_object_agg(x.axis_code, x.scope_node_id)::text
+		          FROM grant_scopes x WHERE x.grant_id = g.id)
+		  FROM grants g
+		  JOIN grant_scopes gs ON gs.grant_id = g.id
+		  JOIN role_permissions_effective rpe ON rpe.role_id = g.role_id
+		  JOIN permissions p ON p.id = rpe.permission_id
+		  JOIN identities i ON i.id = g.identity_id
+		 WHERE g.tenant_id = $1 AND g.revoked_at IS NULL AND NOT g.self_scoped
+		   AND g.valid_from <= now()
+		   AND (g.valid_until IS NULL OR g.valid_until > now())
+		   AND i.status = 'active' AND i.disabled_at IS NULL
+		   AND p.deprecated_at IS NULL AND p.min_assurance <= i.assurance_level
+		   AND (SELECT count(*) FROM scope_closure c
+		         WHERE c.ancestor_id = gs.scope_node_id AND c.depth = 1) >= 2
+		 ORDER BY g.id, gs.axis_code, p.key
+		 LIMIT 1`, tenant).Scan(&grantID, &identity, &perm, &axis,
+		&parent, &branchA, &branchB, &fullTargets)
+	if err != nil {
+		t.Skipf("no grant with a branching scope to carve up: %v", err)
+	}
+
+	targets := map[string]string{}
+	if err := json.Unmarshal([]byte(fullTargets), &targets); err != nil {
+		t.Fatalf("grant targets: %v", err)
+	}
+	with := func(node string) map[string]string {
+		out := make(map[string]string, len(targets))
+		for k, v := range targets {
+			out[k] = v
+		}
+		out[axis] = node
+		return out
+	}
+	var deep string
+	if err := pool.QueryRow(ctx,
+		`SELECT descendant_id::text FROM scope_closure
+		  WHERE ancestor_id = $1 AND depth > 0 ORDER BY descendant_id LIMIT 1`,
+		branchA).Scan(&deep); err != nil {
+		deep = branchA // a leaf branch is fine; the probe just repeats branchA
+	}
+
+	check := func(stage string, cases map[string]map[string]string) {
+		t.Helper()
+		repo := gatepg.New(database.New(pool))
+		snap, err := repo.LoadSnapshot(ctx, tenant, slug, 30*time.Minute)
+		if err != nil {
+			t.Fatalf("%s: load snapshot: %v", stage, err)
+		}
+		now := time.Now()
+		for name, tg := range cases {
+			raw, _ := json.Marshal(tg)
+			var sqlAnswer bool
+			if err := pool.QueryRow(ctx, `SELECT authorize($1,$2,$3,$4::jsonb)`,
+				identity, tenant, perm, string(raw)).Scan(&sqlAnswer); err != nil {
+				t.Fatalf("%s/%s: engine: %v", stage, name, err)
+			}
+			memAnswer := snap.Evaluate(identity, perm, tg, now)
+			if sqlAnswer != memAnswer {
+				t.Errorf("%s/%s DISAGREEMENT targets=%s: engine=%v snapshot=%v",
+					stage, name, raw, sqlAnswer, memAnswer)
+			}
+			t.Logf("%s/%s: %v", stage, name, sqlAnswer)
+		}
+	}
+
+	cases := map[string]map[string]string{
+		"parent":         with(parent),
+		"branch-a":       with(branchA),
+		"under-branch-a": with(deep),
+		"branch-b":       with(branchB),
+	}
+	check("before", cases)
+
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO grant_scopes (grant_id, tenant_id, axis_code, scope_node_id, inherit, mode)
+		 VALUES ($1, $2, $3, $4, true, 'exclude')`,
+		grantID, tenant, axis, branchA); err != nil {
+		t.Fatalf("insert exclusion: %v", err)
+	}
+	t.Cleanup(func() {
+		if _, err := pool.Exec(context.WithoutCancel(ctx),
+			`DELETE FROM grant_scopes
+			  WHERE grant_id=$1 AND axis_code=$2 AND scope_node_id=$3 AND mode='exclude'`,
+			grantID, axis, branchA); err != nil {
+			t.Logf("remove exclusion: %v", err)
+		}
+	})
+
+	check("after", cases)
+
+	// And the carve-out has to have actually bitten — agreement on four
+	// unchanged answers would be agreement about nothing.
+	repo := gatepg.New(database.New(pool))
+	snap, err := repo.LoadSnapshot(ctx, tenant, slug, 30*time.Minute)
+	if err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	now := time.Now()
+	if !snap.Evaluate(identity, perm, with(parent), now) {
+		t.Error("the parent is above the carve-out and must still be allowed")
+	}
+	if snap.Evaluate(identity, perm, with(branchA), now) {
+		t.Error("the excluded branch must be denied — the exclusion did nothing")
+	}
+	if !snap.Evaluate(identity, perm, with(branchB), now) {
+		t.Error("the sibling branch must be untouched by the carve-out")
+	}
+}

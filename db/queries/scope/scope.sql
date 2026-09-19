@@ -46,32 +46,47 @@ RETURNING code;
 -- skips, and it drops or repeats rows when a sync inserts ahead of the
 -- cursor. name is not unique, which is why id is in both the ORDER BY and
 -- the comparison. Index: scope_nodes_paging (migration 0039).
-SELECT id, tenant_id, parent_id, is_axis_root, status, axis_code, node_type,
-       slug, name, external_ref
-FROM scope_nodes
-WHERE tenant_id = sqlc.arg(tenant_id)
-  AND axis_code = sqlc.arg(axis_code)
-  AND (sqlc.narg(parent_id)::uuid IS NULL OR parent_id = sqlc.narg(parent_id))
-  AND (sqlc.narg(query)::text IS NULL OR name ILIKE '%' || sqlc.narg(query) || '%')
-  AND (sqlc.arg(include_archived)::boolean OR status = 'active')
+--
+-- child_count is what the expand affordance is drawn from, so it counts the
+-- children THIS CALL would return -- same include_archived, same tenant. A
+-- count that disagreed with the listing would draw a chevron that expands to
+-- nothing, or hide one that had children behind it. Costs a per-row index
+-- scan on scope_nodes_sibling_slug (parent_id, slug): measured 0.154 ms ->
+-- 0.393 ms for a 200-row page of the 20k-node customer axis.
+SELECT n.id, n.tenant_id, n.parent_id, n.is_axis_root, n.status, n.axis_code,
+       n.node_type, n.slug, n.name, n.external_ref,
+       (SELECT count(*) FROM scope_nodes c
+         WHERE c.parent_id = n.id
+           AND (sqlc.arg(include_archived)::boolean OR c.status = 'active'))::int
+         AS child_count
+FROM scope_nodes n
+WHERE n.tenant_id = sqlc.arg(tenant_id)
+  AND n.axis_code = sqlc.arg(axis_code)
+  AND (sqlc.narg(parent_id)::uuid IS NULL OR n.parent_id = sqlc.narg(parent_id))
+  AND (sqlc.narg(query)::text IS NULL OR n.name ILIKE '%' || sqlc.narg(query) || '%')
+  AND (sqlc.arg(include_archived)::boolean OR n.status = 'active')
   AND (sqlc.narg(after_name)::text IS NULL
-       OR name > sqlc.narg(after_name)::text
-       OR (name = sqlc.narg(after_name)::text AND id > sqlc.narg(after_id)::uuid))
-ORDER BY name, id
+       OR n.name > sqlc.narg(after_name)::text
+       OR (n.name = sqlc.narg(after_name)::text AND n.id > sqlc.narg(after_id)::uuid))
+ORDER BY n.name, n.id
 LIMIT sqlc.arg(lim);
 
 -- name: GetScopeNode :one
-SELECT id, tenant_id, parent_id, is_axis_root, status, axis_code, node_type,
-       slug, name, external_ref
-FROM scope_nodes
-WHERE id = sqlc.arg(id) AND tenant_id = sqlc.arg(tenant_id);
+SELECT n.id, n.tenant_id, n.parent_id, n.is_axis_root, n.status, n.axis_code,
+       n.node_type, n.slug, n.name, n.external_ref,
+       (SELECT count(*) FROM scope_nodes c
+         WHERE c.parent_id = n.id AND c.status = 'active')::int AS child_count
+FROM scope_nodes n
+WHERE n.id = sqlc.arg(id) AND n.tenant_id = sqlc.arg(tenant_id);
 
 -- name: GetScopeNodeByRef :one
-SELECT id, tenant_id, parent_id, is_axis_root, status, axis_code, node_type,
-       slug, name, external_ref
-FROM scope_nodes
-WHERE tenant_id = sqlc.arg(tenant_id) AND axis_code = sqlc.arg(axis_code)
-  AND external_ref = sqlc.arg(external_ref);
+SELECT n.id, n.tenant_id, n.parent_id, n.is_axis_root, n.status, n.axis_code,
+       n.node_type, n.slug, n.name, n.external_ref,
+       (SELECT count(*) FROM scope_nodes c
+         WHERE c.parent_id = n.id AND c.status = 'active')::int AS child_count
+FROM scope_nodes n
+WHERE n.tenant_id = sqlc.arg(tenant_id) AND n.axis_code = sqlc.arg(axis_code)
+  AND n.external_ref = sqlc.arg(external_ref);
 
 -- name: EnsureAxisRoot :one
 SELECT scope_ensure_root(sqlc.arg(tenant_id), sqlc.arg(axis_code)) AS node_id;
@@ -216,10 +231,12 @@ SELECT count(*) FROM scope_nodes WHERE tenant_id = $1 AND status = 'active';
 -- grants on one screen. The console used to pull every node in every axis
 -- (32k here) to render a dozen labels.
 -- name: ScopeNodesByIDs :many
-SELECT id, tenant_id, parent_id, is_axis_root, status, axis_code, node_type,
-       slug, name, external_ref
-FROM scope_nodes
-WHERE tenant_id = sqlc.arg(tenant_id) AND id = ANY(sqlc.arg(ids)::uuid[]);
+SELECT n.id, n.tenant_id, n.parent_id, n.is_axis_root, n.status, n.axis_code,
+       n.node_type, n.slug, n.name, n.external_ref,
+       (SELECT count(*) FROM scope_nodes c
+         WHERE c.parent_id = n.id AND c.status = 'active')::int AS child_count
+FROM scope_nodes n
+WHERE n.tenant_id = sqlc.arg(tenant_id) AND n.id = ANY(sqlc.arg(ids)::uuid[]);
 
 -- ListSyncRuns is the history scope_sync_apply has been recording since
 -- 0017 and nothing ever read. Joined through the source so a run can only
