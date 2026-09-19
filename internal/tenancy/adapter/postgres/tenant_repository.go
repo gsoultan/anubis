@@ -6,63 +6,97 @@ import (
 
 	"github.com/gsoultan/anubis/internal/platform/database"
 	"github.com/gsoultan/anubis/internal/shared/apperr"
-	gen "github.com/gsoultan/anubis/internal/tenancy/adapter/postgres/gen"
+	"github.com/gsoultan/anubis/internal/tenancy/adapter/postgres/rgen/catalogversion"
+	"github.com/gsoultan/anubis/internal/tenancy/adapter/postgres/rgen/tenant"
+	tenancyrquery "github.com/gsoultan/anubis/internal/tenancy/adapter/postgres/rquery"
 	tenancydomain "github.com/gsoultan/anubis/internal/tenancy/domain"
 )
 
 func (s *Repository) TenantBySlug(ctx context.Context, slug string) (*tenancydomain.TenantRef, error) {
-	row, err := s.q(ctx).GetTenantBySlug(ctx, slug)
+	row, ok, err := tenant.New().Where(tenant.Slug.Eq(slug)).One(ctx, s.ex(ctx))
 	if err != nil {
 		return nil, database.MapErr(err)
 	}
-	return &tenancydomain.TenantRef{ID: row.ID, Slug: row.Slug, Name: row.Name,
-		Status: row.Status, CreatedAt: row.CreatedAt}, nil
+	if !ok {
+		return nil, apperr.ErrNotFound.With("tenant", slug)
+	}
+	return tenantRef(row), nil
 }
 
 func (s *Repository) TenantByID(ctx context.Context, id string) (*tenancydomain.TenantRef, error) {
-	row, err := s.q(ctx).GetTenant(ctx, id)
+	tid, err := database.ParseUUID(id)
 	if err != nil {
 		return nil, database.MapErr(err)
 	}
-	return &tenancydomain.TenantRef{ID: row.ID, Slug: row.Slug, Name: row.Name,
-		Status: row.Status, CreatedAt: row.CreatedAt}, nil
+	row, ok, err := tenant.New().Where(tenant.ID.Eq(tid)).One(ctx, s.ex(ctx))
+	if err != nil {
+		return nil, database.MapErr(err)
+	}
+	if !ok {
+		return nil, apperr.ErrNotFound.With("tenant", id)
+	}
+	return tenantRef(row), nil
 }
 
 func (s *Repository) ListTenants(ctx context.Context) ([]tenancydomain.TenantRef, error) {
-	rows, err := s.q(ctx).ListTenants(ctx)
+	rows, err := tenant.New().Order(tenant.Slug.Asc()).All(ctx, s.ex(ctx), nil)
 	if err != nil {
 		return nil, database.MapErr(err)
 	}
 	out := make([]tenancydomain.TenantRef, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, tenancydomain.TenantRef{ID: r.ID, Slug: r.Slug, Name: r.Name,
-			Status: r.Status, CreatedAt: r.CreatedAt})
+		out = append(out, *tenantRef(r))
 	}
 	return out, nil
 }
 
 func (s *Repository) CreateTenant(ctx context.Context, slug, name string) (*tenancydomain.TenantRef, error) {
-	row, err := s.q(ctx).CreateTenant(ctx, gen.CreateTenantParams{Slug: slug, Name: name})
+	n := tenant.Create()
+	n.SetSlug(slug)
+	n.SetName(name)
+	row, err := n.Insert(ctx, s.ex(ctx))
 	if err != nil {
 		return nil, database.MapErr(err)
 	}
-	return &tenancydomain.TenantRef{ID: row.ID, Slug: row.Slug, Name: row.Name,
-		Status: row.Status, CreatedAt: row.CreatedAt}, nil
+	return tenantRef(row), nil
 }
 
+func tenantRef(r tenant.Row) *tenancydomain.TenantRef {
+	return &tenancydomain.TenantRef{
+		ID: database.UUIDStr(r.ID), Slug: r.Slug, Name: r.Name,
+		Status: r.Status, CreatedAt: r.CreatedAt,
+	}
+}
+
+// CatalogVersion is the counter a gate snapshot is built from.
 func (s *Repository) CatalogVersion(ctx context.Context, tenantID string) (int64, time.Time, error) {
-	row, err := s.q(ctx).GetCatalogVersion(ctx, tenantID)
+	tid, err := database.ParseUUID(tenantID)
 	if err != nil {
 		return 0, time.Time{}, database.MapErr(err)
 	}
+	row, ok, err := catalogversion.New().
+		Where(catalogversion.TenantID.Eq(tid)).
+		One(ctx, s.ex(ctx))
+	if err != nil {
+		return 0, time.Time{}, database.MapErr(err)
+	}
+	if !ok {
+		return 0, time.Time{}, apperr.ErrNotFound.With("catalog_version", tenantID)
+	}
 	return row.Version, row.ChangedAt, nil
+}
+
+// BumpCatalogVersion invalidates every gate snapshot for a tenant.
+func (s *Repository) BumpCatalogVersion(ctx context.Context, tenantID string) error {
+	_, _, err := tenancyrquery.BumpCatalogVersion.One(ctx, s.ex(ctx), tenantID)
+	return database.MapErr(err)
 }
 
 // UpdateTenant renames a tenant. The slug is deliberately not editable: it
 // appears in URLs, tokens and every hosted page path, and changing it would
 // break links that already exist in the world.
 func (s *Repository) UpdateTenant(ctx context.Context, id, name string) error {
-	n, err := s.q(ctx).UpdateTenant(ctx, gen.UpdateTenantParams{ID: id, Name: name})
+	n, err := tenancyrquery.UpdateTenant.Exec(ctx, s.ex(ctx), id, name)
 	if err != nil {
 		return database.MapErr(err)
 	}
@@ -74,7 +108,7 @@ func (s *Repository) UpdateTenant(ctx context.Context, id, name string) error {
 
 // SetTenantStatus suspends or retires a tenant.
 func (s *Repository) SetTenantStatus(ctx context.Context, id, status string) error {
-	n, err := s.q(ctx).SetTenantStatus(ctx, gen.SetTenantStatusParams{ID: id, Status: status})
+	n, err := tenancyrquery.SetTenantStatus.Exec(ctx, s.ex(ctx), id, status)
 	if err != nil {
 		return database.MapErr(err)
 	}
@@ -87,16 +121,16 @@ func (s *Repository) SetTenantStatus(ctx context.Context, id, status string) err
 // CountTenantIdentities backs the "this holds N people" warning before a
 // tenant is retired.
 func (s *Repository) CountTenantIdentities(ctx context.Context, tenantID string) (int, error) {
-	n, err := s.q(ctx).CountTenantIdentities(ctx, tenantID)
+	row, _, err := tenancyrquery.CountTenantIdentities.One(ctx, s.ex(ctx), tenantID)
 	if err != nil {
 		return 0, database.MapErr(err)
 	}
-	return int(n), nil
+	return int(row.N), nil
 }
 
 // TenantStats counts what a tenant holds.
 func (s *Repository) TenantStats(ctx context.Context, tenantID string) (*tenancydomain.TenantStats, error) {
-	row, err := s.q(ctx).GetTenantStats(ctx, tenantID)
+	row, _, err := tenancyrquery.GetTenantStats.One(ctx, s.ex(ctx), tenantID)
 	if err != nil {
 		return nil, database.MapErr(err)
 	}

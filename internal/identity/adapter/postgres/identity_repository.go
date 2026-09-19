@@ -3,67 +3,68 @@ package identitypg
 import (
 	"context"
 
-	gen "github.com/gsoultan/anubis/internal/identity/adapter/postgres/gen"
+	identityrquery "github.com/gsoultan/anubis/internal/identity/adapter/postgres/rquery"
 	identitydomain "github.com/gsoultan/anubis/internal/identity/domain"
 	"github.com/gsoultan/anubis/internal/platform/database"
 	"github.com/gsoultan/anubis/internal/shared/apperr"
 )
 
+// IdentityForLogin is the sign-in lookup. It matches on lower(username) —
+// the expression the unique index is built on — and carries the realm's policy
+// along so the hot path needs no second round trip.
 func (s *Repository) IdentityForLogin(ctx context.Context, tenantID, realmID, username string) (*identitydomain.Identity, error) {
-	row, err := s.q(ctx).GetIdentityForLogin(ctx, gen.GetIdentityForLoginParams{
-		TenantID: tenantID, RealmID: database.OptStr(realmID), Username: username,
-	})
+	row, ok, err := identityrquery.GetIdentityForLogin.One(ctx, s.ex(ctx),
+		tenantID, optArg(realmID), username)
 	if err != nil {
 		return nil, database.MapErr(err)
+	}
+	if !ok {
+		return nil, database.NotFound()
 	}
 	return &identitydomain.Identity{
 		ID:             row.ID,
 		TenantID:       row.TenantID,
-		RealmID:        database.Deref(row.RealmID),
-		RealmCode:      database.Deref(row.RealmCode),
-		RealmKind:      database.Deref(row.RealmKind),
+		RealmID:        nstr(row.RealmID),
+		RealmCode:      nstr(row.RealmCode),
+		RealmKind:      nstr(row.RealmKind),
 		Username:       row.Username,
-		Email:          database.Deref(row.Email),
+		Email:          nstr(row.Email),
 		Status:         row.Status,
 		AssuranceLevel: int(row.AssuranceLevel),
 		TokenEpoch:     int(row.TokenEpoch),
-		Disabled:       row.DisabledAt != nil,
-		Anonymized:     row.AnonymizedAt != nil,
+		Disabled:       present(row.DisabledAt),
+		Anonymized:     present(row.AnonymizedAt),
 	}, nil
 }
 
 func (s *Repository) Identity(ctx context.Context, tenantID, id string) (*identitydomain.Identity, error) {
-	row, err := s.q(ctx).GetIdentity(ctx, gen.GetIdentityParams{ID: id, TenantID: tenantID})
+	row, ok, err := identityrquery.GetIdentity.One(ctx, s.ex(ctx), id, tenantID)
 	if err != nil {
 		return nil, database.MapErr(err)
+	}
+	if !ok {
+		return nil, database.NotFound()
 	}
 	return &identitydomain.Identity{
 		ID:             row.ID,
 		TenantID:       row.TenantID,
-		RealmID:        database.Deref(row.RealmID),
-		RealmCode:      database.Deref(row.RealmCode),
-		RealmKind:      database.Deref(row.RealmKind),
+		RealmID:        nstr(row.RealmID),
+		RealmCode:      nstr(row.RealmCode),
+		RealmKind:      nstr(row.RealmKind),
 		Username:       row.Username,
-		Email:          database.Deref(row.Email),
+		Email:          nstr(row.Email),
 		Status:         row.Status,
 		AssuranceLevel: int(row.AssuranceLevel),
 		TokenEpoch:     int(row.TokenEpoch),
-		Disabled:       row.DisabledAt != nil,
-		Anonymized:     row.AnonymizedAt != nil,
+		Disabled:       present(row.DisabledAt),
+		Anonymized:     present(row.AnonymizedAt),
 	}, nil
 }
 
 func (s *Repository) CreateIdentity(ctx context.Context, in identitydomain.IdentityCreate) (string, error) {
-	row, err := s.q(ctx).CreateIdentity(ctx, gen.CreateIdentityParams{
-		TenantID:       in.TenantID,
-		RealmID:        database.OptStr(in.RealmID),
-		Username:       in.Username,
-		Email:          in.Email,
-		ExternalRef:    in.ExternalRef,
-		AssuranceLevel: int16(in.AssuranceLevel),
-		CategoryID:     database.OptStr(in.CategoryID),
-		Status:         in.Status,
-	})
+	row, _, err := identityrquery.CreateIdentity.One(ctx, s.ex(ctx),
+		in.TenantID, optArg(in.RealmID), in.Username, in.Email, in.ExternalRef,
+		int16(in.AssuranceLevel), optArg(in.CategoryID), in.Status)
 	if err != nil {
 		return "", database.MapErr(err)
 	}
@@ -71,7 +72,7 @@ func (s *Repository) CreateIdentity(ctx context.Context, in identitydomain.Ident
 }
 
 func (s *Repository) DisableIdentity(ctx context.Context, tenantID, id string) error {
-	n, err := s.q(ctx).DisableIdentity(ctx, gen.DisableIdentityParams{ID: id, TenantID: tenantID})
+	n, err := identityrquery.DisableIdentity.Exec(ctx, s.ex(ctx), id, tenantID)
 	if err != nil {
 		return database.MapErr(err)
 	}
@@ -82,7 +83,7 @@ func (s *Repository) DisableIdentity(ctx context.Context, tenantID, id string) e
 }
 
 func (s *Repository) EnableIdentity(ctx context.Context, tenantID, id string) error {
-	n, err := s.q(ctx).EnableIdentity(ctx, gen.EnableIdentityParams{ID: id, TenantID: tenantID})
+	n, err := identityrquery.EnableIdentity.Exec(ctx, s.ex(ctx), id, tenantID)
 	if err != nil {
 		return database.MapErr(err)
 	}
@@ -92,20 +93,27 @@ func (s *Repository) EnableIdentity(ctx context.Context, tenantID, id string) er
 	return nil
 }
 
+// BumpTokenEpoch invalidates every outstanding token for one identity. The
+// increment is computed by the database: in Go it is a read-modify-write, and
+// two concurrent revocations would leave one set of tokens live.
 func (s *Repository) BumpTokenEpoch(ctx context.Context, tenantID, id string) (int, error) {
-	epoch, err := s.q(ctx).BumpTokenEpoch(ctx, gen.BumpTokenEpochParams{ID: id, TenantID: tenantID})
+	row, ok, err := identityrquery.BumpTokenEpoch.One(ctx, s.ex(ctx), id, tenantID)
 	if err != nil {
 		return 0, database.MapErr(err)
 	}
-	return int(epoch), nil
+	if !ok {
+		return 0, apperr.ErrNotFound
+	}
+	return int(row.TokenEpoch), nil
 }
 
+// TouchLastLogin is best effort: a login that worked must not fail on it.
 func (s *Repository) TouchLastLogin(ctx context.Context, id string) {
-	_ = s.q(ctx).TouchLastLogin(ctx, id) // best-effort; login must not fail on it
+	_, _ = identityrquery.TouchLastLogin.Exec(ctx, s.ex(ctx), id)
 }
 
 func (s *Repository) RequestErasure(ctx context.Context, tenantID, id string) error {
-	n, err := s.q(ctx).RequestErasure(ctx, gen.RequestErasureParams{ID: id, TenantID: tenantID})
+	n, err := identityrquery.RequestErasure.Exec(ctx, s.ex(ctx), id, tenantID)
 	if err != nil {
 		return database.MapErr(err)
 	}
@@ -116,16 +124,16 @@ func (s *Repository) RequestErasure(ctx context.Context, tenantID, id string) er
 }
 
 func (s *Repository) LinkIdentities(ctx context.Context, tenantID, primaryID, secondaryID, linkedBy, method string, evidence []byte) error {
-	return database.MapErr(s.q(ctx).LinkIdentities(ctx, gen.LinkIdentitiesParams{
-		TenantID: tenantID, PrimaryID: primaryID, SecondaryID: secondaryID,
-		LinkedBy: linkedBy, Method: method, Evidence: evidence,
-	}))
+	_, err := identityrquery.LinkIdentities.Exec(ctx, s.ex(ctx),
+		tenantID, primaryID, secondaryID, linkedBy, method,
+		database.OrEmptyJSON(evidence))
+	return database.MapErr(err)
 }
 
 // CountIdentitiesByRealm backs the console's overview — one row per
 // population, zero rows counted honestly.
 func (s *Repository) CountIdentitiesByRealm(ctx context.Context, tenantID string) ([]identitydomain.RealmCount, error) {
-	rows, err := s.q(ctx).CountIdentitiesByRealm(ctx, tenantID)
+	rows, err := identityrquery.CountIdentitiesByRealm.Query(ctx, s.ex(ctx), tenantID)
 	if err != nil {
 		return nil, database.MapErr(err)
 	}
@@ -139,9 +147,9 @@ func (s *Repository) CountIdentitiesByRealm(ctx context.Context, tenantID string
 // CountRetentionBacklog is the compliance clock: rows past retention_until
 // and not yet anonymised.
 func (s *Repository) CountRetentionBacklog(ctx context.Context, tenantID string) (int64, error) {
-	n, err := s.q(ctx).CountRetentionBacklog(ctx, tenantID)
+	row, _, err := identityrquery.CountRetentionBacklog.One(ctx, s.ex(ctx), tenantID)
 	if err != nil {
 		return 0, database.MapErr(err)
 	}
-	return n, nil
+	return row.N, nil
 }

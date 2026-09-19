@@ -1,29 +1,52 @@
 #!/usr/bin/env bash
 # Generated code is committed; regeneration must be a no-op. Drift means a
-# .proto, .sql, rmodel or rquery changed without regenerating (or vice versa).
+# .proto, rmodel or rquery changed without regenerating (or vice versa).
+#
+# sqlc is gone: every context generates through storm now, and the storm half
+# of this check needs a live database because stormgen PREPAREs every rquery
+# declaration against it — that check IS the point.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 export PATH="$(go env GOPATH)/bin:$PATH"
 buf generate
-sqlc generate
-if ! git diff --exit-code --quiet gen internal/*/adapter/postgres/gen; then
-  echo "FAIL: generated code drifted — run scripts/gen.sh and commit" >&2
-  git --no-pager diff --stat gen internal/*/adapter/postgres/gen >&2
+if ! git diff --exit-code --quiet gen; then
+  echo "FAIL: proto generated code drifted — run scripts/gen.sh and commit" >&2
+  git --no-pager diff --stat gen >&2
   exit 1
 fi
-# storm's rgen needs a live dev database (stormgen PREPAREs every rquery
-# declaration against it — that check IS the point). Locally and in the
-# backend suite ANUBIS_DB_URL is set; without one, say so instead of
-# pretending the check ran.
+
+# Full paths, not a context name plus a template: the technical context's
+# generated package lives under internal/platform/database, not under an
+# adapter/postgres it does not have.
+storm_outs=(
+  internal/authz/adapter/postgres/rgen
+  internal/audit/adapter/postgres/rgen
+  internal/auth/adapter/postgres/rgen
+  internal/control/adapter/postgres/rgen
+  internal/gate/adapter/postgres/rgen
+  internal/identity/adapter/postgres/rgen
+  internal/scope/adapter/postgres/rgen
+  internal/tenancy/adapter/postgres/rgen
+  internal/platform/database/rgen
+)
+
+# Locally and in the backend suite ANUBIS_DB_URL is set; without one, say so
+# instead of pretending the check ran.
 if [ -n "${ANUBIS_DB_URL:-}" ]; then
-  go run ./cmd/stormgen generate internal/authz/adapter/postgres/rgen \
-  -raw-schema live -dsn "$ANUBIS_DB_URL" >/dev/null
-  if ! git diff --exit-code --quiet internal/*/adapter/postgres/rgen; then
+  for out in "${storm_outs[@]}"; do
+    go run ./cmd/stormgen generate "$out" -raw-schema live -dsn "$ANUBIS_DB_URL" >/dev/null
+  done
+  if ! git diff --exit-code --quiet "${storm_outs[@]}"; then
     echo "FAIL: storm generated code drifted — regenerate and commit (see cmd/stormgen)" >&2
-    git --no-pager diff --stat internal/*/adapter/postgres/rgen >&2
+    git --no-pager diff --stat "${storm_outs[@]}" >&2
     exit 1
   fi
-  echo "ok: generated code matches sources (sqlc, buf, storm)"
+  # The schema of record is checked in scripts/ci/backend-suite.sh rather than
+  # here. Both need a database, but the suite's is built from migrations/ a
+  # moment earlier, which is what makes the check mean "the model and the
+  # migrations agree" rather than "the model matches whatever this database
+  # happens to be".
+  echo "ok: generated code matches sources (buf, storm)"
 else
-  echo "ok: generated code matches sources (sqlc, buf; storm skipped — no ANUBIS_DB_URL)"
+  echo "ok: generated code matches sources (buf; storm skipped — no ANUBIS_DB_URL)"
 fi

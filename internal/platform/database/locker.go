@@ -4,7 +4,10 @@ import (
 	"context"
 	"log/slog"
 
-	gen "github.com/gsoultan/anubis/internal/platform/database/gen"
+	// The generated package's init registers the raw-row scanners; the blank
+	// import is what makes the declarations below executable.
+	_ "github.com/gsoultan/anubis/internal/platform/database/rgen"
+	platformrquery "github.com/gsoultan/anubis/internal/platform/database/rquery"
 )
 
 // TryLock takes a session-scoped advisory lock so exactly one replica runs a
@@ -16,13 +19,16 @@ func (d *DB) TryLock(ctx context.Context, id int64) (bool, func(), error) {
 	if err != nil {
 		return false, nil, err
 	}
-	q := gen.New(conn)
-	acquired, err := q.TryAdvisoryLock(ctx, id)
+	// Bound to THIS connection, not to the pool: the lock is held by the
+	// session that took it, so a release routed through the pool would run on
+	// whichever connection came back next and release nothing.
+	ex := Executor(conn)
+	row, _, err := platformrquery.TryAdvisoryLock.One(ctx, ex, id)
 	if err != nil {
 		conn.Release()
 		return false, nil, err
 	}
-	if !acquired {
+	if !row.Acquired {
 		conn.Release()
 		return false, nil, nil // another replica has it; not an error
 	}
@@ -30,7 +36,7 @@ func (d *DB) TryLock(ctx context.Context, id int64) (bool, func(), error) {
 		// Unlock on the SAME connection, and outside the caller's cancelled
 		// context — a cancelled cleanup would leak the lock until the
 		// connection is recycled.
-		if _, err := gen.New(conn).AdvisoryUnlock(context.WithoutCancel(ctx), id); err != nil {
+		if _, _, err := platformrquery.AdvisoryUnlock.One(context.WithoutCancel(ctx), ex, id); err != nil {
 			slog.Warn("advisory unlock failed", "lock", id, "error", err)
 		}
 		conn.Release()

@@ -25,11 +25,39 @@ go run ./cmd/anubisd migrate
 # schema stormgen can PREPARE the rquery declarations against. A declaration
 # that drifted from migrations, or generated output that drifted from a
 # declaration, fails here naming the statement.
-go run ./cmd/stormgen generate internal/authz/adapter/postgres/rgen \
-  -raw-schema live -dsn "$ANUBIS_DB_URL" >/dev/null
-if ! git diff --exit-code --quiet internal/*/adapter/postgres/rgen; then
+# One invocation per bounded context: stormgen reads the context out of the
+# output path and hands storm only THAT context's models, so a query cannot
+# compile against a table its context does not own. Add a line when a context
+# moves off sqlc.
+# Full paths, not a context name plus a template: the technical context's
+# generated package lives under internal/platform/database, not under an
+# adapter/postgres that it does not have.
+for out in \
+  internal/authz/adapter/postgres/rgen \
+  internal/audit/adapter/postgres/rgen \
+  internal/control/adapter/postgres/rgen \
+  internal/tenancy/adapter/postgres/rgen \
+  internal/scope/adapter/postgres/rgen \
+  internal/auth/adapter/postgres/rgen \
+  internal/gate/adapter/postgres/rgen \
+  internal/identity/adapter/postgres/rgen \
+  internal/platform/database/rgen \
+; do
+  go run ./cmd/stormgen generate "$out" -raw-schema live -dsn "$ANUBIS_DB_URL" >/dev/null
+done
+# The SCHEMA OF RECORD against a database built from migrations/ a moment ago.
+#
+# This is the strongest place for it: the database here is exactly what the
+# migrations produce, so a disagreement means the model and the migrations have
+# parted company — a model edited without a migration, or a migration written
+# without the model following it. In the `checks` job this cannot run at all,
+# because that job has no database; putting it only there would have made it
+# skip silently and look like a pass.
+go run ./cmd/stormddl -check -dsn "$ANUBIS_DB_URL"
+
+if ! git diff --exit-code --quiet internal/*/adapter/postgres/rgen internal/platform/database/rgen; then
   echo "FAIL: storm generated code drifted — regenerate and commit (see cmd/stormgen)" >&2
-  git --no-pager diff --stat internal/*/adapter/postgres/rgen >&2
+  git --no-pager diff --stat internal/*/adapter/postgres/rgen internal/platform/database/rgen >&2
   exit 1
 fi
 
