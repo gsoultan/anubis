@@ -21,6 +21,199 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type StreamRevocationsResponse_Kind int32
+
+const (
+	StreamRevocationsResponse_KIND_UNSPECIFIED StreamRevocationsResponse_Kind = 0
+	// One session ended: logout, admin revocation, or refresh-token theft
+	// detection. sid is set.
+	StreamRevocationsResponse_KIND_SESSION_REVOKED StreamRevocationsResponse_Kind = 1
+	// Every token issued to an identity before epoch is now invalid, which
+	// is how a password change or a disable invalidates in bulk. sub and
+	// epoch are set.
+	StreamRevocationsResponse_KIND_EPOCH_BUMPED StreamRevocationsResponse_Kind = 2
+	// The stream is live and the consumer has seen the current state. Sent
+	// once, before any change events, so a client can tell "nothing has
+	// happened yet" from "not connected yet".
+	StreamRevocationsResponse_KIND_SYNCED StreamRevocationsResponse_Kind = 3
+)
+
+// Enum value maps for StreamRevocationsResponse_Kind.
+var (
+	StreamRevocationsResponse_Kind_name = map[int32]string{
+		0: "KIND_UNSPECIFIED",
+		1: "KIND_SESSION_REVOKED",
+		2: "KIND_EPOCH_BUMPED",
+		3: "KIND_SYNCED",
+	}
+	StreamRevocationsResponse_Kind_value = map[string]int32{
+		"KIND_UNSPECIFIED":     0,
+		"KIND_SESSION_REVOKED": 1,
+		"KIND_EPOCH_BUMPED":    2,
+		"KIND_SYNCED":          3,
+	}
+)
+
+func (x StreamRevocationsResponse_Kind) Enum() *StreamRevocationsResponse_Kind {
+	p := new(StreamRevocationsResponse_Kind)
+	*p = x
+	return p
+}
+
+func (x StreamRevocationsResponse_Kind) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (StreamRevocationsResponse_Kind) Descriptor() protoreflect.EnumDescriptor {
+	return file_anubis_v1_token_proto_enumTypes[0].Descriptor()
+}
+
+func (StreamRevocationsResponse_Kind) Type() protoreflect.EnumType {
+	return &file_anubis_v1_token_proto_enumTypes[0]
+}
+
+func (x StreamRevocationsResponse_Kind) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use StreamRevocationsResponse_Kind.Descriptor instead.
+func (StreamRevocationsResponse_Kind) EnumDescriptor() ([]byte, []int) {
+	return file_anubis_v1_token_proto_rawDescGZIP(), []int{1, 0}
+}
+
+type StreamRevocationsRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Tenant to watch. Ignored for a tenant-scoped credential, which can only
+	// ever watch its own.
+	Tenant        string `protobuf:"bytes,1,opt,name=tenant,proto3" json:"tenant,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StreamRevocationsRequest) Reset() {
+	*x = StreamRevocationsRequest{}
+	mi := &file_anubis_v1_token_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StreamRevocationsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StreamRevocationsRequest) ProtoMessage() {}
+
+func (x *StreamRevocationsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_anubis_v1_token_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StreamRevocationsRequest.ProtoReflect.Descriptor instead.
+func (*StreamRevocationsRequest) Descriptor() ([]byte, []int) {
+	return file_anubis_v1_token_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *StreamRevocationsRequest) GetTenant() string {
+	if x != nil {
+		return x.Tenant
+	}
+	return ""
+}
+
+// StreamRevocationsResponse names something that stopped being valid. One
+// message per event; the stream stays open.
+type StreamRevocationsResponse struct {
+	state  protoimpl.MessageState         `protogen:"open.v1"`
+	Kind   StreamRevocationsResponse_Kind `protobuf:"varint,1,opt,name=kind,proto3,enum=anubis.v1.StreamRevocationsResponse_Kind" json:"kind,omitempty"`
+	Tenant string                         `protobuf:"bytes,2,opt,name=tenant,proto3" json:"tenant,omitempty"`
+	Sid    string                         `protobuf:"bytes,3,opt,name=sid,proto3" json:"sid,omitempty"`
+	Sub    string                         `protobuf:"bytes,4,opt,name=sub,proto3" json:"sub,omitempty"`
+	Epoch  int32                          `protobuf:"varint,5,opt,name=epoch,proto3" json:"epoch,omitempty"`
+	// When Anubis observed it, not when the consumer received it.
+	ObservedAt    int64 `protobuf:"varint,6,opt,name=observed_at,json=observedAt,proto3" json:"observed_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StreamRevocationsResponse) Reset() {
+	*x = StreamRevocationsResponse{}
+	mi := &file_anubis_v1_token_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StreamRevocationsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StreamRevocationsResponse) ProtoMessage() {}
+
+func (x *StreamRevocationsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_anubis_v1_token_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StreamRevocationsResponse.ProtoReflect.Descriptor instead.
+func (*StreamRevocationsResponse) Descriptor() ([]byte, []int) {
+	return file_anubis_v1_token_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *StreamRevocationsResponse) GetKind() StreamRevocationsResponse_Kind {
+	if x != nil {
+		return x.Kind
+	}
+	return StreamRevocationsResponse_KIND_UNSPECIFIED
+}
+
+func (x *StreamRevocationsResponse) GetTenant() string {
+	if x != nil {
+		return x.Tenant
+	}
+	return ""
+}
+
+func (x *StreamRevocationsResponse) GetSid() string {
+	if x != nil {
+		return x.Sid
+	}
+	return ""
+}
+
+func (x *StreamRevocationsResponse) GetSub() string {
+	if x != nil {
+		return x.Sub
+	}
+	return ""
+}
+
+func (x *StreamRevocationsResponse) GetEpoch() int32 {
+	if x != nil {
+		return x.Epoch
+	}
+	return 0
+}
+
+func (x *StreamRevocationsResponse) GetObservedAt() int64 {
+	if x != nil {
+		return x.ObservedAt
+	}
+	return 0
+}
+
 type IntrospectRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Token         string                 `protobuf:"bytes,1,opt,name=token,proto3" json:"token,omitempty"`
@@ -30,7 +223,7 @@ type IntrospectRequest struct {
 
 func (x *IntrospectRequest) Reset() {
 	*x = IntrospectRequest{}
-	mi := &file_anubis_v1_token_proto_msgTypes[0]
+	mi := &file_anubis_v1_token_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -42,7 +235,7 @@ func (x *IntrospectRequest) String() string {
 func (*IntrospectRequest) ProtoMessage() {}
 
 func (x *IntrospectRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_token_proto_msgTypes[0]
+	mi := &file_anubis_v1_token_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -55,7 +248,7 @@ func (x *IntrospectRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IntrospectRequest.ProtoReflect.Descriptor instead.
 func (*IntrospectRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_token_proto_rawDescGZIP(), []int{0}
+	return file_anubis_v1_token_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *IntrospectRequest) GetToken() string {
@@ -86,7 +279,7 @@ type IntrospectResponse struct {
 
 func (x *IntrospectResponse) Reset() {
 	*x = IntrospectResponse{}
-	mi := &file_anubis_v1_token_proto_msgTypes[1]
+	mi := &file_anubis_v1_token_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -98,7 +291,7 @@ func (x *IntrospectResponse) String() string {
 func (*IntrospectResponse) ProtoMessage() {}
 
 func (x *IntrospectResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_token_proto_msgTypes[1]
+	mi := &file_anubis_v1_token_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -111,7 +304,7 @@ func (x *IntrospectResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IntrospectResponse.ProtoReflect.Descriptor instead.
 func (*IntrospectResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_token_proto_rawDescGZIP(), []int{1}
+	return file_anubis_v1_token_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *IntrospectResponse) GetActive() bool {
@@ -215,7 +408,7 @@ type RevokeRequest struct {
 
 func (x *RevokeRequest) Reset() {
 	*x = RevokeRequest{}
-	mi := &file_anubis_v1_token_proto_msgTypes[2]
+	mi := &file_anubis_v1_token_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -227,7 +420,7 @@ func (x *RevokeRequest) String() string {
 func (*RevokeRequest) ProtoMessage() {}
 
 func (x *RevokeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_token_proto_msgTypes[2]
+	mi := &file_anubis_v1_token_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -240,7 +433,7 @@ func (x *RevokeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RevokeRequest.ProtoReflect.Descriptor instead.
 func (*RevokeRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_token_proto_rawDescGZIP(), []int{2}
+	return file_anubis_v1_token_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *RevokeRequest) GetToken() string {
@@ -265,7 +458,7 @@ type RevokeResponse struct {
 
 func (x *RevokeResponse) Reset() {
 	*x = RevokeResponse{}
-	mi := &file_anubis_v1_token_proto_msgTypes[3]
+	mi := &file_anubis_v1_token_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -277,7 +470,7 @@ func (x *RevokeResponse) String() string {
 func (*RevokeResponse) ProtoMessage() {}
 
 func (x *RevokeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_token_proto_msgTypes[3]
+	mi := &file_anubis_v1_token_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -290,14 +483,29 @@ func (x *RevokeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RevokeResponse.ProtoReflect.Descriptor instead.
 func (*RevokeResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_token_proto_rawDescGZIP(), []int{3}
+	return file_anubis_v1_token_proto_rawDescGZIP(), []int{5}
 }
 
 var File_anubis_v1_token_proto protoreflect.FileDescriptor
 
 const file_anubis_v1_token_proto_rawDesc = "" +
 	"\n" +
-	"\x15anubis/v1/token.proto\x12\tanubis.v1\")\n" +
+	"\x15anubis/v1/token.proto\x12\tanubis.v1\"2\n" +
+	"\x18StreamRevocationsRequest\x12\x16\n" +
+	"\x06tenant\x18\x01 \x01(\tR\x06tenant\"\xad\x02\n" +
+	"\x19StreamRevocationsResponse\x12=\n" +
+	"\x04kind\x18\x01 \x01(\x0e2).anubis.v1.StreamRevocationsResponse.KindR\x04kind\x12\x16\n" +
+	"\x06tenant\x18\x02 \x01(\tR\x06tenant\x12\x10\n" +
+	"\x03sid\x18\x03 \x01(\tR\x03sid\x12\x10\n" +
+	"\x03sub\x18\x04 \x01(\tR\x03sub\x12\x14\n" +
+	"\x05epoch\x18\x05 \x01(\x05R\x05epoch\x12\x1f\n" +
+	"\vobserved_at\x18\x06 \x01(\x03R\n" +
+	"observedAt\"^\n" +
+	"\x04Kind\x12\x14\n" +
+	"\x10KIND_UNSPECIFIED\x10\x00\x12\x18\n" +
+	"\x14KIND_SESSION_REVOKED\x10\x01\x12\x15\n" +
+	"\x11KIND_EPOCH_BUMPED\x10\x02\x12\x0f\n" +
+	"\vKIND_SYNCED\x10\x03\")\n" +
 	"\x11IntrospectRequest\x12\x14\n" +
 	"\x05token\x18\x01 \x01(\tR\x05token\"\x87\x03\n" +
 	"\x12IntrospectResponse\x12\x16\n" +
@@ -321,11 +529,12 @@ const file_anubis_v1_token_proto_rawDesc = "" +
 	"\rRevokeRequest\x12\x14\n" +
 	"\x05token\x18\x01 \x01(\tR\x05token\x12&\n" +
 	"\x0ftoken_type_hint\x18\x02 \x01(\tR\rtokenTypeHint\"\x10\n" +
-	"\x0eRevokeResponse2\x98\x01\n" +
+	"\x0eRevokeResponse2\xfa\x01\n" +
 	"\fTokenService\x12I\n" +
 	"\n" +
 	"Introspect\x12\x1c.anubis.v1.IntrospectRequest\x1a\x1d.anubis.v1.IntrospectResponse\x12=\n" +
-	"\x06Revoke\x12\x18.anubis.v1.RevokeRequest\x1a\x19.anubis.v1.RevokeResponseB6Z4github.com/gsoultan/anubis/gen/go/anubis/v1;anubisv1b\x06proto3"
+	"\x06Revoke\x12\x18.anubis.v1.RevokeRequest\x1a\x19.anubis.v1.RevokeResponse\x12`\n" +
+	"\x11StreamRevocations\x12#.anubis.v1.StreamRevocationsRequest\x1a$.anubis.v1.StreamRevocationsResponse0\x01B6Z4github.com/gsoultan/anubis/gen/go/anubis/v1;anubisv1b\x06proto3"
 
 var (
 	file_anubis_v1_token_proto_rawDescOnce sync.Once
@@ -339,25 +548,32 @@ func file_anubis_v1_token_proto_rawDescGZIP() []byte {
 	return file_anubis_v1_token_proto_rawDescData
 }
 
-var file_anubis_v1_token_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
+var file_anubis_v1_token_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
+var file_anubis_v1_token_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
 var file_anubis_v1_token_proto_goTypes = []any{
-	(*IntrospectRequest)(nil),  // 0: anubis.v1.IntrospectRequest
-	(*IntrospectResponse)(nil), // 1: anubis.v1.IntrospectResponse
-	(*RevokeRequest)(nil),      // 2: anubis.v1.RevokeRequest
-	(*RevokeResponse)(nil),     // 3: anubis.v1.RevokeResponse
-	nil,                        // 4: anubis.v1.IntrospectResponse.ScopesEntry
+	(StreamRevocationsResponse_Kind)(0), // 0: anubis.v1.StreamRevocationsResponse.Kind
+	(*StreamRevocationsRequest)(nil),    // 1: anubis.v1.StreamRevocationsRequest
+	(*StreamRevocationsResponse)(nil),   // 2: anubis.v1.StreamRevocationsResponse
+	(*IntrospectRequest)(nil),           // 3: anubis.v1.IntrospectRequest
+	(*IntrospectResponse)(nil),          // 4: anubis.v1.IntrospectResponse
+	(*RevokeRequest)(nil),               // 5: anubis.v1.RevokeRequest
+	(*RevokeResponse)(nil),              // 6: anubis.v1.RevokeResponse
+	nil,                                 // 7: anubis.v1.IntrospectResponse.ScopesEntry
 }
 var file_anubis_v1_token_proto_depIdxs = []int32{
-	4, // 0: anubis.v1.IntrospectResponse.scopes:type_name -> anubis.v1.IntrospectResponse.ScopesEntry
-	0, // 1: anubis.v1.TokenService.Introspect:input_type -> anubis.v1.IntrospectRequest
-	2, // 2: anubis.v1.TokenService.Revoke:input_type -> anubis.v1.RevokeRequest
-	1, // 3: anubis.v1.TokenService.Introspect:output_type -> anubis.v1.IntrospectResponse
-	3, // 4: anubis.v1.TokenService.Revoke:output_type -> anubis.v1.RevokeResponse
-	3, // [3:5] is the sub-list for method output_type
-	1, // [1:3] is the sub-list for method input_type
-	1, // [1:1] is the sub-list for extension type_name
-	1, // [1:1] is the sub-list for extension extendee
-	0, // [0:1] is the sub-list for field type_name
+	0, // 0: anubis.v1.StreamRevocationsResponse.kind:type_name -> anubis.v1.StreamRevocationsResponse.Kind
+	7, // 1: anubis.v1.IntrospectResponse.scopes:type_name -> anubis.v1.IntrospectResponse.ScopesEntry
+	3, // 2: anubis.v1.TokenService.Introspect:input_type -> anubis.v1.IntrospectRequest
+	5, // 3: anubis.v1.TokenService.Revoke:input_type -> anubis.v1.RevokeRequest
+	1, // 4: anubis.v1.TokenService.StreamRevocations:input_type -> anubis.v1.StreamRevocationsRequest
+	4, // 5: anubis.v1.TokenService.Introspect:output_type -> anubis.v1.IntrospectResponse
+	6, // 6: anubis.v1.TokenService.Revoke:output_type -> anubis.v1.RevokeResponse
+	2, // 7: anubis.v1.TokenService.StreamRevocations:output_type -> anubis.v1.StreamRevocationsResponse
+	5, // [5:8] is the sub-list for method output_type
+	2, // [2:5] is the sub-list for method input_type
+	2, // [2:2] is the sub-list for extension type_name
+	2, // [2:2] is the sub-list for extension extendee
+	0, // [0:2] is the sub-list for field type_name
 }
 
 func init() { file_anubis_v1_token_proto_init() }
@@ -370,13 +586,14 @@ func file_anubis_v1_token_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_anubis_v1_token_proto_rawDesc), len(file_anubis_v1_token_proto_rawDesc)),
-			NumEnums:      0,
-			NumMessages:   5,
+			NumEnums:      1,
+			NumMessages:   7,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
 		GoTypes:           file_anubis_v1_token_proto_goTypes,
 		DependencyIndexes: file_anubis_v1_token_proto_depIdxs,
+		EnumInfos:         file_anubis_v1_token_proto_enumTypes,
 		MessageInfos:      file_anubis_v1_token_proto_msgTypes,
 	}.Build()
 	File_anubis_v1_token_proto = out.File

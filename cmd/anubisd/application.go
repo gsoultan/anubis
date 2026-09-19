@@ -49,6 +49,7 @@ import (
 	"github.com/gsoultan/anubis/internal/platform/jobs"
 	"github.com/gsoultan/anubis/internal/platform/mw"
 	"github.com/gsoultan/anubis/internal/platform/ratelimit"
+	"github.com/gsoultan/anubis/internal/platform/revocation"
 	provisioningrpc "github.com/gsoultan/anubis/internal/provisioning/adapter/rpc"
 	provisioningapp "github.com/gsoultan/anubis/internal/provisioning/app"
 	provisioningsvc "github.com/gsoultan/anubis/internal/provisioning/service"
@@ -70,12 +71,16 @@ import (
 // register their own transports. Nothing here contains business logic —
 // this file exists so no other package has to know the whole system.
 type application struct {
-	clock     systemClock
-	ring      *keyring.Manager
-	auditor   *auditpg.ChainedAuditor
-	issuer    authapp.TokenIssuer
-	issuerURL string
-	masterKey []byte
+	clock systemClock
+	ring  *keyring.Manager
+	// revocations fans snapshot deltas out to StreamRevocations subscribers.
+	// Created here because the token handler is wired before the snapshot
+	// manager exists, and both need the same broker.
+	revocations *revocation.Broker
+	auditor     *auditpg.ChainedAuditor
+	issuer      authapp.TokenIssuer
+	issuerURL   string
+	masterKey   []byte
 	// bootstrapTenantSlug is the FALLBACK tenant for the page URLs the console
 	// shows: a caller carrying a tenant on its principal gets that one instead,
 	// because it is the tenant they are administering. Page lookup itself
@@ -98,6 +103,7 @@ type application struct {
 
 func newApplication(ctx context.Context, cfg *config.Config, db *database.DB, logger *slog.Logger) (*application, error) {
 	a := &application{
+		revocations:         revocation.NewBroker(),
 		clock:               systemClock{},
 		masterKey:           cfg.MasterKey,
 		issuerURL:           cfg.Issuer,
@@ -197,7 +203,7 @@ func (a *application) registerRPC(rpc *http.ServeMux, opts connect.HandlerOption
 	rpc.Handle(anubisv1connect.NewAuthServiceHandler(
 		authrpc.NewAuthHandler(authep.NewAuthEndpoints(authService, logger, limiter)), opts))
 	rpc.Handle(anubisv1connect.NewTokenServiceHandler(
-		authrpc.NewTokenHandler(authep.NewTokenEndpoints(tokenService, logger)), opts))
+		authrpc.NewTokenHandler(authep.NewTokenEndpoints(tokenService, logger), a.revocations), opts))
 	rpc.Handle(anubisv1connect.NewSessionServiceHandler(
 		authrpc.NewSessionHandler(authep.NewSessionEndpoints(sessionService, logger)), opts))
 
@@ -312,6 +318,9 @@ func (a *application) registerHTTP(ctx context.Context, srv *apihttp.Server,
 	srv.HandleFunc("GET /p/{tenant}/{kind}/{slug}", oidc.ServePage)
 
 	snaps := gateapp.NewManager(a.gate, a.gate, cfg.SnapshotMaxAge, logger)
+	// Before Run: the manager announces deltas on every swap, and the first
+	// swap happens inside Run.
+	snaps.PublishRevocationsTo(a.revocations)
 	go snaps.Run(ctx)
 	// Readiness must fail while the snapshot is too stale to serve from:
 	// past that age the gate fails closed, so this instance is denying

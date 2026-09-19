@@ -37,12 +37,24 @@ const (
 	TokenServiceIntrospectProcedure = "/anubis.v1.TokenService/Introspect"
 	// TokenServiceRevokeProcedure is the fully-qualified name of the TokenService's Revoke RPC.
 	TokenServiceRevokeProcedure = "/anubis.v1.TokenService/Revoke"
+	// TokenServiceStreamRevocationsProcedure is the fully-qualified name of the TokenService's
+	// StreamRevocations RPC.
+	TokenServiceStreamRevocationsProcedure = "/anubis.v1.TokenService/StreamRevocations"
 )
 
 // TokenServiceClient is a client for the anubis.v1.TokenService service.
 type TokenServiceClient interface {
 	Introspect(context.Context, *connect.Request[v1.IntrospectRequest]) (*connect.Response[v1.IntrospectResponse], error)
 	Revoke(context.Context, *connect.Request[v1.RevokeRequest]) (*connect.Response[v1.RevokeResponse], error)
+	// StreamRevocations pushes revocations as they happen, so a resource
+	// server can drop a session before the access token expires without
+	// putting Anubis in the hot path the way Introspect does.
+	//
+	// The stream is a CACHE INVALIDATION, not an authorization decision. A
+	// consumer that misses an event because it was disconnected must still be
+	// correct, which is why tokens stay short-lived and why the snapshot
+	// remains the authority. Treat a gap as "check again", never as "allow".
+	StreamRevocations(context.Context, *connect.Request[v1.StreamRevocationsRequest]) (*connect.ServerStreamForClient[v1.StreamRevocationsResponse], error)
 }
 
 // NewTokenServiceClient constructs a client for the anubis.v1.TokenService service. By default, it
@@ -68,13 +80,20 @@ func NewTokenServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 			connect.WithSchema(tokenServiceMethods.ByName("Revoke")),
 			connect.WithClientOptions(opts...),
 		),
+		streamRevocations: connect.NewClient[v1.StreamRevocationsRequest, v1.StreamRevocationsResponse](
+			httpClient,
+			baseURL+TokenServiceStreamRevocationsProcedure,
+			connect.WithSchema(tokenServiceMethods.ByName("StreamRevocations")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // tokenServiceClient implements TokenServiceClient.
 type tokenServiceClient struct {
-	introspect *connect.Client[v1.IntrospectRequest, v1.IntrospectResponse]
-	revoke     *connect.Client[v1.RevokeRequest, v1.RevokeResponse]
+	introspect        *connect.Client[v1.IntrospectRequest, v1.IntrospectResponse]
+	revoke            *connect.Client[v1.RevokeRequest, v1.RevokeResponse]
+	streamRevocations *connect.Client[v1.StreamRevocationsRequest, v1.StreamRevocationsResponse]
 }
 
 // Introspect calls anubis.v1.TokenService.Introspect.
@@ -87,10 +106,24 @@ func (c *tokenServiceClient) Revoke(ctx context.Context, req *connect.Request[v1
 	return c.revoke.CallUnary(ctx, req)
 }
 
+// StreamRevocations calls anubis.v1.TokenService.StreamRevocations.
+func (c *tokenServiceClient) StreamRevocations(ctx context.Context, req *connect.Request[v1.StreamRevocationsRequest]) (*connect.ServerStreamForClient[v1.StreamRevocationsResponse], error) {
+	return c.streamRevocations.CallServerStream(ctx, req)
+}
+
 // TokenServiceHandler is an implementation of the anubis.v1.TokenService service.
 type TokenServiceHandler interface {
 	Introspect(context.Context, *connect.Request[v1.IntrospectRequest]) (*connect.Response[v1.IntrospectResponse], error)
 	Revoke(context.Context, *connect.Request[v1.RevokeRequest]) (*connect.Response[v1.RevokeResponse], error)
+	// StreamRevocations pushes revocations as they happen, so a resource
+	// server can drop a session before the access token expires without
+	// putting Anubis in the hot path the way Introspect does.
+	//
+	// The stream is a CACHE INVALIDATION, not an authorization decision. A
+	// consumer that misses an event because it was disconnected must still be
+	// correct, which is why tokens stay short-lived and why the snapshot
+	// remains the authority. Treat a gap as "check again", never as "allow".
+	StreamRevocations(context.Context, *connect.Request[v1.StreamRevocationsRequest], *connect.ServerStream[v1.StreamRevocationsResponse]) error
 }
 
 // NewTokenServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -112,12 +145,20 @@ func NewTokenServiceHandler(svc TokenServiceHandler, opts ...connect.HandlerOpti
 		connect.WithSchema(tokenServiceMethods.ByName("Revoke")),
 		connect.WithHandlerOptions(opts...),
 	)
+	tokenServiceStreamRevocationsHandler := connect.NewServerStreamHandler(
+		TokenServiceStreamRevocationsProcedure,
+		svc.StreamRevocations,
+		connect.WithSchema(tokenServiceMethods.ByName("StreamRevocations")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/anubis.v1.TokenService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case TokenServiceIntrospectProcedure:
 			tokenServiceIntrospectHandler.ServeHTTP(w, r)
 		case TokenServiceRevokeProcedure:
 			tokenServiceRevokeHandler.ServeHTTP(w, r)
+		case TokenServiceStreamRevocationsProcedure:
+			tokenServiceStreamRevocationsHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -133,4 +174,8 @@ func (UnimplementedTokenServiceHandler) Introspect(context.Context, *connect.Req
 
 func (UnimplementedTokenServiceHandler) Revoke(context.Context, *connect.Request[v1.RevokeRequest]) (*connect.Response[v1.RevokeResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.TokenService.Revoke is not implemented"))
+}
+
+func (UnimplementedTokenServiceHandler) StreamRevocations(context.Context, *connect.Request[v1.StreamRevocationsRequest], *connect.ServerStream[v1.StreamRevocationsResponse]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.TokenService.StreamRevocations is not implemented"))
 }

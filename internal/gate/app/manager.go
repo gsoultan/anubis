@@ -8,6 +8,7 @@ import (
 
 	"github.com/gsoultan/anubis/internal/gate/snapshot"
 	"github.com/gsoultan/anubis/internal/platform/metrics"
+	"github.com/gsoultan/anubis/internal/platform/revocation"
 )
 
 // Loader is what the Manager needs from the repository layer.
@@ -44,6 +45,9 @@ type Manager struct {
 	coalesceMax   time.Duration
 	// rebuildEvery bounds how long the version gate may be trusted. See load.
 	rebuildEvery time.Duration
+	// revocations, when set, is told what changed on every swap. Optional:
+	// nil means nobody is streaming and the diff is skipped entirely.
+	revocations *revocation.Broker
 
 	mu    sync.RWMutex
 	data  map[string]*snapshot.Data // by tenant slug
@@ -102,6 +106,13 @@ func (m *Manager) Get(tenantSlug string) (d *snapshot.Data, fresh bool) {
 	}
 	return d, time.Since(d.LoadedAt) <= m.maxAge
 }
+
+// PublishRevocationsTo makes the manager announce snapshot deltas to b.
+//
+// Set once at wiring time, before Run. Optional on purpose: an instance with
+// nobody streaming pays nothing, and the gate must not depend on a consumer
+// existing.
+func (m *Manager) PublishRevocationsTo(b *revocation.Broker) { m.revocations = b }
 
 // Run blocks: initial load, then LISTEN + poll until ctx ends.
 func (m *Manager) Run(ctx context.Context) {
@@ -239,8 +250,13 @@ func (m *Manager) load(ctx context.Context, tenantID, slug string) {
 		return
 	}
 	m.mu.Lock()
+	prev := m.data[slug]
 	m.data[slug] = d
 	m.mu.Unlock()
+	// Announce AFTER the swap: a consumer that reacts by asking the gate
+	// must find the new snapshot already serving, or it would be told the
+	// session is still live by the very instance that just learned it is not.
+	publishRevocations(m.revocations, slug, prev, d)
 	metrics.SetSnapshotLoaded(slug, time.Now())
 	metrics.SetSnapshotNodes(slug, d.Scope.Len())
 	metrics.IncSnapshotRefresh(slug, outcome)
