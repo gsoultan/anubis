@@ -428,7 +428,23 @@ and the audit log shows nothing wrong.
 2. Set the compromised key `retired` (it disappears from discovery).
 3. Bump `token_epoch` for **every** identity — the only way to invalidate
    tokens already signed with the old key.
-4. Rotate the master key and re-seal, if the master itself may have leaked.
+4. Rotate the master key and re-seal, if the master itself may have leaked:
+
+   ```bash
+   export ANUBIS_NEW_MASTER_KEY="$(head -c 32 /dev/urandom | basenc --base64url | tr -d '=')"
+   anubisd keys reseal --dry-run   # opens every secret; writes nothing
+   anubisd keys reseal
+   # then point ANUBIS_MASTER_KEY (or ANUBIS_KEY_FILE) at the new key and restart
+   ```
+
+   The master seals three things — signing keys, the per-identity PII keys
+   behind crypto-shredding, and operator TOTP secrets — and `reseal` rewraps
+   all three in one transaction. Until the new key is configured the service
+   cannot unseal anything, so the restart is part of the procedure, not a
+   follow-up.
+
+   Re-running is safe: every row is opened under the OLD master first, so one
+   already rewrapped is reported rather than sealed twice.
 
 ## Restoring from backup
 

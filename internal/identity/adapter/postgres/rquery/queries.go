@@ -38,6 +38,7 @@ func Queries() []storm.RawDecl {
 		WithdrawConsent,
 		// pii.go
 		ShredPIIKey, SetIdentityPIIKey, GetIdentityAttributes, SetIdentityAttributes,
+		ListResealablePIIKeys, ResealPIIKey,
 		// realm.go
 		GetRealmByCode, GetRealm, ListRealms, CreateRealm, UpdateRealm,
 		CorrectEmptyRealmIdentity,

@@ -105,3 +105,30 @@ func (s *Repository) SetIdentityAttributes(ctx context.Context, tenantID, identi
 	}
 	return nil
 }
+
+// ResealablePIIKey is one key to rewrap, with the identity id its ciphertext
+// is bound to.
+type ResealablePIIKey struct {
+	KeyID      string
+	IdentityID string
+	Sealed     []byte
+}
+
+// ResealablePIIKeys lists every PII key that still has material.
+func (s *Repository) ResealablePIIKeys(ctx context.Context) ([]ResealablePIIKey, error) {
+	rows, err := identityrquery.ListResealablePIIKeys.Query(ctx, s.ex(ctx))
+	if err != nil {
+		return nil, database.MapErr(err)
+	}
+	out := make([]ResealablePIIKey, len(rows))
+	for i, r := range rows {
+		out[i] = ResealablePIIKey{KeyID: r.KeyID, IdentityID: r.IdentityID, Sealed: r.KeyEnc}
+	}
+	return out, nil
+}
+
+// ResealPIIKey writes material rewrapped under a new master.
+func (s *Repository) ResealPIIKey(ctx context.Context, keyID string, sealed []byte, kmsRef string) error {
+	_, err := identityrquery.ResealPIIKey.Exec(ctx, s.ex(ctx), keyID, sealed, database.OptStr(kmsRef))
+	return database.MapErr(err)
+}

@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/gsoultan/anubis/cmd/anubisd/reseal"
 	authpg "github.com/gsoultan/anubis/internal/auth/adapter/postgres"
 	authdomain "github.com/gsoultan/anubis/internal/auth/domain"
 	authport "github.com/gsoultan/anubis/internal/auth/port"
@@ -15,8 +16,9 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// keys init|list|prepare|promote — the pending -> active -> retiring
-// lifecycle, plus init for the first key on a fresh installation.
+// keys init|list|prepare|promote|reseal — the pending -> active -> retiring
+// lifecycle, plus init for the first key on a fresh installation, plus
+// reseal for the master key the others are stored under.
 // prepare mints a PENDING key (publish it, warm caches); promote flips
 // active -> retiring and pending -> active.
 func runKeys(ctx context.Context, logger *slog.Logger, args []string) error {
@@ -82,6 +84,11 @@ func runKeys(ctx context.Context, logger *slog.Logger, args []string) error {
 		}
 		logger.Info("signing key created and activated", "purpose", purpose)
 		return nil
+	case "reseal":
+		// Not a key lifecycle operation: it rewraps everything the MASTER
+		// key holds, which is what operations.md requires after the master
+		// itself may have leaked.
+		return reseal.Run(ctx, logger, args[1:])
 	case "prepare":
 		return prepareKey(ctx, store, cfg.MasterKey, purpose)
 	case "promote":
@@ -98,7 +105,7 @@ func runKeys(ctx context.Context, logger *slog.Logger, args []string) error {
 		logger.Info("key promoted", "purpose", purpose)
 		return nil
 	default:
-		return fmt.Errorf("unknown keys subcommand %q (init|list|prepare|promote)", sub)
+		return fmt.Errorf("unknown keys subcommand %q (init|list|prepare|promote|reseal)", sub)
 	}
 }
 

@@ -53,6 +53,7 @@ func init() {
 	storm.RegisterScanner(scanIDRow)
 	storm.RegisterScanner(scanShreddedRow)
 	storm.RegisterScanner(scanAttributesRow)
+	storm.RegisterScanner(scanResealableRow)
 	storm.RegisterScanner(scanRealmWithSecsRow)
 	storm.RegisterScanner(scanRealmRow)
 	storm.RegisterScanner(scanRealmIDRow)
@@ -197,6 +198,12 @@ SELECT id::text AS id, identity_id::text AS identity_id,
 FROM credentials
 WHERE identity_id = $1 AND kind = 'password' AND revoked_at IS NULL`)
 	storm.RegisterStatement(`
+SELECT k.id::text AS key_id, i.id::text AS identity_id, k.key_enc
+FROM pii_keys k
+JOIN identities i ON i.pii_key_id = k.id
+WHERE k.key_enc IS NOT NULL AND k.shredded_at IS NULL
+ORDER BY k.id`)
+	storm.RegisterStatement(`
 SELECT pii_shred($1, $2) AS shredded`)
 	storm.RegisterStatement(`
 SELECT r.code AS realm, r.kind, count(i.id) AS n
@@ -296,6 +303,8 @@ WHERE i.realm_id = r.id
   AND r.default_retention IS NOT NULL
   AND i.retention_until IS NULL
   AND i.anonymized_at IS NULL`)
+	storm.RegisterStatement(`
+UPDATE pii_keys SET key_enc = $2, kms_key_ref = $3 WHERE id = $1`)
 	storm.RegisterStatement(`
 UPDATE realms SET
     display_name = $2,
@@ -452,6 +461,13 @@ func scanShreddedRow(rv [][]byte, r *identityrquery.ShreddedRow, sl *runtime.Sla
 func scanAttributesRow(rv [][]byte, r *identityrquery.AttributesRow, sl *runtime.Slab) error {
 	r.Attributes = runtime.JSON(runtime.JSONB(rv[0], sl))
 	r.PiiKeyID = runtime.NullText(rv[1], sl)
+	r.KeyEnc = runtime.Bytes(rv[2])
+	return nil
+}
+
+func scanResealableRow(rv [][]byte, r *identityrquery.ResealableRow, sl *runtime.Slab) error {
+	r.KeyID = sl.Str(rv[0])
+	r.IdentityID = sl.Str(rv[1])
 	r.KeyEnc = runtime.Bytes(rv[2])
 	return nil
 }
