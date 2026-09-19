@@ -8,6 +8,7 @@ import (
 	"connectrpc.com/connect"
 
 	"github.com/gsoultan/anubis/gen/go/anubis/v1/anubisv1connect"
+	"github.com/gsoultan/anubis/gen/go/envoy/service/auth/v3/authv3connect"
 	apihttp "github.com/gsoultan/anubis/internal/api/http"
 	auditpg "github.com/gsoultan/anubis/internal/audit/adapter/postgres"
 	authhttp "github.com/gsoultan/anubis/internal/auth/adapter/http"
@@ -35,6 +36,7 @@ import (
 	controlrpc "github.com/gsoultan/anubis/internal/control/adapter/rpc"
 	controlapp "github.com/gsoultan/anubis/internal/control/app"
 	controlsvc "github.com/gsoultan/anubis/internal/control/service"
+	gategrpc "github.com/gsoultan/anubis/internal/gate/adapter/grpc"
 	gatehttp "github.com/gsoultan/anubis/internal/gate/adapter/http"
 	gatepg "github.com/gsoultan/anubis/internal/gate/adapter/postgres"
 	gateapp "github.com/gsoultan/anubis/internal/gate/app"
@@ -326,7 +328,22 @@ func (a *application) registerHTTP(ctx context.Context, srv *apihttp.Server,
 	// past that age the gate fails closed, so this instance is denying
 	// traffic and should leave the load balancer.
 	health.WithSnapshot(snaps)
+	// One decider, two transports: nginx/Traefik over HTTP and Envoy over
+	// gRPC ext_authz. A second copy of the decision is a second place for it
+	// to drift.
+	decider := gateapp.NewDecider(cfg.Issuer, a.ring, snaps)
 	gate := gatehttp.NewGateHandler(cfg.Issuer, a.ring, snaps)
 	srv.HandleFunc("POST /v1/gate/check", gate.Check)
 	srv.HandleFunc("GET /v1/gate/check", gate.Check)
+	// Envoy's ext_authz, on the path the proxy dials:
+	// /envoy.service.auth.v3.Authorization/Check.
+	//
+	// No auth interceptor, deliberately and exactly like /v1/gate/check: the
+	// caller here is the PROXY, not a principal, and the only thing this
+	// endpoint will tell anyone is the answer for the token they already
+	// hold. Requiring a credential of the sidecar would add a secret to
+	// distribute for no property gained.
+	extAuthzPath, extAuthz := authv3connect.NewAuthorizationHandler(
+		gategrpc.New(decider, cfg.Issuer+"/v1/authorize"))
+	srv.Handle(extAuthzPath, extAuthz)
 }

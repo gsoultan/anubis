@@ -1,0 +1,130 @@
+syntax = "proto3";
+
+// Envoy's external authorization contract, reduced to the parts Anubis
+// actually uses.
+//
+// WHY NOT the upstream protos: they declare
+// go_package = "github.com/envoyproxy/go-control-plane/...", so generating
+// them would put that module in the import graph, and ADR-0002 keeps the
+// direct-dependency list to six. Vendoring the full tree is not much better —
+// CheckRequest's transitive closure pulls in most of envoy/config/core,
+// envoy/type, xds and udpa annotations, none of which this service reads.
+//
+// WHAT MAKES THIS SAFE: protobuf compatibility is by FIELD NUMBER, not by
+// file. Every message, field number and wire type below was taken from
+// envoyproxy/envoy main (api/envoy/service/auth/v3/external_auth.proto,
+// attribute_context.proto, config/core/v3/base.proto, type/v3/http_status.proto)
+// and is reproduced exactly; fields Anubis ignores are simply absent, and
+// proto3 skips unknown fields on the wire. The service name and method name
+// must also match exactly, because that is the gRPC path Envoy dials:
+// /envoy.service.auth.v3.Authorization/Check.
+//
+// A wrong field number here would not fail loudly — it would read the wrong
+// string and authorize the wrong request — so ext_authz_test.go asserts the
+// numbers against this file rather than trusting the comment.
+package envoy.service.auth.v3;
+
+option go_package = "github.com/gsoultan/anubis/gen/go/envoy/service/auth/v3;authv3";
+
+// Authorization is the service Envoy's ext_authz filter dials when
+// `grpc_service` is configured.
+service Authorization {
+  rpc Check(CheckRequest) returns (CheckResponse);
+}
+
+message CheckRequest {
+  AttributeContext attributes = 1;
+}
+
+message AttributeContext {
+  message Peer {
+    string service = 2;
+    map<string, string> labels = 3;
+    string principal = 4;
+    string certificate = 5;
+  }
+
+  message HttpRequest {
+    string id = 1;
+    string method = 2;
+    map<string, string> headers = 3;
+    string path = 4;
+    string host = 5;
+    string scheme = 6;
+    string query = 7;
+    string fragment = 8;
+    int64 size = 9;
+    string protocol = 10;
+    string body = 11;
+    bytes raw_body = 12;
+  }
+
+  message Request {
+    // Field 1 is google.protobuf.Timestamp time, which Anubis does not read:
+    // the decision is made against the server's own clock, never against one
+    // the proxy supplies.
+    HttpRequest http = 2;
+  }
+
+  Peer source = 1;
+  Peer destination = 2;
+  Request request = 4;
+  map<string, string> context_extensions = 10;
+}
+
+// Status mirrors google.rpc.Status, which upstream imports. Reproduced here
+// rather than imported for the same reason as the rest of this file: the
+// generated Go for google/rpc lives in google.golang.org/genproto, and the
+// message NAME never travels on the wire — only the field numbers do, and
+// code=1 / message=2 are those. details (field 3) is repeated Any, which
+// Anubis neither sets nor reads.
+//
+// The code is a google.rpc.Code: 0 is OK, 7 is PERMISSION_DENIED, 16 is
+// UNAUTHENTICATED. Envoy reads it to decide allow vs deny.
+message Status {
+  int32 code = 1;
+  string message = 2;
+}
+
+// HeaderValue and HeaderValueOption mirror envoy.config.core.v3, which is the
+// only reason those two messages are duplicated here rather than imported.
+message HeaderValue {
+  string key = 1;
+  string value = 2;
+}
+
+message HeaderValueOption {
+  HeaderValue header = 1;
+}
+
+// HttpStatus mirrors envoy.type.v3.HttpStatus. The code is a plain int on the
+// wire; the upstream enum's numeric values ARE the HTTP status codes.
+message HttpStatus {
+  int32 code = 1;
+}
+
+message DeniedHttpResponse {
+  HttpStatus status = 1;
+  repeated HeaderValueOption headers = 2;
+  string body = 3;
+}
+
+message OkHttpResponse {
+  // Field 2, NOT 1. Getting this wrong drops every header the authorizer
+  // adds, silently, which looks like the upstream service ignoring them.
+  repeated HeaderValueOption headers = 2;
+  repeated string headers_to_remove = 5;
+}
+
+message CheckResponse {
+  Status status = 1;
+
+  oneof http_response {
+    DeniedHttpResponse denied_response = 2;
+    OkHttpResponse ok_response = 3;
+  }
+
+  // Field 4 is google.protobuf.Struct dynamic_metadata, which Anubis does
+  // not emit: it exists to pass data to other Envoy filters, and this
+  // service's answer is the decision itself.
+}

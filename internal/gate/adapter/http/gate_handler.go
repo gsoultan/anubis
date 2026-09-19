@@ -4,11 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
-	"time"
 
-	"github.com/gsoultan/anubis/internal/gate/routepath"
-	"github.com/gsoultan/anubis/internal/gate/snapshot"
-	"github.com/gsoultan/anubis/internal/platform/crypto/accesstoken"
+	gateapp "github.com/gsoultan/anubis/internal/gate/app"
 	"github.com/gsoultan/anubis/internal/platform/crypto/keyring"
 	"github.com/gsoultan/anubis/pkg/anubis"
 )
@@ -17,149 +14,67 @@ import (
 // Traefik forwardAuth, Envoy ext_authz. Served ENTIRELY from the snapshot:
 // p99 < 1 ms, no database on the path. Fail-static while the snapshot is
 // within max age; fail-closed beyond it.
-// Snapshots is all this handler needs from the snapshot manager: the tenant's
-// data, and whether it is fresh enough to decide from. Narrow on purpose —
-// the same reason HealthHandler takes a probe rather than the manager. It
-// also makes the fail-closed branch testable without a database, which it was
-// not, which is why "fail-closed beyond max age" went unverified.
-type Snapshots interface {
-	Get(tenantSlug string) (*snapshot.Data, bool)
-}
+//
+// The decision itself is gateapp.Decider: Envoy's ext_authz speaks gRPC, and
+// two copies of an authorization decision is two places for it to drift.
+
+// Snapshots is all a decision needs from the snapshot manager. It is defined
+// in gateapp now, because the gRPC transport needs the same thing and the
+// decision itself moved there; this alias keeps the name available where it
+// has always been.
+type Snapshots = gateapp.Snapshots
 
 type GateHandler struct {
-	issuer   string
-	ring     *keyring.Manager
-	snaps    Snapshots
+	decider  *gateapp.Decider
 	loginURL string
-	clock    func() time.Time
 }
 
-func NewGateHandler(issuer string, ring *keyring.Manager, snaps Snapshots) *GateHandler {
+func NewGateHandler(issuer string, ring *keyring.Manager, snaps gateapp.Snapshots) *GateHandler {
 	return &GateHandler{
-		issuer: issuer, ring: ring, snaps: snaps,
+		decider:  gateapp.NewDecider(issuer, ring, snaps),
 		loginURL: issuer + "/v1/authorize",
-		clock:    time.Now,
 	}
 }
 
 func (h *GateHandler) Check(w http.ResponseWriter, r *http.Request) {
-	uri := r.Header.Get("X-Original-URI")
-	method := r.Header.Get("X-Original-Method")
-	host := r.Header.Get("X-Original-Host")
 	tenant := r.Header.Get("X-Anubis-Tenant")
 	if tenant == "" {
 		tenant = "impack"
 	}
-	if uri == "" || method == "" {
-		http.Error(w, "missing X-Original-URI/X-Original-Method", http.StatusBadRequest)
-		return
-	}
-
-	snap, fresh := h.snaps.Get(tenant)
-	if snap == nil || !fresh {
-		// No snapshot, or stale beyond max age: FAIL CLOSED. A cached answer
-		// beats an outage; an unbounded-stale answer does not.
-		http.Error(w, "authorization snapshot unavailable", http.StatusForbidden)
-		return
-	}
-
-	normPath, err := routepath.NormalizePath(uri)
-	if err != nil {
-		// Ambiguous path = deny. The gap between two normalisers is the
-		// bypass; anything this one cannot canonicalise nothing may serve.
-		http.Error(w, "ambiguous path", http.StatusForbidden)
-		return
-	}
-
-	route, params := routepath.Match(snap.Routes, host, method, normPath)
-	if route == nil {
-		// No policy for this path: deny. An unlisted path behind the gate is
-		// a configuration hole, not an allow.
-		http.Error(w, "no route policy", http.StatusForbidden)
-		return
-	}
-
-	switch route.Effect {
-	case "public":
-		w.WriteHeader(http.StatusNoContent)
-		return
-	case "deny":
-		http.Error(w, "denied by policy", http.StatusForbidden)
-		return
-	}
-
-	claims := h.verify(r, snap)
-	if claims == nil {
-		w.Header().Set("Location", h.loginURL)
-		http.Error(w, "authentication required", http.StatusUnauthorized)
-		return
-	}
-
-	if route.Effect == "require_permission" {
-		targets := map[string]string{}
-		for axis, from := range route.ScopeBindings {
-			switch {
-			case from == "token":
-				if v, ok := claims.Scopes[axis]; ok {
-					targets[axis] = v
-				}
-			case strings.HasPrefix(from, "path."):
-				if v, ok := params[from[len("path."):]]; ok {
-					targets[axis] = v
-				}
-			}
-		}
-		if !snap.Evaluate(claims.Subject, route.PermissionKey, targets, h.clock()) {
-			http.Error(w, "permission denied", http.StatusForbidden)
-			return
-		}
-	}
-
-	w.Header().Set("X-Anubis-Subject", claims.Subject)
-	w.Header().Set("X-Anubis-Session", claims.Session)
-	if len(claims.Scopes) > 0 {
-		raw, _ := json.Marshal(claims.Scopes)
-		w.Header().Set("X-Anubis-Scope", string(raw))
-	}
-	w.WriteHeader(http.StatusNoContent)
-}
-
-// verify checks the bearer token offline against the ring and the snapshot's
-// revocation/epoch state. Zero I/O.
-func (h *GateHandler) verify(r *http.Request, snap *snapshot.Data) *anubis.Claims {
 	token, ok := anubis.BearerToken(r)
 	if !ok {
 		// nginx passes the original Authorization header through by default.
 		if v := r.Header.Get("X-Original-Authorization"); strings.HasPrefix(v, "Bearer ") {
 			token = v[len("Bearer "):]
-		} else {
-			return nil
 		}
 	}
-	kid, err := accesstoken.Kid(token)
-	if err != nil {
-		return nil
+
+	d := h.decider.Decide(gateapp.Request{
+		Tenant: tenant,
+		Method: r.Header.Get("X-Original-Method"),
+		Path:   r.Header.Get("X-Original-URI"),
+		Host:   r.Header.Get("X-Original-Host"),
+		Token:  token,
+	})
+
+	switch d.Outcome {
+	case gateapp.Allow:
+		w.Header().Set("X-Anubis-Subject", d.Subject)
+		w.Header().Set("X-Anubis-Session", d.Session)
+		if len(d.Scopes) > 0 {
+			raw, _ := json.Marshal(d.Scopes)
+			w.Header().Set("X-Anubis-Scope", string(raw))
+		}
+		w.WriteHeader(http.StatusNoContent)
+	case gateapp.Unauthenticated:
+		w.Header().Set("Location", h.loginURL)
+		http.Error(w, d.Reason, http.StatusUnauthorized)
+	case gateapp.BadRequest:
+		http.Error(w, "missing X-Original-URI/X-Original-Method", http.StatusBadRequest)
+	default:
+		// Denied and Unavailable are both 403: a caller must not be able to
+		// tell "policy says no" from "this instance cannot decide", or the
+		// difference becomes a probe for when the gate is degraded.
+		http.Error(w, d.Reason, http.StatusForbidden)
 	}
-	key, err := h.ring.Ring().Lookup(kid)
-	if err != nil || key.Purpose != keyring.PurposeAccess {
-		return nil
-	}
-	msg, err := accesstoken.Verify(key.Public, token)
-	if err != nil {
-		return nil
-	}
-	var claims anubis.Claims
-	if json.Unmarshal(msg, &claims) != nil {
-		return nil
-	}
-	now := h.clock().Unix()
-	if claims.Issuer != h.issuer || claims.Tenant != snap.TenantSlug ||
-		(claims.Expires != 0 && now > claims.Expires) ||
-		(claims.NotBefore != 0 && now < claims.NotBefore-60) {
-		return nil
-	}
-	if !snap.SessionAlive(claims.Session, claims.Epoch, claims.Subject) {
-		return nil
-	}
-	return &claims
 }
