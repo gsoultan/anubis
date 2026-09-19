@@ -16,10 +16,11 @@ Everything an on-call engineer needs at 3am, and nothing that duplicates
 9. [Machine credentials for pipelines](#machine-credentials-for-pipelines)
 10. [Maintenance jobs](#maintenance-jobs)
 11. [Key rotation](#key-rotation)
-12. [Incident: refresh token reuse](#incident-refresh-token-reuse)
-13. [Incident: signing key compromise](#incident-signing-key-compromise)
-14. [Restoring from backup](#restoring-from-backup)
-15. [Performance budgets](#performance-budgets)
+12. [Issuing JWS instead of PASETO](#issuing-jws-instead-of-paseto)
+13. [Incident: refresh token reuse](#incident-refresh-token-reuse)
+14. [Incident: signing key compromise](#incident-signing-key-compromise)
+15. [Restoring from backup](#restoring-from-backup)
+16. [Performance budgets](#performance-budgets)
 
 ---
 
@@ -404,6 +405,27 @@ anubisd keys promote access     # active -> retiring, pending -> active
 Keep the retiring key published until the longest-lived token signed with it
 has expired (≤ the access TTL). Rotate every 30–90 days; the job warns at 14
 days.
+
+## Issuing JWS instead of PASETO
+
+Per application, for consumers whose stack has no PASETO library:
+
+```sql
+UPDATE applications SET token_format = 'jws.eddsa' WHERE slug = 'legacy-app';
+```
+
+The same Ed25519 key signs both; only the encoding differs, so no rotation is
+needed and `/.well-known` is unchanged. Tokens already issued stay valid —
+every verifier in Anubis accepts either format, chosen by the token's own
+format marker.
+
+Set it back to `'v4.public'` to revert. There is no window in which a token is
+unverifiable, in either direction.
+
+`pkg/anubis` verifies both with no configuration. A consumer using a
+third-party JOSE library instead should pin `EdDSA` and reject `alg: none`
+themselves — that is the property this project declined to depend on a
+library for, and ADR-0001 explains why.
 
 ## Incident: refresh token reuse
 

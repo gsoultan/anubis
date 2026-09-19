@@ -1,4 +1,4 @@
-# ADR-0001 — Token format: PASETO v4.public, with JWS as a dormant hedge
+# ADR-0001 — Token format: PASETO v4.public, with JWS as the hedge
 
 **Status:** accepted · **Date:** 2026-08-22
 
@@ -117,3 +117,29 @@ the same position as JWT's header `kid`.
 
 Attacker-controlled input driving a lookup is how you get injection and denial of
 service.
+
+
+## Status update — 2026-09-19
+
+The hedge is no longer dormant. `pkg/anubis/jws` exists, is selected per
+application by `applications.token_format = 'jws.eddsa'`, and is verified by
+the SDK and by every server-side path.
+
+Two things worth recording, because neither was obvious from the original
+decision:
+
+**The codec was the easy half.** Four call sites branched on a `"v4.public."`
+prefix — the gate, introspection, the authn interceptor and revoke — so
+turning the flag on for one application would have made three of them
+silently stop recognising its tokens: the gate denying, introspection
+reporting inactive, and revoke quietly revoking nothing. A format flag is not
+local to the issuer. They now share
+`internal/platform/crypto/accesstoken`, which picks the codec by format
+marker and never by an algorithm field.
+
+**"No negotiation" needed more than pinning `alg`.** RFC 7515's `crit` header
+says a verifier that does not implement every extension named there must
+reject; ignoring it makes "critical" advisory. A compact JWE has five parts,
+and accepting one hands the caller an encrypted payload as though it were
+verified claims. Both are refused, and both have tests, alongside the
+`alg: none` family this ADR was written about.

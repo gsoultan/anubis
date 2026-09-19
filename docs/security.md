@@ -136,7 +136,7 @@ main reason to ship an SDK rather than let each team write a verifier.
 ### Algorithm confusion
 
 Structurally impossible: PASETO's version *is* the cipher suite, with no
-negotiable `alg` field. The dormant JWS codec pins `Ed25519` and never reads
+negotiable `alg` field. The JWS codec pins `Ed25519` and never reads
 `alg` from the token.
 
 ### Key-lookup abuse
@@ -302,7 +302,7 @@ Stated plainly rather than left implicit.
 | **Concurrent subtree moves unproven** | Open | `scope_move_node` asserts `SERIALIZABLE`; not yet stress-tested under concurrency. |
 | **Deep role graphs unproven** | Open | `role_recompute_effective` has `CYCLE` detection; not stress-tested. |
 | **No deny rules** | Deliberate | Allow-only union semantics in v1. Adding deny needs strict precedence and an explain endpoint. |
-| **No PASETO ecosystem support** | Deliberate | Dormant JWS codec behind a per-application flag. |
+| **No PASETO ecosystem support** | **Addressed** | `pkg/anubis/jws` behind `applications.token_format = 'jws.eddsa'`. EdDSA is compiled in and `alg` is never read to choose anything, so the algorithm-confusion family JOSE is known for is absent by construction; `crit` is refused, a five-part (JWE) token is refused, and `kid` rides in the protected header. Stdlib only. |
 | **PII crypto-shredding** | **Built** | `migrations/0022` + `internal/identity/domain/pii`: per-identity keys sealed under the master key, erasure and the retention job destroy the key and leave a tombstone (the *fact* of erasure stays auditable). No column is encrypted yet; [ADR-0013](adr/0013-pii-encryption-scope.md) decides the scope — `identities.attributes` is sealed, identifiers deliberately are not, and the API must first write `attributes` at all. |
 | **Self-registration abuse controls** | Partly built | Email verification and per-IP/per-tenant registration limits ship; bot protection (CAPTCHA/attestation) does not. |
 | **Enrol-or-deny for required factors** | Open, deliberate | A realm requiring TOTP still admits a password-only login from an un-enrolled user; an enrolled factor is always demanded. The missing piece is a grace period, not a check: [enrolment-rollout.md](enrolment-rollout.md). |
