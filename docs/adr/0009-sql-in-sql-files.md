@@ -109,7 +109,17 @@ it exclusively owns, builders for the CRUD, and raw declarations for the joins
 and for the guarded updates that set a SERVER-side expression — `revoked_at =
 now()` is not the same fact on a client clock, and `token_epoch = token_epoch +
 1` computed in Go is a read-modify-write that loses an increment under two
-concurrent disables. storm's `Mut` takes values, not expressions.
+concurrent disables.
+
+Those two SET forms were also, at the time, things storm could not say. As of
+storm v0.16.0 it can — `SetRevokedAtNow`, `IncTokenEpoch`, and `MutateKey` for
+the caller with nothing to read first — and the sign-in lookup moved to a
+builder with `EqLower`, which lowers to the `lower(username)` the unique index
+is built on. What keeps the guarded updates in SQL now is their WHERE, not
+their SET: they address rows by something other than the primary key, and the
+guard has to be in the statement because a read-then-write is the window it
+exists to close. That distinction matters for the next reader — a note naming
+a constraint that has since lifted sends them looking in the wrong place.
 
 The **tenancy** context followed (2026-09-17): five tables it owns, builders
 for the reads and writes that stay on one table, raw declarations for the LEFT
