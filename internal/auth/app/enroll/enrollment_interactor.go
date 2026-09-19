@@ -162,8 +162,13 @@ func (u *enrollmentInteractor) ConfirmTOTP(ctx context.Context, enrollmentToken,
 		if err != nil {
 			return err
 		}
+		// Record WHICH key sealed it. This secret is written once and read
+		// for the life of the enrolment, so it cannot depend on whichever
+		// local key happens to be active at read time — rotating the key
+		// would otherwise lock every enrolled identity out, and present as
+		// "invalid code" rather than as an outage.
 		if err := u.creds.UpdateCredentialSecret(ctx, credID,
-			base64.RawStdEncoding.EncodeToString(sealed)); err != nil {
+			base64.RawStdEncoding.EncodeToString(sealed), master.Kid); err != nil {
 			return err
 		}
 		out.CredentialID = credID

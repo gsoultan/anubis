@@ -50,10 +50,12 @@ func (s *Repository) RevokeCredentialsOfKind(ctx context.Context, identityID, ki
 	return n, database.MapErr(err)
 }
 
-// UpdateCredentialSecret is the KDF upgrade path: rehash on next successful
-// login (ADR-0002).
-func (s *Repository) UpdateCredentialSecret(ctx context.Context, id, secret string) error {
-	_, err := identityrquery.UpdateCredentialSecret.Exec(ctx, s.ex(ctx), id, database.OptStr(secret))
+// UpdateCredentialSecret writes the secret and the key it was sealed under.
+// An empty kid stores NULL, which is what a password wants: it is hashed, not
+// sealed, and has no key to name.
+func (s *Repository) UpdateCredentialSecret(ctx context.Context, id, secret, kid string) error {
+	_, err := identityrquery.UpdateCredentialSecret.Exec(ctx, s.ex(ctx),
+		id, database.OptStr(secret), database.OptStr(kid))
 	return database.MapErr(err)
 }
 
@@ -74,8 +76,8 @@ func (s *Repository) ActiveCredentialOfKind(ctx context.Context, identityID, kin
 	}
 	return &credentialdomain.Credential{
 		ID: row.ID, IdentityID: row.IdentityID, TenantID: row.TenantID,
-		Kind: row.Kind, Secret: nstr(row.Secret), Params: []byte(row.Params),
-		SignCounter: row.SignCounter,
+		Kind: row.Kind, Secret: nstr(row.Secret), SecretKid: nstr(row.SecretKid),
+		Params: []byte(row.Params), SignCounter: row.SignCounter,
 	}, nil
 }
 

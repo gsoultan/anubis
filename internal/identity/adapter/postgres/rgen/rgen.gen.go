@@ -185,7 +185,7 @@ WHERE i.tenant_id = $1
   AND lower(i.username) = lower($3)`)
 	storm.RegisterStatement(`
 SELECT id::text AS id, identity_id::text AS identity_id,
-       tenant_id::text AS tenant_id, kind, secret, params, sign_counter
+       tenant_id::text AS tenant_id, kind, secret, secret_kid, params, sign_counter
 FROM credentials
 WHERE identity_id = $1 AND kind = $2
   AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > now())
@@ -238,7 +238,7 @@ WHERE id = $1 AND tenant_id = $2 AND revoked_at IS NULL`)
 UPDATE credentials SET revoked_at = now(), updated_at = now()
 WHERE identity_id = $1 AND kind = $2 AND revoked_at IS NULL`)
 	storm.RegisterStatement(`
-UPDATE credentials SET secret = $2, updated_at = now() WHERE id = $1`)
+UPDATE credentials SET secret = $2, secret_kid = $3, updated_at = now() WHERE id = $1`)
 	storm.RegisterStatement(`
 UPDATE identities
 SET anonymized_at = now(),
@@ -433,8 +433,9 @@ func scanActiveCredentialRow(rv [][]byte, r *identityrquery.ActiveCredentialRow,
 	r.TenantID = sl.Str(rv[2])
 	r.Kind = sl.Str(rv[3])
 	r.Secret = runtime.NullText(rv[4], sl)
-	r.Params = runtime.JSON(runtime.JSONB(rv[5], sl))
-	r.SignCounter = runtime.Int8(rv[6])
+	r.SecretKid = runtime.NullText(rv[5], sl)
+	r.Params = runtime.JSON(runtime.JSONB(rv[6], sl))
+	r.SignCounter = runtime.Int8(rv[7])
 	return nil
 }
 

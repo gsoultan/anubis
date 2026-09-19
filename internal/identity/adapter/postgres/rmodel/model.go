@@ -37,9 +37,12 @@ type Credential struct {
 	SignCounter int64
 	Kind        string
 	Secret      *string
-	LookupKey   *string
-	Label       *string
-	Params      storm.JSON
+	// SecretKid names the local key Secret was sealed under. NULL means the
+	// row predates the column.
+	SecretKid *string
+	LookupKey *string
+	Label     *string
+	Params    storm.JSON
 }
 
 func (m *Credential) Schema(t *storm.Table) {
@@ -47,6 +50,7 @@ func (m *Credential) Schema(t *storm.Table) {
 	t.Col(&m.ID).Default("uuidv7()")
 	t.Col(&m.SignCounter).Default("0")
 	t.Col(&m.Params).Default("'{}'::jsonb")
+	t.Col(&m.SecretKid).Size(64)
 	t.CheckNamed("credentials_kind_check",
 		"kind = ANY (ARRAY['password'::text, 'device_key'::text, 'totp'::text, "+
 			"'recovery_code'::text, 'oidc_link'::text])")

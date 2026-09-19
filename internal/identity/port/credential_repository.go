@@ -12,7 +12,12 @@ type CredentialRepository interface {
 	CreateCredential(ctx context.Context, in credential.CredentialInput) (string, error)
 	RevokeCredential(ctx context.Context, tenantID, id string) error
 	RevokeCredentialsOfKind(ctx context.Context, identityID, kind string) (int64, error)
-	UpdateCredentialSecret(ctx context.Context, id, secret string) error
+	// UpdateCredentialSecret writes the secret and the local key it was
+	// sealed under. kid is empty for a password, which is hashed rather than
+	// sealed; it is REQUIRED for anything the keyring seals, because a
+	// secret read for the life of an enrolment cannot depend on which key
+	// happens to be active when it is read.
+	UpdateCredentialSecret(ctx context.Context, id, secret, kid string) error
 	UpdateCredentialParams(ctx context.Context, id string, params []byte) error
 	ActiveCredentialOfKind(ctx context.Context, identityID, kind string) (*credential.Credential, error)
 	ActiveCredentialKinds(ctx context.Context, identityID string) ([]string, error)
