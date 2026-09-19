@@ -10,13 +10,13 @@ import (
 
 	authport "github.com/gsoultan/anubis/internal/auth/port"
 	controlport "github.com/gsoultan/anubis/internal/control/port"
+	"github.com/gsoultan/anubis/internal/platform/crypto/accesstoken"
 	"github.com/gsoultan/anubis/internal/platform/crypto/keyring"
 	"github.com/gsoultan/anubis/internal/platform/crypto/secret"
 	"github.com/gsoultan/anubis/internal/shared/authctx"
 	"github.com/gsoultan/anubis/internal/shared/clock"
 	tenancyport "github.com/gsoultan/anubis/internal/tenancy/port"
 	"github.com/gsoultan/anubis/pkg/anubis"
-	"github.com/gsoultan/anubis/pkg/anubis/paseto"
 )
 
 // AuthnInterceptor authenticates whoever presents credentials — bearer
@@ -88,21 +88,15 @@ const platformAudience = "anubis-platform"
 const TenantHeader = "X-Anubis-Tenant"
 
 func (i *AuthnInterceptor) principalFromToken(ctx context.Context, token, wantTenant string) *authctx.Principal {
-	_, _, footer, err := paseto.Parse(token)
+	kid, err := accesstoken.Kid(token)
 	if err != nil {
 		return nil
 	}
-	var tf struct {
-		Kid string `json:"kid"`
-	}
-	if len(footer) > 0 && json.Unmarshal(footer, &tf) != nil {
-		return nil
-	}
-	key, err := i.ring.Ring().Lookup(tf.Kid)
+	key, err := i.ring.Ring().Lookup(kid)
 	if err != nil || key.Purpose != keyring.PurposeAccess {
 		return nil
 	}
-	msg, _, err := paseto.Verify(key.Public, token, nil)
+	msg, err := accesstoken.Verify(key.Public, token)
 	if err != nil {
 		return nil
 	}

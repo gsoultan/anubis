@@ -6,8 +6,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
+	"github.com/gsoultan/anubis/pkg/anubis/jws"
 	"github.com/gsoultan/anubis/pkg/anubis/keys"
 	"github.com/gsoultan/anubis/pkg/anubis/paseto"
 )
@@ -42,30 +44,59 @@ func NewVerifier(cfg Config) (*Verifier, error) {
 // Verify checks signature, expiry, nbf, issuer and audience, and returns the
 // claims. It does NOT check epoch or session revocation — those need state
 // only Anubis holds; use introspection when instant revocation matters.
-func (v *Verifier) Verify(ctx context.Context, token string) (*Claims, error) {
-	// The kid rides in the footer, which is authenticated by the signature —
-	// but we must read it BEFORE verification to select the key. That
-	// pre-verification read may only ever index the bounded key map.
-	_, _, footer, err := paseto.Parse(token)
-	if err != nil {
-		return nil, err
-	}
-	var kid string
-	if len(footer) > 0 {
-		var tf tokenFooter
-		if err := json.Unmarshal(footer, &tf); err != nil {
-			return nil, fmt.Errorf("anubis: token footer: %w", err)
-		}
-		kid = tf.Kid
-	}
+// pasetoPrefix is the format marker a v4.public token must start with.
+// Anything else is offered to the JWS codec, which pins EdDSA.
+const pasetoPrefix = "v4.public."
 
-	pk, err := v.key(ctx, kid)
-	if err != nil {
-		return nil, err
-	}
-	msg, _, err := paseto.Verify(pk, token, nil)
-	if err != nil {
-		return nil, err
+func (v *Verifier) Verify(ctx context.Context, token string) (*Claims, error) {
+	// Which CODEC, chosen by the format marker the token is required to
+	// carry — never by an `alg` field inside it. Both codecs are Ed25519 and
+	// nothing else, so this choice cannot downgrade anything; it is a
+	// question of encoding, which is the only reason it is safe to read
+	// before verifying.
+	var (
+		msg []byte
+		kid string
+	)
+	if strings.HasPrefix(token, pasetoPrefix) {
+		// The kid rides in the footer, which is authenticated by the
+		// signature — but we must read it BEFORE verification to select the
+		// key. That pre-verification read may only ever index the bounded
+		// key map.
+		_, _, footer, err := paseto.Parse(token)
+		if err != nil {
+			return nil, err
+		}
+		if len(footer) > 0 {
+			var tf tokenFooter
+			if err := json.Unmarshal(footer, &tf); err != nil {
+				return nil, fmt.Errorf("anubis: token footer: %w", err)
+			}
+			kid = tf.Kid
+		}
+		pk, err := v.key(ctx, kid)
+		if err != nil {
+			return nil, err
+		}
+		if msg, _, err = paseto.Verify(pk, token, nil); err != nil {
+			return nil, err
+		}
+	} else {
+		// JWS: the kid is in the PROTECTED header, so reading it early is
+		// the same bargain — untrusted until the signature checks out, and
+		// only ever used to index the same bounded map.
+		h, _, _, err := jws.Parse(token)
+		if err != nil {
+			return nil, err
+		}
+		kid = h.Kid
+		pk, err := v.key(ctx, kid)
+		if err != nil {
+			return nil, err
+		}
+		if msg, _, err = jws.Verify(pk, token); err != nil {
+			return nil, err
+		}
 	}
 	claims, err := parseClaims(msg)
 	if err != nil {

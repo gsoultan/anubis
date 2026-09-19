@@ -8,9 +8,9 @@ import (
 
 	"github.com/gsoultan/anubis/internal/gate/routepath"
 	"github.com/gsoultan/anubis/internal/gate/snapshot"
+	"github.com/gsoultan/anubis/internal/platform/crypto/accesstoken"
 	"github.com/gsoultan/anubis/internal/platform/crypto/keyring"
 	"github.com/gsoultan/anubis/pkg/anubis"
-	"github.com/gsoultan/anubis/pkg/anubis/paseto"
 )
 
 // GateHandler is /v1/gate/check — forward auth for nginx auth_request,
@@ -136,21 +136,15 @@ func (h *GateHandler) verify(r *http.Request, snap *snapshot.Data) *anubis.Claim
 			return nil
 		}
 	}
-	_, _, footer, err := paseto.Parse(token)
+	kid, err := accesstoken.Kid(token)
 	if err != nil {
 		return nil
 	}
-	var tf struct {
-		Kid string `json:"kid"`
-	}
-	if len(footer) > 0 && json.Unmarshal(footer, &tf) != nil {
-		return nil
-	}
-	key, err := h.ring.Ring().Lookup(tf.Kid)
+	key, err := h.ring.Ring().Lookup(kid)
 	if err != nil || key.Purpose != keyring.PurposeAccess {
 		return nil
 	}
-	msg, _, err := paseto.Verify(key.Public, token, nil)
+	msg, err := accesstoken.Verify(key.Public, token)
 	if err != nil {
 		return nil
 	}

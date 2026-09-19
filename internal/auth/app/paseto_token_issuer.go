@@ -16,6 +16,7 @@ import (
 	"github.com/gsoultan/anubis/internal/shared/clock"
 	tenancyport "github.com/gsoultan/anubis/internal/tenancy/port"
 	"github.com/gsoultan/anubis/pkg/anubis"
+	"github.com/gsoultan/anubis/pkg/anubis/jws"
 	"github.com/gsoultan/anubis/pkg/anubis/paseto"
 )
 
@@ -55,11 +56,14 @@ func NewPasetoTokenIssuer(
 // /v1/me and introspection.
 const maxRolesInToken = 32
 
+// pasetoFormat is the default, and applications.token_format carries it.
+const pasetoFormat = "v4.public"
+
 func (t *pasetoTokenIssuer) Issue(ctx context.Context, in IssueInput) (*TokenPair, error) {
 	now := t.clock.Now()
 	s := in.Session
 
-	accessTTL, refreshTTL, aud, appID, err := t.ttls(ctx, s, in.ClientID)
+	accessTTL, refreshTTL, aud, appID, format, err := t.ttls(ctx, s, in.ClientID)
 	if err != nil {
 		return nil, err
 	}
@@ -113,8 +117,16 @@ func (t *pasetoTokenIssuer) Issue(ctx context.Context, in IssueInput) (*TokenPai
 	if err != nil {
 		return nil, apperr.ErrInternal.Wrap(err)
 	}
-	footer, _ := json.Marshal(map[string]string{"kid": key.Kid})
-	access, err := paseto.Sign(key.Private, body, footer, nil)
+	// One key, two encodings. The application chooses; nothing in the TOKEN
+	// chooses, which is what keeps the verifier free of negotiation.
+	var access string
+	switch format {
+	case jws.Format:
+		access, err = jws.Sign(key.Private, body, key.Kid)
+	default:
+		footer, _ := json.Marshal(map[string]string{"kid": key.Kid})
+		access, err = paseto.Sign(key.Private, body, footer, nil)
+	}
 	if err != nil {
 		return nil, apperr.ErrInternal.Wrap(err)
 	}
@@ -172,7 +184,11 @@ func (t *pasetoTokenIssuer) Issue(ctx context.Context, in IssueInput) (*TokenPai
 // ttls resolves token lifetimes and audience. Population policy (realm)
 // governs; an application with a STRICTER TTL wins. aud defaults to the
 // tenant's own console surface when no client is named.
-func (t *pasetoTokenIssuer) ttls(ctx context.Context, s *authdomain.SessionView, clientID string) (access, refresh time.Duration, aud []string, appID string, err error) {
+func (t *pasetoTokenIssuer) ttls(ctx context.Context, s *authdomain.SessionView, clientID string) (access, refresh time.Duration, aud []string, appID, format string, err error) {
+	// The default is PASETO for every caller that does not ask otherwise,
+	// including one with no client_id at all. A token format must never be
+	// decided by the absence of configuration.
+	format = pasetoFormat
 	access, refresh = 10*time.Minute, 30*24*time.Hour
 	if s.RealmID != "" {
 		realm, rerr := t.realms.RealmByID(ctx, s.RealmID)
@@ -189,7 +205,10 @@ func (t *pasetoTokenIssuer) ttls(ctx context.Context, s *authdomain.SessionView,
 	if clientID != "" {
 		app, aerr := t.apps.ApplicationBySlug(ctx, s.TenantID, clientID)
 		if aerr != nil {
-			return 0, 0, nil, "", apperr.ErrInvalidArgument.With("client_id", "unknown application")
+			return 0, 0, nil, "", "", apperr.ErrInvalidArgument.With("client_id", "unknown application")
+		}
+		if app.TokenFormat == jws.Format {
+			format = jws.Format
 		}
 		aud = []string{app.Slug}
 		appID = app.ID
@@ -200,7 +219,7 @@ func (t *pasetoTokenIssuer) ttls(ctx context.Context, s *authdomain.SessionView,
 			refresh = d
 		}
 	}
-	return access, refresh, aud, appID, nil
+	return access, refresh, aud, appID, format, nil
 }
 
 // newUUIDv7ish builds a time-ordered 128-bit id for refresh families in the
