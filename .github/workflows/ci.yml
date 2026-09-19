@@ -15,6 +15,13 @@ concurrency:
 env:
   BUF_VERSION: "1.72.0"
   SQLC_VERSION: "1.31.1"
+  # The alert rules ship in packaging/; scripts/check/alert-rules.sh skips
+  # itself without promtool, and a check that skips is not a check. Prometheus
+  # cannot be `go install`ed — its go.mod carries replace directives — so the
+  # release tarball it is, pinned by digest like anything else fetched over the
+  # network.
+  PROMTOOL_VERSION: "3.14.0"
+  PROMTOOL_SHA256: "f665c6da19eb7ba399c915d30c7d9793c9b417bf8a749b504bc470678631478d"
   # Pinned, not floating: the console is compiled INTO the release binary,
   # so the bundler version is part of what ships.
   BUN_VERSION: "1.4.0"
@@ -38,6 +45,15 @@ jobs:
           go install github.com/sqlc-dev/sqlc/cmd/sqlc@v${SQLC_VERSION}
           go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.11
           go install connectrpc.com/connect/cmd/protoc-gen-connect-go@v1.20.0
+      - name: install promtool (pinned + checksummed)
+        run: |
+          tgz="prometheus-${PROMTOOL_VERSION}.linux-amd64.tar.gz"
+          curl -sSLf -o "$tgz" \
+            "https://github.com/prometheus/prometheus/releases/download/v${PROMTOOL_VERSION}/${tgz}"
+          echo "${PROMTOOL_SHA256}  ${tgz}" | sha256sum -c -
+          tar -xzf "$tgz"
+          sudo install -m 0755 "prometheus-${PROMTOOL_VERSION}.linux-amd64/promtool" /usr/local/bin/promtool
+          rm -rf "$tgz" "prometheus-${PROMTOOL_VERSION}.linux-amd64"
       - name: buf lint
         run: buf lint
       - name: enforcement gates
