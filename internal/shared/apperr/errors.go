@@ -34,6 +34,10 @@ var (
 
 	// External structure feeds (scope sync).
 	ErrUnavailableFeed = E(KindUnavailable, "feed_unavailable", "Structure feed is unreachable")
+	// ErrStreamUnavailable: this instance is not watching snapshots, so it
+	// has nothing to stream. Unavailable rather than Unimplemented — the RPC
+	// exists and another instance can serve it.
+	ErrStreamUnavailable = E(KindUnavailable, "stream_unavailable", "Revocation streaming is not enabled on this instance")
 
 	// Registration / flows.
 	ErrRegistrationClosed = E(KindPermissionDenied, "registration_closed", "Self-registration is not enabled for this realm")

@@ -62,10 +62,15 @@ SET last_used_at = now(),
     updated_at = now()
 WHERE id = $1`)
 
-// UpdateCredentialSecret is the KDF upgrade path: rehash on next successful
-// login (ADR-0002).
+// UpdateCredentialSecret writes the secret and the key it was sealed under.
+//
+// Two callers with different needs: the KDF upgrade path rehashes a password
+// (ADR-0002) and passes no kid, because a hash is not sealed; TOTP enrolment
+// seals under a local key and MUST record which one, or rotating that key
+// makes the secret unreadable. Both go through one statement so the pair can
+// never drift apart.
 var UpdateCredentialSecret = storm.SQLExec(`
-UPDATE credentials SET secret = $2, updated_at = now() WHERE id = $1`)
+UPDATE credentials SET secret = $2, secret_kid = $3, updated_at = now() WHERE id = $1`)
 
 // UpdateCredentialParams carries the TOTP replay guard: params holds the last
 // accepted time step.
@@ -93,13 +98,14 @@ type ActiveCredentialRow struct {
 	TenantID    string
 	Kind        string
 	Secret      runtime.Null[string]
+	SecretKid   runtime.Null[string]
 	Params      runtime.JSON
 	SignCounter int64
 }
 
 var GetActiveCredentialOfKind = storm.SQL[ActiveCredentialRow](`
 SELECT id::text AS id, identity_id::text AS identity_id,
-       tenant_id::text AS tenant_id, kind, secret, params, sign_counter
+       tenant_id::text AS tenant_id, kind, secret, secret_kid, params, sign_counter
 FROM credentials
 WHERE identity_id = $1 AND kind = $2
   AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > now())

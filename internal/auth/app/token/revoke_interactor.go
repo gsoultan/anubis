@@ -8,10 +8,10 @@ import (
 	auditdomain "github.com/gsoultan/anubis/internal/audit/domain"
 	auditport "github.com/gsoultan/anubis/internal/audit/port"
 	authport "github.com/gsoultan/anubis/internal/auth/port"
+	"github.com/gsoultan/anubis/internal/platform/crypto/accesstoken"
 	"github.com/gsoultan/anubis/internal/platform/crypto/secret"
 	"github.com/gsoultan/anubis/internal/shared/authctx"
 	tenancyport "github.com/gsoultan/anubis/internal/tenancy/port"
-	"github.com/gsoultan/anubis/pkg/anubis/paseto"
 )
 
 // revokeInteractor implements RevokeUsecase.
@@ -50,11 +50,15 @@ func (u *revokeInteractor) Execute(ctx context.Context, token, hint string) erro
 			SessionID: info.SessionID, Action: "token.revoke", Result: "allow",
 			IP: authctx.ClientIP(ctx), Detail: []byte(`{"type":"refresh"}`),
 		})
-	case strings.HasPrefix(token, "v4.public."):
+	case accesstoken.IsAccessToken(token):
 		// Best effort: an access token revokes its session. Signature is NOT
 		// required — a leaked token being revoked by whoever found it is the
 		// desired outcome — but claims must parse.
-		msg, _, _, err := paseto.Parse(token)
+		//
+		// Both formats, not just PASETO: this branch was gated on the
+		// "v4.public." prefix, so an application issuing JWS would have had
+		// its revocations silently do nothing.
+		msg, err := accesstoken.ClaimsUnverified(token)
 		if err != nil {
 			return nil
 		}

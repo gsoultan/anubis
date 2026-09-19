@@ -39,6 +39,7 @@ func _assertCredentialShape(m m0.Credential) {
 		m.SignCounter,
 		m.Kind,
 		m.Secret,
+		m.SecretKid,
 		m.LookupKey,
 		m.Label,
 		m.Params,

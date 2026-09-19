@@ -93,3 +93,37 @@ func (s *Repository) SetKeyStatus(ctx context.Context, kid, status string) error
 	_, err := authrquery.SetSigningKeyStatus.Exec(ctx, s.ex(ctx), kid, status)
 	return database.MapErr(err)
 }
+
+// ResealableKey is one signing key's sealed private half, with the kid its
+// ciphertext is bound to.
+type ResealableKey struct {
+	ID     [16]byte
+	Kid    string
+	Sealed []byte
+}
+
+// ResealableKeys lists every signing key that still holds material.
+//
+// Retired keys included. Their rows survive so a retirement can be undone,
+// and a row left sealed under a master that no longer exists cannot be.
+func (s *Repository) ResealableKeys(ctx context.Context) ([]ResealableKey, error) {
+	rows, err := signingkey.New().Order(signingkey.CreatedAt.Asc()).All(ctx, s.ex(ctx), nil)
+	if err != nil {
+		return nil, database.MapErr(err)
+	}
+	out := make([]ResealableKey, 0, len(rows))
+	for _, r := range rows {
+		if len(r.PrivateKeyEnc) == 0 {
+			continue
+		}
+		out = append(out, ResealableKey{ID: r.ID, Kid: r.Kid, Sealed: r.PrivateKeyEnc})
+	}
+	return out, nil
+}
+
+// ResealKey writes private material rewrapped under a new master.
+func (s *Repository) ResealKey(ctx context.Context, id [16]byte, sealed []byte) error {
+	m := signingkey.MutateKey(id)
+	m.SetPrivateKeyEnc(sealed)
+	return database.MapErr(m.Update(ctx, s.ex(ctx)))
+}

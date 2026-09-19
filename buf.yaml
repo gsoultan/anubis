@@ -4,6 +4,22 @@ modules:
 lint:
   use:
     - STANDARD
+  # proto/envoy is a FOREIGN contract reproduced for wire compatibility, not
+  # an API this project designs. Its service, message and field names are
+  # fixed by Envoy — "Authorization" is literally the gRPC path the proxy
+  # dials — so the naming rules that keep our own APIs consistent would
+  # require breaking it. Scoped to that directory so nothing else loosens.
+  ignore_only:
+    SERVICE_SUFFIX:
+      - proto/envoy
+    RPC_REQUEST_STANDARD_NAME:
+      - proto/envoy
+    RPC_RESPONSE_STANDARD_NAME:
+      - proto/envoy
+    RPC_REQUEST_RESPONSE_UNIQUE:
+      - proto/envoy
+    PACKAGE_DIRECTORY_MATCH:
+      - proto/envoy
 breaking:
   use:
     - FILE

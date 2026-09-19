@@ -6,13 +6,13 @@ import "time"
 // addressed by slug; exactly one per kind is the default that /v1/authorize
 // falls back to.
 type AuthPage struct {
-	ID              string
-	TenantID        string
-	Kind            string // signin | signout
-	Slug            string
-	Name            string
-	Status          string // active | disabled
-	IsDefault       bool
+	ID        string
+	TenantID  string
+	Kind      string // signin | signout
+	Slug      string
+	Name      string
+	Status    string // active | disabled
+	IsDefault bool
 	// A page is bound to an application OR a realm, never both — resolution
 	// would have to pick one and whichever it picked would surprise somebody.
 	// The database refuses the row (auth_pages_one_binding, migration 0041).
@@ -23,7 +23,7 @@ type AuthPage struct {
 	// tenant default.
 	RealmID   string
 	RealmCode string
-	Config          []byte
-	CreatedAt       time.Time
-	UpdatedAt       time.Time
+	Config    []byte
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }

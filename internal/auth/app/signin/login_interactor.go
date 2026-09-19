@@ -116,7 +116,8 @@ func (u *loginInteractor) Execute(ctx context.Context, in LoginInput) (*LoginOut
 
 	if needsRehash {
 		if newHash, herr := kdf.Hash(in.Password); herr == nil {
-			_ = u.creds.UpdateCredentialSecret(ctx, credential.ID, newHash)
+			// No kid: a password is hashed, not sealed, so no key opens it.
+			_ = u.creds.UpdateCredentialSecret(ctx, credential.ID, newHash, "")
 		}
 	}
 

@@ -69,17 +69,26 @@ func (u *verifyMfaInteractor) Execute(ctx context.Context, in VerifyMfaInput) (*
 	if err != nil || cred == nil {
 		return nil, apperr.ErrMfaInvalid
 	}
-	key, err := u.ring.Ring().ActiveLocal()
-	if err != nil {
-		return nil, apperr.ErrInternal.Wrap(err)
-	}
 	sealed, err := base64.RawStdEncoding.DecodeString(cred.Secret)
 	if err != nil {
 		return nil, apperr.ErrInternal.Wrap(err)
 	}
-	sharedSecret, err := keyring.OpenSecret(key.Secret, "totp:"+cred.ID, sealed)
+	// Open under the key this secret was SEALED with, not whichever is active
+	// now. Using the active one meant `keys promote local` locked out every
+	// enrolled identity: the unseal fails, so every second factor in the
+	// installation stops working at once, and the wrapped error blamed the
+	// MASTER key ("wrong master key?") when the master was never involved.
+	sharedSecret, usedKid, err := keyring.OpenNamedSecret(
+		u.ring.Ring(), cred.SecretKid, "totp:"+cred.ID, sealed)
 	if err != nil {
 		return nil, apperr.ErrInternal.Wrap(err)
+	}
+	// An enrolment from before the kid was recorded: write down the answer so
+	// the next rotation does not have to guess it.
+	if cred.SecretKid == "" {
+		if err := u.creds.UpdateCredentialSecret(ctx, cred.ID, cred.Secret, usedKid); err != nil {
+			return nil, apperr.ErrInternal.Wrap(err)
+		}
 	}
 
 	step, ok := totp.Verify(sharedSecret, in.Code, u.clock.Now(), totp.DefaultStep, totp.DefaultDigits, 1)

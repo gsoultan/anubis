@@ -206,3 +206,36 @@ func (s *Repository) ClearTOTP(ctx context.Context, id string) error {
 	}
 	return nil
 }
+
+// ResealableTOTP is one operator's sealed TOTP secret, with the id its
+// ciphertext is bound to.
+type ResealableTOTP struct {
+	ID     [16]byte
+	IDText string
+	Sealed []byte
+}
+
+// ResealableTOTPSecrets lists every operator holding sealed TOTP material.
+func (s *Repository) ResealableTOTPSecrets(ctx context.Context) ([]ResealableTOTP, error) {
+	rows, err := platformuser.New().Order(platformuser.CreatedAt.Asc()).All(ctx, s.ex(ctx), nil)
+	if err != nil {
+		return nil, database.MapErr(err)
+	}
+	out := make([]ResealableTOTP, 0, len(rows))
+	for _, r := range rows {
+		if len(r.TotpSecretEnc) == 0 {
+			continue
+		}
+		out = append(out, ResealableTOTP{
+			ID: r.ID, IDText: database.UUIDStr(r.ID), Sealed: r.TotpSecretEnc,
+		})
+	}
+	return out, nil
+}
+
+// ResealTOTPSecret writes a secret rewrapped under a new master.
+func (s *Repository) ResealTOTPSecret(ctx context.Context, id [16]byte, sealed []byte) error {
+	m := platformuser.MutateKey(id)
+	m.SetTotpSecretEnc(sealed)
+	return database.MapErr(m.Update(ctx, s.ex(ctx)))
+}

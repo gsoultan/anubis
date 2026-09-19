@@ -8,6 +8,7 @@ import (
 	"connectrpc.com/connect"
 
 	"github.com/gsoultan/anubis/gen/go/anubis/v1/anubisv1connect"
+	"github.com/gsoultan/anubis/gen/go/envoy/service/auth/v3/authv3connect"
 	apihttp "github.com/gsoultan/anubis/internal/api/http"
 	auditpg "github.com/gsoultan/anubis/internal/audit/adapter/postgres"
 	authhttp "github.com/gsoultan/anubis/internal/auth/adapter/http"
@@ -35,6 +36,7 @@ import (
 	controlrpc "github.com/gsoultan/anubis/internal/control/adapter/rpc"
 	controlapp "github.com/gsoultan/anubis/internal/control/app"
 	controlsvc "github.com/gsoultan/anubis/internal/control/service"
+	gategrpc "github.com/gsoultan/anubis/internal/gate/adapter/grpc"
 	gatehttp "github.com/gsoultan/anubis/internal/gate/adapter/http"
 	gatepg "github.com/gsoultan/anubis/internal/gate/adapter/postgres"
 	gateapp "github.com/gsoultan/anubis/internal/gate/app"
@@ -49,6 +51,7 @@ import (
 	"github.com/gsoultan/anubis/internal/platform/jobs"
 	"github.com/gsoultan/anubis/internal/platform/mw"
 	"github.com/gsoultan/anubis/internal/platform/ratelimit"
+	"github.com/gsoultan/anubis/internal/platform/revocation"
 	provisioningrpc "github.com/gsoultan/anubis/internal/provisioning/adapter/rpc"
 	provisioningapp "github.com/gsoultan/anubis/internal/provisioning/app"
 	provisioningsvc "github.com/gsoultan/anubis/internal/provisioning/service"
@@ -70,12 +73,16 @@ import (
 // register their own transports. Nothing here contains business logic —
 // this file exists so no other package has to know the whole system.
 type application struct {
-	clock     systemClock
-	ring      *keyring.Manager
-	auditor   *auditpg.ChainedAuditor
-	issuer    authapp.TokenIssuer
-	issuerURL string
-	masterKey []byte
+	clock systemClock
+	ring  *keyring.Manager
+	// revocations fans snapshot deltas out to StreamRevocations subscribers.
+	// Created here because the token handler is wired before the snapshot
+	// manager exists, and both need the same broker.
+	revocations *revocation.Broker
+	auditor     *auditpg.ChainedAuditor
+	issuer      authapp.TokenIssuer
+	issuerURL   string
+	masterKey   []byte
 	// bootstrapTenantSlug is the FALLBACK tenant for the page URLs the console
 	// shows: a caller carrying a tenant on its principal gets that one instead,
 	// because it is the tenant they are administering. Page lookup itself
@@ -98,6 +105,7 @@ type application struct {
 
 func newApplication(ctx context.Context, cfg *config.Config, db *database.DB, logger *slog.Logger) (*application, error) {
 	a := &application{
+		revocations:         revocation.NewBroker(),
 		clock:               systemClock{},
 		masterKey:           cfg.MasterKey,
 		issuerURL:           cfg.Issuer,
@@ -197,7 +205,7 @@ func (a *application) registerRPC(rpc *http.ServeMux, opts connect.HandlerOption
 	rpc.Handle(anubisv1connect.NewAuthServiceHandler(
 		authrpc.NewAuthHandler(authep.NewAuthEndpoints(authService, logger, limiter)), opts))
 	rpc.Handle(anubisv1connect.NewTokenServiceHandler(
-		authrpc.NewTokenHandler(authep.NewTokenEndpoints(tokenService, logger)), opts))
+		authrpc.NewTokenHandler(authep.NewTokenEndpoints(tokenService, logger), a.revocations), opts))
 	rpc.Handle(anubisv1connect.NewSessionServiceHandler(
 		authrpc.NewSessionHandler(authep.NewSessionEndpoints(sessionService, logger)), opts))
 
@@ -312,12 +320,30 @@ func (a *application) registerHTTP(ctx context.Context, srv *apihttp.Server,
 	srv.HandleFunc("GET /p/{tenant}/{kind}/{slug}", oidc.ServePage)
 
 	snaps := gateapp.NewManager(a.gate, a.gate, cfg.SnapshotMaxAge, logger)
+	// Before Run: the manager announces deltas on every swap, and the first
+	// swap happens inside Run.
+	snaps.PublishRevocationsTo(a.revocations)
 	go snaps.Run(ctx)
 	// Readiness must fail while the snapshot is too stale to serve from:
 	// past that age the gate fails closed, so this instance is denying
 	// traffic and should leave the load balancer.
 	health.WithSnapshot(snaps)
+	// One decider, two transports: nginx/Traefik over HTTP and Envoy over
+	// gRPC ext_authz. A second copy of the decision is a second place for it
+	// to drift.
+	decider := gateapp.NewDecider(cfg.Issuer, a.ring, snaps)
 	gate := gatehttp.NewGateHandler(cfg.Issuer, a.ring, snaps)
 	srv.HandleFunc("POST /v1/gate/check", gate.Check)
 	srv.HandleFunc("GET /v1/gate/check", gate.Check)
+	// Envoy's ext_authz, on the path the proxy dials:
+	// /envoy.service.auth.v3.Authorization/Check.
+	//
+	// No auth interceptor, deliberately and exactly like /v1/gate/check: the
+	// caller here is the PROXY, not a principal, and the only thing this
+	// endpoint will tell anyone is the answer for the token they already
+	// hold. Requiring a credential of the sidecar would add a secret to
+	// distribute for no property gained.
+	extAuthzPath, extAuthz := authv3connect.NewAuthorizationHandler(
+		gategrpc.New(decider, cfg.Issuer+"/v1/authorize"))
+	srv.Handle(extAuthzPath, extAuthz)
 }

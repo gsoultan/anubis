@@ -321,9 +321,17 @@ type Credential struct {
 	SignCounter int64
 	Kind        string
 	Secret      *string
-	LookupKey   *string
-	Label       *string
-	Params      storm.JSON
+	// SecretKid names the local key Secret was sealed under. NULL means the
+	// row predates the column: the reader falls back to whichever local key
+	// is active and records the answer, because a secret sealed once and read
+	// for years cannot depend on which key happens to be active today.
+	//
+	// Without it, `keys promote local` unsealed nothing and every enrolled
+	// second factor stopped working at once.
+	SecretKid *string
+	LookupKey *string
+	Label     *string
+	Params    storm.JSON
 }
 
 func (m *Credential) Schema(t *storm.Table) {
@@ -331,6 +339,7 @@ func (m *Credential) Schema(t *storm.Table) {
 	t.Col(&m.ID).Default("uuidv7()")
 	t.Col(&m.SignCounter).Default("0")
 	t.Col(&m.Params).Default("'{}'::jsonb")
+	t.Col(&m.SecretKid).Size(64)
 	t.CheckNamed("credentials_kind_check", "kind = ANY (ARRAY['password'::text, 'device_key'::text, 'totp'::text, 'recovery_code'::text, 'oidc_link'::text])")
 	t.Index(&m.IdentityID, &m.Kind).Where("revoked_at IS NULL").Named("credentials_identity")
 	t.Index(&m.LookupKey).Unique().Where("(lookup_key IS NOT NULL) AND (revoked_at IS NULL)").Named("credentials_lookup")

@@ -5,12 +5,12 @@ import (
 	"encoding/json"
 
 	authport "github.com/gsoultan/anubis/internal/auth/port"
+	"github.com/gsoultan/anubis/internal/platform/crypto/accesstoken"
 	"github.com/gsoultan/anubis/internal/platform/crypto/keyring"
 	"github.com/gsoultan/anubis/internal/shared/apperr"
 	"github.com/gsoultan/anubis/internal/shared/clock"
 	tenancyport "github.com/gsoultan/anubis/internal/tenancy/port"
 	"github.com/gsoultan/anubis/pkg/anubis"
-	"github.com/gsoultan/anubis/pkg/anubis/paseto"
 )
 
 // introspectInteractor implements IntrospectUsecase.
@@ -67,23 +67,15 @@ func (u *introspectInteractor) Execute(ctx context.Context, token string) (*Intr
 // verify checks signature + time + issuer against the local ring (no
 // audience: introspection serves every application).
 func (u *introspectInteractor) verify(token string) (*anubis.Claims, error) {
-	_, _, footer, err := paseto.Parse(token)
+	kid, err := accesstoken.Kid(token)
 	if err != nil {
 		return nil, err
 	}
-	var tf struct {
-		Kid string `json:"kid"`
-	}
-	if len(footer) > 0 {
-		if err := json.Unmarshal(footer, &tf); err != nil {
-			return nil, err
-		}
-	}
-	key, err := u.ring.Ring().Lookup(tf.Kid)
+	key, err := u.ring.Ring().Lookup(kid)
 	if err != nil || key.Purpose != keyring.PurposeAccess {
 		return nil, apperr.ErrTokenInvalid
 	}
-	msg, _, err := paseto.Verify(key.Public, token, nil)
+	msg, err := accesstoken.Verify(key.Public, token)
 	if err != nil {
 		return nil, err
 	}

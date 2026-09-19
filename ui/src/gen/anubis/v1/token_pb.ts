@@ -2,15 +2,124 @@
 // @generated from file anubis/v1/token.proto (package anubis.v1, syntax proto3)
 /* eslint-disable */
 
-import type { GenFile, GenMessage, GenService } from "@bufbuild/protobuf/codegenv2";
-import { fileDesc, messageDesc, serviceDesc } from "@bufbuild/protobuf/codegenv2";
+import type { GenEnum, GenFile, GenMessage, GenService } from "@bufbuild/protobuf/codegenv2";
+import { enumDesc, fileDesc, messageDesc, serviceDesc } from "@bufbuild/protobuf/codegenv2";
 import type { Message } from "@bufbuild/protobuf";
 
 /**
  * Describes the file anubis/v1/token.proto.
  */
 export const file_anubis_v1_token: GenFile = /*@__PURE__*/
-  fileDesc("ChVhbnViaXMvdjEvdG9rZW4ucHJvdG8SCWFudWJpcy52MSIiChFJbnRyb3NwZWN0UmVxdWVzdBINCgV0b2tlbhgBIAEoCSKpAgoSSW50cm9zcGVjdFJlc3BvbnNlEg4KBmFjdGl2ZRgBIAEoCBILCgNzdWIYAiABKAkSCwoDc2lkGAMgASgJEgsKA3RpZBgEIAEoCRINCgVyZWFsbRgFIAEoCRINCgVyb2xlcxgGIAMoCRI5CgZzY29wZXMYByADKAsyKS5hbnViaXMudjEuSW50cm9zcGVjdFJlc3BvbnNlLlNjb3Blc0VudHJ5EgsKA2FtchgIIAMoCRILCgNhdWQYCSADKAkSCwoDZXhwGAogASgDEhEKCWF1dGhfdGltZRgLIAEoAxILCgNpYWwYDCABKAUSDQoFZXBvY2gYDSABKAUaLQoLU2NvcGVzRW50cnkSCwoDa2V5GAEgASgJEg0KBXZhbHVlGAIgASgJOgI4ASI3Cg1SZXZva2VSZXF1ZXN0Eg0KBXRva2VuGAEgASgJEhcKD3Rva2VuX3R5cGVfaGludBgCIAEoCSIQCg5SZXZva2VSZXNwb25zZTKYAQoMVG9rZW5TZXJ2aWNlEkkKCkludHJvc3BlY3QSHC5hbnViaXMudjEuSW50cm9zcGVjdFJlcXVlc3QaHS5hbnViaXMudjEuSW50cm9zcGVjdFJlc3BvbnNlEj0KBlJldm9rZRIYLmFudWJpcy52MS5SZXZva2VSZXF1ZXN0GhkuYW51YmlzLnYxLlJldm9rZVJlc3BvbnNlQjZaNGdpdGh1Yi5jb20vZ3NvdWx0YW4vYW51YmlzL2dlbi9nby9hbnViaXMvdjE7YW51YmlzdjFiBnByb3RvMw");
+  fileDesc("ChVhbnViaXMvdjEvdG9rZW4ucHJvdG8SCWFudWJpcy52MSIqChhTdHJlYW1SZXZvY2F0aW9uc1JlcXVlc3QSDgoGdGVuYW50GAEgASgJIoICChlTdHJlYW1SZXZvY2F0aW9uc1Jlc3BvbnNlEjcKBGtpbmQYASABKA4yKS5hbnViaXMudjEuU3RyZWFtUmV2b2NhdGlvbnNSZXNwb25zZS5LaW5kEg4KBnRlbmFudBgCIAEoCRILCgNzaWQYAyABKAkSCwoDc3ViGAQgASgJEg0KBWVwb2NoGAUgASgFEhMKC29ic2VydmVkX2F0GAYgASgDIl4KBEtpbmQSFAoQS0lORF9VTlNQRUNJRklFRBAAEhgKFEtJTkRfU0VTU0lPTl9SRVZPS0VEEAESFQoRS0lORF9FUE9DSF9CVU1QRUQQAhIPCgtLSU5EX1NZTkNFRBADIiIKEUludHJvc3BlY3RSZXF1ZXN0Eg0KBXRva2VuGAEgASgJIqkCChJJbnRyb3NwZWN0UmVzcG9uc2USDgoGYWN0aXZlGAEgASgIEgsKA3N1YhgCIAEoCRILCgNzaWQYAyABKAkSCwoDdGlkGAQgASgJEg0KBXJlYWxtGAUgASgJEg0KBXJvbGVzGAYgAygJEjkKBnNjb3BlcxgHIAMoCzIpLmFudWJpcy52MS5JbnRyb3NwZWN0UmVzcG9uc2UuU2NvcGVzRW50cnkSCwoDYW1yGAggAygJEgsKA2F1ZBgJIAMoCRILCgNleHAYCiABKAMSEQoJYXV0aF90aW1lGAsgASgDEgsKA2lhbBgMIAEoBRINCgVlcG9jaBgNIAEoBRotCgtTY29wZXNFbnRyeRILCgNrZXkYASABKAkSDQoFdmFsdWUYAiABKAk6AjgBIjcKDVJldm9rZVJlcXVlc3QSDQoFdG9rZW4YASABKAkSFwoPdG9rZW5fdHlwZV9oaW50GAIgASgJIhAKDlJldm9rZVJlc3BvbnNlMvoBCgxUb2tlblNlcnZpY2USSQoKSW50cm9zcGVjdBIcLmFudWJpcy52MS5JbnRyb3NwZWN0UmVxdWVzdBodLmFudWJpcy52MS5JbnRyb3NwZWN0UmVzcG9uc2USPQoGUmV2b2tlEhguYW51YmlzLnYxLlJldm9rZVJlcXVlc3QaGS5hbnViaXMudjEuUmV2b2tlUmVzcG9uc2USYAoRU3RyZWFtUmV2b2NhdGlvbnMSIy5hbnViaXMudjEuU3RyZWFtUmV2b2NhdGlvbnNSZXF1ZXN0GiQuYW51YmlzLnYxLlN0cmVhbVJldm9jYXRpb25zUmVzcG9uc2UwAUI2WjRnaXRodWIuY29tL2dzb3VsdGFuL2FudWJpcy9nZW4vZ28vYW51YmlzL3YxO2FudWJpc3YxYgZwcm90bzM");
+
+/**
+ * @generated from message anubis.v1.StreamRevocationsRequest
+ */
+export type StreamRevocationsRequest = Message<"anubis.v1.StreamRevocationsRequest"> & {
+  /**
+   * Tenant to watch. Ignored for a tenant-scoped credential, which can only
+   * ever watch its own.
+   *
+   * @generated from field: string tenant = 1;
+   */
+  tenant: string;
+};
+
+/**
+ * Describes the message anubis.v1.StreamRevocationsRequest.
+ * Use `create(StreamRevocationsRequestSchema)` to create a new message.
+ */
+export const StreamRevocationsRequestSchema: GenMessage<StreamRevocationsRequest> = /*@__PURE__*/
+  messageDesc(file_anubis_v1_token, 0);
+
+/**
+ * StreamRevocationsResponse names something that stopped being valid. One
+ * message per event; the stream stays open.
+ *
+ * @generated from message anubis.v1.StreamRevocationsResponse
+ */
+export type StreamRevocationsResponse = Message<"anubis.v1.StreamRevocationsResponse"> & {
+  /**
+   * @generated from field: anubis.v1.StreamRevocationsResponse.Kind kind = 1;
+   */
+  kind: StreamRevocationsResponse_Kind;
+
+  /**
+   * @generated from field: string tenant = 2;
+   */
+  tenant: string;
+
+  /**
+   * @generated from field: string sid = 3;
+   */
+  sid: string;
+
+  /**
+   * @generated from field: string sub = 4;
+   */
+  sub: string;
+
+  /**
+   * @generated from field: int32 epoch = 5;
+   */
+  epoch: number;
+
+  /**
+   * When Anubis observed it, not when the consumer received it.
+   *
+   * @generated from field: int64 observed_at = 6;
+   */
+  observedAt: bigint;
+};
+
+/**
+ * Describes the message anubis.v1.StreamRevocationsResponse.
+ * Use `create(StreamRevocationsResponseSchema)` to create a new message.
+ */
+export const StreamRevocationsResponseSchema: GenMessage<StreamRevocationsResponse> = /*@__PURE__*/
+  messageDesc(file_anubis_v1_token, 1);
+
+/**
+ * @generated from enum anubis.v1.StreamRevocationsResponse.Kind
+ */
+export enum StreamRevocationsResponse_Kind {
+  /**
+   * @generated from enum value: KIND_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * One session ended: logout, admin revocation, or refresh-token theft
+   * detection. sid is set.
+   *
+   * @generated from enum value: KIND_SESSION_REVOKED = 1;
+   */
+  SESSION_REVOKED = 1,
+
+  /**
+   * Every token issued to an identity before epoch is now invalid, which
+   * is how a password change or a disable invalidates in bulk. sub and
+   * epoch are set.
+   *
+   * @generated from enum value: KIND_EPOCH_BUMPED = 2;
+   */
+  EPOCH_BUMPED = 2,
+
+  /**
+   * The stream is live and the consumer has seen the current state. Sent
+   * once, before any change events, so a client can tell "nothing has
+   * happened yet" from "not connected yet".
+   *
+   * @generated from enum value: KIND_SYNCED = 3;
+   */
+  SYNCED = 3,
+}
+
+/**
+ * Describes the enum anubis.v1.StreamRevocationsResponse.Kind.
+ */
+export const StreamRevocationsResponse_KindSchema: GenEnum<StreamRevocationsResponse_Kind> = /*@__PURE__*/
+  enumDesc(file_anubis_v1_token, 1, 0);
 
 /**
  * @generated from message anubis.v1.IntrospectRequest
@@ -27,7 +136,7 @@ export type IntrospectRequest = Message<"anubis.v1.IntrospectRequest"> & {
  * Use `create(IntrospectRequestSchema)` to create a new message.
  */
 export const IntrospectRequestSchema: GenMessage<IntrospectRequest> = /*@__PURE__*/
-  messageDesc(file_anubis_v1_token, 0);
+  messageDesc(file_anubis_v1_token, 2);
 
 /**
  * @generated from message anubis.v1.IntrospectResponse
@@ -104,7 +213,7 @@ export type IntrospectResponse = Message<"anubis.v1.IntrospectResponse"> & {
  * Use `create(IntrospectResponseSchema)` to create a new message.
  */
 export const IntrospectResponseSchema: GenMessage<IntrospectResponse> = /*@__PURE__*/
-  messageDesc(file_anubis_v1_token, 1);
+  messageDesc(file_anubis_v1_token, 3);
 
 /**
  * @generated from message anubis.v1.RevokeRequest
@@ -128,7 +237,7 @@ export type RevokeRequest = Message<"anubis.v1.RevokeRequest"> & {
  * Use `create(RevokeRequestSchema)` to create a new message.
  */
 export const RevokeRequestSchema: GenMessage<RevokeRequest> = /*@__PURE__*/
-  messageDesc(file_anubis_v1_token, 2);
+  messageDesc(file_anubis_v1_token, 4);
 
 /**
  * @generated from message anubis.v1.RevokeResponse
@@ -141,7 +250,7 @@ export type RevokeResponse = Message<"anubis.v1.RevokeResponse"> & {
  * Use `create(RevokeResponseSchema)` to create a new message.
  */
 export const RevokeResponseSchema: GenMessage<RevokeResponse> = /*@__PURE__*/
-  messageDesc(file_anubis_v1_token, 3);
+  messageDesc(file_anubis_v1_token, 5);
 
 /**
  * Token introspection and revocation. Service-authenticated callers only
@@ -166,6 +275,23 @@ export const TokenService: GenService<{
     methodKind: "unary";
     input: typeof RevokeRequestSchema;
     output: typeof RevokeResponseSchema;
+  },
+  /**
+   * StreamRevocations pushes revocations as they happen, so a resource
+   * server can drop a session before the access token expires without
+   * putting Anubis in the hot path the way Introspect does.
+   *
+   * The stream is a CACHE INVALIDATION, not an authorization decision. A
+   * consumer that misses an event because it was disconnected must still be
+   * correct, which is why tokens stay short-lived and why the snapshot
+   * remains the authority. Treat a gap as "check again", never as "allow".
+   *
+   * @generated from rpc anubis.v1.TokenService.StreamRevocations
+   */
+  streamRevocations: {
+    methodKind: "server_streaming";
+    input: typeof StreamRevocationsRequestSchema;
+    output: typeof StreamRevocationsResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_anubis_v1_token, 0);

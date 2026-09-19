@@ -50,7 +50,7 @@ func FuzzNormalizePath(f *testing.F) {
 	f.Add("/a/b/../c")
 	f.Add("/%2e%2e/etc/passwd")
 	f.Add("//a//b/")
-	f.Add("/..0") // a segment merely CONTAINING dots is a name, not traversal
+	f.Add("/..0")  // a segment merely CONTAINING dots is a name, not traversal
 	f.Add("/0%23") // decoded '#' — delimiter to a re-parser, data to us
 	f.Add("/a%3fb")
 	f.Fuzz(func(t *testing.T, s string) {

@@ -8,9 +8,9 @@ import "time"
 // exactly the evidence somebody wants, and the run that did NOT happen is
 // otherwise invisible.
 type SyncRun struct {
-	ID       string
-	SourceID string
-	AxisCode string
+	ID        string
+	SourceID  string
+	AxisCode  string
 	StartedAt time.Time
 	// FinishedAt is nil while a run is in flight, or if the process died
 	// mid-run — a row stuck at 'running' is itself the diagnosis.

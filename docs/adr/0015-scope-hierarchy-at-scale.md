@@ -159,6 +159,28 @@ database back on the request path, which ADR-0005 rules out. Sharding tenants
 across instances costs no gate code at all and should be preferred until the
 numbers say otherwise.
 
+**The numbers** (`BenchmarkSnapshotMemoryPerTenant`, 2026-09-19). A million
+nodes is a single-tenant question; the fleet question is a realistic tenant
+multiplied by how many of them an instance holds. This measures a WHOLE
+snapshot — all seven maps, not just the scope index, because identities and
+flattened role permissions scale independently of nodes:
+
+| Tenant | Shape | Per tenant | 100 tenants | 1,000 tenants |
+| :--- | :--- | ---: | ---: | ---: |
+| small | 500 nodes, 200 identities, 10 roles | 0.21 MB | 0.02 GB | 0.20 GB |
+| medium | 5k nodes, 5k identities, 50 roles | 4.33 MB | 0.42 GB | 4.23 GB |
+| large | 50k nodes, 50k identities, 200 roles | 42.08 MB | 4.11 GB | 41.09 GB |
+
+Read off an 8 GB instance: roughly 39,000 small tenants, 1,900 medium, or 190
+large. So **sharding is enough**, and stays enough, unless the fleet holds
+many hundreds of LARGE tenants on one instance — at which point the shard
+count is the lever before the loading strategy is.
+
+Cost is linear in identities and in nodes, which is why the large row is
+almost exactly ten times the medium one. That also says where to look first
+if the number ever disappoints: it will be the identity and grant maps, not
+the scope index this ADR was written about.
+
 Depth is separately capped at the `smallint` ceiling of 32,767 (migration
 0038 now raises a named `program_limit_exceeded` rather than "smallint out of
 range"). The closure is quadratic in chain length — depth 2,000 is already

@@ -208,7 +208,8 @@ why.
 
 ### `POST /v1/gate/check` — forward-auth
 
-For nginx `auth_request`, Traefik `forwardAuth`, Envoy `ext_authz`.
+For nginx `auth_request` and Traefik `forwardAuth`. Envoy can use this too,
+but prefers the gRPC form below.
 
 | Header in | |
 | :--- | :--- |
@@ -221,6 +222,49 @@ For nginx `auth_request`, Traefik `forwardAuth`, Envoy `ext_authz`.
 | `204` | Allow | `X-Anubis-Subject`, `X-Anubis-Scope`, `X-Anubis-Session` |
 | `401` | Needs login | `Location` for the redirect flow |
 | `403` | Denied | |
+
+### `envoy.service.auth.v3.Authorization/Check` — Envoy ext_authz
+
+The gRPC form of the same decision, on the path Envoy dials. Configure the
+`ext_authz` filter with a `grpc_service` pointing at the Anubis listener:
+
+```yaml
+http_filters:
+  - name: envoy.filters.http.ext_authz
+    typed_config:
+      "@type": type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthz
+      transport_api_version: V3
+      grpc_service:
+        envoy_grpc: { cluster_name: anubis }
+```
+
+It shares one decider with `/v1/gate/check`, so the two cannot disagree. On
+allow it sets `X-Anubis-Subject`, `X-Anubis-Session` and `X-Anubis-Scope`
+upstream, and **removes any the client sent** — upstream trusts those as
+Anubis's word.
+
+Leave `failure_mode_allow` off. Anubis never answers a check with a gRPC
+error (an internal fault is still an explicit deny), so the only thing
+`failure_mode_allow` can do is open the door when the network breaks.
+
+### `anubis.v1.TokenService/StreamRevocations` — revocation stream
+
+Server-streaming. Service-authenticated callers only, like `Introspect`. A
+resource server subscribes and drops sessions as they are revoked, instead of
+polling introspection.
+
+| Kind | Meaning |
+| :--- | :--- |
+| `KIND_SYNCED` | Sent once, first. You are current; nothing is pending. |
+| `KIND_SESSION_REVOKED` | `sid` ended — logout, admin revocation, or refresh-token theft. |
+| `KIND_EPOCH_BUMPED` | Every token issued to `sub` before `epoch` is invalid. |
+
+**This is a cache invalidation, not an authorization decision.** A consumer
+that disconnects misses what happened while it was away: the broker drops
+rather than queues, because delivery must never stall the gate's refresh
+path. Treat a gap as "check again", never as "allow" — correctness comes
+from short token lifetimes and from the gate, not from having seen every
+event.
 
 Served entirely from the in-memory snapshot. **Target p99 < 1 ms, no database on
 the path.** Fail-static if Postgres is down; fail-closed only if the snapshot

@@ -21,7 +21,8 @@ partially (self-registration, consents, erasure request; crypto-shredding key
 management still open). Phase 5 ✅ (API keys). Phase 6 ✅ (TOTP + device keys;
 step-up via amr/auth_time). Phase 7 ✅ (gate + snapshot + shared normalisation
 corpus + fuzz). Phase 8 partially (gRPC via Connect on day one; key prepare/
-promote lifecycle; Envoy ext_authz and revocation streaming remain).
+promote lifecycle; Envoy ext_authz, revocation streaming and the JWS codec
+landed 2026-09-19, which closes it).
 
 Since then, and not in the original phase plan: the platform control plane
 (ADR-0011) with its own sign-in, refresh and machine credentials; the
@@ -163,10 +164,10 @@ Stated plainly, as the earlier list was.
 
 | Gap | Status |
 | :--- | :--- |
-| **Envoy `ext_authz`, revocation streaming, JWS codec flag** | Phase 8 tail. Connect already serves gRPC, so these are integrations rather than new mechanisms |
+| ~~**Envoy `ext_authz`, revocation streaming, JWS codec flag**~~ | **Done** (2026-09-19). ext_authz speaks gRPC on `/envoy.service.auth.v3.Authorization/Check`, sharing one `gateapp.Decider` with the HTTP forward-auth so the two transports cannot drift; `TokenService.StreamRevocations` pushes revocations from the snapshot, so they reach a consumer whatever replica noticed; `pkg/anubis/jws` implements `applications.token_format = 'jws.eddsa'`. No new dependency — Envoy's contract is reproduced by field number under our own `go_package`, and JOSE libraries stay banned. |
 | **Redis-backed rate limits** | Decided against for now, with trigger conditions: [ADR-0012](adr/0012-rate-limits-across-replicas.md). Limits are per instance and the docs say so |
 | **Bot protection on public registration** | Decided against, with the escape hatch documented: [ADR-0014](adr/0014-bot-protection-on-registration.md) |
-| **Gate memory scales with tenant COUNT** | Open, with a preferred answer. Every instance holds every tenant's snapshot — ~92 MB at a million scope nodes — so the ceiling moved from tenant *size* to tenant *count* ([ADR-0015](adr/0015-scope-hierarchy-at-scale.md)). Shard tenants across instances first: the gate is deliberately share-nothing, so that is a routing change and no code. Lazy per-tenant loading with an LRU is the alternative and costs more than it looks — it puts the database back on the request path, which [ADR-0005](adr/0005-database-performance.md) rules out, and trades a cold-start stall on a tenant's first request for the memory. Worth doing only with numbers saying sharding is not enough |
+| **Gate memory scales with tenant COUNT** | **Measured** (2026-09-19), and sharding is enough. A whole snapshot costs 0.21 MB for a small tenant, 4.33 MB for a medium one and 42 MB for a large one, so an 8 GB instance holds ~39,000 / ~1,900 / ~190 of them. Lazy loading is not worth its cost until a fleet puts many hundreds of LARGE tenants on one instance — see the table in [ADR-0015](adr/0015-scope-hierarchy-at-scale.md). Original framing below. Open, with a preferred answer. Every instance holds every tenant's snapshot — ~92 MB at a million scope nodes — so the ceiling moved from tenant *size* to tenant *count* ([ADR-0015](adr/0015-scope-hierarchy-at-scale.md)). Shard tenants across instances first: the gate is deliberately share-nothing, so that is a routing change and no code. Lazy per-tenant loading with an LRU is the alternative and costs more than it looks — it puts the database back on the request path, which [ADR-0005](adr/0005-database-performance.md) rules out, and trades a cold-start stall on a tenant's first request for the memory. Worth doing only with numbers saying sharding is not enough |
 
 Nothing above is an unproven claim. Two are decisions with their reasoning
 written down, one is an integration the transport already supports, and the

@@ -31,6 +31,7 @@ type Row struct {
 	SignCounter int64
 	Kind        string
 	Secret      runtime.Null[string]
+	SecretKid   runtime.Null[string]
 	LookupKey   runtime.Null[string]
 	Label       runtime.Null[string]
 	Params      runtime.JSON
@@ -72,7 +73,7 @@ const (
 	opNotExists runtime.Op = 27
 )
 
-const nCols = 14
+const nCols = 15
 
 // Query is a value type: composing one allocates nothing. Predicates
 // are a postfix token stream, so disjunction and negation are
@@ -269,9 +270,16 @@ func (q *Query) cursor(col uint32, r Row) {
 			q.over = true
 			return
 		}
-		q.strs[q.ns] = r.LookupKey.V
+		q.strs[q.ns] = r.SecretKid.V
 		q.ns++
 	case 12:
+		if int(q.ns) >= len(q.strs) {
+			q.over = true
+			return
+		}
+		q.strs[q.ns] = r.LookupKey.V
+		q.ns++
+	case 13:
 		if int(q.ns) >= len(q.strs) {
 			q.over = true
 			return
@@ -449,9 +457,10 @@ var (
 	SignCounter = Int64Col{8}
 	Kind        = TextCol{9}
 	Secret      = NullTextCol{10}
-	LookupKey   = NullTextCol{11}
-	Label       = NullTextCol{12}
-	Params      = JSONCol{13}
+	SecretKid   = NullTextCol{11}
+	LookupKey   = NullTextCol{12}
+	Label       = NullTextCol{13}
+	Params      = JSONCol{14}
 )
 
 // UUIDCol addresses a uuid column.
@@ -821,6 +830,13 @@ func (q *Query) leaf(p Pred) {
 			}
 			q.anyStr[q.nas] = p.anyStr
 			q.nas++
+		case 14:
+			if int(q.nas) >= 3 {
+				q.over = true
+				return
+			}
+			q.anyStr[q.nas] = p.anyStr
+			q.nas++
 		}
 		q.push(runtime.MakeLeaf(uint32(p.op), uint32(p.col)))
 		return
@@ -922,6 +938,13 @@ func (q *Query) leaf(p Pred) {
 		q.strs[q.ns] = p.str
 		q.ns++
 	case 13:
+		if int(q.ns) >= 6 {
+			q.over = true
+			return
+		}
+		q.strs[q.ns] = p.str
+		q.ns++
+	case 14:
 		if int(q.njs) >= 2 {
 			q.over = true
 			return
@@ -1013,6 +1036,19 @@ func (q Query) SecretIn(v ...string) Query             { return q.Where(Secret.I
 func (q Query) SecretNotIn(v ...string) Query          { return q.Where(Secret.NotIn(v...)) }
 func (q Query) SecretIsNull() Query                    { return q.Where(Secret.IsNull()) }
 func (q Query) SecretIsNotNull() Query                 { return q.Where(Secret.IsNotNull()) }
+func (q Query) SecretKidEq(v string) Query             { return q.Where(SecretKid.Eq(v)) }
+func (q Query) SecretKidNotEq(v string) Query          { return q.Where(SecretKid.NotEq(v)) }
+func (q Query) SecretKidGt(v string) Query             { return q.Where(SecretKid.Gt(v)) }
+func (q Query) SecretKidGte(v string) Query            { return q.Where(SecretKid.Gte(v)) }
+func (q Query) SecretKidLt(v string) Query             { return q.Where(SecretKid.Lt(v)) }
+func (q Query) SecretKidLte(v string) Query            { return q.Where(SecretKid.Lte(v)) }
+func (q Query) SecretKidEqLower(v string) Query        { return q.Where(SecretKid.EqLower(v)) }
+func (q Query) SecretKidLike(v string) Query           { return q.Where(SecretKid.Like(v)) }
+func (q Query) SecretKidILike(v string) Query          { return q.Where(SecretKid.ILike(v)) }
+func (q Query) SecretKidIn(v ...string) Query          { return q.Where(SecretKid.In(v...)) }
+func (q Query) SecretKidNotIn(v ...string) Query       { return q.Where(SecretKid.NotIn(v...)) }
+func (q Query) SecretKidIsNull() Query                 { return q.Where(SecretKid.IsNull()) }
+func (q Query) SecretKidIsNotNull() Query              { return q.Where(SecretKid.IsNotNull()) }
 func (q Query) LookupKeyEq(v string) Query             { return q.Where(LookupKey.Eq(v)) }
 func (q Query) LookupKeyNotEq(v string) Query          { return q.Where(LookupKey.NotEq(v)) }
 func (q Query) LookupKeyGt(v string) Query             { return q.Where(LookupKey.Gt(v)) }
@@ -1044,7 +1080,7 @@ func (q Query) ParamsContainedBy(v runtime.JSON) Query { return q.Where(Params.C
 func (q Query) ParamsHasAnyKey(v ...string) Query      { return q.Where(Params.HasAnyKey(v...)) }
 func (q Query) ParamsHasAllKeys(v ...string) Query     { return q.Where(Params.HasAllKeys(v...)) }
 
-const selectPrefix = `SELECT "id", "created_at", "updated_at", "last_used_at", "expires_at", "revoked_at", "identity_id", "tenant_id", "sign_counter", "kind", "secret", "lookup_key", "label", "params" FROM "credentials"`
+const selectPrefix = `SELECT "id", "created_at", "updated_at", "last_used_at", "expires_at", "revoked_at", "identity_id", "tenant_id", "sign_counter", "kind", "secret", "secret_kid", "lookup_key", "label", "params" FROM "credentials"`
 const countPrefix = `SELECT count(*) FROM "credentials"`
 const existsPrefix = `SELECT 1 FROM "credentials"`
 const existsSuffix = ` LIMIT 1`
@@ -1147,6 +1183,12 @@ var orderTable = [nCols][4]string{
 		"\"secret\" ASC NULLS FIRST",
 		"\"secret\" DESC NULLS LAST",
 	},
+	{ // secret_kid
+		"\"secret_kid\"",
+		"\"secret_kid\" DESC",
+		"\"secret_kid\" ASC NULLS FIRST",
+		"\"secret_kid\" DESC NULLS LAST",
+	},
 	{ // lookup_key
 		"\"lookup_key\"",
 		"\"lookup_key\" DESC",
@@ -1181,6 +1223,7 @@ var identTable = [nCols]string{
 	"\"sign_counter\"",
 	"\"kind\"",
 	"\"secret\"",
+	"\"secret_kid\"",
 	"\"lookup_key\"",
 	"\"label\"",
 	"\"params\"",
@@ -1216,7 +1259,7 @@ func orderOf(dir, col uint32) string {
 
 // fragTable is every predicate this table can produce, lowered at build
 // time. Runtime splices; it never formats.
-var fragTable = [14][28]runtime.Frag{
+var fragTable = [15][28]runtime.Frag{
 	{ // id
 		{}, // opNone
 		{A: "\"id\" = $", B: ""},
@@ -1547,6 +1590,36 @@ var fragTable = [14][28]runtime.Frag{
 		{},
 		{},
 	},
+	{ // secret_kid
+		{}, // opNone
+		{A: "\"secret_kid\" = $", B: ""},
+		{A: "\"secret_kid\" <> $", B: ""},
+		{A: "\"secret_kid\" > $", B: ""},
+		{A: "\"secret_kid\" >= $", B: ""},
+		{A: "\"secret_kid\" < $", B: ""},
+		{A: "\"secret_kid\" <= $", B: ""},
+		{A: "lower(\"secret_kid\") = lower($", B: ")"},
+		{A: "\"secret_kid\" LIKE $", B: ""},
+		{A: "\"secret_kid\" ILIKE $", B: ""},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{A: "\"secret_kid\" = ANY($", B: ")"},
+		{A: "\"secret_kid\" <> ALL($", B: ")"},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{A: "\"secret_kid\" IS NULL", B: ""},
+		{A: "\"secret_kid\" IS NOT NULL", B: ""},
+		{},
+		{},
+	},
 	{ // lookup_key
 		{}, // opNone
 		{A: "\"lookup_key\" = $", B: ""},
@@ -1803,9 +1876,10 @@ func scan(rv [][]byte, r *Row, sl *runtime.Slab) error {
 	r.SignCounter = runtime.Int8(rv[8])
 	r.Kind = sl.Str(rv[9])
 	r.Secret = runtime.NullText(rv[10], sl)
-	r.LookupKey = runtime.NullText(rv[11], sl)
-	r.Label = runtime.NullText(rv[12], sl)
-	r.Params = runtime.JSON(runtime.JSONB(rv[13], sl))
+	r.SecretKid = runtime.NullText(rv[11], sl)
+	r.LookupKey = runtime.NullText(rv[12], sl)
+	r.Label = runtime.NullText(rv[13], sl)
+	r.Params = runtime.JSON(runtime.JSONB(rv[14], sl))
 	return nil
 }
 
@@ -1912,6 +1986,10 @@ func (q Query) bindPreds(b *binder) []any {
 				b.anyStr[nas] = q.anyStr[nas]
 				v = append(v, &b.anyStr[nas])
 				nas++
+			case 14:
+				b.anyStr[nas] = q.anyStr[nas]
+				v = append(v, &b.anyStr[nas])
+				nas++
 			}
 			continue
 		}
@@ -1969,6 +2047,10 @@ func (q Query) bindPreds(b *binder) []any {
 			v = append(v, &b.strs[ns])
 			ns++
 		case 13:
+			b.strs[ns] = q.strs[ns]
+			v = append(v, &b.strs[ns])
+			ns++
+		case 14:
 			b.jsns[njs] = q.jsns[njs]
 			v = append(v, &b.jsns[njs])
 			njs++
@@ -2109,7 +2191,7 @@ func (q Query) Prepare(b *Binder) (string, []any) {
 
 // insertSQL does not vary: the column list is fixed by the table, so
 // the placeholders are known at build time and nothing is spliced.
-const insertSQL = `INSERT INTO "credentials" ("id", "created_at", "updated_at", "last_used_at", "expires_at", "revoked_at", "identity_id", "tenant_id", "sign_counter", "kind", "secret", "lookup_key", "label", "params") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING "id", "created_at", "updated_at", "last_used_at", "expires_at", "revoked_at", "identity_id", "tenant_id", "sign_counter", "kind", "secret", "lookup_key", "label", "params"`
+const insertSQL = `INSERT INTO "credentials" ("id", "created_at", "updated_at", "last_used_at", "expires_at", "revoked_at", "identity_id", "tenant_id", "sign_counter", "kind", "secret", "secret_kid", "lookup_key", "label", "params") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING "id", "created_at", "updated_at", "last_used_at", "expires_at", "revoked_at", "identity_id", "tenant_id", "sign_counter", "kind", "secret", "secret_kid", "lookup_key", "label", "params"`
 
 const updatePrefix = `UPDATE "credentials" SET `
 const deletePrefix = `DELETE FROM "credentials"`
@@ -2126,12 +2208,13 @@ const (
 	dSignCounter uint64 = 1 << 6
 	dKind        uint64 = 1 << 7
 	dSecret      uint64 = 1 << 8
-	dLookupKey   uint64 = 1 << 9
-	dLabel       uint64 = 1 << 10
-	dParams      uint64 = 1 << 11
+	dSecretKid   uint64 = 1 << 9
+	dLookupKey   uint64 = 1 << 10
+	dLabel       uint64 = 1 << 11
+	dParams      uint64 = 1 << 12
 )
 
-const nUpdatable = 12
+const nUpdatable = 13
 
 // setFrags is every assignment this table can make, lowered at build time.
 var setFrags = [nUpdatable]runtime.Frag{
@@ -2144,6 +2227,7 @@ var setFrags = [nUpdatable]runtime.Frag{
 	{A: "\"sign_counter\" = $", B: ""}, // sign_counter
 	{A: "\"kind\" = $", B: ""},         // kind
 	{A: "\"secret\" = $", B: ""},       // secret
+	{A: "\"secret_kid\" = $", B: ""},   // secret_kid
 	{A: "\"lookup_key\" = $", B: ""},   // lookup_key
 	{A: "\"label\" = $", B: ""},        // label
 	{A: "\"params\" = $", B: ""},       // params
@@ -2162,6 +2246,7 @@ var exprFrags = [nUpdatable]runtime.Frag{
 	{A: "\"sign_counter\" = \"sign_counter\" + 1", B: ""}, // sign_counter = its own value plus one
 	{}, // kind has no server-side form
 	{}, // secret has no server-side form
+	{}, // secret_kid has no server-side form
 	{}, // lookup_key has no server-side form
 	{}, // label has no server-side form
 	{}, // params has no server-side form
@@ -2187,12 +2272,13 @@ const (
 	iSignCounter uint64 = 1 << 8
 	iKind        uint64 = 1 << 9
 	iSecret      uint64 = 1 << 10
-	iLookupKey   uint64 = 1 << 11
-	iLabel       uint64 = 1 << 12
-	iParams      uint64 = 1 << 13
+	iSecretKid   uint64 = 1 << 11
+	iLookupKey   uint64 = 1 << 12
+	iLabel       uint64 = 1 << 13
+	iParams      uint64 = 1 << 14
 )
 
-const nInsertable = 14
+const nInsertable = 15
 
 // insCols is the quoted column name for each insert bit.
 var insCols = [nInsertable]string{
@@ -2207,6 +2293,7 @@ var insCols = [nInsertable]string{
 	"\"sign_counter\"",
 	"\"kind\"",
 	"\"secret\"",
+	"\"secret_kid\"",
 	"\"lookup_key\"",
 	"\"label\"",
 	"\"params\"",
@@ -2218,7 +2305,7 @@ var insParts = runtime.InsertParts{Open: " (", Sep: ", ", Mid: ") VALUES (", Clo
 var insPlaceholder = runtime.Placeholder{}
 
 const insPrefix = "INSERT INTO \"credentials\""
-const insReturning = " RETURNING \"id\", \"created_at\", \"updated_at\", \"last_used_at\", \"expires_at\", \"revoked_at\", \"identity_id\", \"tenant_id\", \"sign_counter\", \"kind\", \"secret\", \"lookup_key\", \"label\", \"params\""
+const insReturning = " RETURNING \"id\", \"created_at\", \"updated_at\", \"last_used_at\", \"expires_at\", \"revoked_at\", \"identity_id\", \"tenant_id\", \"sign_counter\", \"kind\", \"secret\", \"secret_kid\", \"lookup_key\", \"label\", \"params\""
 
 var insCache = runtime.NewMaskCache()
 
@@ -2237,7 +2324,7 @@ var updOpCache = runtime.NewMaskCache()
 // part of it. Without it m.Row() would hold what the row held BEFORE
 // the statement, so a caller reading back the counter it just
 // incremented would get the old number and never know.
-const updReturning = " RETURNING \"id\", \"created_at\", \"updated_at\", \"last_used_at\", \"expires_at\", \"revoked_at\", \"identity_id\", \"tenant_id\", \"sign_counter\", \"kind\", \"secret\", \"lookup_key\", \"label\", \"params\""
+const updReturning = " RETURNING \"id\", \"created_at\", \"updated_at\", \"last_used_at\", \"expires_at\", \"revoked_at\", \"identity_id\", \"tenant_id\", \"sign_counter\", \"kind\", \"secret\", \"secret_kid\", \"lookup_key\", \"label\", \"params\""
 
 // Masks reports how many distinct UPDATE shapes have compiled.
 func Masks() int { return updCache.Masks() }
@@ -2425,6 +2512,20 @@ func (m *Mut) SetSecretNull() {
 	m.expr &^= dSecret
 }
 
+func (m *Mut) SetSecretKid(v string) {
+	m.row.SecretKid = runtime.Null[string]{V: v, Valid: true}
+	m.dirty |= dSecretKid
+	m.expr &^= dSecretKid
+}
+
+// SetSecretKidNull writes SQL NULL. It is a separate method because a
+// zero value and an absent value are different facts.
+func (m *Mut) SetSecretKidNull() {
+	m.row.SecretKid = runtime.Null[string]{}
+	m.dirty |= dSecretKid
+	m.expr &^= dSecretKid
+}
+
 func (m *Mut) SetLookupKey(v string) {
 	m.row.LookupKey = runtime.Null[string]{V: v, Valid: true}
 	m.dirty |= dLookupKey
@@ -2567,6 +2668,18 @@ func (n *Ins) SetSecretNull() {
 	n.set |= iSecret
 }
 
+func (n *Ins) SetSecretKid(v string) {
+	n.row.SecretKid = runtime.Null[string]{V: v, Valid: true}
+	n.set |= iSecretKid
+}
+
+// SetSecretKidNull writes SQL NULL explicitly, which is not the same as
+// leaving the column unset and taking its default.
+func (n *Ins) SetSecretKidNull() {
+	n.row.SecretKid = runtime.Null[string]{}
+	n.set |= iSecretKid
+}
+
 func (n *Ins) SetLookupKey(v string) {
 	n.row.LookupKey = runtime.Null[string]{V: v, Valid: true}
 	n.set |= iLookupKey
@@ -2643,7 +2756,7 @@ var conflictSpecs = []string{
 
 // assignable is the columns target i may overwrite, given the mask.
 func assignable(i uint8, mask uint64) []string {
-	set := make([]string, 0, 12)
+	set := make([]string, 0, 13)
 	switch i {
 	case 0:
 		if mask&(1<<2) != 0 {
@@ -2674,12 +2787,15 @@ func assignable(i uint8, mask uint64) []string {
 			set = append(set, "secret")
 		}
 		if mask&(1<<11) != 0 {
-			set = append(set, "lookup_key")
+			set = append(set, "secret_kid")
 		}
 		if mask&(1<<12) != 0 {
-			set = append(set, "label")
+			set = append(set, "lookup_key")
 		}
 		if mask&(1<<13) != 0 {
+			set = append(set, "label")
+		}
+		if mask&(1<<14) != 0 {
 			set = append(set, "params")
 		}
 	case 1:
@@ -2710,10 +2826,13 @@ func assignable(i uint8, mask uint64) []string {
 		if mask&(1<<10) != 0 {
 			set = append(set, "secret")
 		}
-		if mask&(1<<12) != 0 {
-			set = append(set, "label")
+		if mask&(1<<11) != 0 {
+			set = append(set, "secret_kid")
 		}
 		if mask&(1<<13) != 0 {
+			set = append(set, "label")
+		}
+		if mask&(1<<14) != 0 {
 			set = append(set, "params")
 		}
 	case 2:
@@ -2742,12 +2861,15 @@ func assignable(i uint8, mask uint64) []string {
 			set = append(set, "secret")
 		}
 		if mask&(1<<11) != 0 {
-			set = append(set, "lookup_key")
+			set = append(set, "secret_kid")
 		}
 		if mask&(1<<12) != 0 {
-			set = append(set, "label")
+			set = append(set, "lookup_key")
 		}
 		if mask&(1<<13) != 0 {
+			set = append(set, "label")
+		}
+		if mask&(1<<14) != 0 {
 			set = append(set, "params")
 		}
 	}
@@ -2827,6 +2949,7 @@ var assignFor = map[string]string{
 	"sign_counter": "\"sign_counter\" = EXCLUDED.\"sign_counter\"",
 	"kind":         "\"kind\" = EXCLUDED.\"kind\"",
 	"secret":       "\"secret\" = EXCLUDED.\"secret\"",
+	"secret_kid":   "\"secret_kid\" = EXCLUDED.\"secret_kid\"",
 	"lookup_key":   "\"lookup_key\" = EXCLUDED.\"lookup_key\"",
 	"label":        "\"label\" = EXCLUDED.\"label\"",
 	"params":       "\"params\" = EXCLUDED.\"params\"",
@@ -2896,10 +3019,12 @@ func (n *Ins) Insert(ctx context.Context, ex runtime.Executor) (Row, error) {
 		case 10:
 			args = append(args, n.row.Secret.Arg())
 		case 11:
-			args = append(args, n.row.LookupKey.Arg())
+			args = append(args, n.row.SecretKid.Arg())
 		case 12:
-			args = append(args, n.row.Label.Arg())
+			args = append(args, n.row.LookupKey.Arg())
 		case 13:
+			args = append(args, n.row.Label.Arg())
+		case 14:
 			args = append(args, n.row.Params)
 		}
 	}
@@ -2938,7 +3063,7 @@ func Inserts() int { return insCache.Masks() }
 // not treat a zero as 'unset': that guess is why other ORMs cannot insert
 // a false, a 0 or an empty string into a column with a default.
 func Insert(ctx context.Context, ex runtime.Executor, r *Row) error {
-	args := make([]any, 0, 14)
+	args := make([]any, 0, 15)
 	args = append(args, r.ID)
 	args = append(args, r.CreatedAt)
 	args = append(args, r.UpdatedAt)
@@ -2950,6 +3075,7 @@ func Insert(ctx context.Context, ex runtime.Executor, r *Row) error {
 	args = append(args, r.SignCounter)
 	args = append(args, r.Kind)
 	args = append(args, r.Secret.Arg())
+	args = append(args, r.SecretKid.Arg())
 	args = append(args, r.LookupKey.Arg())
 	args = append(args, r.Label.Arg())
 	args = append(args, r.Params)
@@ -2990,6 +3116,7 @@ var copyCols = []string{
 	"sign_counter",
 	"kind",
 	"secret",
+	"secret_kid",
 	"lookup_key",
 	"label",
 	"params",
@@ -2999,7 +3126,7 @@ var copyCols = []string{
 type rowSource struct {
 	rows []Row
 	i    int
-	buf  [14]any
+	buf  [15]any
 }
 
 func (s *rowSource) Next() bool {
@@ -3028,9 +3155,10 @@ func (s *rowSource) Values() []any {
 	s.buf[8] = &r.SignCounter
 	s.buf[9] = &r.Kind
 	s.buf[10] = r.Secret.Ptr()
-	s.buf[11] = r.LookupKey.Ptr()
-	s.buf[12] = r.Label.Ptr()
-	s.buf[13] = &r.Params
+	s.buf[11] = r.SecretKid.Ptr()
+	s.buf[12] = r.LookupKey.Ptr()
+	s.buf[13] = r.Label.Ptr()
+	s.buf[14] = &r.Params
 	return s.buf[:]
 }
 
@@ -3075,8 +3203,9 @@ func InsertOp(r Row) runtime.BatchOp {
 	mask |= 1 << 11
 	mask |= 1 << 12
 	mask |= 1 << 13
+	mask |= 1 << 14
 	st := stmtForInsertNoReturn(mask, 0)
-	args := make([]any, 0, 14)
+	args := make([]any, 0, 15)
 	args = append(args, r.ID)
 	args = append(args, r.CreatedAt)
 	args = append(args, r.UpdatedAt)
@@ -3088,6 +3217,7 @@ func InsertOp(r Row) runtime.BatchOp {
 	args = append(args, r.SignCounter)
 	args = append(args, r.Kind)
 	args = append(args, r.Secret.Arg())
+	args = append(args, r.SecretKid.Arg())
 	args = append(args, r.LookupKey.Arg())
 	args = append(args, r.Label.Arg())
 	args = append(args, r.Params)
@@ -3147,10 +3277,12 @@ func (n *Ins) Op() (runtime.BatchOp, error) {
 		case 10:
 			args = append(args, n.row.Secret.Arg())
 		case 11:
-			args = append(args, n.row.LookupKey.Arg())
+			args = append(args, n.row.SecretKid.Arg())
 		case 12:
-			args = append(args, n.row.Label.Arg())
+			args = append(args, n.row.LookupKey.Arg())
 		case 13:
+			args = append(args, n.row.Label.Arg())
+		case 14:
 			args = append(args, n.row.Params)
 		}
 	}
@@ -3217,10 +3349,12 @@ func (m *Mut) UpdateOp() (runtime.BatchOp, bool) {
 		case 8:
 			args = append(args, m.row.Secret.Arg())
 		case 9:
-			args = append(args, m.row.LookupKey.Arg())
+			args = append(args, m.row.SecretKid.Arg())
 		case 10:
-			args = append(args, m.row.Label.Arg())
+			args = append(args, m.row.LookupKey.Arg())
 		case 11:
+			args = append(args, m.row.Label.Arg())
+		case 12:
 			args = append(args, m.row.Params)
 		}
 	}
@@ -3323,10 +3457,12 @@ func (m *Mut) Update(ctx context.Context, ex runtime.Executor) error {
 		case 8:
 			args = append(args, m.row.Secret.Arg())
 		case 9:
-			args = append(args, m.row.LookupKey.Arg())
+			args = append(args, m.row.SecretKid.Arg())
 		case 10:
-			args = append(args, m.row.Label.Arg())
+			args = append(args, m.row.LookupKey.Arg())
 		case 11:
+			args = append(args, m.row.Label.Arg())
+		case 12:
 			args = append(args, m.row.Params)
 		}
 	}

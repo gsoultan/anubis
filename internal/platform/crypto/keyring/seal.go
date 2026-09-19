@@ -14,6 +14,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"errors"
+	"fmt"
 )
 
 func sealAEAD(master []byte) (cipher.AEAD, error) {
@@ -56,4 +57,47 @@ func OpenSecret(master []byte, kid string, sealed []byte) ([]byte, error) {
 		return nil, errors.New("keyring: unseal failed (wrong master key?)")
 	}
 	return material, nil
+}
+
+// ErrSealingKeyGone means the key a secret was sealed under is no longer in
+// the ring, so the secret can never be read again.
+//
+// It is a distinct error because it needs a distinct answer. An operator has
+// to re-enrol the factor; the holder has done nothing wrong. Folding it into
+// "invalid code" would tell the one person who can fix it that somebody
+// mistyped six digits.
+var ErrSealingKeyGone = errors.New("keyring: the key this secret was sealed under is no longer in the ring")
+
+// OpenNamedSecret opens a secret sealed under a NAMED local key.
+//
+// A secret written once and read for years cannot be opened with "whichever
+// key is active now": rotating the key would make every stored secret
+// unreadable, and the rotation is exactly what an incident demands. So the
+// caller stores the kid and passes it back here.
+//
+// An empty kid means the record predates that discipline. Fall back to the
+// active local key — which is what the old code did unconditionally, so this
+// is no worse — and return the kid that worked so the caller can record it
+// and stop guessing.
+func OpenNamedSecret(r *Ring, kid, aad string, sealed []byte) (material []byte, usedKid string, err error) {
+	if kid == "" {
+		k, err := r.ActiveLocal()
+		if err != nil {
+			return nil, "", err
+		}
+		m, err := OpenSecret(k.Secret, aad, sealed)
+		if err != nil {
+			return nil, "", err
+		}
+		return m, k.Kid, nil
+	}
+	k, err := r.Lookup(kid)
+	if err != nil {
+		return nil, "", fmt.Errorf("%w: %s", ErrSealingKeyGone, kid)
+	}
+	m, err := OpenSecret(k.Secret, aad, sealed)
+	if err != nil {
+		return nil, "", err
+	}
+	return m, kid, nil
 }
