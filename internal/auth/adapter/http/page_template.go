@@ -163,6 +163,19 @@ body{padding:0;align-content:stretch;justify-items:stretch}
     <input type="hidden" name="code_challenge" value="{{$.Challenge}}">
     <input type="hidden" name="code_challenge_method" value="{{$.Method}}">
     <input type="hidden" name="nonce" value="{{$.Nonce}}">
+    {{if $.MFAToken}}
+    {{/* Second factor. The password already checked out, and this form
+         carries a single-use token standing for that — so the password is
+         not asked for again, and nothing on this page can replay it. */}}
+    <input type="hidden" name="mfa_token" value="{{$.MFAToken}}">
+    <input type="hidden" name="realm" value="{{$.Realm}}">
+    <label for="code">Authentication code</label>
+    <input id="code" name="code" inputmode="numeric" autocomplete="one-time-code"
+           pattern="[0-9]*" maxlength="8" required autofocus
+           autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="go">
+    {{if $.Error}}<div class="err">{{$.Error}}</div>{{end}}
+    <button type="submit">{{$.Cfg.Copy.SubmitLabel}}</button>
+    {{else}}
     {{if and $.Cfg.Features.ShowRealmPicker $.Realms}}
       <label for="realm">Directory</label>
       <select id="realm" name="realm">
@@ -185,6 +198,7 @@ body{padding:0;align-content:stretch;justify-items:stretch}
     {{end}}
     {{if $.Error}}<div class="err">{{$.Error}}</div>{{end}}
     <button type="submit">{{$.Cfg.Copy.SubmitLabel}}</button>
+    {{end}}
   </form>
 {{else}}
   {{if $.SignedOut}}

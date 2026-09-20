@@ -309,7 +309,7 @@ func (a *application) registerHTTP(ctx context.Context, srv *apihttp.Server,
 
 	oidc := authhttp.NewOIDCHandler(cfg.Issuer, a.tenancy, a.identity, a.identity,
 		a.identity, a.identity, a.auth, a.auth, a.tenancy, a.tenancy, a.auth,
-		cfg.DefaultTenant, cfg.Env == "prod", a.issuer, a.clock, a.auditor, limiter, logger)
+		cfg.DefaultTenant, cfg.Env == "prod", a.issuer, a.ring, a.clock, a.auditor, limiter, logger)
 	srv.HandleFunc("GET /v1/authorize", oidc.Authorize)
 	srv.HandleFunc("POST /v1/login", oidc.LoginForm)
 	srv.HandleFunc("POST /v1/token", oidc.Token)

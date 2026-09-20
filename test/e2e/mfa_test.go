@@ -6,6 +6,8 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/url"
+	"strings"
 	"testing"
 	"time"
 
@@ -426,5 +428,201 @@ func TestAGrantCannotReplaceAnEnrolledFactor(t *testing.T) {
 	}
 	if connect.CodeOf(err) != connect.CodeAlreadyExists {
 		t.Fatalf("want a conflict on grant replay, got %v", err)
+	}
+}
+
+// A second factor is a property of the IDENTITY, not of the door it walks
+// through.
+//
+// AuthService.Login refuses a password-only sign-in once an authenticator is
+// enrolled — TestSecondFactorLifecycle asserts exactly that, and the
+// interactor says why: "somebody who added an authenticator is asked for it
+// either way". The hosted browser page is a second implementation of login,
+// and it went password -> session -> SSO cookie -> authorization code with no
+// factor check anywhere in the handler.
+//
+// So an attacker holding only a stolen password could skip the victim's
+// enrolled TOTP by using POST /v1/login instead of the API.
+func TestBrowserLoginRefusesPasswordAloneOnceEnrolled(t *testing.T) {
+	requireServer(t)
+	ctx := context.Background()
+	adminToken := platformLogin(t)
+
+	username := fmt.Sprintf("browser-mfa-%d", time.Now().UnixNano())
+	const password = "browser-mfa-password-1234"
+
+	idAdmin := anubisv1connect.NewIdentityAdminServiceClient(http.DefaultClient, baseURL)
+	if _, err := idAdmin.CreateIdentity(ctx, operatorBearer(connect.NewRequest(&anubisv1.CreateIdentityRequest{
+		Realm: "internal", Username: username, Password: password, AssuranceLevel: 2,
+	}), adminToken)); err != nil {
+		t.Fatalf("create probe identity: %v", err)
+	}
+
+	// Every login in this package shares one limiter, and this test adds
+	// several more. Waiting for refill is the correct behaviour under test.
+	first, err := retryRateLimited(t, func() (*connect.Response[anubisv1.LoginResponse], error) {
+		return authClient().Login(ctx, connect.NewRequest(&anubisv1.LoginRequest{
+			Tenant: tenant, Username: username, Password: password,
+		}))
+	})
+	if err != nil {
+		t.Fatalf("initial login: %v", err)
+	}
+	tokens := first.Msg.GetTokens()
+	if tokens == nil {
+		t.Fatal("un-enrolled identity was challenged")
+	}
+
+	// Enrol TOTP through the API.
+	begin, err := authClient().BeginTotpEnrollment(ctx,
+		bearer(connect.NewRequest(&anubisv1.BeginTotpEnrollmentRequest{}), tokens.AccessToken))
+	if err != nil {
+		t.Fatalf("begin enrolment: %v", err)
+	}
+	secret := decodeBase32(t, begin.Msg.Secret)
+	if _, err := retryRateLimited(t, func() (*connect.Response[anubisv1.ConfirmTotpEnrollmentResponse], error) {
+		return authClient().ConfirmTotpEnrollment(ctx,
+			bearer(connect.NewRequest(&anubisv1.ConfirmTotpEnrollmentRequest{
+				EnrollmentToken: begin.Msg.EnrollmentToken,
+				Code:            totp.Generate(secret, time.Now(), totp.DefaultStep, totp.DefaultDigits),
+			}), tokens.AccessToken))
+	}); err != nil {
+		t.Fatalf("confirm enrolment: %v", err)
+	}
+
+	// The API now refuses password alone. Establishes that the identity is
+	// genuinely enrolled, so a pass below cannot be "TOTP was never on".
+	after, err := retryRateLimited(t, func() (*connect.Response[anubisv1.LoginResponse], error) {
+		return authClient().Login(ctx, connect.NewRequest(&anubisv1.LoginRequest{
+			Tenant: tenant, Username: username, Password: password,
+		}))
+	})
+	if err != nil {
+		t.Fatalf("login after enrolment: %v", err)
+	}
+	if after.Msg.GetMfa() == nil {
+		t.Fatal("the API stopped demanding the enrolled factor; this test proves nothing")
+	}
+
+	// THE BROWSER DOOR. Same credentials, same identity, no second factor.
+	client := &http.Client{
+		// Do not follow: a redirect carrying ?code= IS the successful login.
+		CheckRedirect: func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+	form := url.Values{
+		"tenant": {tenant}, "realm": {"internal"},
+		"username": {username}, "password": {password},
+	}
+	resp := postLoginForm(t, client, form)
+	defer resp.Body.Close()
+
+	for _, c := range resp.Cookies() {
+		if strings.Contains(c.Name, "anubis_sso") && c.Value != "" {
+			t.Fatalf("the browser door issued an SSO session cookie for a "+
+				"password-only login on an identity with TOTP enrolled "+
+				"(cookie %q, status %d)", c.Name, resp.StatusCode)
+		}
+	}
+	if loc := resp.Header.Get("Location"); strings.Contains(loc, "code=") {
+		t.Fatalf("the browser door issued an authorization code for a "+
+			"password-only login on an identity with TOTP enrolled: %s", loc)
+	}
+
+	// And it must ASK: closing the hole by refusing MFA users outright would
+	// pass the assertions above and break the product.
+	body := readAll(t, resp)
+	if !strings.Contains(body, `name="mfa_token"`) {
+		t.Fatalf("the page did not ask for a second factor (status %d):\n%s",
+			resp.StatusCode, firstBytes(body, 400))
+	}
+	token := between(body, `name="mfa_token" value="`, `"`)
+	if token == "" {
+		t.Fatal("the second-factor form carried no token")
+	}
+
+	// The enrolment code must NOT complete the browser sign-in either: a
+	// code is single-use whichever door it is presented at. The browser
+	// path goes through the same AdvanceCredentialStep guard.
+	stale := postLoginForm(t, client, url.Values{
+		"tenant": {tenant}, "realm": {"internal"},
+		"username": {username}, "password": {password},
+		"mfa_token": {token},
+		"code":      {totp.Generate(secret, time.Now(), totp.DefaultStep, totp.DefaultDigits)},
+	})
+	staleBody := readAll(t, stale)
+	for _, c := range stale.Cookies() {
+		if strings.Contains(c.Name, "anubis_sso") && c.Value != "" {
+			t.Fatal("the enrolment code signed in through the browser door: TOTP replay is possible")
+		}
+	}
+	// A rejected code must leave the user able to try again, or one typo
+	// means restarting the whole sign-in.
+	token = between(staleBody, `name="mfa_token" value="`, `"`)
+	if token == "" {
+		t.Fatalf("a wrong code left no way to retry:\n%s", firstBytes(staleBody, 400))
+	}
+
+	// The NEXT code completes it — the factor is a step, not a wall. Waiting
+	// for the real boundary rather than generating a future code, which
+	// would fall outside the accepted skew.
+	waitForNextStep()
+	done := postLoginForm(t, client, url.Values{
+		"tenant": {tenant}, "realm": {"internal"},
+		"username": {username}, "password": {password},
+		"mfa_token": {token},
+		"code":      {totp.Generate(secret, time.Now(), totp.DefaultStep, totp.DefaultDigits)},
+	})
+	var got string
+	doneBody := readAll(t, done)
+	for _, c := range done.Cookies() {
+		if strings.Contains(c.Name, "anubis_sso") && c.Value != "" {
+			got = c.Name
+		}
+	}
+	if got == "" {
+		t.Fatalf("a correct code did not complete the browser sign-in (status %d):\n%s",
+			done.StatusCode, firstBytes(doneBody, 400))
+	}
+}
+
+func between(s, open, close string) string {
+	i := strings.Index(s, open)
+	if i < 0 {
+		return ""
+	}
+	rest := s[i+len(open):]
+	j := strings.Index(rest, close)
+	if j < 0 {
+		return ""
+	}
+	return rest[:j]
+}
+
+func firstBytes(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return s[:n]
+}
+
+// postLoginForm posts the hosted sign-in form, waiting out the shared rate
+// limiter the same way retryRateLimited does for the RPC path. Every test in
+// this package hits one limiter from one IP, so throttling here is expected
+// under a full-suite run rather than a failure.
+func postLoginForm(t *testing.T, client *http.Client, form url.Values) *http.Response {
+	t.Helper()
+	deadline := time.Now().Add(90 * time.Second)
+	for {
+		resp, err := client.PostForm(baseURL+"/v1/login", form)
+		if err != nil {
+			t.Fatalf("browser login: %v", err)
+		}
+		if resp.StatusCode != http.StatusTooManyRequests || time.Now().After(deadline) {
+			return resp
+		}
+		resp.Body.Close()
+		time.Sleep(3 * time.Second)
 	}
 }

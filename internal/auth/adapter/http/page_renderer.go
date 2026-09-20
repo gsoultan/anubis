@@ -43,6 +43,10 @@ type PageView struct {
 	Method      string
 	Nonce       string
 	Error       string
+	// MFAToken, when set, turns the sign-in form into the second-factor
+	// step: the password is already verified and this single-use token
+	// stands for it.
+	MFAToken string
 	// Realms offered by the picker, when the page enables it.
 	Realms []RealmChoice
 	// RegistrationURL is empty unless the realm actually allows
