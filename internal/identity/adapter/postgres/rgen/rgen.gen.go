@@ -331,7 +331,12 @@ UPDATE realms SET
     -- survive, so a second rollout starts ahead of the first.
     factor_enrolment_deadline = $14::timestamptz,
     updated_at = now()
-WHERE id = $1
+-- tenant_id is in the WHERE, not left to the caller. It used to be checked
+-- only by whoever loaded the record first, and the repository discarded the
+-- tenant it was handed -- safe with one caller that lists by tenant and
+-- scans, and a cross-tenant write the moment a second caller skips that.
+-- A guard that depends on every future caller remembering is not a guard.
+WHERE id = $1 AND tenant_id = $15
 RETURNING id::text AS id`)
 	storm.RegisterStatement(`
 UPDATE realms SET code = $3, kind = $4, updated_at = now()

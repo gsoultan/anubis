@@ -7,6 +7,7 @@ import (
 	identityrquery "github.com/gsoultan/anubis/internal/identity/adapter/postgres/rquery"
 	identitydomain "github.com/gsoultan/anubis/internal/identity/domain"
 	"github.com/gsoultan/anubis/internal/platform/database"
+	"github.com/gsoultan/anubis/internal/shared/apperr"
 )
 
 func (s *Repository) ListRealms(ctx context.Context, tenantID string) ([]identitydomain.RealmRecord, error) {
@@ -50,8 +51,7 @@ func (s *Repository) CreateRealm(ctx context.Context, tenantID string, r identit
 // they decide which roles a realm's members may hold, so changing them on a
 // populated realm would retroactively re-decide access already granted.
 func (s *Repository) UpdateRealm(ctx context.Context, tenantID string, r identitydomain.RealmRecord) error {
-	_ = tenantID // realms update by their own id; tenancy is checked by the caller loading the record
-	_, _, err := identityrquery.UpdateRealm.One(ctx, s.ex(ctx),
+	_, ok, err := identityrquery.UpdateRealm.One(ctx, s.ex(ctx),
 		r.ID, r.DisplayName, int16(r.MinAssurance), r.SelfRegistration,
 		r.EmailVerification, r.PIIEncryption,
 		database.EmptyIfNil(r.AllowedFactors), database.EmptyIfNil(r.RequiredFactors),
@@ -59,8 +59,17 @@ func (s *Repository) UpdateRealm(ctx context.Context, tenantID string, r identit
 		database.OrDefaultStr(r.SessionTTL, "12 hours"),
 		database.OrDefaultStr(r.AccessTokenTTL, "10 minutes"),
 		database.OrDefaultStr(r.RefreshTokenTTL, "30 days"),
-		r.DefaultRetention, r.FactorEnrolmentDeadline)
-	return database.MapErr(err)
+		r.DefaultRetention, r.FactorEnrolmentDeadline, tenantID)
+	if err != nil {
+		return database.MapErr(err)
+	}
+	// No row: either the realm does not exist or it belongs to another
+	// tenant. The two are one answer on purpose — telling them apart would
+	// confirm a realm id to a tenant that cannot see it.
+	if !ok {
+		return apperr.ErrNotFound
+	}
+	return nil
 }
 
 // CountIdentitiesByCategory counts people per category in one grouped query —

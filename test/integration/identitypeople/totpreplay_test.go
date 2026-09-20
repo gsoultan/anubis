@@ -93,3 +93,44 @@ func ownerOf(t *testing.T, credID string) string {
 	}
 	return id
 }
+
+// A realm belongs to a tenant, and the UPDATE has to say so.
+//
+// The tenant was checked only by whoever loaded the record first, and the
+// repository discarded the tenant it was handed — safe with the one caller
+// that lists by tenant and scans, and a cross-tenant write the moment a
+// second caller skips that. This drives the repository DIRECTLY, which is
+// exactly the second caller that used to be unguarded.
+func TestARealmCannotBeUpdatedFromAnotherTenant(t *testing.T) {
+	r := repo(t)
+	ctx := context.Background()
+
+	realms, err := r.ListRealms(ctx, tenant)
+	if err != nil || len(realms) == 0 {
+		t.Fatalf("need a realm in the probe tenant: %v", err)
+	}
+	victim := realms[0]
+
+	changed := victim
+	changed.DisplayName = "owned by somebody else"
+	if err := r.UpdateRealm(ctx, other, changed); err == nil {
+		t.Fatal("a realm was updated by a tenant that does not own it")
+	}
+
+	after, err := r.ListRealms(ctx, tenant)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, rl := range after {
+		if rl.ID == victim.ID && rl.DisplayName != victim.DisplayName {
+			t.Fatalf("the realm changed anyway: %q", rl.DisplayName)
+		}
+	}
+
+	// And the owning tenant must still be able to update it, or the guard
+	// has simply broken the feature.
+	changed.DisplayName = victim.DisplayName + " (edited)"
+	if err := r.UpdateRealm(ctx, tenant, changed); err != nil {
+		t.Fatalf("the owning tenant could not update its own realm: %v", err)
+	}
+}
