@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"github.com/gsoultan/anubis/cmd/anubisd/keyload"
 	"time"
 
 	authdomain "github.com/gsoultan/anubis/internal/auth/domain"
@@ -22,10 +23,10 @@ func (r *storeKeyRotator) PrepareKey(ctx context.Context, purpose string) (*auth
 	var k *keyring.Key
 	var err error
 	if purpose == keyring.PurposeLocal {
-		k, err = keyring.GenerateLocalKey(now, keyLifetime)
+		k, err = keyring.GenerateLocalKey(now, keyload.Lifetime)
 	} else {
 		purpose = keyring.PurposeAccess
-		k, err = keyring.GenerateAccessKey(now, keyLifetime)
+		k, err = keyring.GenerateAccessKey(now, keyload.Lifetime)
 	}
 	if err != nil {
 		return nil, err
@@ -40,7 +41,7 @@ func (r *storeKeyRotator) PrepareKey(ctx context.Context, purpose string) (*auth
 	}
 	rec := authdomain.KeyRecord{
 		Kid: k.Kid, Alg: k.Alg, Status: keyring.StatusPending, Purpose: purpose,
-		PublicKey: orEmptyBytes(k.Public), PrivateKeyEnc: sealed,
+		PublicKey: keyload.OrEmptyBytes(k.Public), PrivateKeyEnc: sealed,
 		NotBefore: k.NotBefore, NotAfter: k.NotAfter,
 	}
 	if err := r.keys.CreateKey(ctx, rec); err != nil {

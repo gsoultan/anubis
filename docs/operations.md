@@ -441,6 +441,32 @@ attacker holds. Anubis has already revoked the whole family and the session.
    session do before detection?
 4. Force credential rotation if the access predates the detection.
 
+### When a key will not unseal at boot
+
+A key whose private half cannot be opened with the current master key is
+**fatal if it must still sign** — active or pending. Without it this instance
+can issue nothing, so it refuses to start and says which kid, rather than
+booting and failing every login.
+
+A **retiring** key is logged and skipped instead:
+
+```
+ERROR retiring key could not be unsealed — it will keep verifying, but
+      anything sealed under it can no longer be opened  kid=... purpose=...
+```
+
+It is loaded only to keep verifying tokens signed before the rotation, and
+verification uses the public half, which is stored in plaintext. The ring
+never selects a retiring key to sign with, so it cannot be picked by accident.
+
+This distinction exists because treating both as fatal turns a botched re-seal
+into a total outage — a handful of test keys sealed under a different master
+stopped the server starting at all, when the only thing genuinely lost was the
+ability to sign with keys that must not sign. **If you see that line, anything
+still sealed under that kid is unrecoverable**: short-lived MFA challenges and
+enrolment grants will fail until they expire, which is minutes. Retire the kid
+(`status = 'retired'`) once its tokens have aged out.
+
 ## Incident: signing key compromise
 
 Total compromise: the attacker mints valid tokens for any user in any scope
