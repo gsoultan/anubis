@@ -17,8 +17,11 @@
 Phases 0–3 are implemented and e2e-tested (login/MFA/device flows, refresh
 rotation with theft detection, logout×3 with back-channel, introspect/revoke,
 authorize/explain/scope-switch, admin plane, audit hash chain). Phase 4
-partially (self-registration, consents, erasure request; crypto-shredding key
-management still open). Phase 5 ✅ (API keys). Phase 6 ✅ (TOTP + device keys;
+partially (self-registration, consents, erasure request). Crypto-shredding key
+management is built: per-identity keys sealed under the master, shredding
+wired through the attributes and retention interactors, and `anubisd keys
+reseal` rotates the master that seals them. What ADR-0013 still scopes is
+WHICH columns get sealed, not the key lifecycle. Phase 5 ✅ (API keys). Phase 6 ✅ (TOTP + device keys;
 step-up via amr/auth_time). Phase 7 ✅ (gate + snapshot + shared normalisation
 corpus + fuzz). Phase 8 partially (gRPC via Connect on day one; key prepare/
 promote lifecycle; Envoy ext_authz, revocation streaming and the JWS codec

@@ -102,6 +102,22 @@ func IncAuditDropped(action string) {
 	counter(key("audit_dropped", action)).Add(1)
 }
 
+// IncRefreshReuse counts detected refresh-token theft, split by whether the
+// automatic containment actually landed.
+//
+// The split is the point. Detection already pages through the audit log, and
+// the revocations behind it used to have their errors discarded — so a page
+// saying a stolen token was found could arrive while the token family stayed
+// usable, and nothing said so. contained="false" means act NOW: the
+// revocation has to be done by hand.
+func IncRefreshReuse(contained bool) {
+	result := "contained"
+	if !contained {
+		result = "not_contained"
+	}
+	counter(key("refresh_reuse", result)).Add(1)
+}
+
 // IncJob counts a maintenance job run by outcome: ok, error, or skipped.
 //
 // Exposed as the label `maintenance_job`, not `job`. Prometheus reserves `job`

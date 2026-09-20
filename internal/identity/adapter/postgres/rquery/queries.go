@@ -32,7 +32,7 @@ func Queries() []storm.RawDecl {
 		// credential.go
 		GetPasswordCredential, CreateCredential, RevokeCredential,
 		RevokeCredentialsOfKind, TouchCredentialUsed, UpdateCredentialSecret,
-		UpdateCredentialParams, ListActiveCredentialKinds,
+		UpdateCredentialParams, AdvanceCredentialStep, ListActiveCredentialKinds,
 		GetActiveCredentialOfKind, ConsumeRecoveryCode,
 		// consent.go
 		WithdrawConsent,

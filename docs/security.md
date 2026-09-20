@@ -299,8 +299,8 @@ Stated plainly rather than left implicit.
 | Gap | Status | Mitigation |
 | :--- | :--- | :--- |
 | **PBKDF2 rather than Argon2id** | Accepted | Standard library only. ≥600k iterations. Hash format supports transparent migration. |
-| **Concurrent subtree moves unproven** | Open | `scope_move_node` asserts `SERIALIZABLE`; not yet stress-tested under concurrency. |
-| **Deep role graphs unproven** | Open | `role_recompute_effective` has `CYCLE` detection; not stress-tested. |
+| ~~Concurrent subtree moves unproven~~ | **Proven** | `scope_move_node` asserts `SERIALIZABLE`, and `TestConcurrentSubtreeMovesKeepClosureConsistent` runs concurrent moves against a real database and checks the closure afterwards. |
+| ~~Deep role graphs unproven~~ | **Proven** | `TestDeepRoleGraphRecompute` propagates a permission 60 levels; `TestCyclicRoleGraphTerminates` shows the `CYCLE` clause ends rather than hangs. |
 | **No deny rules** | Deliberate | Allow-only union semantics in v1. Adding deny needs strict precedence and an explain endpoint. |
 | **No PASETO ecosystem support** | **Addressed** | `pkg/anubis/jws` behind `applications.token_format = 'jws.eddsa'`. EdDSA is compiled in and `alg` is never read to choose anything, so the algorithm-confusion family JOSE is known for is absent by construction; `crit` is refused, a five-part (JWE) token is refused, and `kid` rides in the protected header. Stdlib only. |
 | **PII crypto-shredding** | **Built** | `migrations/0022` + `internal/identity/domain/pii`: per-identity keys sealed under the master key, erasure and the retention job destroy the key and leave a tombstone (the *fact* of erasure stays auditable). No column is encrypted yet; [ADR-0013](adr/0013-pii-encryption-scope.md) decides the scope — `identities.attributes` is sealed, identifiers deliberately are not, and the API must first write `attributes` at all. |

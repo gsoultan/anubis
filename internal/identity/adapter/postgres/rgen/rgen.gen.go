@@ -221,6 +221,14 @@ UPDATE consents SET withdrawn_at = now()
 WHERE id = $1 AND tenant_id = $2 AND withdrawn_at IS NULL`)
 	storm.RegisterStatement(`
 UPDATE credentials
+   SET params = jsonb_set(COALESCE(params, '{}'::jsonb), '{last_step}', to_jsonb($2::bigint)),
+       updated_at = now()
+ WHERE id = $1
+   AND COALESCE(
+         CASE WHEN jsonb_typeof(params->'last_step') = 'number'
+              THEN (params->>'last_step')::bigint END, 0) < $2`)
+	storm.RegisterStatement(`
+UPDATE credentials
 SET last_used_at = now(),
     sign_counter = GREATEST(sign_counter, $2),
     updated_at = now()
@@ -323,7 +331,12 @@ UPDATE realms SET
     -- survive, so a second rollout starts ahead of the first.
     factor_enrolment_deadline = $14::timestamptz,
     updated_at = now()
-WHERE id = $1
+-- tenant_id is in the WHERE, not left to the caller. It used to be checked
+-- only by whoever loaded the record first, and the repository discarded the
+-- tenant it was handed -- safe with one caller that lists by tenant and
+-- scans, and a cross-tenant write the moment a second caller skips that.
+-- A guard that depends on every future caller remembering is not a guard.
+WHERE id = $1 AND tenant_id = $15
 RETURNING id::text AS id`)
 	storm.RegisterStatement(`
 UPDATE realms SET code = $3, kind = $4, updated_at = now()

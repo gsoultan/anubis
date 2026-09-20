@@ -180,7 +180,7 @@ func (a *application) registerRPC(rpc *http.ServeMux, opts connect.HandlerOption
 		a.auth, a.auth, a.issuer, a.ring, a.auth, a.clock, a.auditor)
 	verifyMfa := mfa.NewVerifyMfaInteractor(a.ring, a.auth, a.identity, a.identity,
 		a.identity, a.tenancy, a.auth, a.issuer, a.auth, a.clock, a.auditor)
-	refresh := tokenapp.NewRefreshInteractor(a.auth, a.auth, a.tenancy, a.issuer, a.auth, a.auditor)
+	refresh := tokenapp.NewRefreshInteractor(a.auth, a.auth, a.tenancy, a.issuer, a.auth, a.auditor, logger)
 	logout := sessionapp.NewLogoutInteractor(a.auth, a.auth, a.identity, a.auth, a.auditor, backchannel)
 	dev := device.NewDeviceInteractor(a.tenancy, a.identity, a.identity, a.identity,
 		a.auth, a.auth, a.issuer, a.auth, a.clock, a.auditor)

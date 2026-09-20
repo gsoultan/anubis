@@ -3,6 +3,8 @@ package tokenapp
 import (
 	"context"
 	"errors"
+	"log/slog"
+	"strconv"
 	"strings"
 
 	auditdomain "github.com/gsoultan/anubis/internal/audit/domain"
@@ -11,6 +13,7 @@ import (
 	authdomain "github.com/gsoultan/anubis/internal/auth/domain"
 	authport "github.com/gsoultan/anubis/internal/auth/port"
 	"github.com/gsoultan/anubis/internal/platform/crypto/secret"
+	"github.com/gsoultan/anubis/internal/platform/metrics"
 	"github.com/gsoultan/anubis/internal/shared/apperr"
 	"github.com/gsoultan/anubis/internal/shared/authctx"
 	"github.com/gsoultan/anubis/internal/shared/jsonx"
@@ -26,6 +29,7 @@ type refreshInteractor struct {
 	issuer   authapp.TokenIssuer
 	tx       txm.TxManager
 	audit    auditport.Auditor
+	logger   *slog.Logger
 }
 
 func NewRefreshInteractor(
@@ -35,10 +39,11 @@ func NewRefreshInteractor(
 	issuer authapp.TokenIssuer,
 	tx txm.TxManager,
 	audit auditport.Auditor,
+	logger *slog.Logger,
 ) RefreshUsecase {
 	return &refreshInteractor{
 		refresh: refresh, sessions: sessions, tenants: tenants,
-		issuer: issuer, tx: tx, audit: audit,
+		issuer: issuer, tx: tx, audit: audit, logger: logger,
 	}
 }
 
@@ -112,12 +117,32 @@ func (u *refreshInteractor) respondToFailedClaim(ctx context.Context, hash []byt
 	}
 	switch info.Status {
 	case "consumed", "revoked":
-		_, _ = u.refresh.RevokeRefreshFamily(ctx, info.FamilyID)
-		if _, rerr := u.sessions.RevokeSession(ctx, info.TenantID, info.SessionID, "refresh_reuse_detected"); rerr == nil {
-			_, _ = u.refresh.RevokeRefreshBySessions(ctx, []string{info.SessionID})
+		// Containment, and whether it WORKED. These errors were discarded,
+		// so a failed revocation still produced the page below — telling
+		// whoever answered it that a stolen token had been contained while
+		// the family stayed usable. The alert has to carry the outcome, or
+		// it reports an action rather than a result.
+		contained := true
+		if _, rerr := u.refresh.RevokeRefreshFamily(ctx, info.FamilyID); rerr != nil {
+			contained = false
+			u.logger.Error("refresh reuse detected and the family could NOT be revoked",
+				"family_id", info.FamilyID, "session_id", info.SessionID,
+				"tenant_id", info.TenantID, "error", rerr)
 		}
+		if _, rerr := u.sessions.RevokeSession(ctx, info.TenantID, info.SessionID, "refresh_reuse_detected"); rerr != nil {
+			contained = false
+			u.logger.Error("refresh reuse detected and the session could NOT be revoked",
+				"session_id", info.SessionID, "tenant_id", info.TenantID, "error", rerr)
+		} else if _, rerr := u.refresh.RevokeRefreshBySessions(ctx, []string{info.SessionID}); rerr != nil {
+			contained = false
+			u.logger.Error("refresh reuse detected and the session's tokens could NOT be revoked",
+				"session_id", info.SessionID, "tenant_id", info.TenantID, "error", rerr)
+		}
+		metrics.IncRefreshReuse(contained)
+
 		// THE alert. This event means a refresh token was stolen; the audit
-		// pipeline routes action=token.reuse_detected to paging.
+		// pipeline routes action=token.reuse_detected to paging. `contained`
+		// is the difference between "handled" and "act now".
 		u.audit.Emit(ctx, auditdomain.AuditEvent{
 			TenantID:  info.TenantID,
 			ActorKind: "identity",
@@ -125,7 +150,10 @@ func (u *refreshInteractor) respondToFailedClaim(ctx context.Context, hash []byt
 			Action:    "token.reuse_detected",
 			Result:    "deny",
 			IP:        authctx.ClientIP(ctx),
-			Detail:    jsonx.Must(map[string]string{"family_id": info.FamilyID}),
+			Detail: jsonx.Must(map[string]string{
+				"family_id": info.FamilyID,
+				"contained": strconv.FormatBool(contained),
+			}),
 		})
 		return apperr.ErrRefreshReuse
 	default:
