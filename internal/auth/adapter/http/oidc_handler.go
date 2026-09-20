@@ -19,11 +19,14 @@ import (
 	"github.com/gsoultan/anubis/internal/identity/domain/credential"
 	identityport "github.com/gsoultan/anubis/internal/identity/port"
 	"github.com/gsoultan/anubis/internal/platform/crypto/kdf"
+	"github.com/gsoultan/anubis/internal/platform/crypto/keyring"
 	"github.com/gsoultan/anubis/internal/platform/crypto/secret"
+	"github.com/gsoultan/anubis/internal/platform/crypto/totp"
 	"github.com/gsoultan/anubis/internal/platform/ratelimit"
 	"github.com/gsoultan/anubis/internal/shared/apperr"
 	"github.com/gsoultan/anubis/internal/shared/authctx"
 	"github.com/gsoultan/anubis/internal/shared/clock"
+	"github.com/gsoultan/anubis/internal/shared/jsonx"
 	tenancydomain "github.com/gsoultan/anubis/internal/tenancy/domain"
 	tenancyport "github.com/gsoultan/anubis/internal/tenancy/port"
 )
@@ -50,6 +53,8 @@ type OIDCHandler struct {
 	renderer      *PageRenderer
 	defaultTenant string
 	issuerUC      authapp.TokenIssuer
+	// ring unseals TOTP secrets for the browser second-factor step.
+	ring *keyring.Manager
 	// cookies decides `__Host-`/Secure versus the development fallback; see
 	// cookies.go for why that fallback exists and how narrow it is.
 	cookies cookiePolicy
@@ -74,6 +79,7 @@ func NewOIDCHandler(
 	defaultTenant string,
 	prod bool,
 	issuerUC authapp.TokenIssuer,
+	ring *keyring.Manager,
 	clock clock.Clock,
 	audit auditport.Auditor,
 	limiter *ratelimit.Limiter,
@@ -83,7 +89,7 @@ func NewOIDCHandler(
 		issuer: issuer, tenants: tenants, realms: realms, ids: ids,
 		creds: creds, sessions: sessions, onetime: onetime, apps: apps,
 		pages: pages, refresh: refresh, renderer: NewPageRenderer(),
-		defaultTenant: defaultTenant, issuerUC: issuerUC,
+		defaultTenant: defaultTenant, issuerUC: issuerUC, ring: ring,
 		cookies: cookiePolicy{prod: prod}, clock: clock, audit: audit,
 		limiter: limiter, logger: logger,
 	}
@@ -209,10 +215,39 @@ func (h *OIDCHandler) LoginForm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// SECOND FACTOR. This page used to go straight from password to session,
+	// while AuthService.Login refused the same sign-in — so an attacker with
+	// a stolen password could skip an enrolled authenticator simply by using
+	// the browser door. A factor belongs to the IDENTITY, not to the door.
+	//
+	// The rule matches the API exactly: enrolment is honoured on its own,
+	// before any realm policy, so whoever added an authenticator is asked for
+	// it either way.
+	amr := []string{"pwd"}
+	if mfaTok := r.PostFormValue("mfa_token"); mfaTok != "" {
+		// Second submit: the code, carried with the single-use token that
+		// stands for the password check.
+		if err := h.verifyBrowserFactor(r, tenant, identity, mfaTok, r.PostFormValue("code")); err != nil {
+			h.audit.Emit(r.Context(), auditdomain.AuditEvent{
+				TenantID: tenant.ID, ActorID: identity.ID, ActorKind: "identity",
+				Action: "auth.mfa", Result: "deny", IP: ip,
+				Detail: []byte(`{"surface":"browser","method":"totp"}`),
+			})
+			h.promptForFactor(w, r, tenant, identity, realm, "That code was not accepted.")
+			return
+		}
+		amr = []string{"pwd", "otp"}
+	} else if h.identityHasFactor(r, identity) {
+		// First submit and a factor is enrolled: ask for it instead of
+		// minting anything. No session, no cookie, no code.
+		h.promptForFactor(w, r, tenant, identity, realm, "")
+		return
+	}
+
 	// Browser session + __Host- cookie (Secure; Path=/; no Domain).
 	sess, err := h.sessions.CreateSession(r.Context(), authdomain.SessionInput{
 		IdentityID: identity.ID, TenantID: tenant.ID,
-		AMR: []string{"pwd"}, IP: ip,
+		AMR: amr, IP: ip,
 		UserAgent:    authctx.UserAgent(r.Context()),
 		ActiveScopes: []byte("{}"),
 		ExpiresAt:    h.clock.Now().Add(realm.SessionTTL),
@@ -384,6 +419,9 @@ type loginPageData struct {
 	// app-initiated flow keep its own branding.
 	Page, ApplicationID string
 	Error               string
+	// MFAToken turns the page into the second-factor step. Single use, and
+	// it stands for a password that has already been verified.
+	MFAToken string
 }
 
 // renderLogin draws the sign-in page for the current flow.
@@ -399,7 +437,7 @@ func (h *OIDCHandler) renderLogin(w http.ResponseWriter, r *http.Request, tenant
 		Tenant: data.Tenant, Realm: data.Realm, ClientID: data.ClientID,
 		RedirectURI: data.RedirectURI, State: data.State,
 		Challenge: data.Challenge, Method: data.Method, Nonce: data.Nonce,
-		Error: data.Error,
+		Error: data.Error, MFAToken: data.MFAToken,
 	}
 	// Only offer what the server will actually accept: a realm picker listing
 	// realms that forbid passwords, or a registration link for a realm with
@@ -436,4 +474,113 @@ func firstNonEmpty(a, b string) string {
 		return a
 	}
 	return b
+}
+
+// browserFactorTTL bounds the gap between the password and the code. Long
+// enough to open an authenticator app, short enough that a token left in a
+// browser tab is not a standing credential.
+const browserFactorTTL = 5 * time.Minute
+
+// identityHasFactor reports whether an enrolled second factor exists.
+//
+// On error it answers TRUE. A lookup that failed is not evidence that nobody
+// enrolled anything, and the safe reading of "I could not tell" on this path
+// is to ask for the factor rather than to skip it.
+func (h *OIDCHandler) identityHasFactor(r *http.Request, identity *identitydomain.Identity) bool {
+	kinds, err := h.creds.ActiveCredentialKinds(r.Context(), identity.ID)
+	if err != nil {
+		return true
+	}
+	for _, k := range kinds {
+		if k == "totp" {
+			return true
+		}
+	}
+	return false
+}
+
+// promptForFactor mints the single-use token standing for the verified
+// password and re-renders the page asking for a code.
+//
+// The token carries the identity, so the second submit cannot name a
+// different one: everything the second step needs is inside a value only
+// this server can have written.
+func (h *OIDCHandler) promptForFactor(
+	w http.ResponseWriter, r *http.Request,
+	tenant *tenancydomain.TenantRef, identity *identitydomain.Identity,
+	realm *identitydomain.Realm, msg string,
+) {
+	raw, err := secret.New(32)
+	if err != nil {
+		apihttp.WriteError(w, r, apperr.ErrInternal.Wrap(err))
+		return
+	}
+	// payload is jsonb, so it has to BE json — a bare uuid is not, and the
+	// insert fails with a 500 that says nothing about why.
+	if _, err := h.onetime.CreateOneTime(r.Context(), tenant.ID, "browser_mfa",
+		secret.Hash(raw), jsonx.Must(map[string]string{"identity_id": identity.ID}),
+		h.clock.Now().Add(browserFactorTTL)); err != nil {
+		apihttp.WriteError(w, r, apperr.ErrInternal.Wrap(err))
+		return
+	}
+	h.renderLogin(w, r, tenant.ID, loginPageData{
+		Tenant: r.PostFormValue("tenant"), Realm: realmCodeOf(realm),
+		ClientID: r.PostFormValue("client_id"), RedirectURI: r.PostFormValue("redirect_uri"),
+		State: r.PostFormValue("state"), Challenge: r.PostFormValue("code_challenge"),
+		Method: r.PostFormValue("code_challenge_method"), Nonce: r.PostFormValue("nonce"),
+		Page: r.PostFormValue("page"), Error: msg, MFAToken: raw,
+	})
+}
+
+// verifyBrowserFactor consumes the single-use token and checks the code.
+//
+// ConsumeOneTime is atomic, so the token cannot be spent twice, and the code
+// goes through AdvanceCredentialStep — the same guard the API path uses,
+// which is in the database rather than in Go so two presentations of one code
+// cannot both win.
+func (h *OIDCHandler) verifyBrowserFactor(
+	r *http.Request, tenant *tenancydomain.TenantRef,
+	identity *identitydomain.Identity, token, code string,
+) error {
+	_, payload, err := h.onetime.ConsumeOneTime(r.Context(), "browser_mfa", secret.Hash(token))
+	if err != nil {
+		return apperr.ErrMfaInvalid
+	}
+	// The token names the identity the password was checked for. A second
+	// submit that arrived with somebody else's username must not be able to
+	// borrow this token.
+	var claim struct {
+		IdentityID string `json:"identity_id"`
+	}
+	if err := json.Unmarshal(payload, &claim); err != nil || claim.IdentityID != identity.ID {
+		return apperr.ErrMfaInvalid
+	}
+	cred, err := h.creds.ActiveCredentialOfKind(r.Context(), identity.ID, "totp")
+	if err != nil || cred == nil {
+		return apperr.ErrMfaInvalid
+	}
+	sealed, err := base64.RawStdEncoding.DecodeString(cred.Secret)
+	if err != nil {
+		return apperr.ErrMfaInvalid
+	}
+	shared, _, err := keyring.OpenNamedSecret(h.ring.Ring(), cred.SecretKid, "totp:"+cred.ID, sealed)
+	if err != nil {
+		return apperr.ErrMfaInvalid
+	}
+	step, ok := totp.Verify(shared, code, h.clock.Now(), totp.DefaultStep, totp.DefaultDigits, 1)
+	if !ok {
+		return apperr.ErrMfaInvalid
+	}
+	fresh, err := h.creds.AdvanceCredentialStep(r.Context(), cred.ID, step)
+	if err != nil || !fresh {
+		return apperr.ErrMfaInvalid
+	}
+	return nil
+}
+
+func realmCodeOf(realm *identitydomain.Realm) string {
+	if realm == nil {
+		return ""
+	}
+	return realm.Code
 }
