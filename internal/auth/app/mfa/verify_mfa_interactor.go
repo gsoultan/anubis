@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
-	"strconv"
 
 	auditdomain "github.com/gsoultan/anubis/internal/audit/domain"
 	auditport "github.com/gsoultan/anubis/internal/audit/port"
@@ -92,7 +91,23 @@ func (u *verifyMfaInteractor) Execute(ctx context.Context, in VerifyMfaInput) (*
 	}
 
 	step, ok := totp.Verify(sharedSecret, in.Code, u.clock.Now(), totp.DefaultStep, totp.DefaultDigits, 1)
-	if !ok || !u.stepIsFresh(cred.Params, step) {
+	// Single use, decided by the DATABASE. This was a Go-side comparison
+	// against the last accepted step followed by an unconditional write, and
+	// every concurrent presentation of one code passed the comparison —
+	// measured at eight of eight. The guard is now in the WHERE clause, so
+	// exactly one caller can win, and losing is a replay.
+	fresh := false
+	if ok {
+		var aerr error
+		fresh, aerr = u.creds.AdvanceCredentialStep(ctx, cred.ID, step)
+		if aerr != nil {
+			// A guard that cannot be recorded has not been applied. Refusing
+			// is the only safe answer: the alternative is accepting a code
+			// that nothing prevents being replayed.
+			return nil, apperr.ErrInternal.Wrap(aerr)
+		}
+	}
+	if !ok || !fresh {
 		u.audit.Emit(ctx, auditdomain.AuditEvent{
 			TenantID: state.TenantID, ActorID: state.IdentityID,
 			ActorKind: "identity", Action: "auth.mfa", Result: "deny",
@@ -100,10 +115,6 @@ func (u *verifyMfaInteractor) Execute(ctx context.Context, in VerifyMfaInput) (*
 		})
 		return nil, apperr.ErrMfaInvalid
 	}
-	// Replay guard: persist the accepted step; a code may be accepted once.
-	_ = u.creds.UpdateCredentialParams(ctx, cred.ID,
-		jsonx.Must(map[string]uint64{"last_step": step}))
-
 	tenant, err := u.tenants.TenantByID(ctx, state.TenantID)
 	if err != nil {
 		return nil, apperr.ErrInternal.Wrap(err)
@@ -159,18 +170,3 @@ func (u *verifyMfaInteractor) openState(ctx context.Context, token string) (*aut
 }
 
 // stepIsFresh enforces monotonic TOTP acceptance.
-func (u *verifyMfaInteractor) stepIsFresh(params []byte, step uint64) bool {
-	var p map[string]json.RawMessage
-	if err := json.Unmarshal(params, &p); err != nil {
-		return true
-	}
-	raw, ok := p["last_step"]
-	if !ok {
-		return true
-	}
-	last, err := strconv.ParseUint(string(raw), 10, 64)
-	if err != nil {
-		return true
-	}
-	return step > last
-}

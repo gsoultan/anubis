@@ -133,3 +133,28 @@ WHERE id = (
        AND c.secret = $2
      LIMIT 1)
 RETURNING id::text AS id`)
+
+// AdvanceCredentialStep is the TOTP single-use guard: it succeeds only when
+// the step is strictly newer than the last one accepted, so replaying a code
+// inside its own validity window updates nothing and the caller refuses.
+//
+// The comparison is in the WHERE, not in Go, deliberately — the same reason
+// the control plane's AdvanceTotpStep is written this way. A read-then-write
+// lets EVERY concurrent presentation of one code pass the read: measured at
+// eight of eight before this existed, which is not a narrow race but the
+// whole request window.
+//
+// jsonb_typeof guards the cast. params is written only by enrolment and by
+// this statement, both of which store a number, so a non-numeric value is
+// unreachable through the API — but a cast that can raise on stored data
+// would turn corruption into a 500 on every second-factor check. Treating it
+// as 0 accepts one code and replaces it with a valid number, so the guard
+// still holds and the row heals.
+var AdvanceCredentialStep = storm.SQLExec(`
+UPDATE credentials
+   SET params = jsonb_set(COALESCE(params, '{}'::jsonb), '{last_step}', to_jsonb($2::bigint)),
+       updated_at = now()
+ WHERE id = $1
+   AND COALESCE(
+         CASE WHEN jsonb_typeof(params->'last_step') = 'number'
+              THEN (params->>'last_step')::bigint END, 0) < $2`)

@@ -7,10 +7,13 @@ import (
 
 	auditdomain "github.com/gsoultan/anubis/internal/audit/domain"
 	auditport "github.com/gsoultan/anubis/internal/audit/port"
+	authdomain "github.com/gsoultan/anubis/internal/auth/domain"
 	authport "github.com/gsoultan/anubis/internal/auth/port"
 	"github.com/gsoultan/anubis/internal/platform/crypto/accesstoken"
 	"github.com/gsoultan/anubis/internal/platform/crypto/secret"
+	"github.com/gsoultan/anubis/internal/shared/apperr"
 	"github.com/gsoultan/anubis/internal/shared/authctx"
+	"github.com/gsoultan/anubis/internal/shared/jsonx"
 	tenancyport "github.com/gsoultan/anubis/internal/tenancy/port"
 )
 
@@ -41,9 +44,22 @@ func (u *revokeInteractor) Execute(ctx context.Context, token, hint string) erro
 		if err != nil || info == nil {
 			return nil
 		}
-		_, _ = u.refresh.RevokeRefreshFamily(ctx, info.FamilyID)
-		if _, err := u.sessions.RevokeSession(ctx, info.TenantID, info.SessionID, "token_revoked"); err == nil {
-			_, _ = u.refresh.RevokeRefreshBySessions(ctx, []string{info.SessionID})
+		// These errors were discarded, so a revocation that failed returned
+		// success to the caller AND recorded result=allow. RFC 7009 wants an
+		// unknown token to look like a successful revocation — that is the
+		// `return nil` above — but it does not ask us to claim we revoked a
+		// token we did not. A caller told "revoked" does not retry.
+		if _, rerr := u.refresh.RevokeRefreshFamily(ctx, info.FamilyID); rerr != nil {
+			u.auditRevokeFailed(ctx, info, "family")
+			return apperr.ErrInternal.Wrap(rerr)
+		}
+		if _, rerr := u.sessions.RevokeSession(ctx, info.TenantID, info.SessionID, "token_revoked"); rerr != nil {
+			u.auditRevokeFailed(ctx, info, "session")
+			return apperr.ErrInternal.Wrap(rerr)
+		}
+		if _, rerr := u.refresh.RevokeRefreshBySessions(ctx, []string{info.SessionID}); rerr != nil {
+			u.auditRevokeFailed(ctx, info, "session_tokens")
+			return apperr.ErrInternal.Wrap(rerr)
 		}
 		u.audit.Emit(ctx, auditdomain.AuditEvent{
 			TenantID: info.TenantID, ActorKind: "service",
@@ -78,4 +94,16 @@ func (u *revokeInteractor) Execute(ctx context.Context, token, hint string) erro
 		}
 	}
 	return nil
+}
+
+// auditRevokeFailed records a revocation that was asked for and did not
+// happen. Separate from the allow event so a search for "was this token
+// revoked" cannot match an attempt.
+func (u *revokeInteractor) auditRevokeFailed(ctx context.Context, info *authdomain.RefreshInfo, stage string) {
+	u.audit.Emit(ctx, auditdomain.AuditEvent{
+		TenantID: info.TenantID, ActorKind: "service",
+		SessionID: info.SessionID, Action: "token.revoke", Result: "error",
+		IP:     authctx.ClientIP(ctx),
+		Detail: jsonx.Must(map[string]string{"type": "refresh", "failed_at": stage}),
+	})
 }

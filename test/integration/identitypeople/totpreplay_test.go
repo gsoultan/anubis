@@ -1,0 +1,95 @@
+//go:build integration
+
+package identitypeople
+
+import (
+	"context"
+	"fmt"
+	"sync"
+	"testing"
+	"time"
+
+	credentialdomain "github.com/gsoultan/anubis/internal/identity/domain/credential"
+)
+
+func totpCred(t *testing.T, name string) string {
+	t.Helper()
+	r := repo(t)
+	ctx := context.Background()
+	id := newIdentity(t, r, name)
+	credID, err := r.CreateCredential(ctx, credentialdomain.CredentialInput{
+		IdentityID: id, TenantID: tenant, Kind: "totp", Params: []byte(`{"last_step":10}`),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return credID
+}
+
+// A TOTP code may be accepted ONCE. verify_mfa_interactor.go says so in a
+// comment and then reads the last accepted step, compares it in Go, and
+// writes the new one — with nothing between the read and the write.
+//
+// The control plane implements the same guard correctly and its comment names
+// this exact failure: "read-then-write would let two presentations of the
+// same code both pass the read". Two concurrent submissions of one code both
+// see the old step, both pass, and both proceed to mint a session.
+func TestOneCodeCannotBeAcceptedTwice(t *testing.T) {
+	r := repo(t)
+	ctx := context.Background()
+
+	// Rounds with a fresh credential each: the window between the read and
+	// the write is small, so one pair of goroutines rarely lands in it.
+	// Widening the contention is what makes this deterministic, exactly as
+	// it was for the statement-cache race.
+	const (
+		rounds    = 25
+		attempts  = 8
+		firstStep = uint64(11)
+	)
+
+	for round := 0; round < rounds; round++ {
+		credID := totpCred(t, fmt.Sprintf("zztotp%d%d", time.Now().UnixNano()%1_000_000, round))
+		owner := ownerOf(t, credID)
+
+		start := make(chan struct{})
+		var wg sync.WaitGroup
+		accepted := make(chan struct{}, attempts)
+		for i := 0; i < attempts; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				<-start
+				// Exactly what the interactor does now: ask the database
+				// to record the step, and treat losing as a replay.
+				if _, err := r.ActiveCredentialOfKind(ctx, owner, "totp"); err != nil {
+					return
+				}
+				won, err := r.AdvanceCredentialStep(ctx, credID, firstStep)
+				if err != nil || !won {
+					return
+				}
+				accepted <- struct{}{}
+			}()
+		}
+		close(start)
+		wg.Wait()
+		close(accepted)
+
+		if n := len(accepted); n != 1 {
+			t.Fatalf("round %d: the same code was accepted %d times; "+
+				"a TOTP code may be accepted once", round, n)
+		}
+	}
+}
+
+// ownerOf returns the identity a credential belongs to.
+func ownerOf(t *testing.T, credID string) string {
+	t.Helper()
+	r := repo(t)
+	id, _, _, err := r.CredentialOwner(context.Background(), credID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return id
+}

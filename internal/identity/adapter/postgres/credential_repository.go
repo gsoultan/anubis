@@ -181,3 +181,17 @@ func (s *Repository) ConsumeRecoveryCode(ctx context.Context, identityID, codeHa
 	}
 	return row.ID, nil
 }
+
+// AdvanceCredentialStep records an accepted TOTP step, and reports whether
+// THIS caller was the one that recorded it.
+//
+// false means somebody else got there first with the same or a newer step —
+// a replay. The decision is the database's, because a read-then-write in Go
+// lets every concurrent presentation of one code pass.
+func (s *Repository) AdvanceCredentialStep(ctx context.Context, id string, step uint64) (bool, error) {
+	n, err := identityrquery.AdvanceCredentialStep.Exec(ctx, s.ex(ctx), id, int64(step))
+	if err != nil {
+		return false, database.MapErr(err)
+	}
+	return n > 0, nil
+}

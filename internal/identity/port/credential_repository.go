@@ -19,6 +19,11 @@ type CredentialRepository interface {
 	// happens to be active when it is read.
 	UpdateCredentialSecret(ctx context.Context, id, secret, kid string) error
 	UpdateCredentialParams(ctx context.Context, id string, params []byte) error
+	// AdvanceCredentialStep records an accepted TOTP step and reports
+	// whether this caller recorded it. false is a REPLAY: somebody already
+	// used this code. The comparison belongs to the database because a
+	// read-then-write in Go lets every concurrent presentation pass.
+	AdvanceCredentialStep(ctx context.Context, id string, step uint64) (bool, error)
 	ActiveCredentialOfKind(ctx context.Context, identityID, kind string) (*credential.Credential, error)
 	ActiveCredentialKinds(ctx context.Context, identityID string) ([]string, error)
 	TouchCredentialUsed(ctx context.Context, id string, signCounter int64)

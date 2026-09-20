@@ -221,6 +221,14 @@ UPDATE consents SET withdrawn_at = now()
 WHERE id = $1 AND tenant_id = $2 AND withdrawn_at IS NULL`)
 	storm.RegisterStatement(`
 UPDATE credentials
+   SET params = jsonb_set(COALESCE(params, '{}'::jsonb), '{last_step}', to_jsonb($2::bigint)),
+       updated_at = now()
+ WHERE id = $1
+   AND COALESCE(
+         CASE WHEN jsonb_typeof(params->'last_step') = 'number'
+              THEN (params->>'last_step')::bigint END, 0) < $2`)
+	storm.RegisterStatement(`
+UPDATE credentials
 SET last_used_at = now(),
     sign_counter = GREATEST(sign_counter, $2),
     updated_at = now()
