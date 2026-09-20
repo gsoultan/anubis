@@ -5,6 +5,7 @@ package e2e
 import (
 	"context"
 	"fmt"
+	"html"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -842,6 +843,8 @@ func TestTheRenderedSecondFactorFormCanBeSubmitted(t *testing.T) {
 		"browser\n%s", resp.StatusCode, firstBytes(out, 400))
 }
 
+var continueLink = regexp.MustCompile(`<a href="(/v1/authorize[^"]*)"`)
+
 var setupKey = regexp.MustCompile(`<label for="k">Setup key</label>\s*<p class="sub"><code>([A-Z2-7]+)</code></p>`)
 
 // A member the deadline refuses must be able to comply without leaving the
@@ -898,12 +901,11 @@ func TestABrowserCanEnrolTheFactorItIsRefusedFor(t *testing.T) {
 	}
 	passwordStep := func() (*http.Client, *http.Response, string) {
 		t.Helper()
-		client, csrf := signinPage(t)
-		resp := postLoginForm(t, client, url.Values{
-			"tenant": {tenant}, "realm": {realmCode},
-			"username": {username}, "password": {password},
-			"csrf": {csrf},
-		})
+		client, form := signinPageForm(t)
+		form.Set("realm", realmCode)
+		form.Set("username", username)
+		form.Set("password", password)
+		resp := postLoginForm(t, client, form)
 		return client, resp, readAll(t, resp)
 	}
 
@@ -967,5 +969,183 @@ func TestABrowserCanEnrolTheFactorItIsRefusedFor(t *testing.T) {
 	if signedIn(done) == "" {
 		t.Fatalf("the factor enrolled through the browser did not complete a "+
 			"sign-in (status %d):\n%s", done.StatusCode, firstBytes(doneBody, 500))
+	}
+}
+
+// Inside the grace period the browser must sign somebody in AND tell them
+// what is coming.
+//
+// The API returns the deadline and the missing factors on every sign-in
+// inside the grace period. The browser returned nothing: that response
+// redirects straight back to the application, so there was nowhere to put a
+// warning, and a member who only ever used SSO met the policy for the first
+// time on the day it refused them. The runway the deadline exists to provide
+// did not reach them.
+//
+// Both properties are asserted here, because either alone is a regression:
+// a warning that blocks is not a grace period, and a grace period that says
+// nothing is not a warning.
+func TestTheBrowserWarnsInsideTheGracePeriod(t *testing.T) {
+	requireServer(t)
+	ctx := context.Background()
+	token := platformLogin(t)
+	admin := anubisv1connect.NewTenantAdminServiceClient(http.DefaultClient, baseURL)
+	idAdmin := anubisv1connect.NewIdentityAdminServiceClient(http.DefaultClient, baseURL)
+
+	realmCode := fmt.Sprintf("bgrace%d", time.Now().UnixNano()%100_000_000)
+	deadline := time.Now().Add(72 * time.Hour)
+	if _, err := admin.CreateRealm(ctx, operatorBearer(connect.NewRequest(&anubisv1.CreateRealmRequest{
+		Realm: &anubisv1.Realm{
+			Code: realmCode, Kind: "internal", DisplayName: "Browser grace period",
+			MinAssurance:    1,
+			AllowedFactors:  []string{"password", "totp"},
+			RequiredFactors: []string{"password", "totp"},
+			SessionTtl:      "8 hours", AccessTokenTtl: "10 minutes",
+			RefreshTokenTtl:         "30 days",
+			FactorEnrolmentDeadline: deadline.Unix(),
+		},
+	}), token)); err != nil {
+		t.Fatalf("create realm: %v", err)
+	}
+
+	username := fmt.Sprintf("bgracee-%d", time.Now().UnixNano())
+	const password = "browser-grace-password-1234"
+	if _, err := idAdmin.CreateIdentity(ctx, operatorBearer(connect.NewRequest(&anubisv1.CreateIdentityRequest{
+		Realm: realmCode, Username: username, Password: password,
+	}), token)); err != nil {
+		t.Fatalf("create identity: %v", err)
+	}
+
+	client, form := signinPageForm(t)
+	form.Set("realm", realmCode)
+	form.Set("username", username)
+	form.Set("password", password)
+	resp := postLoginForm(t, client, form)
+	body := readAll(t, resp)
+	resp.Body.Close()
+
+	// 1. Signed in. The grace period must not refuse anybody.
+	var signedIn bool
+	for _, c := range resp.Cookies() {
+		if strings.Contains(c.Name, "anubis_sso") && c.Value != "" {
+			signedIn = true
+		}
+	}
+	if !signedIn {
+		t.Fatalf("the grace period refused a browser sign-in (status %d):\n%s",
+			resp.StatusCode, firstBytes(body, 400))
+	}
+
+	// 2. And warned, naming the date and the factor.
+	if !strings.Contains(body, deadline.Format("2 January 2006")) {
+		t.Fatalf("signed in inside the grace period without naming the deadline "+
+			"(status %d):\n%s", resp.StatusCode, firstBytes(body, 600))
+	}
+	if !strings.Contains(strings.ToLower(body), "authenticator") {
+		t.Fatalf("warned without saying what to enrol:\n%s", firstBytes(body, 600))
+	}
+
+	// 3. The warning is skippable, and skipping it lands where the sign-in
+	//    was going. A warning that strands the caller is worse than none.
+	cont := continueLink.FindStringSubmatch(body)
+	if cont == nil {
+		t.Fatalf("the warning offered no way to continue:\n%s", firstBytes(body, 600))
+	}
+	onward, err := client.Get(baseURL + html.UnescapeString(cont[1]))
+	if err != nil {
+		t.Fatalf("continue: %v", err)
+	}
+	defer onward.Body.Close()
+	if loc := onward.Header.Get("Location"); !strings.Contains(loc, "code=") {
+		t.Fatalf("continuing from the warning did not issue a code (status %d, location %q)",
+			onward.StatusCode, loc)
+	}
+}
+
+// And the offer on that warning has to work: a member who complies early is
+// enrolled and sent on, not asked for the password they just used.
+func TestEnrolingFromTheWarningContinuesTheSignIn(t *testing.T) {
+	requireServer(t)
+	ctx := context.Background()
+	token := platformLogin(t)
+	admin := anubisv1connect.NewTenantAdminServiceClient(http.DefaultClient, baseURL)
+	idAdmin := anubisv1connect.NewIdentityAdminServiceClient(http.DefaultClient, baseURL)
+
+	realmCode := fmt.Sprintf("bearly%d", time.Now().UnixNano()%100_000_000)
+	if _, err := admin.CreateRealm(ctx, operatorBearer(connect.NewRequest(&anubisv1.CreateRealmRequest{
+		Realm: &anubisv1.Realm{
+			Code: realmCode, Kind: "internal", DisplayName: "Early complier",
+			MinAssurance:    1,
+			AllowedFactors:  []string{"password", "totp"},
+			RequiredFactors: []string{"password", "totp"},
+			SessionTtl:      "8 hours", AccessTokenTtl: "10 minutes",
+			RefreshTokenTtl:         "30 days",
+			FactorEnrolmentDeadline: time.Now().Add(72 * time.Hour).Unix(),
+		},
+	}), token)); err != nil {
+		t.Fatalf("create realm: %v", err)
+	}
+	username := fmt.Sprintf("bearlye-%d", time.Now().UnixNano())
+	const password = "browser-early-password-1234"
+	if _, err := idAdmin.CreateIdentity(ctx, operatorBearer(connect.NewRequest(&anubisv1.CreateIdentityRequest{
+		Realm: realmCode, Username: username, Password: password,
+	}), token)); err != nil {
+		t.Fatalf("create identity: %v", err)
+	}
+
+	client, form := signinPageForm(t)
+	form.Set("realm", realmCode)
+	form.Set("username", username)
+	form.Set("password", password)
+	warned := postLoginForm(t, client, form)
+	warnBody := readAll(t, warned)
+	warned.Body.Close()
+	if !strings.Contains(warnBody, `name="enrol_now"`) {
+		t.Fatalf("the warning did not offer to enrol (status %d):\n%s",
+			warned.StatusCode, firstBytes(warnBody, 600))
+	}
+
+	// "Set it up now" — the form's own fields plus the button that was clicked.
+	choice := formFields(warnBody)
+	choice.Set("enrol_now", "1")
+	offered := postLoginForm(t, client, choice)
+	offerBody := readAll(t, offered)
+	offered.Body.Close()
+	m := setupKey.FindStringSubmatch(offerBody)
+	if m == nil {
+		t.Fatalf("no setup key offered to somebody complying early (status %d):\n%s",
+			offered.StatusCode, firstBytes(offerBody, 600))
+	}
+	secret := decodeBase32(t, m[1])
+
+	enrolForm := formFields(offerBody)
+	waitForNextStep()
+	enrolForm.Set("code", totp.Generate(secret, time.Now(), totp.DefaultStep, totp.DefaultDigits))
+	done := postLoginForm(t, client, enrolForm)
+	doneBody := readAll(t, done)
+	done.Body.Close()
+
+	if !strings.Contains(doneBody, "recovery codes") {
+		t.Fatalf("enrolling early returned no recovery codes (status %d):\n%s",
+			done.StatusCode, firstBytes(doneBody, 600))
+	}
+	// Already signed in before enrolling, so the password must not be asked
+	// for again — complying early cannot cost more than skipping.
+	if strings.Contains(doneBody, `name="password"`) {
+		t.Fatalf("after enrolling early the page asked for the password again:\n%s",
+			firstBytes(doneBody, 600))
+	}
+	cont := continueLink.FindStringSubmatch(doneBody)
+	if cont == nil {
+		t.Fatalf("no way onward after enrolling early:\n%s", firstBytes(doneBody, 600))
+	}
+	onward, err := client.Get(baseURL + html.UnescapeString(cont[1]))
+	if err != nil {
+		t.Fatalf("continue: %v", err)
+	}
+	defer onward.Body.Close()
+	if loc := onward.Header.Get("Location"); !strings.Contains(loc, "code=") {
+		t.Fatalf("continuing after enrolling did not issue a code (status %d, location %q)",
+			onward.StatusCode, loc)
 	}
 }

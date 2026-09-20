@@ -226,6 +226,13 @@ func (h *OIDCHandler) LoginForm(w http.ResponseWriter, r *http.Request) {
 		h.completeEnrolment(w, r, tenantSlug, realmCode, enrolTok, r.PostFormValue("code"))
 		return
 	}
+	// "Set it up now" on the grace-period warning. No token stands for the
+	// password here because a session already does: this member is signed in,
+	// and the SSO cookie is the proof.
+	if r.PostFormValue("enrol_now") != "" {
+		h.enrolFromSession(w, r, tenantSlug, realmCode)
+		return
+	}
 
 	// Every property of a password sign-in — uniform failure timing, the
 	// realm's allowed factors, a blocked identity, the KDF rehash, the deny
@@ -257,7 +264,7 @@ func (h *OIDCHandler) LoginForm(w http.ResponseWriter, r *http.Request) {
 		// The realm requires a factor this member never enrolled and the date
 		// for enrolling it has passed. No session — and a way to comply, or
 		// the policy is unsatisfiable by exactly the people it applies to.
-		h.promptForEnrolment(w, r, tenantSlug, realmCode, d, enrolmentMessage(d.Missing))
+		h.promptForEnrolment(w, r, tenantSlug, realmCode, d, enrolmentMessage(d.Missing), "")
 		return
 	}
 
@@ -271,6 +278,15 @@ func (h *OIDCHandler) LoginForm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if d.Due {
+		// Signed in, and told why that will stop working. This is the only
+		// moment the browser gets: the ordinary path redirects straight back
+		// to the application, which is why a member who only uses SSO used to
+		// meet an enrol-or-deny policy for the first time on the day it
+		// refused them.
+		h.warnEnrolmentDue(w, r, tenantSlug, realmCode, d)
+		return
+	}
 	h.establishBrowserSession(w, r, d.Tenant, d.Realm, d.Identity, []string{"pwd"}, "password")
 }
 
@@ -337,6 +353,28 @@ func (h *OIDCHandler) establishBrowserSession(
 	tenant *tenancydomain.TenantRef, realm *identitydomain.Realm,
 	identity *identitydomain.Identity, amr []string, detail string,
 ) {
+	sessionID := h.openBrowserSession(w, r, tenant, realm, identity, amr, detail)
+	if sessionID == "" {
+		return
+	}
+	h.issueCode(w, r, tenant, identity.ID, sessionID,
+		r.PostFormValue("client_id"), r.PostFormValue("redirect_uri"),
+		r.PostFormValue("state"), r.PostFormValue("code_challenge"),
+		r.PostFormValue("code_challenge_method"), r.PostFormValue("nonce"))
+}
+
+// openBrowserSession creates the session row, sets the __Host- cookie and
+// writes the audit event. It returns the session id, or "" when it has
+// already written an error response.
+//
+// Separate from issuing the code because one caller has something to say
+// first: a member inside the grace period IS signed in, and the page that
+// tells them so is the only chance the browser gets to mention the deadline.
+func (h *OIDCHandler) openBrowserSession(
+	w http.ResponseWriter, r *http.Request,
+	tenant *tenancydomain.TenantRef, realm *identitydomain.Realm,
+	identity *identitydomain.Identity, amr []string, detail string,
+) string {
 	sess, err := h.sessions.CreateSession(r.Context(), authdomain.SessionInput{
 		IdentityID: identity.ID, TenantID: tenant.ID,
 		AMR: amr, IP: authctx.ClientIP(r.Context()),
@@ -346,24 +384,21 @@ func (h *OIDCHandler) establishBrowserSession(
 	})
 	if err != nil {
 		apihttp.WriteError(w, r, apperr.ErrInternal.Wrap(err))
-		return
+		return ""
 	}
 	cookieSecret, err := secret.New(32)
 	if err != nil {
 		apihttp.WriteError(w, r, apperr.ErrInternal.Wrap(err))
-		return
+		return ""
 	}
 	if err := h.sessions.SetSessionCookieHash(r.Context(), sess.ID, secret.Hash(cookieSecret)); err != nil {
 		apihttp.WriteError(w, r, apperr.ErrInternal.Wrap(err))
-		return
+		return ""
 	}
 	h.cookies.set(w, r, ssoCookieBase, cookieSecret, int(realm.SessionTTL/time.Second))
 	h.auth.AuditLogin(r.Context(), tenant, identity, signin.SurfaceBrowser,
 		"allow", detail, sess.ID)
-	h.issueCode(w, r, tenant, identity.ID, sess.ID,
-		r.PostFormValue("client_id"), r.PostFormValue("redirect_uri"),
-		r.PostFormValue("state"), r.PostFormValue("code_challenge"),
-		r.PostFormValue("code_challenge_method"), r.PostFormValue("nonce"))
+	return sess.ID
 }
 
 // resubmit rebuilds the page data from the flow fields the form posted back,
@@ -388,15 +423,24 @@ func (h *OIDCHandler) resubmit(r *http.Request, tenantSlug, realmCode, msg strin
 // useless on a page: "totp" is not a thing anybody outside this system has
 // heard of.
 func enrolmentMessage(missing []string) string {
+	if len(missing) == 0 {
+		return "This realm requires a second factor that this account does not have."
+	}
+	return "This realm requires " + factorNames(missing) +
+		", which this account has not set up. Enrol one, then sign in again."
+}
+
+// factorNames renders factor KINDS as something a person has heard of.
+// "totp" is fine in a policy and useless on a page.
+func factorNames(missing []string) string {
 	names := make([]string, 0, len(missing))
 	for _, m := range missing {
 		names = append(names, factorName(m))
 	}
 	if len(names) == 0 {
-		return "This realm requires a second factor that this account does not have."
+		return "a second factor"
 	}
-	return "This realm requires " + strings.Join(names, " and ") +
-		", which this account has not set up. Enrol one, then sign in again."
+	return strings.Join(names, " and ")
 }
 
 func factorName(kind string) string {
@@ -563,6 +607,14 @@ type loginPageData struct {
 	// RecoveryCodes are shown exactly once, above the sign-in form, because
 	// that is the only moment they exist in readable form.
 	RecoveryCodes []string
+	// WarnDeadline turns the page into the grace-period warning: signed in,
+	// and this is the date it stops working. WarnFactors names what to enrol.
+	WarnDeadline string
+	WarnFactors  string
+	// ContinueURL re-enters /v1/authorize, which finds the SSO cookie and
+	// issues the code. Set whenever the page is shown to somebody who is
+	// already signed in.
+	ContinueURL string
 }
 
 // loginCSRFTTL bounds how long a rendered sign-in page stays submittable.
@@ -591,7 +643,9 @@ func (h *OIDCHandler) renderLogin(w http.ResponseWriter, r *http.Request, tenant
 		Cfg: cfg, Kind: "signin", LoginCSRF: csrf,
 		EnrolToken: data.EnrolToken, EnrolKey: data.EnrolKey,
 		EnrolURI: template.URL(data.EnrolURI), RecoveryCodes: data.RecoveryCodes,
-		Tenant: data.Tenant, Realm: data.Realm, ClientID: data.ClientID,
+		WarnDeadline: data.WarnDeadline, WarnFactors: data.WarnFactors,
+		ContinueURL: data.ContinueURL,
+		Tenant:      data.Tenant, Realm: data.Realm, ClientID: data.ClientID,
 		RedirectURI: data.RedirectURI, State: data.State,
 		Challenge: data.Challenge, Method: data.Method, Nonce: data.Nonce,
 		Error: data.Error, MFAToken: data.MFAToken,
@@ -764,7 +818,7 @@ const browserEnrolTTL = 15 * time.Minute
 // credential. The grant never reaches the browser at all.
 func (h *OIDCHandler) promptForEnrolment(
 	w http.ResponseWriter, r *http.Request,
-	tenantSlug, realmCode string, d signin.Decision, msg string,
+	tenantSlug, realmCode string, d signin.Decision, msg, continueURL string,
 ) {
 	challenge, err := h.granter.Grant(d.Tenant, d.Realm, d.Identity, d.Missing)
 	if err != nil {
@@ -791,6 +845,10 @@ func (h *OIDCHandler) promptForEnrolment(
 			"identity_id":      d.Identity.ID,
 			"grant":            challenge.GrantToken,
 			"enrollment_token": pending.EnrollmentToken,
+			// Set when the member is ALREADY signed in and enrolling by
+			// choice inside the grace period. Empty when they were refused,
+			// because then there is no session to continue to.
+			"continue_url": continueURL,
 		}), h.clock.Now().Add(browserEnrolTTL)); err != nil {
 		apihttp.WriteError(w, r, apperr.ErrInternal.Wrap(err))
 		return
@@ -822,6 +880,7 @@ func (h *OIDCHandler) completeEnrolment(w http.ResponseWriter, r *http.Request, 
 		IdentityID      string `json:"identity_id"`
 		Grant           string `json:"grant"`
 		EnrollmentToken string `json:"enrollment_token"`
+		ContinueURL     string `json:"continue_url"`
 	}
 	if err := json.Unmarshal(payload, &claim); err != nil || claim.Grant == "" {
 		restart("Please sign in again.")
@@ -844,5 +903,94 @@ func (h *OIDCHandler) completeEnrolment(w http.ResponseWriter, r *http.Request, 
 	// challenged for it — which is also the proof that the enrolment took.
 	data := h.resubmit(r, tenantSlug, realmCode, "")
 	data.RecoveryCodes = done.RecoveryCodes
+	// A member who enrolled from the grace-period warning is already signed
+	// in: send them on rather than asking for the password they just used.
+	// Punishing somebody for complying early is how a rollout stalls. The
+	// refused member has no session, so they get the sign-in form instead.
+	data.ContinueURL = claim.ContinueURL
 	h.renderLogin(w, r, "", data)
+}
+
+// warnEnrolmentDue signs the member in and then says what is coming.
+//
+// The API returns the deadline and the missing factors on every sign-in
+// inside the grace period. The browser had nowhere to put that, because the
+// success path redirects to the application in the same response — so this
+// page exists to be that place, and it offers the enrolment rather than only
+// describing it.
+//
+// It is shown on every sign-in during the grace period, and it is always
+// skippable. A grace period that blocks is not a grace period; one that stays
+// quiet is not a warning.
+func (h *OIDCHandler) warnEnrolmentDue(w http.ResponseWriter, r *http.Request, tenantSlug, realmCode string, d signin.Decision) {
+	if h.openBrowserSession(w, r, d.Tenant, d.Realm, d.Identity, []string{"pwd"}, "password") == "" {
+		return
+	}
+	data := h.resubmit(r, tenantSlug, realmCode, "")
+	data.WarnFactors = factorNames(d.Missing)
+	data.WarnDeadline = d.Deadline.Format("2 January 2006")
+	data.ContinueURL = h.continueURL(r, tenantSlug)
+	h.renderLogin(w, r, d.Tenant.ID, data)
+}
+
+// enrolFromSession starts enrolment for somebody the warning page just signed
+// in. The SSO cookie identifies them, so nothing on the form has to.
+func (h *OIDCHandler) enrolFromSession(w http.ResponseWriter, r *http.Request, tenantSlug, realmCode string) {
+	raw := h.cookies.get(r, ssoCookieBase)
+	if raw == "" {
+		h.renderLogin(w, r, "", h.resubmit(r, tenantSlug, realmCode, "Please sign in again."))
+		return
+	}
+	view, err := h.sessions.SessionByCookieHash(r.Context(), secret.Hash(raw))
+	if err != nil {
+		h.renderLogin(w, r, "", h.resubmit(r, tenantSlug, realmCode, "Please sign in again."))
+		return
+	}
+	tenant, err := h.tenants.TenantBySlug(r.Context(), tenantSlug)
+	if err != nil || tenant == nil || tenant.ID != view.TenantID {
+		h.renderLogin(w, r, "", h.resubmit(r, tenantSlug, realmCode, "Please sign in again."))
+		return
+	}
+	realm, err := h.realms.RealmByCode(r.Context(), tenant.ID, realmCode)
+	if err != nil || realm == nil {
+		h.renderLogin(w, r, "", h.resubmit(r, tenantSlug, realmCode, "Please sign in again."))
+		return
+	}
+	identity, err := h.ids.Identity(r.Context(), tenant.ID, view.IdentityID)
+	if err != nil || identity == nil {
+		h.renderLogin(w, r, "", h.resubmit(r, tenantSlug, realmCode, "Please sign in again."))
+		return
+	}
+	// Which factors are outstanding is the authenticator's question, not this
+	// handler's — re-deriving it here is the duplication that put a hole in
+	// this file twice.
+	missing, err := h.auth.MissingFactors(r.Context(), realm, identity.ID)
+	if err != nil {
+		apihttp.WriteError(w, r, apperr.ErrInternal.Wrap(err))
+		return
+	}
+	h.promptForEnrolment(w, r, tenantSlug, realmCode, signin.Decision{
+		Tenant: tenant, Realm: realm, Identity: identity, Missing: missing,
+	}, "", h.continueURL(r, tenantSlug))
+}
+
+// continueURL sends the browser back through /v1/authorize, which finds the
+// SSO cookie and issues the code without prompting. Re-entering the front
+// door keeps PKCE and redirect_uri validation where they already live rather
+// than copying them here.
+func (h *OIDCHandler) continueURL(r *http.Request, tenantSlug string) string {
+	q := url.Values{}
+	q.Set("tenant", tenantSlug)
+	q.Set("client_id", r.PostFormValue("client_id"))
+	q.Set("redirect_uri", r.PostFormValue("redirect_uri"))
+	q.Set("response_type", "code")
+	q.Set("code_challenge", r.PostFormValue("code_challenge"))
+	q.Set("code_challenge_method", r.PostFormValue("code_challenge_method"))
+	if v := r.PostFormValue("state"); v != "" {
+		q.Set("state", v)
+	}
+	if v := r.PostFormValue("nonce"); v != "" {
+		q.Set("nonce", v)
+	}
+	return "/v1/authorize?" + q.Encode()
 }

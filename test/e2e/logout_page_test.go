@@ -209,7 +209,7 @@ func TestLoginRefusesACrossSiteSubmission(t *testing.T) {
 // The GET matters: a sign-in form is only submittable by somebody who was
 // served one, which is the property TestLoginRefusesACrossSiteSubmission
 // exists to keep.
-func signinPage(t *testing.T) (*http.Client, string) {
+func signinPageBody(t *testing.T) (*http.Client, string) {
 	t.Helper()
 	ctx := context.Background()
 	token := platformLogin(t)
@@ -239,13 +239,37 @@ func signinPage(t *testing.T) (*http.Client, string) {
 	if err != nil {
 		t.Fatalf("render sign-in page: %v", err)
 	}
-	body := readAll(t, resp)
+	return client, readAll(t, resp)
+}
+
+func signinPage(t *testing.T) (*http.Client, string) {
+	t.Helper()
+	client, body := signinPageBody(t)
 	m := csrfField.FindStringSubmatch(body)
 	if m == nil || m[1] == "" {
 		t.Fatalf("no CSRF token in the sign-in form (status %d): a cross-site "+
-			"form would be indistinguishable from a real one", resp.StatusCode)
+			"form would be indistinguishable from a real one", len(body))
 	}
 	return client, m[1]
+}
+
+// signinPageForm returns the rendered form itself, so a test submits what the
+// page carries instead of the three fields it happens to remember. Anything
+// built from those hidden fields later — the continue URL after a
+// grace-period warning, for one — is empty otherwise, and the failure looks
+// like a server bug.
+func signinPageForm(t *testing.T) (*http.Client, url.Values) {
+	t.Helper()
+	client, body := signinPageBody(t)
+	form := formFields(body)
+	if form.Get("csrf") == "" {
+		t.Fatalf("the sign-in form carried no CSRF token:\n%s", body[:min(len(body), 400)])
+	}
+	if form.Get("client_id") == "" {
+		t.Fatal("the sign-in form carried no client_id — a flow resumed from " +
+			"it would have nowhere to go")
+	}
+	return client, form
 }
 
 // The page's own form must still work, or the check closes the hole by

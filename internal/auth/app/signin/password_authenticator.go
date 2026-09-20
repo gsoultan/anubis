@@ -163,6 +163,22 @@ func (a *PasswordAuthenticator) Authenticate(ctx context.Context, in LoginInput,
 	return d
 }
 
+// MissingFactors reports which factors the realm requires that this identity
+// has not enrolled.
+//
+// The hosted page needs this after a sign-in has already succeeded, to offer
+// enrolment to somebody inside the grace period. It goes through the same
+// fail-closed lookup as Authenticate rather than being re-derived at the
+// transport — that re-derivation is what this type exists to prevent.
+func (a *PasswordAuthenticator) MissingFactors(ctx context.Context, realm *identitydomain.Realm, identityID string) ([]string, error) {
+	enrolled, err := a.enrolledFactorKinds(ctx, identityID)
+	if err != nil {
+		return nil, err
+	}
+	_, missing := realm.EnrolmentStanceFor(enrolled, a.clock.Now())
+	return missing, nil
+}
+
 // AuditLogin writes one auth.login event. Both doors call it so the record
 // has one shape whichever was used, and the surface says which.
 func (a *PasswordAuthenticator) AuditLogin(

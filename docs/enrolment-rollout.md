@@ -130,7 +130,7 @@ spend the grant differently:
 | | API (`AuthService.Login`) | Hosted page (`POST /v1/login`) |
 | :--- | :--- | :--- |
 | Past the deadline, nothing enrolled | Refused, with a 15-minute grant token the caller drives `BeginTOTP`/`ConfirmTOTP` with | Refused, and the page drives the same two calls itself — setup key, `otpauth://` link, code field, recovery codes shown once |
-| Inside the grace period | Signed in, plus the deadline and the missing factors | Signed in, **no warning** |
+| Inside the grace period | Signed in, plus the deadline and the missing factors | Signed in, then shown the date and the missing factor, with "set it up now" and "continue without it" |
 
 The browser never receives the grant. It holds an opaque single-use handle
 (`one_time_tokens.kind = 'browser_enrol'`) and the server keeps the grant,
@@ -148,14 +148,23 @@ forbids the library that would otherwise do it — so the key is tapped
 (`otpauth://` opens an authenticator on a phone) or typed. That is the one
 place this flow is worse than a commercial IdP's.
 
-### The gap that is left
+### What the warning does, and why it is skippable
 
-A member inside the grace period is told nothing by the browser. That response
-redirects straight back to the application, so there is nowhere to put a
-warning without interrupting a sign-in that is working — which is a product
-decision, not an oversight. Until it is made, step 2's announcement is doing
-that work: assume browser-only populations learn of the deadline from you and
-not from the product.
+Inside the grace period the page writes the session and the cookie FIRST and
+then renders the warning, so both buttons lead somewhere and neither blocks.
+"Continue without it" re-enters `/v1/authorize`, which finds the cookie and
+issues the code without prompting — the warning cannot strand anybody.
+
+It appears on every sign-in during the grace period. That is deliberate: the
+deadline is a date the operator chose, and the runway only works if the people
+on it know about it. If that proves too noisy for a long grace period, the
+place to change it is here, not by making the warning conditional on something
+the page cannot see.
+
+Somebody who enrols from the warning is **not asked for their password
+again** — they already hold a session, and charging extra for complying early
+is how a rollout stalls. They get the recovery codes and a "continue" link.
+Somebody who was refused has no session, so they enrol and then sign in.
 
 ## Rolling back
 

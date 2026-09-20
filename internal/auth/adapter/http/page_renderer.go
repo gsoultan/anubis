@@ -67,6 +67,11 @@ type PageView struct {
 	// RecoveryCodes are rendered above the sign-in form and exist in
 	// readable form exactly once. Shown here or never.
 	RecoveryCodes []string
+	// WarnDeadline turns the page into the grace-period warning; ContinueURL
+	// is how somebody already signed in gets on with what they came for.
+	WarnDeadline string
+	WarnFactors  string
+	ContinueURL  string
 	// Realms offered by the picker, when the page enables it.
 	Realms []RealmChoice
 	// RegistrationURL is empty unless the realm actually allows

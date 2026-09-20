@@ -74,10 +74,16 @@ Deliberate, not rough edges:
   form and the next attempt is challenged for the factor, which is also how
   the test proves the enrolment took.
 
-**Still open:** a member inside the grace period is warned by the API and not
-by the browser, because that response redirects straight back to the
-application. A warning there interrupts a sign-in that works, so it is a
-product decision rather than an oversight.
+**The grace period warns now too.** The page writes the session and cookie
+FIRST and then renders the warning, so "set it up now" and "continue without
+it" both lead somewhere and neither blocks — `openBrowserSession` exists
+apart from `issueCode` for exactly this. Continue re-enters `/v1/authorize`,
+which finds the cookie and issues the code, so PKCE and redirect_uri checks
+are not copied anywhere. Enrolling from the warning does NOT re-ask for the
+password: that member already holds a session, and charging extra for
+complying early is how a rollout stalls.
+
+**Still missing: a QR code.** Only that.
 
 ## The hosted second-factor step had never worked
 

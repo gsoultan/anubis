@@ -199,6 +199,16 @@ body{padding:0;align-content:stretch;justify-items:stretch}
            pattern="[0-9]*" maxlength="8" required autofocus
            autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="go">
     <button type="submit">{{$.Cfg.Copy.SubmitLabel}}</button>
+    {{else if $.WarnDeadline}}
+    {{/* Grace period. This member IS signed in — the session and cookie were
+         written before this page — so both buttons lead somewhere and neither
+         blocks. Skippable by design: a grace period that refuses is not a
+         grace period. */}}
+    <p class="sub">You are signed in. From {{$.WarnDeadline}} this account will
+       also need {{$.WarnFactors}}, and signing in without one will stop
+       working.</p>
+    <button type="submit" name="enrol_now" value="1">Set it up now</button>
+    <p class="links"><a href="{{$.ContinueURL}}">Continue without it</a></p>
     {{else}}
     {{if $.RecoveryCodes}}
     {{/* Shown once, because once is when they exist: Anubis keeps only their
@@ -208,6 +218,11 @@ body{padding:0;align-content:stretch;justify-items:stretch}
        they are shown once and cannot be retrieved later.</p>
     <p class="sub">{{range $.RecoveryCodes}}<code>{{.}}</code><br>{{end}}</p>
     {{end}}
+    {{if and $.RecoveryCodes $.ContinueURL}}
+    {{/* Enrolled from the grace-period warning, so the session already
+         exists. Asking for the password again would punish complying early. */}}
+    <p class="links"><a href="{{$.ContinueURL}}">Continue</a></p>
+    {{else}}
     {{if and $.Cfg.Features.ShowRealmPicker $.Realms}}
       <label for="realm">Directory</label>
       <select id="realm" name="realm">
@@ -230,6 +245,7 @@ body{padding:0;align-content:stretch;justify-items:stretch}
     {{end}}
     {{if $.Error}}<div class="err">{{$.Error}}</div>{{end}}
     <button type="submit">{{$.Cfg.Copy.SubmitLabel}}</button>
+    {{end}}
     {{end}}
   </form>
 {{else}}
