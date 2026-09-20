@@ -50,20 +50,49 @@ shorter and was the wrong one to keep. `enrolledFactorKinds` now returns an
 error and a failed lookup is `StepDeny`, pinned by
 `TestAFactorLookupFailureRefusesRatherThanAdmits` (mutation-checked).
 
-## What the browser still cannot do
+## What the browser can and cannot do
 
-`auth_pages.kind` permits `signin` and `signout` only — there is **no hosted
-enrolment page**. So:
+Both doors refuse an overdue member and both offer the same way out, but they
+spend the grant differently. The API returns it and the caller drives
+`BeginTOTP`/`ConfirmTOTP`; the hosted page drives those itself and keeps the
+grant server-side behind an opaque single-use handle
+(`one_time_tokens.kind = 'browser_enrol'`, migration 0050). The grant never
+reaches the browser.
 
-- Past the deadline: the API returns a 15-minute grant token to enrol with;
-  the browser can only refuse and name the missing factor.
-- Inside the grace period: the API returns the deadline and missing factors;
-  the browser shows **nothing**, because that response redirects straight
-  back to the application.
+Deliberate, not rough edges:
 
-A browser-only member therefore meets an enrol-or-deny policy for the first
-time on the day it refuses them. Drive those populations through an operator
-until a `kind = 'enrol'` page exists. See `docs/enrolment-rollout.md`.
+- **A wrong code discards the key.** `ConfirmTOTP` spends the enrolment token
+  *before* verifying the code, so a stolen grant buys one guess rather than
+  thousands. The page issues a fresh key and says so.
+- **No QR.** A QR encoder is a feature of its own under ADR-0002; the
+  `otpauth://` link opens an authenticator on a phone, and the key is typed
+  anywhere else.
+- **`PageView.EnrolURI` is `template.URL`.** `html/template` rewrites
+  `otpauth://` to `#ZgotmplZ` — the scheme is not on its allowlist — and the
+  link renders dead with no error anywhere. See [[page-rendering]].
+- **Enrolling is not signing in.** Recovery codes render above the ordinary
+  form and the next attempt is challenged for the factor, which is also how
+  the test proves the enrolment took.
+
+**Still open:** a member inside the grace period is warned by the API and not
+by the browser, because that response redirects straight back to the
+application. A warning there interrupts a sign-in that works, so it is a
+product decision rather than an oversight.
+
+## The hosted second-factor step had never worked
+
+Separate from the above and found the same day. The MFA branch of the form
+carries `mfa_token` and a code and NO credentials, while `LoginForm` required
+a valid password on every submit — so a browser typed a correct code and got
+"Invalid username or password".
+
+It passed CI for weeks because the test posted a username and password the
+form does not contain. **Parse the rendered form and submit that**; see
+[[tests-must-submit-what-the-ui-renders]]. `mfa_token` now stands for the
+password as the template always claimed, the identity comes from the token's
+payload rather than the form, and `CanAuthenticate` is re-checked at the
+submit that issues the session because an identity can be blocked between the
+two requests.
 
 ## Adjacent bug, same day
 
