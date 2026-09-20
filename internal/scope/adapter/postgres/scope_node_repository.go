@@ -73,7 +73,8 @@ func nodeRecords(rows []scopermquery.NodeRow) []scopedomain.ScopeNodeRecord {
 }
 
 func nodeRecord(r scopermquery.NodeRow) scopedomain.ScopeNodeRecord {
-	return scopeNodeFromRow(r.ID, r.AxisCode, r.NodeType, nstr(r.ParentID),
+	return scopeNodeFromRow(r.ID, r.AxisCode, r.NodeType,
+		nstr(r.ParentID), nstr(r.ParentAxisCode),
 		r.Slug, r.Name, nstr(r.ExternalRef), r.Status, r.IsAxisRoot, r.ChildCount)
 }
 

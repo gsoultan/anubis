@@ -7,10 +7,17 @@ import (
 )
 
 type ScopeNodeRecord struct {
-	ID          string
-	Axis        string
-	NodeType    string
-	ParentID    string
+	ID       string
+	Axis     string
+	NodeType string
+	ParentID string
+	// ParentAxis is the axis the PARENT sits on, which is not always this
+	// node's. The forest crosses axes — org -> unit -> workplace is one tree
+	// with three axis codes — so a consumer holding ParentID alone cannot place
+	// the parent without reading every axis and looking it up.
+	//
+	// Empty at a root, and empty for a node whose parent was not readable.
+	ParentAxis  string
 	Slug        string
 	Name        string
 	ExternalRef string

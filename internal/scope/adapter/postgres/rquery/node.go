@@ -12,23 +12,45 @@ import (
 // include_archived. A count that disagreed with the listing would draw a
 // chevron that expands to nothing, or hide one that had children behind it.
 type NodeRow struct {
-	ID          string
-	TenantID    string
-	ParentID    runtime.Null[string]
-	IsAxisRoot  bool
-	Status      string
-	AxisCode    string
-	NodeType    string
-	Slug        string
-	Name        string
-	ExternalRef runtime.Null[string]
-	ChildCount  int32
+	ID         string
+	TenantID   string
+	ParentID   runtime.Null[string]
+	IsAxisRoot bool
+	Status     string
+	AxisCode   string
+	// ParentAxisCode is the axis the PARENT sits on, which is not always this
+	// node's: the forest crosses axes. Null at a root.
+	ParentAxisCode runtime.Null[string]
+	NodeType       string
+	Slug           string
+	Name           string
+	ExternalRef    runtime.Null[string]
+	ChildCount     int32
 }
 
+// nodeCols is shared by every node read, so parent_axis_code lands in all of
+// them at once.
+//
+// The parent's AXIS, not only its id. The forest crosses axes —
+// org -> unit -> workplace is one tree with three axis codes — so a consumer
+// holding `parent_id` alone cannot say which axis the parent is on without
+// reading every axis and looking it up. That is a full-forest fetch to answer a
+// question one join already knows, and it is what a client building a scope
+// graph out of a single-axis listing was forced into.
+//
+// LEFT JOIN: an axis root has no parent, and its parent axis is null rather
+// than absent.
 const nodeCols = `
        n.id::text AS id, n.tenant_id::text AS tenant_id,
-       n.parent_id::text AS parent_id, n.is_axis_root, n.status, n.axis_code,
+       n.parent_id::text AS parent_id, p.axis_code AS parent_axis_code,
+       n.is_axis_root, n.status, n.axis_code,
        n.node_type, n.slug, n.name, n.external_ref`
+
+// nodeParentJoin accompanies nodeCols. Separate because each query writes its
+// own FROM, and a join silently missing from one would return a null parent
+// axis that reads exactly like a root.
+const nodeParentJoin = `
+LEFT JOIN scope_nodes p ON p.id = n.parent_id`
 
 // ListScopeNodes is KEYSET paged, ordered by (name, id).
 //
@@ -45,7 +67,7 @@ SELECT` + nodeCols + `,
        (SELECT count(*) FROM scope_nodes c
          WHERE c.parent_id = n.id
            AND ($6::boolean OR c.status = 'active'))::int AS child_count
-FROM scope_nodes n
+FROM scope_nodes n` + nodeParentJoin + `
 WHERE n.tenant_id = $1
   AND n.axis_code = $2
   AND ($3::uuid IS NULL OR n.parent_id = $3)
@@ -63,12 +85,12 @@ const activeChildCount = `
 
 var GetScopeNode = storm.SQL[NodeRow](`
 SELECT` + nodeCols + `,` + activeChildCount + `
-FROM scope_nodes n
+FROM scope_nodes n` + nodeParentJoin + `
 WHERE n.id = $1 AND n.tenant_id = $2`)
 
 var GetScopeNodeByRef = storm.SQL[NodeRow](`
 SELECT` + nodeCols + `,` + activeChildCount + `
-FROM scope_nodes n
+FROM scope_nodes n` + nodeParentJoin + `
 WHERE n.tenant_id = $1 AND n.axis_code = $2 AND n.external_ref = $3`)
 
 // ScopeNodesByIDs resolves a HANDFUL of nodes by id — the names beside the
@@ -76,7 +98,7 @@ WHERE n.tenant_id = $1 AND n.axis_code = $2 AND n.external_ref = $3`)
 // render a dozen labels.
 var ScopeNodesByIDs = storm.SQL[NodeRow](`
 SELECT` + nodeCols + `,` + activeChildCount + `
-FROM scope_nodes n
+FROM scope_nodes n` + nodeParentJoin + `
 WHERE n.tenant_id = $1 AND n.id = ANY($2::uuid[])`)
 
 // AncestorRow is one step of the chain from an axis root down to a node.

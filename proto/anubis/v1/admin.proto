@@ -345,6 +345,14 @@ message ScopeNode {
   string axis = 2;
   string node_type = 3;
   string parent_id = 4;
+  // The axis the PARENT sits on, which is not always this node's: the forest
+  // crosses axes, and org -> unit -> workplace is one tree with three axis
+  // codes. Without it a client holding parent_id alone cannot place the parent
+  // without reading every axis and looking it up — a full-forest fetch to
+  // answer what one join already knows.
+  //
+  // Empty at a root.
+  string parent_axis = 11;
   string slug = 5;
   string name = 6;
   string external_ref = 7;

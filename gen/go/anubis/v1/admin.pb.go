@@ -2598,16 +2598,24 @@ func (x *CreateScopeNodeTypeResponse) GetType() *ScopeNodeType {
 }
 
 type ScopeNode struct {
-	state       protoimpl.MessageState `protogen:"open.v1"`
-	Id          string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	Axis        string                 `protobuf:"bytes,2,opt,name=axis,proto3" json:"axis,omitempty"`
-	NodeType    string                 `protobuf:"bytes,3,opt,name=node_type,json=nodeType,proto3" json:"node_type,omitempty"`
-	ParentId    string                 `protobuf:"bytes,4,opt,name=parent_id,json=parentId,proto3" json:"parent_id,omitempty"`
-	Slug        string                 `protobuf:"bytes,5,opt,name=slug,proto3" json:"slug,omitempty"`
-	Name        string                 `protobuf:"bytes,6,opt,name=name,proto3" json:"name,omitempty"`
-	ExternalRef string                 `protobuf:"bytes,7,opt,name=external_ref,json=externalRef,proto3" json:"external_ref,omitempty"`
-	Status      string                 `protobuf:"bytes,8,opt,name=status,proto3" json:"status,omitempty"`
-	IsAxisRoot  bool                   `protobuf:"varint,9,opt,name=is_axis_root,json=isAxisRoot,proto3" json:"is_axis_root,omitempty"`
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	Id       string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Axis     string                 `protobuf:"bytes,2,opt,name=axis,proto3" json:"axis,omitempty"`
+	NodeType string                 `protobuf:"bytes,3,opt,name=node_type,json=nodeType,proto3" json:"node_type,omitempty"`
+	ParentId string                 `protobuf:"bytes,4,opt,name=parent_id,json=parentId,proto3" json:"parent_id,omitempty"`
+	// The axis the PARENT sits on, which is not always this node's: the forest
+	// crosses axes, and org -> unit -> workplace is one tree with three axis
+	// codes. Without it a client holding parent_id alone cannot place the parent
+	// without reading every axis and looking it up — a full-forest fetch to
+	// answer what one join already knows.
+	//
+	// Empty at a root.
+	ParentAxis  string `protobuf:"bytes,11,opt,name=parent_axis,json=parentAxis,proto3" json:"parent_axis,omitempty"`
+	Slug        string `protobuf:"bytes,5,opt,name=slug,proto3" json:"slug,omitempty"`
+	Name        string `protobuf:"bytes,6,opt,name=name,proto3" json:"name,omitempty"`
+	ExternalRef string `protobuf:"bytes,7,opt,name=external_ref,json=externalRef,proto3" json:"external_ref,omitempty"`
+	Status      string `protobuf:"bytes,8,opt,name=status,proto3" json:"status,omitempty"`
+	IsAxisRoot  bool   `protobuf:"varint,9,opt,name=is_axis_root,json=isAxisRoot,proto3" json:"is_axis_root,omitempty"`
 	// How many children this node has. The console gates its expand chevron on
 	// this, so a ScopeNode that does not carry it is a tree that cannot open.
 	ChildCount    int32 `protobuf:"varint,10,opt,name=child_count,json=childCount,proto3" json:"child_count,omitempty"`
@@ -2669,6 +2677,13 @@ func (x *ScopeNode) GetNodeType() string {
 func (x *ScopeNode) GetParentId() string {
 	if x != nil {
 		return x.ParentId
+	}
+	return ""
+}
+
+func (x *ScopeNode) GetParentAxis() string {
+	if x != nil {
+		return x.ParentAxis
 	}
 	return ""
 }
@@ -14361,12 +14376,14 @@ const file_anubis_v1_admin_proto_rawDesc = "" +
 	"\x1aCreateScopeNodeTypeRequest\x12,\n" +
 	"\x04type\x18\x01 \x01(\v2\x18.anubis.v1.ScopeNodeTypeR\x04type\"K\n" +
 	"\x1bCreateScopeNodeTypeResponse\x12,\n" +
-	"\x04type\x18\x01 \x01(\v2\x18.anubis.v1.ScopeNodeTypeR\x04type\"\x8f\x02\n" +
+	"\x04type\x18\x01 \x01(\v2\x18.anubis.v1.ScopeNodeTypeR\x04type\"\xb0\x02\n" +
 	"\tScopeNode\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04axis\x18\x02 \x01(\tR\x04axis\x12\x1b\n" +
 	"\tnode_type\x18\x03 \x01(\tR\bnodeType\x12\x1b\n" +
-	"\tparent_id\x18\x04 \x01(\tR\bparentId\x12\x12\n" +
+	"\tparent_id\x18\x04 \x01(\tR\bparentId\x12\x1f\n" +
+	"\vparent_axis\x18\v \x01(\tR\n" +
+	"parentAxis\x12\x12\n" +
 	"\x04slug\x18\x05 \x01(\tR\x04slug\x12\x12\n" +
 	"\x04name\x18\x06 \x01(\tR\x04name\x12!\n" +
 	"\fexternal_ref\x18\a \x01(\tR\vexternalRef\x12\x16\n" +

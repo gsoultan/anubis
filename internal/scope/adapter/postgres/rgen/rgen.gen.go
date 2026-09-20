@@ -61,12 +61,14 @@ RETURNING id::text AS id`)
 	storm.RegisterStatement(`
 SELECT
        n.id::text AS id, n.tenant_id::text AS tenant_id,
-       n.parent_id::text AS parent_id, n.is_axis_root, n.status, n.axis_code,
+       n.parent_id::text AS parent_id, p.axis_code AS parent_axis_code,
+       n.is_axis_root, n.status, n.axis_code,
        n.node_type, n.slug, n.name, n.external_ref,
        (SELECT count(*) FROM scope_nodes c
          WHERE c.parent_id = n.id
            AND ($6::boolean OR c.status = 'active'))::int AS child_count
 FROM scope_nodes n
+LEFT JOIN scope_nodes p ON p.id = n.parent_id
 WHERE n.tenant_id = $1
   AND n.axis_code = $2
   AND ($3::uuid IS NULL OR n.parent_id = $3)
@@ -80,29 +82,35 @@ LIMIT $8`)
 	storm.RegisterStatement(`
 SELECT
        n.id::text AS id, n.tenant_id::text AS tenant_id,
-       n.parent_id::text AS parent_id, n.is_axis_root, n.status, n.axis_code,
+       n.parent_id::text AS parent_id, p.axis_code AS parent_axis_code,
+       n.is_axis_root, n.status, n.axis_code,
        n.node_type, n.slug, n.name, n.external_ref,
        (SELECT count(*) FROM scope_nodes c
          WHERE c.parent_id = n.id AND c.status = 'active')::int AS child_count
 FROM scope_nodes n
+LEFT JOIN scope_nodes p ON p.id = n.parent_id
 WHERE n.id = $1 AND n.tenant_id = $2`)
 	storm.RegisterStatement(`
 SELECT
        n.id::text AS id, n.tenant_id::text AS tenant_id,
-       n.parent_id::text AS parent_id, n.is_axis_root, n.status, n.axis_code,
+       n.parent_id::text AS parent_id, p.axis_code AS parent_axis_code,
+       n.is_axis_root, n.status, n.axis_code,
        n.node_type, n.slug, n.name, n.external_ref,
        (SELECT count(*) FROM scope_nodes c
          WHERE c.parent_id = n.id AND c.status = 'active')::int AS child_count
 FROM scope_nodes n
+LEFT JOIN scope_nodes p ON p.id = n.parent_id
 WHERE n.tenant_id = $1 AND n.axis_code = $2 AND n.external_ref = $3`)
 	storm.RegisterStatement(`
 SELECT
        n.id::text AS id, n.tenant_id::text AS tenant_id,
-       n.parent_id::text AS parent_id, n.is_axis_root, n.status, n.axis_code,
+       n.parent_id::text AS parent_id, p.axis_code AS parent_axis_code,
+       n.is_axis_root, n.status, n.axis_code,
        n.node_type, n.slug, n.name, n.external_ref,
        (SELECT count(*) FROM scope_nodes c
          WHERE c.parent_id = n.id AND c.status = 'active')::int AS child_count
 FROM scope_nodes n
+LEFT JOIN scope_nodes p ON p.id = n.parent_id
 WHERE n.tenant_id = $1 AND n.id = ANY($2::uuid[])`)
 	storm.RegisterStatement(`
 SELECT (scope_move_node($1, $2) IS NULL) AS done`)
@@ -170,14 +178,15 @@ func scanNodeRow(rv [][]byte, r *scopermquery.NodeRow, sl *runtime.Slab) error {
 	r.ID = sl.Str(rv[0])
 	r.TenantID = sl.Str(rv[1])
 	r.ParentID = runtime.NullText(rv[2], sl)
-	r.IsAxisRoot = runtime.Bool(rv[3])
-	r.Status = sl.Str(rv[4])
-	r.AxisCode = sl.Str(rv[5])
-	r.NodeType = sl.Str(rv[6])
-	r.Slug = sl.Str(rv[7])
-	r.Name = sl.Str(rv[8])
-	r.ExternalRef = runtime.NullText(rv[9], sl)
-	r.ChildCount = runtime.Int4(rv[10])
+	r.ParentAxisCode = runtime.NullText(rv[3], sl)
+	r.IsAxisRoot = runtime.Bool(rv[4])
+	r.Status = sl.Str(rv[5])
+	r.AxisCode = sl.Str(rv[6])
+	r.NodeType = sl.Str(rv[7])
+	r.Slug = sl.Str(rv[8])
+	r.Name = sl.Str(rv[9])
+	r.ExternalRef = runtime.NullText(rv[10], sl)
+	r.ChildCount = runtime.Int4(rv[11])
 	return nil
 }
 
