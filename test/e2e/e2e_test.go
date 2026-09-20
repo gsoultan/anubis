@@ -9,8 +9,10 @@ package e2e
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"os"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -452,4 +454,16 @@ func signIn(t *testing.T, req *anubisv1.LoginRequest) *anubisv1.LoginResponse {
 		}
 		return resp.Msg
 	}
+}
+
+// slugSeq makes every slug a test invents unique for the whole run.
+//
+// `time.Now().UnixNano()%1_000_000` was not: that residue cycles every
+// millisecond, so two helpers called in the same run collided and the second
+// one failed with applications_tenant_id_slug_key. It reproduced only when
+// several tests ran together, which is the worst way for it to show up.
+var slugSeq atomic.Uint64
+
+func uniqueSlug(prefix string) string {
+	return fmt.Sprintf("%s-%d-%d", prefix, time.Now().UnixNano(), slugSeq.Add(1))
 }

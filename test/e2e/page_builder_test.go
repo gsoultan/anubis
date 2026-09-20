@@ -4,13 +4,11 @@ package e2e
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"strings"
 	"testing"
-	"time"
 
 	"connectrpc.com/connect"
 
@@ -29,7 +27,7 @@ func TestAuthPageLifecycle(t *testing.T) {
 	requireServer(t)
 	ctx := context.Background()
 	token := platformLogin(t)
-	slug := fmt.Sprintf("probe-%d", time.Now().UnixNano()%1_000_000)
+	slug := uniqueSlug("probe")
 
 	created, err := pageClient().CreateAuthPage(ctx, operatorBearer(connect.NewRequest(&anubisv1.CreateAuthPageRequest{
 		Page: &anubisv1.AuthPage{
@@ -120,7 +118,7 @@ func TestDefaultPageIsProtected(t *testing.T) {
 	}
 
 	// Promote a second page and confirm the previous default steps down.
-	slug := fmt.Sprintf("alt-%d", time.Now().UnixNano()%1_000_000)
+	slug := uniqueSlug("alt")
 	created, err := pageClient().CreateAuthPage(ctx, operatorBearer(connect.NewRequest(&anubisv1.CreateAuthPageRequest{
 		Page: &anubisv1.AuthPage{Kind: "signout", Slug: slug, Name: "Alt sign-out", ConfigJson: `{}`},
 	}), token))
@@ -193,7 +191,7 @@ func TestPageEscapesRatherThanRejectsText(t *testing.T) {
 	requireServer(t)
 	ctx := context.Background()
 	token := platformLogin(t)
-	slug := fmt.Sprintf("esc-%d", time.Now().UnixNano()%1_000_000)
+	slug := uniqueSlug("esc")
 
 	created, err := pageClient().CreateAuthPage(ctx, operatorBearer(connect.NewRequest(&anubisv1.CreateAuthPageRequest{
 		Page: &anubisv1.AuthPage{Kind: "signout", Slug: slug, Name: "Escaping probe",
@@ -266,7 +264,7 @@ func TestSignInPageRendersTheRealmPicker(t *testing.T) {
 	ctx := context.Background()
 	token := platformLogin(t)
 
-	slug := fmt.Sprintf("picker-%d", time.Now().UnixNano()%1_000_000)
+	slug := uniqueSlug("picker")
 	if _, err := pageClient().CreateAuthPage(ctx, operatorBearer(connect.NewRequest(&anubisv1.CreateAuthPageRequest{
 		Page: &anubisv1.AuthPage{
 			Kind: "signin", Slug: slug, Name: "Realm picker probe",
@@ -276,7 +274,7 @@ func TestSignInPageRendersTheRealmPicker(t *testing.T) {
 		t.Fatalf("create page: %v", err)
 	}
 
-	appSlug := fmt.Sprintf("picker-app-%d", time.Now().UnixNano()%1_000_000)
+	appSlug := uniqueSlug("picker-app")
 	if _, err := pageClient().CreateApplication(ctx, operatorBearer(connect.NewRequest(&anubisv1.CreateApplicationRequest{
 		Application: &anubisv1.Application{
 			Slug: appSlug, Name: "Realm picker probe", Kind: "spa",

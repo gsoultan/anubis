@@ -98,7 +98,7 @@ func TestLogoutRedirectMustBeRegistered(t *testing.T) {
 	token := platformLogin(t)
 
 	// Register an application that permits exactly one return address.
-	slug := fmt.Sprintf("logout-probe-%d", time.Now().UnixNano()%1_000_000)
+	slug := uniqueSlug("logout-probe")
 	const allowed = "https://allowed.example/after-logout"
 	if _, err := pageClient().CreateApplication(ctx, operatorBearer(connect.NewRequest(&anubisv1.CreateApplicationRequest{
 		Application: &anubisv1.Application{
@@ -214,7 +214,7 @@ func signinPage(t *testing.T) (*http.Client, string) {
 	ctx := context.Background()
 	token := platformLogin(t)
 
-	slug := fmt.Sprintf("csrf-app-%d", time.Now().UnixNano()%1_000_000)
+	slug := uniqueSlug("csrf-app")
 	if _, err := pageClient().CreateApplication(ctx, operatorBearer(connect.NewRequest(&anubisv1.CreateApplicationRequest{
 		Application: &anubisv1.Application{
 			Slug: slug, Name: "CSRF probe", Kind: "spa",
