@@ -101,6 +101,10 @@ type application struct {
 	// The one usecase two subsystems share: the admin RPC surface applies
 	// catalogs on request, the scheduler applies them on a clock.
 	authzAdmin authzadmin.AuthzAdminUsecase
+
+	// passwordAuth is the single implementation of "is this password good
+	// enough to let this identity in", shared by both login doors.
+	passwordAuth *signin.PasswordAuthenticator
 }
 
 func newApplication(ctx context.Context, cfg *config.Config, db *database.DB, logger *slog.Logger) (*application, error) {
@@ -133,6 +137,12 @@ func newApplication(ctx context.Context, cfg *config.Config, db *database.DB, lo
 	a.authzAdmin = authzadmin.NewAuthzAdminInteractor(a.control, a.clock.Now,
 		a.authz, a.authz, a.authz, a.authz,
 		a.authz, a.tenancy, a.tenancy, a.auth, a.auditor)
+	// One authenticator, two doors: AuthService.Login and the hosted sign-in
+	// page. A second instance would be a second place for the factor policy
+	// to differ, which is exactly how the browser door came to skip an
+	// enrolled factor and then to ignore a realm's enrolment deadline.
+	a.passwordAuth = signin.NewPasswordAuthenticator(a.tenancy, a.identity,
+		a.identity, a.identity, a.clock, a.auditor)
 	return a, nil
 }
 
@@ -177,8 +187,8 @@ func (a *application) registerRPC(rpc *http.ServeMux, opts connect.HandlerOption
 	// --- auth context -------------------------------------------------------
 	backchannel := sessionapp.NewBackchannelLogout(a.issuerURL, a.ring, a.tenancy,
 		authpg.NewHTTPBackchannelNotifier(logger), a.clock)
-	login := signin.NewLoginInteractor(a.tenancy, a.identity, a.identity, a.identity,
-		a.auth, a.auth, a.issuer, a.ring, a.auth, a.clock, a.auditor)
+	login := signin.NewLoginInteractor(a.passwordAuth, a.identity,
+		a.auth, a.auth, a.issuer, a.ring, a.auth, a.clock)
 	verifyMfa := mfa.NewVerifyMfaInteractor(a.ring, a.auth, a.identity, a.identity,
 		a.identity, a.tenancy, a.auth, a.issuer, a.auth, a.clock, a.auditor)
 	refresh := tokenapp.NewRefreshInteractor(a.auth, a.auth, a.tenancy, a.issuer, a.auth, a.auditor, logger)
@@ -308,8 +318,8 @@ func (a *application) registerHTTP(ctx context.Context, srv *apihttp.Server,
 	srv.HandleFunc("GET /.well-known/anubis-keys.json", wellKnown.Keys)
 	srv.HandleFunc("GET /.well-known/openid-configuration", wellKnown.OpenIDConfiguration)
 
-	oidc := authhttp.NewOIDCHandler(cfg.Issuer, a.tenancy, a.identity, a.identity,
-		a.identity, a.identity, a.auth, a.auth, a.tenancy, a.tenancy, a.auth,
+	oidc := authhttp.NewOIDCHandler(cfg.Issuer, a.passwordAuth, a.tenancy,
+		a.identity, a.identity, a.identity, a.auth, a.auth, a.tenancy, a.tenancy, a.auth,
 		cfg.DefaultTenant, cfg.Env == "prod", a.issuer, a.ring, a.clock, a.auditor, limiter, logger)
 	srv.HandleFunc("GET /v1/authorize", oidc.Authorize)
 	srv.HandleFunc("POST /v1/login", oidc.LoginForm)

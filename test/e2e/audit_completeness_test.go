@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"testing"
@@ -155,5 +156,87 @@ func TestFailedPlatformLoginIsRecorded(t *testing.T) {
 			t.Fatalf("no audit entry for the failed login of %q", who)
 		}
 		time.Sleep(250 * time.Millisecond)
+	}
+}
+
+// A failed sign-in through the browser must be recorded, exactly as one
+// through the API is.
+//
+// It never was. The hosted page was a second implementation of login and its
+// failure branch rendered an error and returned — there was no audit call
+// anywhere on it. So every wrong password typed into the page humans actually
+// use left no trace, while the same password through AuthService.Login was
+// recorded with a reason. An operator reading the audit log for an account
+// under attack would have seen a quiet account.
+//
+// The event is written by PasswordAuthenticator now, which is reached by both
+// doors, so neither can be the one that forgets.
+func TestFailedBrowserLoginIsRecorded(t *testing.T) {
+	requireServer(t)
+	ctx := context.Background()
+	adminToken := platformLogin(t)
+	before := droppedAudits(t)
+
+	username := fmt.Sprintf("audit-browser-%d", time.Now().UnixNano())
+	const password = "audit-browser-password-1234"
+	idAdmin := anubisv1connect.NewIdentityAdminServiceClient(http.DefaultClient, baseURL)
+	created, err := idAdmin.CreateIdentity(ctx, operatorBearer(connect.NewRequest(&anubisv1.CreateIdentityRequest{
+		Realm: "internal", Username: username, Password: password, AssuranceLevel: 1,
+	}), adminToken))
+	if err != nil {
+		t.Fatalf("create probe identity: %v", err)
+	}
+	identityID := created.Msg.GetIdentity().GetId()
+	if identityID == "" {
+		t.Fatal("created identity has no id")
+	}
+
+	// A real account, the wrong password, through the rendered page.
+	client, csrf := signinPage(t)
+	resp := postLoginForm(t, client, url.Values{
+		"tenant": {tenant}, "realm": {"internal"},
+		"username": {username}, "password": {"wrong-" + password},
+		"csrf": {csrf},
+	})
+	resp.Body.Close()
+	for _, c := range resp.Cookies() {
+		if strings.Contains(c.Name, "anubis_sso") && c.Value != "" {
+			t.Fatal("a wrong password signed the browser in")
+		}
+	}
+
+	admin := anubisv1connect.NewTenantAdminServiceClient(http.DefaultClient, baseURL)
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		got, qerr := admin.QueryAudit(ctx, operatorBearer(connect.NewRequest(&anubisv1.QueryAuditRequest{
+			ActorId: identityID, Action: "auth.login", PageSize: 50,
+		}), adminToken))
+		if qerr != nil {
+			t.Fatalf("query audit: %v", qerr)
+		}
+		for _, e := range got.Msg.Entries {
+			if e.Result != "deny" {
+				continue
+			}
+			// detail is jsonb, so Postgres re-renders what it stores and the
+			// spacing is its choice, not ours — match without it.
+			detail := strings.ReplaceAll(e.DetailJson, " ", "")
+			// The surface is the whole point: two doors write this event and
+			// an operator has to be able to tell which one was knocked on.
+			if !strings.Contains(detail, `"surface":"browser"`) {
+				t.Fatalf("a browser refusal was recorded without naming the door: %s", e.DetailJson)
+			}
+			if !strings.Contains(detail, "invalid_credentials") {
+				t.Fatalf("recorded without a reason: %s", e.DetailJson)
+			}
+			if after := droppedAudits(t); after != before {
+				t.Fatalf("audit events were dropped: %d -> %d", before, after)
+			}
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("no audit entry for a failed browser sign-in by %s (%s)", username, identityID)
+		}
+		time.Sleep(500 * time.Millisecond)
 	}
 }

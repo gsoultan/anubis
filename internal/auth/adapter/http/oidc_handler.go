@@ -8,18 +8,18 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	apihttp "github.com/gsoultan/anubis/internal/api/http"
 	auditdomain "github.com/gsoultan/anubis/internal/audit/domain"
 	auditport "github.com/gsoultan/anubis/internal/audit/port"
 	authapp "github.com/gsoultan/anubis/internal/auth/app"
+	"github.com/gsoultan/anubis/internal/auth/app/signin"
 	authdomain "github.com/gsoultan/anubis/internal/auth/domain"
 	authport "github.com/gsoultan/anubis/internal/auth/port"
 	identitydomain "github.com/gsoultan/anubis/internal/identity/domain"
-	"github.com/gsoultan/anubis/internal/identity/domain/credential"
 	identityport "github.com/gsoultan/anubis/internal/identity/port"
-	"github.com/gsoultan/anubis/internal/platform/crypto/kdf"
 	"github.com/gsoultan/anubis/internal/platform/crypto/keyring"
 	"github.com/gsoultan/anubis/internal/platform/crypto/secret"
 	"github.com/gsoultan/anubis/internal/platform/crypto/totp"
@@ -40,11 +40,15 @@ const (
 // flow with PKCE, the hosted login page, and the code exchange. Wire shapes
 // here are fixed by OIDC — that is why this lives on the stdlib mux.
 type OIDCHandler struct {
-	issuer        string
+	issuer string
+	// auth decides whether a password gets in. It is the SAME instance the
+	// Connect login service uses: this page is the second door onto one
+	// identity, and a policy it evaluated for itself was a policy it got
+	// wrong twice.
+	auth          *signin.PasswordAuthenticator
 	tenants       tenancyport.TenantRepository
 	realms        identityport.RealmRepository
 	realmsAdmin   identityport.RealmAdminRepository
-	ids           identityport.IdentityRepository
 	creds         identityport.CredentialRepository
 	sessions      authport.SessionRepository
 	onetime       authport.OneTimeRepository
@@ -67,10 +71,10 @@ type OIDCHandler struct {
 
 func NewOIDCHandler(
 	issuer string,
+	auth *signin.PasswordAuthenticator,
 	tenants tenancyport.TenantRepository,
 	realms identityport.RealmRepository,
 	realmsAdmin identityport.RealmAdminRepository,
-	ids identityport.IdentityRepository,
 	creds identityport.CredentialRepository,
 	sessions authport.SessionRepository,
 	onetime authport.OneTimeRepository,
@@ -87,8 +91,9 @@ func NewOIDCHandler(
 	logger *slog.Logger,
 ) *OIDCHandler {
 	return &OIDCHandler{
-		issuer: issuer, tenants: tenants, realms: realms, ids: ids,
-		creds: creds, sessions: sessions, onetime: onetime, apps: apps,
+		issuer: issuer, auth: auth, tenants: tenants, realms: realms,
+		realmsAdmin: realmsAdmin,
+		creds:       creds, sessions: sessions, onetime: onetime, apps: apps,
 		pages: pages, refresh: refresh, renderer: NewPageRenderer(),
 		defaultTenant: defaultTenant, issuerUC: issuerUC, ring: ring,
 		cookies: cookiePolicy{prod: prod}, clock: clock, audit: audit,
@@ -196,73 +201,78 @@ func (h *OIDCHandler) LoginForm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Uniform-timing rule holds on the form path too.
-	var identity *identitydomain.Identity
-	var credential *credential.Credential
-	var realm *identitydomain.Realm
-	tenant, err := h.tenants.TenantBySlug(r.Context(), tenantSlug)
-	if err == nil && tenant != nil {
-		realm, err = h.realms.RealmByCode(r.Context(), tenant.ID, realmCode)
-		if err == nil && realm != nil && realm.AllowsFactor("password") {
-			identity, _ = h.ids.IdentityForLogin(r.Context(), tenant.ID, realm.ID, username)
-			if identity != nil {
-				credential, _ = h.creds.PasswordCredential(r.Context(), identity.ID)
-			}
+	// Every property of a password sign-in — uniform failure timing, the
+	// realm's allowed factors, a blocked identity, the KDF rehash, the deny
+	// audit, an enrolled second factor and the realm's enrolment deadline — is
+	// decided by the authenticator the API door also calls. This handler used
+	// to re-derive all of it, and got two of them wrong.
+	d := h.auth.Authenticate(r.Context(), signin.LoginInput{
+		Tenant: tenantSlug, Realm: realmCode,
+		Username: username, Password: password,
+		ClientID: r.PostFormValue("client_id"),
+	}, signin.SurfaceBrowser)
+
+	switch d.Step {
+	case signin.StepDeny:
+		// One message for every credential refusal, as on the API door:
+		// which of them it was is precisely what an attacker is asking.
+		// An internal failure is the exception — telling somebody their
+		// password is wrong when the server could not check it sends them
+		// to reset a password that was fine.
+		msg := "Invalid username or password"
+		if apperr.AsError(d.Err).Code == apperr.ErrInternal.Code {
+			msg = "Sign-in is temporarily unavailable. Please try again."
 		}
-	}
-	hash := kdf.Dummy()
-	if credential != nil && credential.Secret != "" {
-		hash = credential.Secret
-	}
-	ok, _, kerr := kdf.Verify(password, hash)
-	if kerr != nil || identity == nil || credential == nil || !ok ||
-		identity.CanAuthenticate() != nil {
-		h.renderLogin(w, r, tenantID(tenant), loginPageData{
-			Tenant: tenantSlug, Realm: realmCode, ClientID: r.PostFormValue("client_id"),
-			RedirectURI: r.PostFormValue("redirect_uri"), State: r.PostFormValue("state"),
-			Challenge: r.PostFormValue("code_challenge"), Method: r.PostFormValue("code_challenge_method"),
-			Nonce: r.PostFormValue("nonce"), Page: r.PostFormValue("page"),
-			Error: "Invalid username or password",
-		})
+		h.renderLogin(w, r, tenantID(d.Tenant),
+			h.resubmit(r, tenantSlug, realmCode, msg))
+		return
+
+	case signin.StepEnrol:
+		// The realm requires a factor this member never enrolled and the date
+		// for enrolling it has passed. The API door answers with a grant token
+		// to enrol against; the hosted surface has no enrolment page to spend
+		// one at, so it refuses and names what is missing. A refusal nobody can
+		// act on is a support ticket.
+		h.renderLogin(w, r, tenantID(d.Tenant),
+			h.resubmit(r, tenantSlug, realmCode, enrolmentMessage(d.Missing)))
 		return
 	}
 
-	// SECOND FACTOR. This page used to go straight from password to session,
-	// while AuthService.Login refused the same sign-in — so an attacker with
-	// a stolen password could skip an enrolled authenticator simply by using
-	// the browser door. A factor belongs to the IDENTITY, not to the door.
-	//
-	// The rule matches the API exactly: enrolment is honoured on its own,
-	// before any realm policy, so whoever added an authenticator is asked for
-	// it either way.
+	// SECOND FACTOR. This page used to go straight from password to session
+	// while AuthService.Login refused the same sign-in, so an attacker with a
+	// stolen password could skip an enrolled authenticator by using the browser
+	// door. A factor belongs to the IDENTITY, not to the door — and now neither
+	// door decides that for itself.
 	amr := []string{"pwd"}
-	if mfaTok := r.PostFormValue("mfa_token"); mfaTok != "" {
+	if d.Step == signin.StepFactor {
+		mfaTok := r.PostFormValue("mfa_token")
+		if mfaTok == "" {
+			// First submit: ask for the factor instead of minting anything.
+			// No session, no cookie, no code.
+			h.promptForFactor(w, r, d.Tenant, d.Identity, d.Realm, "")
+			return
+		}
 		// Second submit: the code, carried with the single-use token that
 		// stands for the password check.
-		if err := h.verifyBrowserFactor(r, tenant, identity, mfaTok, r.PostFormValue("code")); err != nil {
+		if err := h.verifyBrowserFactor(r, d.Tenant, d.Identity, mfaTok, r.PostFormValue("code")); err != nil {
 			h.audit.Emit(r.Context(), auditdomain.AuditEvent{
-				TenantID: tenant.ID, ActorID: identity.ID, ActorKind: "identity",
+				TenantID: d.Tenant.ID, ActorID: d.Identity.ID, ActorKind: "identity",
 				Action: "auth.mfa", Result: "deny", IP: ip,
 				Detail: []byte(`{"surface":"browser","method":"totp"}`),
 			})
-			h.promptForFactor(w, r, tenant, identity, realm, "That code was not accepted.")
+			h.promptForFactor(w, r, d.Tenant, d.Identity, d.Realm, "That code was not accepted.")
 			return
 		}
 		amr = []string{"pwd", "otp"}
-	} else if h.identityHasFactor(r, identity) {
-		// First submit and a factor is enrolled: ask for it instead of
-		// minting anything. No session, no cookie, no code.
-		h.promptForFactor(w, r, tenant, identity, realm, "")
-		return
 	}
 
 	// Browser session + __Host- cookie (Secure; Path=/; no Domain).
 	sess, err := h.sessions.CreateSession(r.Context(), authdomain.SessionInput{
-		IdentityID: identity.ID, TenantID: tenant.ID,
+		IdentityID: d.Identity.ID, TenantID: d.Tenant.ID,
 		AMR: amr, IP: ip,
 		UserAgent:    authctx.UserAgent(r.Context()),
 		ActiveScopes: []byte("{}"),
-		ExpiresAt:    h.clock.Now().Add(realm.SessionTTL),
+		ExpiresAt:    h.clock.Now().Add(d.Realm.SessionTTL),
 	})
 	if err != nil {
 		apihttp.WriteError(w, r, apperr.ErrInternal.Wrap(err))
@@ -277,16 +287,65 @@ func (h *OIDCHandler) LoginForm(w http.ResponseWriter, r *http.Request) {
 		apihttp.WriteError(w, r, apperr.ErrInternal.Wrap(err))
 		return
 	}
-	h.cookies.set(w, r, ssoCookieBase, cookieSecret, int(realm.SessionTTL/time.Second))
-	h.audit.Emit(r.Context(), auditdomain.AuditEvent{
-		TenantID: tenant.ID, ActorID: identity.ID, ActorKind: "identity",
-		SessionID: sess.ID, Action: "auth.login", Result: "allow", IP: ip,
-		Detail: []byte(`{"surface":"browser"}`),
-	})
-	h.issueCode(w, r, tenant, identity.ID, sess.ID,
+	h.cookies.set(w, r, ssoCookieBase, cookieSecret, int(d.Realm.SessionTTL/time.Second))
+	detail := "password"
+	if len(amr) > 1 {
+		detail = "mfa"
+	}
+	// d.Due — signed in, but inside the grace period — is deliberately not
+	// surfaced: this response redirects straight back to the application, so
+	// there is nowhere to put a warning. Browser members meet the deadline at
+	// the refusal instead, which is later than the API door tells them, and is
+	// the gap a hosted enrolment page would close.
+	h.auth.AuditLogin(r.Context(), d.Tenant, d.Identity, signin.SurfaceBrowser,
+		"allow", detail, sess.ID)
+	h.issueCode(w, r, d.Tenant, d.Identity.ID, sess.ID,
 		r.PostFormValue("client_id"), r.PostFormValue("redirect_uri"),
 		r.PostFormValue("state"), r.PostFormValue("code_challenge"),
 		r.PostFormValue("code_challenge_method"), r.PostFormValue("nonce"))
+}
+
+// resubmit rebuilds the page data from the flow fields the form posted back,
+// so a re-render keeps the caller's OIDC parameters instead of dropping them
+// and stranding the sign-in.
+func (h *OIDCHandler) resubmit(r *http.Request, tenantSlug, realmCode, msg string) loginPageData {
+	return loginPageData{
+		Tenant: tenantSlug, Realm: realmCode,
+		ClientID:    r.PostFormValue("client_id"),
+		RedirectURI: r.PostFormValue("redirect_uri"),
+		State:       r.PostFormValue("state"),
+		Challenge:   r.PostFormValue("code_challenge"),
+		Method:      r.PostFormValue("code_challenge_method"),
+		Nonce:       r.PostFormValue("nonce"),
+		Page:        r.PostFormValue("page"),
+		Error:       msg,
+	}
+}
+
+// enrolmentMessage says which factor has to exist before this account signs
+// in again. The realm stores factor KINDS, which are fine in a policy and
+// useless on a page: "totp" is not a thing anybody outside this system has
+// heard of.
+func enrolmentMessage(missing []string) string {
+	names := make([]string, 0, len(missing))
+	for _, m := range missing {
+		names = append(names, factorName(m))
+	}
+	if len(names) == 0 {
+		return "This realm requires a second factor that this account does not have."
+	}
+	return "This realm requires " + strings.Join(names, " and ") +
+		", which this account has not set up. Enrol one, then sign in again."
+}
+
+func factorName(kind string) string {
+	switch kind {
+	case "totp":
+		return "an authenticator app"
+	case "device_key":
+		return "a device passkey"
+	}
+	return kind
 }
 
 func (h *OIDCHandler) issueCode(w http.ResponseWriter, r *http.Request, tenant *tenancydomain.TenantRef, identityID, sessionID, clientID, redirectURI, state, challenge, method, nonce string) {
@@ -506,24 +565,6 @@ func firstNonEmpty(a, b string) string {
 // enough to open an authenticator app, short enough that a token left in a
 // browser tab is not a standing credential.
 const browserFactorTTL = 5 * time.Minute
-
-// identityHasFactor reports whether an enrolled second factor exists.
-//
-// On error it answers TRUE. A lookup that failed is not evidence that nobody
-// enrolled anything, and the safe reading of "I could not tell" on this path
-// is to ask for the factor rather than to skip it.
-func (h *OIDCHandler) identityHasFactor(r *http.Request, identity *identitydomain.Identity) bool {
-	kinds, err := h.creds.ActiveCredentialKinds(r.Context(), identity.ID)
-	if err != nil {
-		return true
-	}
-	for _, k := range kinds {
-		if k == "totp" {
-			return true
-		}
-	}
-	return false
-}
 
 // promptForFactor mints the single-use token standing for the verified
 // password and re-renders the page asking for a code.

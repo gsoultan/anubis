@@ -116,6 +116,32 @@ Two safeguards are worth knowing about:
   identity. It is not a session, carries no scopes, and is issued only after
   the correct password was presented.
 
+## Both doors, and what the browser cannot do yet
+
+The policy is evaluated by one `signin.PasswordAuthenticator`, called by
+`AuthService.Login` and by the hosted sign-in page alike. That is deliberate
+and recent: until 2026-09-20 the page decided for itself and never asked about
+the deadline, so a realm in force refused API clients and admitted the same
+member through a browser.
+
+The two doors answer a refusal differently, and only one of them is complete:
+
+| | API (`AuthService.Login`) | Hosted page (`POST /v1/login`) |
+| :--- | :--- | :--- |
+| Past the deadline, nothing enrolled | Refused, with a 15-minute grant token to enrol against | Refused, naming the factor to enrol |
+| Inside the grace period | Signed in, plus the deadline and the missing factors | Signed in, **no warning** |
+
+The two gaps are the same gap: **there is no hosted enrolment page.**
+`auth_pages.kind` permits `signin` and `signout` and nothing else, so the
+browser has nowhere to spend a grant token and nowhere to show a warning
+before redirecting back to the application. A member who only ever uses SSO
+therefore meets this policy for the first time on the day it refuses them.
+
+Until that page exists, plan a rollout around it: step 1's measurement is what
+tells you how many people that is, and step 2's announcement is doing the work
+the product cannot. Enrol browser-only populations through an operator or the
+console rather than expecting them to self-serve.
+
 ## Rolling back
 
 Setting `factor_enrolment_deadline` back to NULL — or removing the factor

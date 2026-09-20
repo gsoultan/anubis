@@ -626,3 +626,119 @@ func postLoginForm(t *testing.T, client *http.Client, form url.Values) *http.Res
 		time.Sleep(3 * time.Second)
 	}
 }
+
+// A realm past its enrolment deadline refuses the API door. It must refuse
+// the browser door too.
+//
+// TestEnrolOrDenyRollout proves the policy through AuthService.Login.
+// The hosted page is the OTHER implementation of login, and it asked only
+// "does this identity hold a factor?" — never "does this realm still admit
+// somebody without one?". EnrolmentStanceFor had exactly one caller in the
+// whole tree, in the interactor.
+//
+// So a realm whose deadline had passed refused every API client and signed
+// the same member in through a browser, which is the door humans use. The
+// policy was void for precisely the population it was written for, and the
+// roadmap listed it under claims that are closed.
+func TestBrowserLoginHonoursTheEnrolmentDeadline(t *testing.T) {
+	requireServer(t)
+	ctx := context.Background()
+	token := platformLogin(t)
+	admin := anubisv1connect.NewTenantAdminServiceClient(http.DefaultClient, baseURL)
+	idAdmin := anubisv1connect.NewIdentityAdminServiceClient(http.DefaultClient, baseURL)
+
+	realmCode := fmt.Sprintf("benrol%d", time.Now().UnixNano()%100_000_000)
+	created, err := admin.CreateRealm(ctx, operatorBearer(connect.NewRequest(&anubisv1.CreateRealmRequest{
+		Realm: &anubisv1.Realm{
+			Code: realmCode, Kind: "internal", DisplayName: "Browser enrolment probe",
+			MinAssurance:    1,
+			AllowedFactors:  []string{"password", "totp"},
+			RequiredFactors: []string{"password", "totp"},
+			SessionTtl:      "8 hours", AccessTokenTtl: "10 minutes",
+			RefreshTokenTtl: "30 days",
+		},
+	}), token))
+	if err != nil {
+		t.Fatalf("create realm: %v", err)
+	}
+	realm := created.Msg.GetRealm()
+
+	username := fmt.Sprintf("benrolee-%d", time.Now().UnixNano())
+	const password = "browser-enrolee-password-1234"
+	if _, err := idAdmin.CreateIdentity(ctx, operatorBearer(connect.NewRequest(&anubisv1.CreateIdentityRequest{
+		Realm: realmCode, Username: username, Password: password,
+	}), token)); err != nil {
+		t.Fatalf("create identity: %v", err)
+	}
+
+	setDeadline := func(unix int64) {
+		t.Helper()
+		realm.FactorEnrolmentDeadline = unix
+		if _, uerr := admin.UpdateRealm(ctx, operatorBearer(connect.NewRequest(&anubisv1.UpdateRealmRequest{
+			Realm: realm,
+		}), token)); uerr != nil {
+			t.Fatalf("set deadline %d: %v", unix, uerr)
+		}
+	}
+	browserLogin := func() (*http.Response, string) {
+		t.Helper()
+		client, csrf := signinPage(t)
+		resp := postLoginForm(t, client, url.Values{
+			"tenant": {tenant}, "realm": {realmCode},
+			"username": {username}, "password": {password},
+			"csrf": {csrf},
+		})
+		return resp, readAll(t, resp)
+	}
+	signedIn := func(resp *http.Response) string {
+		t.Helper()
+		for _, c := range resp.Cookies() {
+			if strings.Contains(c.Name, "anubis_sso") && c.Value != "" {
+				return c.Name
+			}
+		}
+		return ""
+	}
+
+	// Past the deadline, with nothing enrolled.
+	setDeadline(time.Now().Add(-1 * time.Hour).Unix())
+
+	// The API refuses. Without this the browser assertions below would pass
+	// just as well if the policy had never applied at all.
+	refused := signIn(t, &anubisv1.LoginRequest{
+		Tenant: tenant, Realm: realmCode, Username: username, Password: password,
+	})
+	if refused.GetEnrolmentRequired() == nil {
+		t.Fatalf("the API stopped refusing an overdue member (%T); this test proves nothing",
+			refused.GetResult())
+	}
+
+	// THE BROWSER DOOR. Same realm, same member, same missing factor.
+	resp, body := browserLogin()
+	defer resp.Body.Close()
+	if c := signedIn(resp); c != "" {
+		t.Fatalf("the browser door issued an SSO session cookie to a member the "+
+			"realm's enrolment deadline refuses (cookie %q, status %d)", c, resp.StatusCode)
+	}
+	if loc := resp.Header.Get("Location"); strings.Contains(loc, "code=") {
+		t.Fatalf("the browser door issued an authorization code past the "+
+			"enrolment deadline: %s", loc)
+	}
+	// A refusal nobody can act on is a support ticket. It has to name the
+	// factor that has to be enrolled.
+	if !strings.Contains(strings.ToLower(body), "authenticator") {
+		t.Fatalf("refused without saying what to enrol (status %d):\n%s",
+			resp.StatusCode, firstBytes(body, 400))
+	}
+
+	// And the cliff must stay a DATE, not a wall. Refusing every unenrolled
+	// member would satisfy every assertion above and lock out each realm that
+	// ever listed a factor — the exact outcome the deadline exists to avoid.
+	setDeadline(time.Now().Add(48 * time.Hour).Unix())
+	graced, gracedBody := browserLogin()
+	defer graced.Body.Close()
+	if signedIn(graced) == "" {
+		t.Fatalf("the grace period refused a browser sign-in (status %d):\n%s",
+			graced.StatusCode, firstBytes(gracedBody, 400))
+	}
+}
