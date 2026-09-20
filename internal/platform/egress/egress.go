@@ -12,6 +12,7 @@ import (
 	"net"
 	"os"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/gsoultan/anubis/internal/shared/apperr"
@@ -36,10 +37,20 @@ import (
 // Timeout bounds a single conversation with an external source.
 const Timeout = 60 * time.Second
 
-// alwaysDenied is not configurable. 169.254.0.0/16 carries the metadata
-// service on every major cloud, and fe80::/10 is its IPv6 equivalent;
-// reaching either from a feed is not a use case anyone has.
-var alwaysDenied = []string{"169.254.0.0/16", "fe80::/10"}
+// alwaysDenied is not configurable. Reaching a metadata service from a
+// structure feed is not a use case anyone has.
+//
+// fd00:ec2::/32 is the correction. This list used to be 169.254.0.0/16 and
+// fe80::/10, described as "its IPv6 equivalent" — which is wrong: AWS serves
+// IMDS over IPv6 at fd00:ec2::254, a UNIQUE-LOCAL address, and nothing in
+// fe80::/10 covers it. A redirect to that address went straight through.
+//
+// The rest of fd00::/8 stays allowed, deliberately. Unique-local is the IPv6
+// counterpart of RFC1918, and a feed living at https://erp.internal on a
+// private network is the case this whole feature exists for — denying the
+// range wholesale would close the hole by removing the feature. Private IPv4
+// is allowed for the same reason.
+var alwaysDenied = []string{"169.254.0.0/16", "fe80::/10", "fd00:ec2::/32"}
 
 // AllowHost refuses a hostname whose addresses are off limits. It resolves
 // the name, because the policy is about where the packet goes and a name is
@@ -91,4 +102,38 @@ func allowIP(ip net.IP, host string) error {
 		}
 	}
 	return nil
+}
+
+// DialControl validates the address a connection is ACTUALLY being made to.
+// It is net.Dialer.Control's signature, so a transport wired with it cannot
+// reach a denied address by any route.
+//
+// AllowHost checks a NAME before a request goes out. This checks the packet,
+// and the gap between the two is where the holes were:
+//
+//   - A redirect goes somewhere nobody checked. The feed fetcher validated
+//     the URL an operator configured and then followed 302s wherever they
+//     led, which on a cloud host means the metadata service is one hostile
+//     response away.
+//   - A name that resolved to a permitted address when it was checked can
+//     resolve to a denied one when the dialer looks it up again moments
+//     later. Checking the resolved address removes the window rather than
+//     narrowing it.
+//
+// Both are the same mistake: judging the request instead of the connection.
+func DialControl(network, address string, _ syscall.RawConn) error {
+	host, _, err := net.SplitHostPort(address)
+	if err != nil {
+		return apperr.ErrInvalidArgument.With("address", address).
+			With("reason", "not an address this policy can judge")
+	}
+	ip := net.ParseIP(host)
+	if ip == nil {
+		// Control is handed a resolved address. A name here means the
+		// resolution did not happen, and a policy that cannot see the
+		// address must not assume it is fine.
+		return apperr.ErrInvalidArgument.With("address", address).
+			With("reason", "unresolved address")
+	}
+	return allowIP(ip, host)
 }
