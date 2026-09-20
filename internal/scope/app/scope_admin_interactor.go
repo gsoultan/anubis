@@ -104,6 +104,18 @@ func (u *scopeAdminInteractor) CreateScopeAxis(ctx context.Context, a scopedomai
 	if !validate.ValidCode(a.Code) {
 		return nil, apperr.ErrInvalidArgument.With("code", a.Code)
 	}
+
+	// An axis created without an effect stated gets DENY. An axis exists to
+	// narrow access, and the safe reading of silence is the one that refuses
+	// rather than the one that ignores — somebody who wants the permissive
+	// behaviour asks for it by name. Existing axes are untouched; flipping one
+	// is what StrictDryRun is for.
+	effect, err := scopedomain.NormaliseDefaultEffect(a.DefaultEffect)
+	if err != nil {
+		return nil, apperr.ErrInvalidArgument.With("default_effect", a.DefaultEffect)
+	}
+	a.DefaultEffect = effect
+
 	if err := u.axes.CreateScopeAxis(ctx, a); err != nil {
 		return nil, err
 	}
