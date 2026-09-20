@@ -34,9 +34,14 @@ func NewUnit() *runtime.Unit { return runtime.NewUnit(FlushOrder) }
 // returning that type — including one assembled at run time. Only the
 // statements listed here run; see storm.RegisterStatement.
 func init() {
+	storm.RegisterScanner(scanAnchorRow)
 	storm.RegisterScanner(scanDoneRow)
 	storm.RegisterScanner(scanDecisionCountsRow)
 	storm.RegisterScanner(scanReuseSignalRow)
+	storm.RegisterStatement(`
+INSERT INTO audit_anchors (tenant_id, seq, entry_hash, kid, signature)
+VALUES ($1, $2, $3, $4, $5)
+ON CONFLICT (tenant_id, seq) DO NOTHING`)
 	storm.RegisterStatement(`
 SELECT (ensure_month_partitions('audit_log', 'occurred_at', 3) IS NULL) AS done`)
 	storm.RegisterStatement(`
@@ -55,6 +60,19 @@ SELECT count(*) FILTER (WHERE result = 'allow') AS allows,
 FROM audit_log
 WHERE tenant_id = $1 AND action = 'authorize'
   AND occurred_at > now() - interval '24 hours'`)
+	storm.RegisterStatement(`
+SELECT seq, entry_hash, kid, signature
+FROM audit_anchors
+WHERE tenant_id = $1 AND seq >= $2
+ORDER BY seq`)
+}
+
+func scanAnchorRow(rv [][]byte, r *auditrquery.AnchorRow, sl *runtime.Slab) error {
+	r.Seq = runtime.Int8(rv[0])
+	r.EntryHash = runtime.Bytes(rv[1])
+	r.Kid = sl.Str(rv[2])
+	r.Signature = runtime.Bytes(rv[3])
+	return nil
 }
 
 func scanDoneRow(rv [][]byte, r *auditrquery.DoneRow, sl *runtime.Slab) error {

@@ -267,6 +267,48 @@ func (m *CatalogSyncSource) Schema(t *storm.Table) {
 	t.ForeignKey(&m.ApplicationID, &m.Tenant).References(&ref0, &ref0.ID, &ref0.Tenant).Named("catalog_sync_sources_application_id_tenant_id_fkey").OnDelete(storm.Cascade).NoIndex()
 }
 
+// AuditAnchor is public.audit_anchors: a SIGNED statement that a tenant's
+// hash chain reached a given entry with a given hash.
+//
+// The chain alone catches a row edited in place or deleted — the next entry's
+// prev_hash stops matching, or a seq goes missing. It does NOT catch a
+// wholesale rewrite: recompute every forward hash and the result is
+// self-consistent. migrations/0005 claimed otherwise ("an attacker with
+// UPDATE rights on this table still cannot silently rewrite history"), and
+// the only thing actually standing in the way was that anubis_app holds no
+// UPDATE grant — a permissions property, not a cryptographic one.
+//
+// An anchor is the cryptographic half. Rewriting history now also means
+// producing a chain whose hash at each anchored seq equals a value signed
+// with the access key, which is sealed under the master. An attacker with
+// the database but not the master key cannot do it, which is exactly the
+// threat the original claim described.
+type AuditAnchor struct {
+	SignedAt  time.Time
+	ID        [16]byte
+	Seq       int64
+	EntryHash []byte
+	Kid       string
+	Signature []byte
+	Tenant    Tenant
+}
+
+func (m *AuditAnchor) Schema(t *storm.Table) {
+	t.PrimaryKey(&m.ID)
+	t.Name("audit_anchors")
+	t.Col(&m.ID).Default("uuidv7()")
+	t.Col(&m.SignedAt).Default("now()")
+	t.Col(&m.EntryHash).NotNull()
+	t.Col(&m.Signature).NotNull()
+	t.Col(&m.Kid).Size(64)
+	t.Col(&m.Tenant).ConstraintName("audit_anchors_tenant_id_fkey")
+	t.Col(&m.Tenant).OnDelete(storm.Cascade)
+	// One anchor per (tenant, seq): re-anchoring the same head must not
+	// stack rows, and a second DIFFERENT hash for a seq already anchored is
+	// the tampering this table exists to make impossible to hide.
+	t.Index(&m.Tenant, &m.Seq).Unique().Named("audit_anchors_tenant_seq")
+}
+
 // CatalogVersion is public.catalog_version. The tenancyrmodel package documents this table's
 // invariants; this declaration is the DDL half of the same thing.
 type CatalogVersion struct {

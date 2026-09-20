@@ -8,6 +8,7 @@ func All() []any {
 	out := []any{
 		&APIKey{},
 		&Application{},
+		&AuditAnchor{},
 		&AuditLog{},
 		&AuthPage{},
 		&CatalogSyncRun{},

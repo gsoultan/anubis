@@ -3,13 +3,16 @@ package auditpg
 import (
 	"bytes"
 	"context"
+	"crypto/ed25519"
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"time"
 
 	auditdomain "github.com/gsoultan/anubis/internal/audit/domain"
+	"github.com/gsoultan/anubis/internal/platform/crypto/keyring"
 	"github.com/gsoultan/anubis/internal/platform/metrics"
 )
 
@@ -234,4 +237,86 @@ func equalBytes(a, b []byte) bool {
 		}
 	}
 	return true
+}
+
+// anchorContext binds a signature to what it is a statement ABOUT.
+//
+// Without it a signature over a bare hash could be lifted from one tenant's
+// anchor to another's, or replayed at a different sequence — the signature
+// would still verify, and it would be attesting to something nobody signed.
+func anchorContext(tenantID string, seq int64, entryHash []byte) []byte {
+	var b bytes.Buffer
+	b.WriteString("anubis/audit-anchor/v1")
+	b.WriteByte(0)
+	b.WriteString(tenantID)
+	b.WriteByte(0)
+	var seqB [8]byte
+	binary.BigEndian.PutUint64(seqB[:], uint64(seq))
+	b.Write(seqB[:])
+	b.Write(entryHash)
+	return b.Bytes()
+}
+
+// AnchorChain signs a tenant's current chain head.
+//
+// Idempotent: a tenant whose chain has not moved re-anchors nothing, because
+// the insert conflicts on (tenant_id, seq) and does nothing. A tenant with no
+// entries yet has no head to sign and is skipped.
+func (a *ChainedAuditor) AnchorChain(ctx context.Context, ring *keyring.Manager, tenantID string) error {
+	seq, entryHash, err := a.store.LastAuditEntry(ctx, tenantID)
+	if err != nil {
+		return err
+	}
+	if seq == 0 || len(entryHash) == 0 {
+		return nil
+	}
+	key, err := ring.Ring().ActiveAccess()
+	if err != nil {
+		return err
+	}
+	sig := ed25519.Sign(key.Private, anchorContext(tenantID, seq, entryHash))
+	return a.store.InsertAnchor(ctx, tenantID, Anchor{
+		Seq: seq, EntryHash: entryHash, Kid: key.Kid, Signature: sig,
+	})
+}
+
+// VerifyAnchors checks a tenant's signed anchors against the chain as it
+// stands now.
+//
+// This is the half VerifyChain cannot do. Walking the chain proves it is
+// SELF-consistent, which a wholesale rewrite also is; an anchor proves the
+// chain passed through a hash that was signed at the time, by a key sealed
+// under the master. brokenAt is the first anchored sequence whose entry no
+// longer carries the hash that was signed, or 0 when every anchor holds.
+//
+// An anchor naming a kid the ring no longer has is reported rather than
+// skipped: "cannot check" and "checked and fine" must not look the same.
+func (a *ChainedAuditor) VerifyAnchors(ctx context.Context, ring *keyring.Manager, tenantID string) (checked int64, brokenAt int64, err error) {
+	anchors, err := a.store.AnchorsFrom(ctx, tenantID, 0)
+	if err != nil {
+		return 0, 0, err
+	}
+	for _, an := range anchors {
+		key, err := ring.Ring().Lookup(an.Kid)
+		if err != nil {
+			return checked, an.Seq, fmt.Errorf("anchor at seq %d was signed by %s, which is no longer in the ring: %w",
+				an.Seq, an.Kid, err)
+		}
+		// The signature first: an anchor that was not signed by this
+		// installation says nothing about the chain either way.
+		if !ed25519.Verify(key.Public, anchorContext(tenantID, an.Seq, an.EntryHash), an.Signature) {
+			return checked, an.Seq, nil
+		}
+		// Then the chain: does the entry at that sequence still carry the
+		// hash that was signed?
+		got, err := a.store.AuditEntryHashAt(ctx, tenantID, an.Seq)
+		if err != nil {
+			return checked, an.Seq, err
+		}
+		if !bytes.Equal(got, an.EntryHash) {
+			return checked, an.Seq, nil
+		}
+		checked++
+	}
+	return checked, 0, nil
 }
