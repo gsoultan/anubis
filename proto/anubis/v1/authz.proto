@@ -15,6 +15,25 @@ service AuthzService {
   // Re-issue the caller's access token pinned to a different active scope,
   // without re-authentication. Mirrors AWS AssumeRole.
   rpc SwitchScope(SwitchScopeRequest) returns (SwitchScopeResponse);
+
+  // ListEffectiveGrants returns one identity's live grants, with their scopes.
+  //
+  // Readable with a TENANT credential, which is the whole reason it is here and
+  // not on AuthzAdminService. The same question is answerable through
+  // AuthzAdminService/ListGrants, but the admin plane refuses any non-platform
+  // caller outright — so a back end that needed a subject's grants had to hold
+  // a credential administering EVERY tenant in the installation in order to
+  // perform one read about one subject in one of them.
+  //
+  // It answers only about the CALLER'S OWN TENANT. That is not a filter for
+  // tidiness: reading across tenants is exactly what closing the admin plane
+  // was protecting, and reopening it here by accident would be worse than
+  // leaving this unbuilt.
+  //
+  // Intended for a policy enforcement point building a local decision cache —
+  // fetch on a version change, decide in process, call nothing per request. A
+  // caller invoking this per request has rebuilt the round trip it removes.
+  rpc ListEffectiveGrants(ListEffectiveGrantsRequest) returns (ListEffectiveGrantsResponse);
 }
 
 message AuthorizeRequest {
@@ -59,6 +78,43 @@ message ExplainResponse {
   // gates, permission gates, per-grant per-axis satisfaction with node lists,
   // strict axes left unaddressed, provenance (which role via which role).
   string detail_json = 4;
+}
+
+message ListEffectiveGrantsRequest {
+  // The identity to read. Must belong to the caller's tenant.
+  string subject = 1;
+}
+
+message ListEffectiveGrantsResponse {
+  repeated EffectiveGrant grants = 1;
+}
+
+// EffectiveGrant is one grant in force right now — revocation and validity
+// windows have already been applied.
+message EffectiveGrant {
+  string id = 1;
+  string role_id = 2;
+  string role_name = 3;
+
+  // Limits the grant to the identity's own records (`_owner`). A caller that
+  // ignores it treats the grant as covering everybody's.
+  bool self_scoped = 4;
+
+  // EMPTY MEANS UNSCOPED, which in Anubis is every node on every axis — not
+  // "no access". A caller reading empty as none has inverted the meaning.
+  repeated EffectiveGrantScope scopes = 5;
+}
+
+message EffectiveGrantScope {
+  string axis = 1;
+  string node_id = 2;
+
+  // Inherit means the grant reaches descendants, not only this node.
+  bool inherit = 3;
+
+  // Exclude carves this node OUT of the grant's includes on the same axis.
+  // Ignoring it produces a grant WIDER than the one held. See ADR-0004.
+  bool exclude = 4;
 }
 
 message SwitchScopeRequest {

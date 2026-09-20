@@ -214,7 +214,8 @@ func (a *application) registerRPC(rpc *http.ServeMux, opts connect.HandlerOption
 	authorize := authzapp.NewAuthorizeInteractor(a.authz, a.clock, a.auditor)
 	explain := authzapp.NewExplainInteractor(a.authz)
 	switchScope := authzapp.NewSwitchScopeInteractor(a.auth, a.scope, a.tenancy, a.issuer, a.auth, a.auditor)
-	authzService := authzsvc.NewAuthzService(authorize, explain, switchScope)
+	effectiveGrants := authzapp.NewEffectiveGrantsInteractor(a.authz)
+	authzService := authzsvc.NewAuthzService(authorize, explain, switchScope, effectiveGrants)
 	rpc.Handle(anubisv1connect.NewAuthzServiceHandler(
 		authzrpc.NewAuthzHandler(authzep.NewAuthzEndpoints(authzService, logger)), opts))
 

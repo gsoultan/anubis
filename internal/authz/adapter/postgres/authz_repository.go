@@ -139,3 +139,46 @@ func errInvalidInterval(err error) error {
 	}
 	return apperr.ErrInternal
 }
+
+// EffectiveGrantsForIdentity returns the identity's live grants with scopes.
+//
+// The query returns ONE ROW PER SCOPE, so a grant with three scopes arrives as
+// three rows and an unscoped grant as one row with the scope columns null.
+// Reassembling here rather than in SQL keeps the statement something a reader
+// can check against the schema.
+func (s *Repository) EffectiveGrantsForIdentity(ctx context.Context, tenantID, identityID string) ([]authzdomain.EffectiveGrant, error) {
+	rows, err := authzrquery.EffectiveGrantsForIdentity.Query(ctx, s.rex(ctx), identityID, tenantID)
+	if err != nil {
+		return nil, database.MapErr(err)
+	}
+
+	// Ordered by the query, so a grant's rows are contiguous and the index
+	// keeps insertion order rather than the map's.
+	byID := make(map[string]int, len(rows))
+	out := make([]authzdomain.EffectiveGrant, 0, len(rows))
+
+	for _, r := range rows {
+		i, seen := byID[r.GrantID]
+		if !seen {
+			out = append(out, authzdomain.EffectiveGrant{
+				ID: r.GrantID, RoleID: r.RoleID, Role: r.RoleName,
+				SelfScoped: r.SelfScoped,
+			})
+			i = len(out) - 1
+			byID[r.GrantID] = i
+		}
+		// A null axis is the LEFT JOIN finding no scope row: the grant is
+		// unscoped, and that is a grant with no scopes rather than a scope with
+		// no axis.
+		if !r.Axis.Valid || !r.NodeID.Valid {
+			continue
+		}
+		out[i].Scopes = append(out[i].Scopes, authzdomain.GrantScope{
+			Axis:    r.Axis.V,
+			NodeID:  r.NodeID.V,
+			Inherit: r.Inherit.Valid && r.Inherit.V,
+			Exclude: r.Exclude.Valid && r.Exclude.V,
+		})
+	}
+	return out, nil
+}

@@ -38,6 +38,7 @@ func init() {
 	storm.RegisterScanner(scanExplainRow)
 	storm.RegisterScanner(scanPermissionMetaRow)
 	storm.RegisterScanner(scanRoleNameRow)
+	storm.RegisterScanner(scanEffectiveGrantRow)
 	storm.RegisterScanner(scanPermissionKeyRow)
 	storm.RegisterScanner(scanStrictSimRow)
 	storm.RegisterScanner(scanDecisionDetailRow)
@@ -241,6 +242,22 @@ WHERE source_id = $1 AND dry = false AND status IN ('ok','skipped')
       AND document_sha <> ''
 ORDER BY started_at DESC
 LIMIT 1`)
+	storm.RegisterStatement(`
+SELECT g.id::text      AS grant_id,
+       g.role_id::text AS role_id,
+       r.name          AS role_name,
+       g.self_scoped   AS self_scoped,
+       gs.axis_code    AS axis,
+       gs.scope_node_id::text AS node_id,
+       gs.inherit      AS inherit,
+       (gs.mode = 'exclude') AS exclude
+FROM grants g
+JOIN roles r ON r.id = g.role_id
+LEFT JOIN grant_scopes gs ON gs.grant_id = g.id
+WHERE g.identity_id = $1 AND g.tenant_id = $2
+  AND g.revoked_at IS NULL AND g.valid_from <= now()
+  AND (g.valid_until IS NULL OR g.valid_until > now())
+ORDER BY r.name, g.id, gs.axis_code, gs.scope_node_id`)
 	storm.RegisterStatement(`
 SELECT g.id::text AS id, g.identity_id::text AS identity_id,
        g.role_id::text AS role_id, r.name AS role_name, g.self_scoped,
@@ -529,6 +546,18 @@ func scanPermissionMetaRow(rv [][]byte, r *authzrquery.PermissionMetaRow, sl *ru
 
 func scanRoleNameRow(rv [][]byte, r *authzrquery.RoleNameRow, sl *runtime.Slab) error {
 	r.Name = sl.Str(rv[0])
+	return nil
+}
+
+func scanEffectiveGrantRow(rv [][]byte, r *authzrquery.EffectiveGrantRow, sl *runtime.Slab) error {
+	r.GrantID = sl.Str(rv[0])
+	r.RoleID = sl.Str(rv[1])
+	r.RoleName = sl.Str(rv[2])
+	r.SelfScoped = runtime.Bool(rv[3])
+	r.Axis = runtime.NullText(rv[4], sl)
+	r.NodeID = runtime.NullText(rv[5], sl)
+	r.Inherit = runtime.Nullable(rv[6], runtime.Bool)
+	r.Exclude = runtime.Nullable(rv[7], runtime.Bool)
 	return nil
 }
 

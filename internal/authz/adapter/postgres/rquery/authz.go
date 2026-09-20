@@ -78,6 +78,59 @@ WHERE g.identity_id = $1 AND g.tenant_id = $2
   AND p.deprecated_at IS NULL
 ORDER BY p.key`)
 
+// EffectiveGrantRow is one live (grant, role, scope) triple for an identity.
+//
+// One row per SCOPE, not per grant: a grant carrying three scopes is three
+// rows, and an UNSCOPED grant is one row with the scope columns null. Flattened
+// rather than nested because the alternative is a second round trip per grant,
+// and the caller reassembling by grant id costs nothing.
+type EffectiveGrantRow struct {
+	GrantID    string
+	RoleID     string
+	RoleName   string
+	SelfScoped bool
+	Axis       runtime.Null[string]
+	NodeID     runtime.Null[string]
+	Inherit    runtime.Null[bool]
+	Exclude    runtime.Null[bool]
+}
+
+// EffectiveGrantsForIdentity lists an identity's live grants with their scopes.
+//
+// TENANT-SCOPED, and that is the entire reason it exists. The same question is
+// answerable through AuthzAdminService/ListGrants, but the admin plane refuses
+// any non-platform caller outright — so a service that needed a subject's
+// grants had to hold a credential administering EVERY tenant in the
+// installation to perform a read about one subject in one of them.
+//
+// `g.tenant_id = $2` is what makes that unnecessary, and it is not a filter
+// added for tidiness: without it a tenant credential would read another
+// tenant's grants, which is the whole reason the admin plane was closed.
+//
+// EXCLUSIONS ARE RETURNED. `mode` distinguishes a carve-out from an include,
+// and a caller that ignores it builds a grant wider than the one held — see
+// migration 0046.
+//
+// LEFT JOIN, so an unscoped grant appears rather than vanishing. An unscoped
+// grant in Anubis means every node on every axis; dropping it here would
+// silently narrow what a caller believes somebody holds.
+var EffectiveGrantsForIdentity = storm.SQL[EffectiveGrantRow](`
+SELECT g.id::text      AS grant_id,
+       g.role_id::text AS role_id,
+       r.name          AS role_name,
+       g.self_scoped   AS self_scoped,
+       gs.axis_code    AS axis,
+       gs.scope_node_id::text AS node_id,
+       gs.inherit      AS inherit,
+       (gs.mode = 'exclude') AS exclude
+FROM grants g
+JOIN roles r ON r.id = g.role_id
+LEFT JOIN grant_scopes gs ON gs.grant_id = g.id
+WHERE g.identity_id = $1 AND g.tenant_id = $2
+  AND g.revoked_at IS NULL AND g.valid_from <= now()
+  AND (g.valid_until IS NULL OR g.valid_until > now())
+ORDER BY r.name, g.id, gs.axis_code, gs.scope_node_id`)
+
 // StrictSimRow is the strict dry-run verdict.
 type StrictSimRow struct {
 	Allow bool

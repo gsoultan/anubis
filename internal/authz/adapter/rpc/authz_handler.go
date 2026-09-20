@@ -63,3 +63,29 @@ func (h *AuthzHandler) SwitchScope(ctx context.Context, req *connect.Request[anu
 		Tokens: authrpc.TokenPairProto(out.(*authapp.TokenPair)),
 	}), nil
 }
+
+// ListEffectiveGrants returns the subject's live grants, within the caller's
+// tenant.
+func (h *AuthzHandler) ListEffectiveGrants(ctx context.Context, req *connect.Request[anubisv1.ListEffectiveGrantsRequest]) (*connect.Response[anubisv1.ListEffectiveGrantsResponse], error) {
+	out, err := h.eps.ListEffectiveGrants(ctx, req.Msg.Subject)
+	if err != nil {
+		return nil, apiconnect.Err(ctx, err)
+	}
+
+	grants := out.([]authzdomain.EffectiveGrant)
+	wire := make([]*anubisv1.EffectiveGrant, 0, len(grants))
+	for _, g := range grants {
+		scopes := make([]*anubisv1.EffectiveGrantScope, 0, len(g.Scopes))
+		for _, sc := range g.Scopes {
+			scopes = append(scopes, &anubisv1.EffectiveGrantScope{
+				Axis: sc.Axis, NodeId: sc.NodeID,
+				Inherit: sc.Inherit, Exclude: sc.Exclude,
+			})
+		}
+		wire = append(wire, &anubisv1.EffectiveGrant{
+			Id: g.ID, RoleId: g.RoleID, RoleName: g.Role,
+			SelfScoped: g.SelfScoped, Scopes: scopes,
+		})
+	}
+	return connect.NewResponse(&anubisv1.ListEffectiveGrantsResponse{Grants: wire}), nil
+}

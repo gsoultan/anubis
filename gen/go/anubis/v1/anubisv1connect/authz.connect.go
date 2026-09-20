@@ -40,6 +40,9 @@ const (
 	// AuthzServiceSwitchScopeProcedure is the fully-qualified name of the AuthzService's SwitchScope
 	// RPC.
 	AuthzServiceSwitchScopeProcedure = "/anubis.v1.AuthzService/SwitchScope"
+	// AuthzServiceListEffectiveGrantsProcedure is the fully-qualified name of the AuthzService's
+	// ListEffectiveGrants RPC.
+	AuthzServiceListEffectiveGrantsProcedure = "/anubis.v1.AuthzService/ListEffectiveGrants"
 )
 
 // AuthzServiceClient is a client for the anubis.v1.AuthzService service.
@@ -49,6 +52,24 @@ type AuthzServiceClient interface {
 	// Re-issue the caller's access token pinned to a different active scope,
 	// without re-authentication. Mirrors AWS AssumeRole.
 	SwitchScope(context.Context, *connect.Request[v1.SwitchScopeRequest]) (*connect.Response[v1.SwitchScopeResponse], error)
+	// ListEffectiveGrants returns one identity's live grants, with their scopes.
+	//
+	// Readable with a TENANT credential, which is the whole reason it is here and
+	// not on AuthzAdminService. The same question is answerable through
+	// AuthzAdminService/ListGrants, but the admin plane refuses any non-platform
+	// caller outright — so a back end that needed a subject's grants had to hold
+	// a credential administering EVERY tenant in the installation in order to
+	// perform one read about one subject in one of them.
+	//
+	// It answers only about the CALLER'S OWN TENANT. That is not a filter for
+	// tidiness: reading across tenants is exactly what closing the admin plane
+	// was protecting, and reopening it here by accident would be worse than
+	// leaving this unbuilt.
+	//
+	// Intended for a policy enforcement point building a local decision cache —
+	// fetch on a version change, decide in process, call nothing per request. A
+	// caller invoking this per request has rebuilt the round trip it removes.
+	ListEffectiveGrants(context.Context, *connect.Request[v1.ListEffectiveGrantsRequest]) (*connect.Response[v1.ListEffectiveGrantsResponse], error)
 }
 
 // NewAuthzServiceClient constructs a client for the anubis.v1.AuthzService service. By default, it
@@ -80,14 +101,21 @@ func NewAuthzServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 			connect.WithSchema(authzServiceMethods.ByName("SwitchScope")),
 			connect.WithClientOptions(opts...),
 		),
+		listEffectiveGrants: connect.NewClient[v1.ListEffectiveGrantsRequest, v1.ListEffectiveGrantsResponse](
+			httpClient,
+			baseURL+AuthzServiceListEffectiveGrantsProcedure,
+			connect.WithSchema(authzServiceMethods.ByName("ListEffectiveGrants")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // authzServiceClient implements AuthzServiceClient.
 type authzServiceClient struct {
-	authorize   *connect.Client[v1.AuthorizeRequest, v1.AuthorizeResponse]
-	explain     *connect.Client[v1.ExplainRequest, v1.ExplainResponse]
-	switchScope *connect.Client[v1.SwitchScopeRequest, v1.SwitchScopeResponse]
+	authorize           *connect.Client[v1.AuthorizeRequest, v1.AuthorizeResponse]
+	explain             *connect.Client[v1.ExplainRequest, v1.ExplainResponse]
+	switchScope         *connect.Client[v1.SwitchScopeRequest, v1.SwitchScopeResponse]
+	listEffectiveGrants *connect.Client[v1.ListEffectiveGrantsRequest, v1.ListEffectiveGrantsResponse]
 }
 
 // Authorize calls anubis.v1.AuthzService.Authorize.
@@ -105,6 +133,11 @@ func (c *authzServiceClient) SwitchScope(ctx context.Context, req *connect.Reque
 	return c.switchScope.CallUnary(ctx, req)
 }
 
+// ListEffectiveGrants calls anubis.v1.AuthzService.ListEffectiveGrants.
+func (c *authzServiceClient) ListEffectiveGrants(ctx context.Context, req *connect.Request[v1.ListEffectiveGrantsRequest]) (*connect.Response[v1.ListEffectiveGrantsResponse], error) {
+	return c.listEffectiveGrants.CallUnary(ctx, req)
+}
+
 // AuthzServiceHandler is an implementation of the anubis.v1.AuthzService service.
 type AuthzServiceHandler interface {
 	Authorize(context.Context, *connect.Request[v1.AuthorizeRequest]) (*connect.Response[v1.AuthorizeResponse], error)
@@ -112,6 +145,24 @@ type AuthzServiceHandler interface {
 	// Re-issue the caller's access token pinned to a different active scope,
 	// without re-authentication. Mirrors AWS AssumeRole.
 	SwitchScope(context.Context, *connect.Request[v1.SwitchScopeRequest]) (*connect.Response[v1.SwitchScopeResponse], error)
+	// ListEffectiveGrants returns one identity's live grants, with their scopes.
+	//
+	// Readable with a TENANT credential, which is the whole reason it is here and
+	// not on AuthzAdminService. The same question is answerable through
+	// AuthzAdminService/ListGrants, but the admin plane refuses any non-platform
+	// caller outright — so a back end that needed a subject's grants had to hold
+	// a credential administering EVERY tenant in the installation in order to
+	// perform one read about one subject in one of them.
+	//
+	// It answers only about the CALLER'S OWN TENANT. That is not a filter for
+	// tidiness: reading across tenants is exactly what closing the admin plane
+	// was protecting, and reopening it here by accident would be worse than
+	// leaving this unbuilt.
+	//
+	// Intended for a policy enforcement point building a local decision cache —
+	// fetch on a version change, decide in process, call nothing per request. A
+	// caller invoking this per request has rebuilt the round trip it removes.
+	ListEffectiveGrants(context.Context, *connect.Request[v1.ListEffectiveGrantsRequest]) (*connect.Response[v1.ListEffectiveGrantsResponse], error)
 }
 
 // NewAuthzServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -139,6 +190,12 @@ func NewAuthzServiceHandler(svc AuthzServiceHandler, opts ...connect.HandlerOpti
 		connect.WithSchema(authzServiceMethods.ByName("SwitchScope")),
 		connect.WithHandlerOptions(opts...),
 	)
+	authzServiceListEffectiveGrantsHandler := connect.NewUnaryHandler(
+		AuthzServiceListEffectiveGrantsProcedure,
+		svc.ListEffectiveGrants,
+		connect.WithSchema(authzServiceMethods.ByName("ListEffectiveGrants")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/anubis.v1.AuthzService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case AuthzServiceAuthorizeProcedure:
@@ -147,6 +204,8 @@ func NewAuthzServiceHandler(svc AuthzServiceHandler, opts ...connect.HandlerOpti
 			authzServiceExplainHandler.ServeHTTP(w, r)
 		case AuthzServiceSwitchScopeProcedure:
 			authzServiceSwitchScopeHandler.ServeHTTP(w, r)
+		case AuthzServiceListEffectiveGrantsProcedure:
+			authzServiceListEffectiveGrantsHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -166,4 +225,8 @@ func (UnimplementedAuthzServiceHandler) Explain(context.Context, *connect.Reques
 
 func (UnimplementedAuthzServiceHandler) SwitchScope(context.Context, *connect.Request[v1.SwitchScopeRequest]) (*connect.Response[v1.SwitchScopeResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.AuthzService.SwitchScope is not implemented"))
+}
+
+func (UnimplementedAuthzServiceHandler) ListEffectiveGrants(context.Context, *connect.Request[v1.ListEffectiveGrantsRequest]) (*connect.Response[v1.ListEffectiveGrantsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.AuthzService.ListEffectiveGrants is not implemented"))
 }

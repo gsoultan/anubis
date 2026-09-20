@@ -12,10 +12,11 @@ type authzService struct {
 	authorize   authzapp.AuthorizeUsecase
 	explain     authzapp.ExplainUsecase
 	switchScope authzapp.SwitchScopeUsecase
+	grants      authzapp.EffectiveGrantsUsecase
 }
 
-func NewAuthzService(authorize authzapp.AuthorizeUsecase, explain authzapp.ExplainUsecase, switchScope authzapp.SwitchScopeUsecase) AuthzService {
-	return &authzService{authorize: authorize, explain: explain, switchScope: switchScope}
+func NewAuthzService(authorize authzapp.AuthorizeUsecase, explain authzapp.ExplainUsecase, switchScope authzapp.SwitchScopeUsecase, grants authzapp.EffectiveGrantsUsecase) AuthzService {
+	return &authzService{authorize: authorize, explain: explain, switchScope: switchScope, grants: grants}
 }
 
 func (s *authzService) Authorize(ctx context.Context, in authzapp.AuthorizeInput) (*authzdomain.Decision, error) {
@@ -28,4 +29,8 @@ func (s *authzService) Explain(ctx context.Context, in authzapp.AuthorizeInput) 
 
 func (s *authzService) SwitchScope(ctx context.Context, scopes map[string]string) (*authapp.TokenPair, error) {
 	return s.switchScope.Execute(ctx, scopes)
+}
+
+func (s *authzService) ListEffectiveGrants(ctx context.Context, subject string) ([]authzdomain.EffectiveGrant, error) {
+	return s.grants.Execute(ctx, subject)
 }
