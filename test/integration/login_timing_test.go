@@ -58,7 +58,8 @@ func TestLoginTimingDoesNotRevealUserExistence(t *testing.T) {
 	// as much as it measures AuthService.Login.
 	passwords := signin.NewPasswordAuthenticator(tenancy, identity, identity,
 		identity, systemClock{}, nopAuditor{})
-	login := signin.NewLoginInteractor(passwords, identity,
+	login := signin.NewLoginInteractor(passwords,
+		signin.NewEnrolmentGranter(keyring.NewManager(ring), systemClock{}), identity,
 		auth, auth, nopIssuer{}, keyring.NewManager(ring), auth, systemClock{})
 
 	var slug string

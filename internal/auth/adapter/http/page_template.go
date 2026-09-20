@@ -179,7 +179,35 @@ body{padding:0;align-content:stretch;justify-items:stretch}
            autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="go">
     {{if $.Error}}<div class="err">{{$.Error}}</div>{{end}}
     <button type="submit">{{$.Cfg.Copy.SubmitLabel}}</button>
+    {{else if $.EnrolToken}}
+    {{/* Enrolment. The realm's deadline has passed and this account holds no
+         factor, so there is no session to be had until one exists. The handle
+         stands for the password already checked; the grant it was minted
+         against stays on the server. */}}
+    <input type="hidden" name="enrol_token" value="{{$.EnrolToken}}">
+    <input type="hidden" name="realm" value="{{$.Realm}}">
+    {{if $.Error}}<div class="err">{{$.Error}}</div>{{end}}
+    <p class="sub">Add this key to an authenticator app, then enter the code it shows.</p>
+    {{/* A tap opens the authenticator on a phone. Elsewhere the key below is
+         typed in by hand — there is no QR here, because drawing one without a
+         third-party library is a feature of its own (ADR-0002). */}}
+    <p class="links"><a href="{{$.EnrolURI}}">Open in your authenticator app</a></p>
+    <label for="k">Setup key</label>
+    <p class="sub"><code>{{$.EnrolKey}}</code></p>
+    <label for="code">Authentication code</label>
+    <input id="code" name="code" inputmode="numeric" autocomplete="one-time-code"
+           pattern="[0-9]*" maxlength="8" required autofocus
+           autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="go">
+    <button type="submit">{{$.Cfg.Copy.SubmitLabel}}</button>
     {{else}}
+    {{if $.RecoveryCodes}}
+    {{/* Shown once, because once is when they exist: Anubis keeps only their
+         hashes. The sign-in form is below on purpose — the factor is enrolled
+         now, so signing in is challenged for it, which is the proof it took. */}}
+    <p class="sub">Your authenticator is set up. Save these recovery codes now —
+       they are shown once and cannot be retrieved later.</p>
+    <p class="sub">{{range $.RecoveryCodes}}<code>{{.}}</code><br>{{end}}</p>
+    {{end}}
     {{if and $.Cfg.Features.ShowRealmPicker $.Realms}}
       <label for="realm">Directory</label>
       <select id="realm" name="realm">

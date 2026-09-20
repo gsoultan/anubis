@@ -283,3 +283,31 @@ func TestLoginFromTheRenderedPageWorks(t *testing.T) {
 			resp.StatusCode)
 	}
 }
+
+// formFields is what a browser would submit from a rendered form: every
+// input the server actually put on the page, and nothing that is not there.
+//
+// Hand-built form values are the trap this avoids. A test that posts a field
+// the page does not contain is testing a client nobody ships — it can pass
+// against a form no human could submit.
+var (
+	inputTag = regexp.MustCompile(`<input\b[^>]*>`)
+	tagAttr  = regexp.MustCompile(`([a-zA-Z][\w-]*)="([^"]*)"`)
+)
+
+func formFields(html string) url.Values {
+	out := url.Values{}
+	for _, tag := range inputTag.FindAllString(html, -1) {
+		attrs := map[string]string{}
+		for _, m := range tagAttr.FindAllStringSubmatch(tag, -1) {
+			attrs[m[1]] = m[2]
+		}
+		switch {
+		case attrs["name"] == "":
+		case attrs["type"] == "submit", attrs["type"] == "checkbox":
+		default:
+			out.Set(attrs["name"], attrs["value"])
+		}
+	}
+	return out
+}

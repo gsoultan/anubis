@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -740,5 +741,231 @@ func TestBrowserLoginHonoursTheEnrolmentDeadline(t *testing.T) {
 	if signedIn(graced) == "" {
 		t.Fatalf("the grace period refused a browser sign-in (status %d):\n%s",
 			graced.StatusCode, firstBytes(gracedBody, 400))
+	}
+}
+
+// The second-factor form the server renders must be submittable by a browser.
+//
+// TestBrowserLoginRefusesPasswordAloneOnceEnrolled completes this flow by
+// posting a username and password on the second submit. The rendered form has
+// neither field — the MFA branch of the template carries `mfa_token` and a
+// code, and its comment says why: "the password is not asked for again, and
+// nothing on this page can replay it". So that test drives a client nobody
+// ships, and passes against a form no human could submit.
+//
+// LoginForm required a valid password on EVERY submit, including the one the
+// token was supposed to stand for. A real browser therefore got "Invalid
+// username or password" after typing a correct code, and the hosted
+// second-factor step could not be completed at all.
+//
+// This test posts exactly the fields the page contains, which is the only
+// thing a browser can do.
+func TestTheRenderedSecondFactorFormCanBeSubmitted(t *testing.T) {
+	requireServer(t)
+	ctx := context.Background()
+	adminToken := platformLogin(t)
+
+	username := fmt.Sprintf("form-mfa-%d", time.Now().UnixNano())
+	const password = "form-mfa-password-1234"
+
+	idAdmin := anubisv1connect.NewIdentityAdminServiceClient(http.DefaultClient, baseURL)
+	if _, err := idAdmin.CreateIdentity(ctx, operatorBearer(connect.NewRequest(&anubisv1.CreateIdentityRequest{
+		Realm: "internal", Username: username, Password: password, AssuranceLevel: 2,
+	}), adminToken)); err != nil {
+		t.Fatalf("create probe identity: %v", err)
+	}
+
+	first, err := retryRateLimited(t, func() (*connect.Response[anubisv1.LoginResponse], error) {
+		return authClient().Login(ctx, connect.NewRequest(&anubisv1.LoginRequest{
+			Tenant: tenant, Username: username, Password: password,
+		}))
+	})
+	if err != nil {
+		t.Fatalf("initial login: %v", err)
+	}
+	tokens := first.Msg.GetTokens()
+	if tokens == nil {
+		t.Fatal("un-enrolled identity was challenged")
+	}
+	begin, err := authClient().BeginTotpEnrollment(ctx,
+		bearer(connect.NewRequest(&anubisv1.BeginTotpEnrollmentRequest{}), tokens.AccessToken))
+	if err != nil {
+		t.Fatalf("begin enrolment: %v", err)
+	}
+	secret := decodeBase32(t, begin.Msg.Secret)
+	if _, err := retryRateLimited(t, func() (*connect.Response[anubisv1.ConfirmTotpEnrollmentResponse], error) {
+		return authClient().ConfirmTotpEnrollment(ctx,
+			bearer(connect.NewRequest(&anubisv1.ConfirmTotpEnrollmentRequest{
+				EnrollmentToken: begin.Msg.EnrollmentToken,
+				Code:            totp.Generate(secret, time.Now(), totp.DefaultStep, totp.DefaultDigits),
+			}), tokens.AccessToken))
+	}); err != nil {
+		t.Fatalf("confirm enrolment: %v", err)
+	}
+
+	// Password step, through a page we were actually served.
+	client, csrf := signinPage(t)
+	prompted := postLoginForm(t, client, url.Values{
+		"tenant": {tenant}, "realm": {"internal"},
+		"username": {username}, "password": {password},
+		"csrf": {csrf},
+	})
+	body := readAll(t, prompted)
+	prompted.Body.Close()
+	if !strings.Contains(body, `name="mfa_token"`) {
+		t.Fatalf("no second-factor form was rendered (status %d):\n%s",
+			prompted.StatusCode, firstBytes(body, 400))
+	}
+
+	// Everything the form offers, and nothing else.
+	form := formFields(body)
+	if form.Get("username") != "" || form.Get("password") != "" {
+		t.Fatal("the second-factor form carries credentials after all — " +
+			"this test would be measuring the wrong thing")
+	}
+	if form.Get("mfa_token") == "" {
+		t.Fatalf("the form carried no mfa_token: %v", form)
+	}
+	waitForNextStep()
+	form.Set("code", totp.Generate(secret, time.Now(), totp.DefaultStep, totp.DefaultDigits))
+
+	resp := postLoginForm(t, client, form)
+	defer resp.Body.Close()
+	out := readAll(t, resp)
+	for _, c := range resp.Cookies() {
+		if strings.Contains(c.Name, "anubis_sso") && c.Value != "" {
+			return
+		}
+	}
+	t.Fatalf("a correct code on the form the server rendered did not sign in "+
+		"(status %d): the hosted second-factor step cannot be completed by a "+
+		"browser\n%s", resp.StatusCode, firstBytes(out, 400))
+}
+
+var setupKey = regexp.MustCompile(`<label for="k">Setup key</label>\s*<p class="sub"><code>([A-Z2-7]+)</code></p>`)
+
+// A member the deadline refuses must be able to comply without leaving the
+// page.
+//
+// This is the other half of TestBrowserLoginHonoursTheEnrolmentDeadline. That
+// test proved the refusal is real; a refusal nobody can act on is a lockout.
+// The API answers an overdue member with a grant token to enrol against, and
+// the browser had nowhere to spend one — so the policy was unsatisfiable by
+// exactly the population it applies to, which is everyone who only ever uses
+// SSO.
+//
+// Every submission here is the form the server rendered, with the code typed
+// into it. A hand-built post would prove nothing about what a browser can do.
+func TestABrowserCanEnrolTheFactorItIsRefusedFor(t *testing.T) {
+	requireServer(t)
+	ctx := context.Background()
+	token := platformLogin(t)
+	admin := anubisv1connect.NewTenantAdminServiceClient(http.DefaultClient, baseURL)
+	idAdmin := anubisv1connect.NewIdentityAdminServiceClient(http.DefaultClient, baseURL)
+
+	realmCode := fmt.Sprintf("bself%d", time.Now().UnixNano()%100_000_000)
+	if _, err := admin.CreateRealm(ctx, operatorBearer(connect.NewRequest(&anubisv1.CreateRealmRequest{
+		Realm: &anubisv1.Realm{
+			Code: realmCode, Kind: "internal", DisplayName: "Browser self-enrolment",
+			MinAssurance:    1,
+			AllowedFactors:  []string{"password", "totp"},
+			RequiredFactors: []string{"password", "totp"},
+			SessionTtl:      "8 hours", AccessTokenTtl: "10 minutes",
+			RefreshTokenTtl: "30 days",
+			// Already overdue: this member is refused from the first attempt.
+			FactorEnrolmentDeadline: time.Now().Add(-1 * time.Hour).Unix(),
+		},
+	}), token)); err != nil {
+		t.Fatalf("create realm: %v", err)
+	}
+
+	username := fmt.Sprintf("bselfer-%d", time.Now().UnixNano())
+	const password = "browser-self-enrol-password-1234"
+	if _, err := idAdmin.CreateIdentity(ctx, operatorBearer(connect.NewRequest(&anubisv1.CreateIdentityRequest{
+		Realm: realmCode, Username: username, Password: password,
+	}), token)); err != nil {
+		t.Fatalf("create identity: %v", err)
+	}
+
+	signedIn := func(resp *http.Response) string {
+		t.Helper()
+		for _, c := range resp.Cookies() {
+			if strings.Contains(c.Name, "anubis_sso") && c.Value != "" {
+				return c.Name
+			}
+		}
+		return ""
+	}
+	passwordStep := func() (*http.Client, *http.Response, string) {
+		t.Helper()
+		client, csrf := signinPage(t)
+		resp := postLoginForm(t, client, url.Values{
+			"tenant": {tenant}, "realm": {realmCode},
+			"username": {username}, "password": {password},
+			"csrf": {csrf},
+		})
+		return client, resp, readAll(t, resp)
+	}
+
+	// 1. Refused, and offered a way out rather than a dead end.
+	client, refused, body := passwordStep()
+	refused.Body.Close()
+	if c := signedIn(refused); c != "" {
+		t.Fatalf("an overdue member was signed in (cookie %q)", c)
+	}
+	if !strings.Contains(body, `name="enrol_token"`) {
+		t.Fatalf("refused with no way to enrol (status %d):\n%s",
+			refused.StatusCode, firstBytes(body, 500))
+	}
+	m := setupKey.FindStringSubmatch(body)
+	if m == nil {
+		t.Fatalf("the enrolment form carried no setup key:\n%s", firstBytes(body, 600))
+	}
+	secret := decodeBase32(t, m[1])
+
+	// 2. Enrol, submitting exactly what the page offers.
+	form := formFields(body)
+	if form.Get("password") != "" {
+		t.Fatal("the enrolment form asks for a password again")
+	}
+	waitForNextStep()
+	form.Set("code", totp.Generate(secret, time.Now(), totp.DefaultStep, totp.DefaultDigits))
+	enrolled := postLoginForm(t, client, form)
+	enrolledBody := readAll(t, enrolled)
+	enrolled.Body.Close()
+	if c := signedIn(enrolled); c != "" {
+		t.Fatalf("enrolling issued a session on its own (cookie %q) — enrolling "+
+			"is not signing in, and the factor has not been presented yet", c)
+	}
+	// Recovery codes exist in readable form exactly once. If they are not on
+	// this response they are gone.
+	if !strings.Contains(enrolledBody, "recovery codes") {
+		t.Fatalf("enrolment returned no recovery codes (status %d):\n%s",
+			enrolled.StatusCode, firstBytes(enrolledBody, 600))
+	}
+
+	// 3. The member now holds the factor their realm demands, so signing in
+	//    is CHALLENGED for it rather than refused for lacking it. That is the
+	//    proof the enrolment actually took.
+	client2, challenged, challengeBody := passwordStep()
+	challenged.Body.Close()
+	if strings.Contains(challengeBody, `name="enrol_token"`) {
+		t.Fatalf("still asked to enrol after enrolling (status %d)", challenged.StatusCode)
+	}
+	if !strings.Contains(challengeBody, `name="mfa_token"`) {
+		t.Fatalf("after enrolling, the page did not ask for the factor (status %d):\n%s",
+			challenged.StatusCode, firstBytes(challengeBody, 500))
+	}
+
+	// 4. And the code completes it.
+	second := formFields(challengeBody)
+	waitForNextStep()
+	second.Set("code", totp.Generate(secret, time.Now(), totp.DefaultStep, totp.DefaultDigits))
+	done := postLoginForm(t, client2, second)
+	doneBody := readAll(t, done)
+	done.Body.Close()
+	if signedIn(done) == "" {
+		t.Fatalf("the factor enrolled through the browser did not complete a "+
+			"sign-in (status %d):\n%s", done.StatusCode, firstBytes(doneBody, 500))
 	}
 }

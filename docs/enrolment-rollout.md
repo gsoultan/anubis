@@ -116,7 +116,7 @@ Two safeguards are worth knowing about:
   identity. It is not a session, carries no scopes, and is issued only after
   the correct password was presented.
 
-## Both doors, and what the browser cannot do yet
+## Both doors
 
 The policy is evaluated by one `signin.PasswordAuthenticator`, called by
 `AuthService.Login` and by the hosted sign-in page alike. That is deliberate
@@ -124,23 +124,38 @@ and recent: until 2026-09-20 the page decided for itself and never asked about
 the deadline, so a realm in force refused API clients and admitted the same
 member through a browser.
 
-The two doors answer a refusal differently, and only one of them is complete:
+Both doors now refuse the same member AND offer the same way out, though they
+spend the grant differently:
 
 | | API (`AuthService.Login`) | Hosted page (`POST /v1/login`) |
 | :--- | :--- | :--- |
-| Past the deadline, nothing enrolled | Refused, with a 15-minute grant token to enrol against | Refused, naming the factor to enrol |
+| Past the deadline, nothing enrolled | Refused, with a 15-minute grant token the caller drives `BeginTOTP`/`ConfirmTOTP` with | Refused, and the page drives the same two calls itself — setup key, `otpauth://` link, code field, recovery codes shown once |
 | Inside the grace period | Signed in, plus the deadline and the missing factors | Signed in, **no warning** |
 
-The two gaps are the same gap: **there is no hosted enrolment page.**
-`auth_pages.kind` permits `signin` and `signout` and nothing else, so the
-browser has nowhere to spend a grant token and nowhere to show a warning
-before redirecting back to the application. A member who only ever uses SSO
-therefore meets this policy for the first time on the day it refuses them.
+The browser never receives the grant. It holds an opaque single-use handle
+(`one_time_tokens.kind = 'browser_enrol'`) and the server keeps the grant,
+the pending enrolment token and the identity behind it.
 
-Until that page exists, plan a rollout around it: step 1's measurement is what
-tells you how many people that is, and step 2's announcement is doing the work
-the product cannot. Enrol browser-only populations through an operator or the
-console rather than expecting them to self-serve.
+**A wrong code costs the whole key, on both doors.** `ConfirmTOTP` spends the
+enrolment token *before* it verifies the code, so a stolen grant buys one
+guess rather than unlimited ones. The page says so and issues a fresh key
+rather than pretending a retry is possible against a secret that no longer
+exists. Tell people to transfer the key carefully; it is not a typo-tolerant
+step.
+
+**There is no QR code.** Drawing one means writing a QR encoder — ADR-0002
+forbids the library that would otherwise do it — so the key is tapped
+(`otpauth://` opens an authenticator on a phone) or typed. That is the one
+place this flow is worse than a commercial IdP's.
+
+### The gap that is left
+
+A member inside the grace period is told nothing by the browser. That response
+redirects straight back to the application, so there is nowhere to put a
+warning without interrupting a sign-in that is working — which is a product
+decision, not an oversight. Until it is made, step 2's announcement is doing
+that work: assume browser-only populations learn of the deadline from you and
+not from the product.
 
 ## Rolling back
 

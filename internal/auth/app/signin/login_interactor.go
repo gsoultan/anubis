@@ -21,12 +21,6 @@ import (
 
 const mfaTokenTTL = 60 * time.Second
 
-// enrolGrantTTL is longer than an MFA challenge on purpose: the holder has to
-// install an authenticator app, scan a code and type a number, not read six
-// digits they already have. Still short enough that a leaked grant is a
-// narrow window.
-const enrolGrantTTL = 15 * time.Minute
-
 // loginInteractor implements LoginUsecase.
 //
 // It owns what the API door does with an authenticated password — mint a
@@ -35,6 +29,7 @@ const enrolGrantTTL = 15 * time.Minute
 // sign-in page so the two doors cannot answer differently.
 type loginInteractor struct {
 	auth     *PasswordAuthenticator
+	granter  *EnrolmentGranter
 	ids      identityport.IdentityRepository
 	sessions authport.SessionRepository
 	onetime  authport.OneTimeRepository
@@ -46,6 +41,7 @@ type loginInteractor struct {
 
 func NewLoginInteractor(
 	auth *PasswordAuthenticator,
+	granter *EnrolmentGranter,
 	ids identityport.IdentityRepository,
 	sessions authport.SessionRepository,
 	onetime authport.OneTimeRepository,
@@ -55,7 +51,7 @@ func NewLoginInteractor(
 	clock clock.Clock,
 ) LoginUsecase {
 	return &loginInteractor{
-		auth: auth, ids: ids, sessions: sessions, onetime: onetime,
+		auth: auth, granter: granter, ids: ids, sessions: sessions, onetime: onetime,
 		issuer: issuer, ring: ring, tx: tx, clock: clock,
 	}
 }
@@ -74,7 +70,7 @@ func (u *loginInteractor) Execute(ctx context.Context, in LoginInput) (*LoginOut
 		return &LoginOutput{MFA: challenge}, nil
 
 	case StepEnrol:
-		challenge, err := u.mintEnrolmentGrant(ctx, d.Tenant, d.Realm, d.Identity, d.Missing)
+		challenge, err := u.granter.Grant(d.Tenant, d.Realm, d.Identity, d.Missing)
 		if err != nil {
 			return nil, err
 		}
@@ -94,40 +90,6 @@ func (u *loginInteractor) Execute(ctx context.Context, in LoginInput) (*LoginOut
 		}
 	}
 	return out, nil
-}
-
-// mintEnrolmentGrant issues the token that makes the refusal actionable.
-//
-// It is minted only for a member with NONE of the required factors enrolled,
-// which is what stops it being a way to replace somebody's authenticator:
-// there is nothing to replace. Its holder has already presented the correct
-// password — the same bar as an MFA challenge token, and it buys strictly
-// less.
-func (u *loginInteractor) mintEnrolmentGrant(ctx context.Context, tenant *tenancydomain.TenantRef, realm *identitydomain.Realm, identity *identitydomain.Identity, missing []string) (*authapp.EnrolmentChallenge, error) {
-	key, err := u.ring.Ring().ActiveLocal()
-	if err != nil {
-		return nil, apperr.ErrInternal.Wrap(err)
-	}
-	jti, err := secret.New(16)
-	if err != nil {
-		return nil, apperr.ErrInternal.Wrap(err)
-	}
-	token, err := localtoken.Seal(key.Secret, key.Kid, "enrol_grant", jti, authapp.EnrolmentGrant{
-		TenantID:   tenant.ID,
-		TenantSlug: tenant.Slug,
-		IdentityID: identity.ID,
-		RealmID:    realm.ID,
-		Factors:    missing,
-	}, enrolGrantTTL, u.clock.Now())
-	if err != nil {
-		return nil, apperr.ErrInternal.Wrap(err)
-	}
-	return &authapp.EnrolmentChallenge{
-		Factors:    missing,
-		Deadline:   realm.FactorEnrolmentDeadline,
-		GrantToken: token,
-		ExpiresIn:  int(enrolGrantTTL.Seconds()),
-	}, nil
 }
 
 func (u *loginInteractor) mintMFAChallenge(ctx context.Context, tenant *tenancydomain.TenantRef, realm *identitydomain.Realm, identity *identitydomain.Identity, in LoginInput, methods []string) (*authapp.MFAChallenge, error) {

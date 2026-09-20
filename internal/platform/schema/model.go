@@ -685,7 +685,7 @@ func (m *OneTimeToken) Schema(t *storm.Table) {
 	t.Col(&m.TokenHash).NotNull()
 	t.Col(&m.Payload).Default("'{}'::jsonb")
 	t.UniqueNamed("one_time_tokens_token_hash_key", &m.TokenHash)
-	t.CheckNamed("one_time_tokens_kind_check", "kind = ANY (ARRAY['mfa'::text, 'browser_mfa'::text, 'auth_code'::text, 'device_challenge'::text, 'email_verify'::text, 'password_reset'::text])")
+	t.CheckNamed("one_time_tokens_kind_check", "kind = ANY (ARRAY['mfa'::text, 'browser_mfa'::text, 'browser_enrol'::text, 'auth_code'::text, 'device_challenge'::text, 'email_verify'::text, 'password_reset'::text])")
 	t.Index(&m.ExpiresAt).Named("one_time_tokens_expiry")
 }
 
