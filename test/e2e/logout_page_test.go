@@ -15,6 +15,8 @@ import (
 
 	"connectrpc.com/connect"
 
+	"github.com/gsoultan/anubis/gen/go/anubis/v1/anubisv1connect"
+
 	anubisv1 "github.com/gsoultan/anubis/gen/go/anubis/v1"
 )
 
@@ -147,4 +149,137 @@ func readAll(t *testing.T, resp *http.Response) string {
 		}
 	}
 	return string(b)
+}
+
+// A cross-site form must not be able to sign somebody in.
+//
+// The logout form carries a CSRF token, and checkLogoutCSRF says why:
+// "without it the confirmation is decorative: any site could submit the form
+// for you". POST /v1/login carried nothing, and there is no Origin or
+// Referer check either — so any page could auto-submit a login form with the
+// ATTACKER's credentials, and the victim's browser would store an
+// __Host-anubis_sso cookie for the attacker's account.
+//
+// SameSite=Lax does not stop it: SameSite governs whether a cookie is SENT,
+// not whether one can be SET, and Lax then sends it on the victim's next
+// top-level navigation to the issuer. The victim proceeds through the OIDC
+// flow and the relying party receives the attacker's identity — so whatever
+// the human does next belongs to somebody else's account.
+func TestLoginRefusesACrossSiteSubmission(t *testing.T) {
+	requireServer(t)
+	ctx := context.Background()
+	adminToken := platformLogin(t)
+
+	username := fmt.Sprintf("csrf-probe-%d", time.Now().UnixNano())
+	const password = "csrf-probe-password-1234"
+
+	idAdmin := anubisv1connect.NewIdentityAdminServiceClient(http.DefaultClient, baseURL)
+	if _, err := idAdmin.CreateIdentity(ctx, operatorBearer(connect.NewRequest(&anubisv1.CreateIdentityRequest{
+		Realm: "internal", Username: username, Password: password, AssuranceLevel: 1,
+	}), adminToken)); err != nil {
+		t.Fatalf("create probe identity: %v", err)
+	}
+
+	// No prior GET of the sign-in page: a cross-site submission has never
+	// been served one, so it holds none of the state the page hands out.
+	client := &http.Client{
+		CheckRedirect: func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+	resp := postLoginForm(t, client, url.Values{
+		"tenant": {tenant}, "realm": {"internal"},
+		"username": {username}, "password": {password},
+	})
+	defer resp.Body.Close()
+
+	for _, c := range resp.Cookies() {
+		if strings.Contains(c.Name, "anubis_sso") && c.Value != "" {
+			t.Fatalf("a submission with no page state signed the browser in "+
+				"(cookie %q, status %d): any site could do this with its own "+
+				"credentials", c.Name, resp.StatusCode)
+		}
+	}
+}
+
+// signinPage registers an application, renders the hosted sign-in page
+// through /v1/authorize, and returns a client holding that page's state plus
+// the CSRF token the form carries.
+//
+// The GET matters: a sign-in form is only submittable by somebody who was
+// served one, which is the property TestLoginRefusesACrossSiteSubmission
+// exists to keep.
+func signinPage(t *testing.T) (*http.Client, string) {
+	t.Helper()
+	ctx := context.Background()
+	token := platformLogin(t)
+
+	slug := fmt.Sprintf("csrf-app-%d", time.Now().UnixNano()%1_000_000)
+	if _, err := pageClient().CreateApplication(ctx, operatorBearer(connect.NewRequest(&anubisv1.CreateApplicationRequest{
+		Application: &anubisv1.Application{
+			Slug: slug, Name: "CSRF probe", Kind: "spa",
+			RedirectUris: []string{"https://allowed.example/callback"},
+		},
+	}), token)); err != nil {
+		t.Fatalf("create application: %v", err)
+	}
+
+	jar, _ := cookiejar.New(nil)
+	client := &http.Client{Jar: jar, CheckRedirect: func(*http.Request, []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}
+	q := url.Values{
+		"tenant": {tenant}, "client_id": {slug},
+		"redirect_uri":          {"https://allowed.example/callback"},
+		"response_type":         {"code"},
+		"code_challenge":        {"E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM"},
+		"code_challenge_method": {"S256"},
+	}
+	resp, err := client.Get(baseURL + "/v1/authorize?" + q.Encode())
+	if err != nil {
+		t.Fatalf("render sign-in page: %v", err)
+	}
+	body := readAll(t, resp)
+	m := csrfField.FindStringSubmatch(body)
+	if m == nil || m[1] == "" {
+		t.Fatalf("no CSRF token in the sign-in form (status %d): a cross-site "+
+			"form would be indistinguishable from a real one", resp.StatusCode)
+	}
+	return client, m[1]
+}
+
+// The page's own form must still work, or the check closes the hole by
+// removing sign-in.
+func TestLoginFromTheRenderedPageWorks(t *testing.T) {
+	requireServer(t)
+	ctx := context.Background()
+	adminToken := platformLogin(t)
+
+	username := fmt.Sprintf("csrf-ok-%d", time.Now().UnixNano())
+	const password = "csrf-ok-password-1234"
+	idAdmin := anubisv1connect.NewIdentityAdminServiceClient(http.DefaultClient, baseURL)
+	if _, err := idAdmin.CreateIdentity(ctx, operatorBearer(connect.NewRequest(&anubisv1.CreateIdentityRequest{
+		Realm: "internal", Username: username, Password: password, AssuranceLevel: 1,
+	}), adminToken)); err != nil {
+		t.Fatalf("create probe identity: %v", err)
+	}
+
+	client, csrf := signinPage(t)
+	resp := postLoginForm(t, client, url.Values{
+		"tenant": {tenant}, "realm": {"internal"},
+		"username": {username}, "password": {password},
+		"csrf": {csrf},
+	})
+	defer resp.Body.Close()
+
+	var signedIn bool
+	for _, c := range resp.Cookies() {
+		if strings.Contains(c.Name, "anubis_sso") && c.Value != "" {
+			signedIn = true
+		}
+	}
+	if !signedIn {
+		t.Fatalf("a submission from the rendered page did not sign in (status %d)",
+			resp.StatusCode)
+	}
 }

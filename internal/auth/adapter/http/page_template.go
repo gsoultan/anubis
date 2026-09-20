@@ -163,6 +163,10 @@ body{padding:0;align-content:stretch;justify-items:stretch}
     <input type="hidden" name="code_challenge" value="{{$.Challenge}}">
     <input type="hidden" name="code_challenge_method" value="{{$.Method}}">
     <input type="hidden" name="nonce" value="{{$.Nonce}}">
+    {{/* Proves this submission came from a page we rendered. Both branches
+         below carry it: a cross-site form holds no page state, which is the
+         whole check. */}}
+    <input type="hidden" name="csrf" value="{{$.LoginCSRF}}">
     {{if $.MFAToken}}
     {{/* Second factor. The password already checked out, and this form
          carries a single-use token standing for that — so the password is

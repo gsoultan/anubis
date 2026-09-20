@@ -43,6 +43,11 @@ type PageView struct {
 	Method      string
 	Nonce       string
 	Error       string
+	// LoginCSRF proves a sign-in submission came from a page this server
+	// rendered. Without it any site can auto-submit the form with its OWN
+	// credentials and silently sign the visitor into somebody else's
+	// account.
+	LoginCSRF string
 	// MFAToken, when set, turns the sign-in form into the second-factor
 	// step: the password is already verified and this single-use token
 	// stands for it.

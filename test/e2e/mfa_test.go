@@ -505,15 +505,13 @@ func TestBrowserLoginRefusesPasswordAloneOnceEnrolled(t *testing.T) {
 	}
 
 	// THE BROWSER DOOR. Same credentials, same identity, no second factor.
-	client := &http.Client{
-		// Do not follow: a redirect carrying ?code= IS the successful login.
-		CheckRedirect: func(*http.Request, []*http.Request) error {
-			return http.ErrUseLastResponse
-		},
-	}
+	// Through a rendered page, as a browser does: the form carries a CSRF
+	// token and a cross-site submission has none.
+	client, csrf := signinPage(t)
 	form := url.Values{
 		"tenant": {tenant}, "realm": {"internal"},
 		"username": {username}, "password": {password},
+		"csrf": {csrf},
 	}
 	resp := postLoginForm(t, client, form)
 	defer resp.Body.Close()
@@ -548,6 +546,7 @@ func TestBrowserLoginRefusesPasswordAloneOnceEnrolled(t *testing.T) {
 	stale := postLoginForm(t, client, url.Values{
 		"tenant": {tenant}, "realm": {"internal"},
 		"username": {username}, "password": {password},
+		"csrf":      {csrfField.FindStringSubmatch(body)[1]},
 		"mfa_token": {token},
 		"code":      {totp.Generate(secret, time.Now(), totp.DefaultStep, totp.DefaultDigits)},
 	})
@@ -571,6 +570,7 @@ func TestBrowserLoginRefusesPasswordAloneOnceEnrolled(t *testing.T) {
 	done := postLoginForm(t, client, url.Values{
 		"tenant": {tenant}, "realm": {"internal"},
 		"username": {username}, "password": {password},
+		"csrf":      {csrfField.FindStringSubmatch(staleBody)[1]},
 		"mfa_token": {token},
 		"code":      {totp.Generate(secret, time.Now(), totp.DefaultStep, totp.DefaultDigits)},
 	})

@@ -2,6 +2,7 @@ package authhttp
 
 import (
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
 	"log/slog"
@@ -171,6 +172,17 @@ func (h *OIDCHandler) LoginForm(w http.ResponseWriter, r *http.Request) {
 	realmCode := r.PostFormValue("realm")
 	if realmCode == "" {
 		realmCode = "internal"
+	}
+
+	// Before anything else, including the rate limiter: a submission that
+	// cannot have come from our page is not a login attempt, and counting it
+	// as one lets a cross-site form burn a victim's account budget.
+	if !h.checkLoginCSRF(r, r.PostFormValue("csrf")) {
+		h.renderLogin(w, r, "", loginPageData{
+			Tenant: tenantSlug, Realm: realmCode,
+			Error: "That form expired. Please try again.",
+		})
+		return
 	}
 
 	ip := authctx.ClientIP(r.Context())
@@ -424,6 +436,11 @@ type loginPageData struct {
 	MFAToken string
 }
 
+// loginCSRFTTL bounds how long a rendered sign-in page stays submittable.
+// Long enough to read a password manager, short enough that a page left open
+// overnight does not carry a usable token into the morning.
+const loginCSRFTTL = 30 * time.Minute
+
 // renderLogin draws the sign-in page for the current flow.
 func (h *OIDCHandler) renderLogin(w http.ResponseWriter, r *http.Request, tenantID string, data loginPageData) {
 	status := http.StatusOK
@@ -432,8 +449,17 @@ func (h *OIDCHandler) renderLogin(w http.ResponseWriter, r *http.Request, tenant
 	}
 	cfg := h.resolvePageForRealm(r, tenantID, "signin", data.Page, data.ApplicationID, data.Realm)
 
+	// A fresh token per render, cookie and form together. The MFA step
+	// re-renders through here too, so its submission carries one as well.
+	csrf, err := secret.New(16)
+	if err != nil {
+		apihttp.WriteError(w, r, apperr.ErrInternal.Wrap(err))
+		return
+	}
+	h.cookies.set(w, r, loginCSRFBase, csrf, int(loginCSRFTTL/time.Second))
+
 	view := PageView{
-		Cfg: cfg, Kind: "signin",
+		Cfg: cfg, Kind: "signin", LoginCSRF: csrf,
 		Tenant: data.Tenant, Realm: data.Realm, ClientID: data.ClientID,
 		RedirectURI: data.RedirectURI, State: data.State,
 		Challenge: data.Challenge, Method: data.Method, Nonce: data.Nonce,
@@ -583,4 +609,25 @@ func realmCodeOf(realm *identitydomain.Realm) string {
 		return ""
 	}
 	return realm.Code
+}
+
+// checkLoginCSRF proves a sign-in submission came from a page this server
+// rendered.
+//
+// Logout has had this since it was written — "without it the confirmation is
+// decorative: any site could submit the form for you" — and login did not,
+// with no Origin or Referer check either. So any page could auto-submit a
+// form carrying the ATTACKER's credentials and leave the visitor holding an
+// SSO cookie for somebody else's account. SameSite=Lax does not help:
+// SameSite decides whether a cookie is SENT, not whether one can be SET.
+//
+// On an identity provider that is worse than it sounds. The visitor carries
+// on through the OIDC flow, the relying party is told they are the attacker,
+// and whatever they do next belongs to an account the attacker can read.
+func (h *OIDCHandler) checkLoginCSRF(r *http.Request, submitted string) bool {
+	stored := h.cookies.get(r, loginCSRFBase)
+	if stored == "" || submitted == "" {
+		return false
+	}
+	return subtle.ConstantTimeCompare([]byte(stored), []byte(submitted)) == 1
 }

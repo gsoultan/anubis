@@ -68,4 +68,5 @@ func (p cookiePolicy) get(r *http.Request, base string) string {
 const (
 	ssoCookieBase  = "anubis_sso"
 	logoutCSRFBase = "anubis_logout"
+	loginCSRFBase  = "anubis_login"
 )
