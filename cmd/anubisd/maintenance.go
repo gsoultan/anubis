@@ -2,9 +2,11 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"time"
 
+	auditpg "github.com/gsoultan/anubis/internal/audit/adapter/postgres"
 	auditport "github.com/gsoultan/anubis/internal/audit/port"
 	authport "github.com/gsoultan/anubis/internal/auth/port"
 	authzcatalog "github.com/gsoultan/anubis/internal/authz/app/catalog"
@@ -13,6 +15,7 @@ import (
 	"github.com/gsoultan/anubis/internal/platform/crypto/keyring"
 	"github.com/gsoultan/anubis/internal/platform/jobs"
 	scopeapp "github.com/gsoultan/anubis/internal/scope/app"
+	tenancyport "github.com/gsoultan/anubis/internal/tenancy/port"
 )
 
 // Advisory lock ids for maintenance. Fixed and distinct so replicas contend
@@ -25,6 +28,7 @@ const (
 	lockSweepRefresh = 0x616e7562_0005
 	lockCatalogSync  = 0x616e7562_0006
 	lockScopeSync    = 0x616e7562_0007
+	lockAuditAnchor  = 0x616e7562_0008
 )
 
 // maintenanceJobs is everything that must keep running for the database to
@@ -37,9 +41,45 @@ func maintenanceJobs(
 	refresh controlport.PlatformRefreshStore,
 	catalog authzcatalog.CatalogSyncUsecase,
 	scope scopeapp.ScopeSyncSchedulerUsecase,
+	anchors *auditpg.ChainedAuditor,
+	ring *keyring.Manager,
+	tenants tenancyport.TenantRepository,
 	logger *slog.Logger,
 ) []jobs.Job {
 	return []jobs.Job{
+		{
+			// Sign each tenant's chain head. The chain proves it is
+			// self-consistent; a rewrite is self-consistent too, so what
+			// makes tampering detectable is a hash somebody signed at the
+			// time with a key sealed under the master.
+			//
+			// Hourly, not continuous: an anchor bounds how much history a
+			// rewrite could reach without being caught, and an hour of
+			// exposure is the trade for not signing on every write.
+			Name: "audit_anchor", Every: time.Hour, LockID: lockAuditAnchor,
+			Timeout: 5 * time.Minute,
+			Run: func(ctx context.Context) error {
+				list, err := tenants.ListTenants(ctx)
+				if err != nil {
+					return err
+				}
+				var failed int
+				for _, tn := range list {
+					if err := anchors.AnchorChain(ctx, ring, tn.ID); err != nil {
+						// One tenant's failure must not stop the rest: an
+						// un-anchored chain is the thing this job exists to
+						// prevent, so the others still need theirs.
+						failed++
+						logger.Error("could not anchor audit chain",
+							"tenant", tn.ID, "error", err)
+					}
+				}
+				if failed > 0 {
+					return fmt.Errorf("%d of %d tenants could not be anchored", failed, len(list))
+				}
+				return nil
+			},
+		},
 		{
 			// Structures that have come due. Same shape as catalog_sync, on
 			// purpose: a minute is the TICK, each source carries its own

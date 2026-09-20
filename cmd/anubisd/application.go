@@ -165,7 +165,8 @@ func (a *application) runMaintenance(ctx context.Context, db *database.DB, logge
 	retention := identityapp.NewRetentionInteractor(a.identity, a.identity, db, a.auditor)
 	sched := jobs.NewScheduler(db, logger,
 		maintenanceJobs(a.audit, a.auth, retention, a.auth, a.control,
-			a.catalogSync(logger), a.scopeSync(logger), logger)...)
+			a.catalogSync(logger), a.scopeSync(logger),
+			a.auditor, a.ring, a.tenancy, logger)...)
 	go sched.Run(ctx)
 }
 

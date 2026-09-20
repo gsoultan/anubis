@@ -21,6 +21,7 @@ import "github.com/gsoultan/storm"
 // clean and the tests pass while a scheduled job is where you find out.
 func Queries() []storm.RawDecl {
 	return []storm.RawDecl{
+		InsertAuditAnchor, AuditAnchorsFrom,
 		// chain.go
 		AdvisoryLockAuditChain,
 		// partitions.go

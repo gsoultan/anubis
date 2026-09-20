@@ -23,3 +23,30 @@ type DoneRow struct {
 // and deadlock on a coincidence.
 var AdvisoryLockAuditChain = storm.SQL[DoneRow](`
 SELECT (pg_advisory_xact_lock(hashtextextended('audit:' || $1::text, 0)) IS NULL) AS done`)
+
+// AnchorRow is one signed statement about where a tenant's chain reached.
+type AnchorRow struct {
+	Seq       int64
+	EntryHash []byte
+	Kid       string
+	Signature []byte
+}
+
+// InsertAuditAnchor records a signed chain head.
+//
+// ON CONFLICT DO NOTHING on (tenant_id, seq): anchoring a head that is
+// already anchored is a no-op, which is what a periodic job re-running on an
+// idle tenant does. It must NOT overwrite — an anchor that can be replaced
+// with a different hash for the same seq anchors nothing.
+var InsertAuditAnchor = storm.SQLExec(`
+INSERT INTO audit_anchors (tenant_id, seq, entry_hash, kid, signature)
+VALUES ($1, $2, $3, $4, $5)
+ON CONFLICT (tenant_id, seq) DO NOTHING`)
+
+// AuditAnchorsFrom lists a tenant's anchors at or after a sequence, oldest
+// first, so a verification walk can check each one as it passes.
+var AuditAnchorsFrom = storm.SQL[AnchorRow](`
+SELECT seq, entry_hash, kid, signature
+FROM audit_anchors
+WHERE tenant_id = $1 AND seq >= $2
+ORDER BY seq`)

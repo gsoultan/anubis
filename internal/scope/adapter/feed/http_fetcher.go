@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -25,9 +26,35 @@ type HTTPFetcher struct {
 func NewHTTPFetcher() *HTTPFetcher {
 	return &HTTPFetcher{client: &http.Client{
 		Timeout: 30 * time.Second,
+		// The policy lives on the DIALER, so it judges every connection this
+		// client makes rather than the one URL an operator configured.
+		//
+		// It was only on the configured URL, and CheckRedirect only counted
+		// hops — so a source pointed at a host the caller controls could
+		// answer 302 and send the server anywhere. Measured against a real
+		// fetcher, the request to 169.254.169.254 was actually issued; it
+		// failed because a laptop has no route there, which a cloud host
+		// does.
+		Transport: &http.Transport{
+			DialContext: (&net.Dialer{
+				Timeout:   10 * time.Second,
+				KeepAlive: 30 * time.Second,
+				Control:   egress.DialControl,
+			}).DialContext,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ResponseHeaderTimeout: 20 * time.Second,
+		},
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if len(via) >= 3 {
 				return apperr.ErrInvalidArgument.With("url", "too many redirects")
+			}
+			// Checked here too, so the refusal NAMES the policy instead of
+			// surfacing as a dial error the operator has to interpret.
+			if err := egress.AllowHost(req.URL.Hostname()); err != nil {
+				return err
+			}
+			if req.URL.Scheme != "http" && req.URL.Scheme != "https" {
+				return apperr.ErrInvalidArgument.With("url", "http(s) only")
 			}
 			return nil
 		},
