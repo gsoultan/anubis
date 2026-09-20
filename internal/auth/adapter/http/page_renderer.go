@@ -43,10 +43,35 @@ type PageView struct {
 	Method      string
 	Nonce       string
 	Error       string
+	// LoginCSRF proves a sign-in submission came from a page this server
+	// rendered. Without it any site can auto-submit the form with its OWN
+	// credentials and silently sign the visitor into somebody else's
+	// account.
+	LoginCSRF string
 	// MFAToken, when set, turns the sign-in form into the second-factor
 	// step: the password is already verified and this single-use token
 	// stands for it.
 	MFAToken string
+	// EnrolToken, when set, turns the form into the enrolment step. It is an
+	// opaque handle for a pending enrolment the server is driving; EnrolKey
+	// and EnrolURI are what the visitor gives their authenticator.
+	EnrolToken string
+	EnrolKey   string
+	// EnrolURI is template.URL deliberately. html/template rewrites any
+	// scheme it does not recognise to "#ZgotmplZ", and otpauth:// is not on
+	// its list — the link would render as a dead anchor with no error
+	// anywhere. It is safe to trust: totp.ProvisioningURI escapes the label
+	// with url.PathEscape and the query with Values.Encode, so nothing a
+	// username contains reaches the attribute raw.
+	EnrolURI template.URL
+	// RecoveryCodes are rendered above the sign-in form and exist in
+	// readable form exactly once. Shown here or never.
+	RecoveryCodes []string
+	// WarnDeadline turns the page into the grace-period warning; ContinueURL
+	// is how somebody already signed in gets on with what they came for.
+	WarnDeadline string
+	WarnFactors  string
+	ContinueURL  string
 	// Realms offered by the picker, when the page enables it.
 	Realms []RealmChoice
 	// RegistrationURL is empty unless the realm actually allows

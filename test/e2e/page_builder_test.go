@@ -4,12 +4,11 @@ package e2e
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
-	"time"
 
 	"connectrpc.com/connect"
 
@@ -28,7 +27,7 @@ func TestAuthPageLifecycle(t *testing.T) {
 	requireServer(t)
 	ctx := context.Background()
 	token := platformLogin(t)
-	slug := fmt.Sprintf("probe-%d", time.Now().UnixNano()%1_000_000)
+	slug := uniqueSlug("probe")
 
 	created, err := pageClient().CreateAuthPage(ctx, operatorBearer(connect.NewRequest(&anubisv1.CreateAuthPageRequest{
 		Page: &anubisv1.AuthPage{
@@ -119,7 +118,7 @@ func TestDefaultPageIsProtected(t *testing.T) {
 	}
 
 	// Promote a second page and confirm the previous default steps down.
-	slug := fmt.Sprintf("alt-%d", time.Now().UnixNano()%1_000_000)
+	slug := uniqueSlug("alt")
 	created, err := pageClient().CreateAuthPage(ctx, operatorBearer(connect.NewRequest(&anubisv1.CreateAuthPageRequest{
 		Page: &anubisv1.AuthPage{Kind: "signout", Slug: slug, Name: "Alt sign-out", ConfigJson: `{}`},
 	}), token))
@@ -192,7 +191,7 @@ func TestPageEscapesRatherThanRejectsText(t *testing.T) {
 	requireServer(t)
 	ctx := context.Background()
 	token := platformLogin(t)
-	slug := fmt.Sprintf("esc-%d", time.Now().UnixNano()%1_000_000)
+	slug := uniqueSlug("esc")
 
 	created, err := pageClient().CreateAuthPage(ctx, operatorBearer(connect.NewRequest(&anubisv1.CreateAuthPageRequest{
 		Page: &anubisv1.AuthPage{Kind: "signout", Slug: slug, Name: "Escaping probe",
@@ -246,4 +245,65 @@ func getStatus(t *testing.T, url string) int {
 	}
 	resp.Body.Close()
 	return resp.StatusCode
+}
+
+// The realm picker has to draw, which means the handler has to hold the
+// repository that lists realms.
+//
+// NewOIDCHandler accepted a RealmAdminRepository and never assigned it: the
+// struct literal set every other field and skipped that one, so h.realmsAdmin
+// was a nil interface. The single line that calls it sits behind
+// cfg.Features.ShowRealmPicker, which is off until an operator turns it on —
+// so the page rendered for everybody who never used the feature, and blew up
+// for the first tenant who did.
+//
+// A dependency reached from one optional branch is a dependency nothing
+// notices is missing. That is what this test is for.
+func TestSignInPageRendersTheRealmPicker(t *testing.T) {
+	requireServer(t)
+	ctx := context.Background()
+	token := platformLogin(t)
+
+	slug := uniqueSlug("picker")
+	if _, err := pageClient().CreateAuthPage(ctx, operatorBearer(connect.NewRequest(&anubisv1.CreateAuthPageRequest{
+		Page: &anubisv1.AuthPage{
+			Kind: "signin", Slug: slug, Name: "Realm picker probe",
+			ConfigJson: `{"features":{"show_realm_picker":true}}`,
+		},
+	}), token)); err != nil {
+		t.Fatalf("create page: %v", err)
+	}
+
+	appSlug := uniqueSlug("picker-app")
+	if _, err := pageClient().CreateApplication(ctx, operatorBearer(connect.NewRequest(&anubisv1.CreateApplicationRequest{
+		Application: &anubisv1.Application{
+			Slug: appSlug, Name: "Realm picker probe", Kind: "spa",
+			RedirectUris: []string{"https://allowed.example/callback"},
+		},
+	}), token)); err != nil {
+		t.Fatalf("create application: %v", err)
+	}
+
+	q := url.Values{
+		"tenant": {tenant}, "client_id": {appSlug},
+		"redirect_uri":          {"https://allowed.example/callback"},
+		"response_type":         {"code"},
+		"code_challenge":        {"E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM"},
+		"code_challenge_method": {"S256"},
+		"page":                  {slug},
+	}
+	resp, err := http.Get(baseURL + "/v1/authorize?" + q.Encode())
+	if err != nil {
+		t.Fatalf("render sign-in page: %v", err)
+	}
+	defer resp.Body.Close()
+	body := readAll(t, resp)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("a page with the realm picker on did not render (status %d):\n%s",
+			resp.StatusCode, firstBytes(body, 400))
+	}
+	if !strings.Contains(body, `<select id="realm"`) {
+		t.Fatalf("the picker was configured on and did not draw (status %d):\n%s",
+			resp.StatusCode, firstBytes(body, 600))
+	}
 }

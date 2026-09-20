@@ -163,6 +163,10 @@ body{padding:0;align-content:stretch;justify-items:stretch}
     <input type="hidden" name="code_challenge" value="{{$.Challenge}}">
     <input type="hidden" name="code_challenge_method" value="{{$.Method}}">
     <input type="hidden" name="nonce" value="{{$.Nonce}}">
+    {{/* Proves this submission came from a page we rendered. Both branches
+         below carry it: a cross-site form holds no page state, which is the
+         whole check. */}}
+    <input type="hidden" name="csrf" value="{{$.LoginCSRF}}">
     {{if $.MFAToken}}
     {{/* Second factor. The password already checked out, and this form
          carries a single-use token standing for that — so the password is
@@ -175,6 +179,49 @@ body{padding:0;align-content:stretch;justify-items:stretch}
            autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="go">
     {{if $.Error}}<div class="err">{{$.Error}}</div>{{end}}
     <button type="submit">{{$.Cfg.Copy.SubmitLabel}}</button>
+    {{else if $.EnrolToken}}
+    {{/* Enrolment. The realm's deadline has passed and this account holds no
+         factor, so there is no session to be had until one exists. The handle
+         stands for the password already checked; the grant it was minted
+         against stays on the server. */}}
+    <input type="hidden" name="enrol_token" value="{{$.EnrolToken}}">
+    <input type="hidden" name="realm" value="{{$.Realm}}">
+    {{if $.Error}}<div class="err">{{$.Error}}</div>{{end}}
+    <p class="sub">Add this key to an authenticator app, then enter the code it shows.</p>
+    {{/* A tap opens the authenticator on a phone. Elsewhere the key below is
+         typed in by hand — there is no QR here, because drawing one without a
+         third-party library is a feature of its own (ADR-0002). */}}
+    <p class="links"><a href="{{$.EnrolURI}}">Open in your authenticator app</a></p>
+    <label for="k">Setup key</label>
+    <p class="sub"><code>{{$.EnrolKey}}</code></p>
+    <label for="code">Authentication code</label>
+    <input id="code" name="code" inputmode="numeric" autocomplete="one-time-code"
+           pattern="[0-9]*" maxlength="8" required autofocus
+           autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="go">
+    <button type="submit">{{$.Cfg.Copy.SubmitLabel}}</button>
+    {{else if $.WarnDeadline}}
+    {{/* Grace period. This member IS signed in — the session and cookie were
+         written before this page — so both buttons lead somewhere and neither
+         blocks. Skippable by design: a grace period that refuses is not a
+         grace period. */}}
+    <p class="sub">You are signed in. From {{$.WarnDeadline}} this account will
+       also need {{$.WarnFactors}}, and signing in without one will stop
+       working.</p>
+    <button type="submit" name="enrol_now" value="1">Set it up now</button>
+    <p class="links"><a href="{{$.ContinueURL}}">Continue without it</a></p>
+    {{else}}
+    {{if $.RecoveryCodes}}
+    {{/* Shown once, because once is when they exist: Anubis keeps only their
+         hashes. The sign-in form is below on purpose — the factor is enrolled
+         now, so signing in is challenged for it, which is the proof it took. */}}
+    <p class="sub">Your authenticator is set up. Save these recovery codes now —
+       they are shown once and cannot be retrieved later.</p>
+    <p class="sub">{{range $.RecoveryCodes}}<code>{{.}}</code><br>{{end}}</p>
+    {{end}}
+    {{if and $.RecoveryCodes $.ContinueURL}}
+    {{/* Enrolled from the grace-period warning, so the session already
+         exists. Asking for the password again would punish complying early. */}}
+    <p class="links"><a href="{{$.ContinueURL}}">Continue</a></p>
     {{else}}
     {{if and $.Cfg.Features.ShowRealmPicker $.Realms}}
       <label for="realm">Directory</label>
@@ -198,6 +245,7 @@ body{padding:0;align-content:stretch;justify-items:stretch}
     {{end}}
     {{if $.Error}}<div class="err">{{$.Error}}</div>{{end}}
     <button type="submit">{{$.Cfg.Copy.SubmitLabel}}</button>
+    {{end}}
     {{end}}
   </form>
 {{else}}

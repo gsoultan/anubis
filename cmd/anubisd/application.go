@@ -101,6 +101,17 @@ type application struct {
 	// The one usecase two subsystems share: the admin RPC surface applies
 	// catalogs on request, the scheduler applies them on a clock.
 	authzAdmin authzadmin.AuthzAdminUsecase
+
+	// passwordAuth is the single implementation of "is this password good
+	// enough to let this identity in", shared by both login doors.
+	passwordAuth *signin.PasswordAuthenticator
+	// enrolGranter mints the enrol-or-deny grant. Both doors refuse the same
+	// member, so both offer the same way out.
+	enrolGranter *signin.EnrolmentGranter
+	// enrolment provisions second factors. The RPC surface exposes it; the
+	// hosted page drives it on behalf of a member it has just refused, who
+	// has no client of their own to do it with.
+	enrolment enroll.EnrollmentUsecase
 }
 
 func newApplication(ctx context.Context, cfg *config.Config, db *database.DB, logger *slog.Logger) (*application, error) {
@@ -133,6 +144,15 @@ func newApplication(ctx context.Context, cfg *config.Config, db *database.DB, lo
 	a.authzAdmin = authzadmin.NewAuthzAdminInteractor(a.control, a.clock.Now,
 		a.authz, a.authz, a.authz, a.authz,
 		a.authz, a.tenancy, a.tenancy, a.auth, a.auditor)
+	// One authenticator, two doors: AuthService.Login and the hosted sign-in
+	// page. A second instance would be a second place for the factor policy
+	// to differ, which is exactly how the browser door came to skip an
+	// enrolled factor and then to ignore a realm's enrolment deadline.
+	a.passwordAuth = signin.NewPasswordAuthenticator(a.tenancy, a.identity,
+		a.identity, a.identity, a.clock, a.auditor)
+	a.enrolGranter = signin.NewEnrolmentGranter(a.ring, a.clock)
+	a.enrolment = enroll.NewEnrollmentInteractor(a.issuerURL, a.ring, a.identity,
+		a.identity, a.auth, a.auth, a.clock, a.auditor)
 	return a, nil
 }
 
@@ -177,8 +197,8 @@ func (a *application) registerRPC(rpc *http.ServeMux, opts connect.HandlerOption
 	// --- auth context -------------------------------------------------------
 	backchannel := sessionapp.NewBackchannelLogout(a.issuerURL, a.ring, a.tenancy,
 		authpg.NewHTTPBackchannelNotifier(logger), a.clock)
-	login := signin.NewLoginInteractor(a.tenancy, a.identity, a.identity, a.identity,
-		a.auth, a.auth, a.issuer, a.ring, a.auth, a.clock, a.auditor)
+	login := signin.NewLoginInteractor(a.passwordAuth, a.enrolGranter, a.identity,
+		a.auth, a.auth, a.issuer, a.ring, a.auth, a.clock)
 	verifyMfa := mfa.NewVerifyMfaInteractor(a.ring, a.auth, a.identity, a.identity,
 		a.identity, a.tenancy, a.auth, a.issuer, a.auth, a.clock, a.auditor)
 	refresh := tokenapp.NewRefreshInteractor(a.auth, a.auth, a.tenancy, a.issuer, a.auth, a.auditor, logger)
@@ -190,8 +210,7 @@ func (a *application) registerRPC(rpc *http.ServeMux, opts connect.HandlerOption
 	verifyEmail := registration.NewVerifyEmailInteractor(a.auth, a.identity)
 	introspect := tokenapp.NewIntrospectInteractor(a.issuerURL, a.ring, a.auth, a.tenancy, a.clock)
 	revoke := tokenapp.NewRevokeInteractor(a.auth, a.auth, a.tenancy, a.auditor)
-	enrollment := enroll.NewEnrollmentInteractor(a.issuerURL, a.ring, a.identity,
-		a.identity, a.auth, a.auth, a.clock, a.auditor)
+	enrollment := a.enrolment
 	clientCreds := clientcreds.NewClientCredentialsInteractor(a.issuerURL, a.ring,
 		a.tenancy, a.tenancy, a.clock, a.auditor)
 	getMe := sessionapp.NewGetMeInteractor(a.identity, a.authz)
@@ -308,8 +327,9 @@ func (a *application) registerHTTP(ctx context.Context, srv *apihttp.Server,
 	srv.HandleFunc("GET /.well-known/anubis-keys.json", wellKnown.Keys)
 	srv.HandleFunc("GET /.well-known/openid-configuration", wellKnown.OpenIDConfiguration)
 
-	oidc := authhttp.NewOIDCHandler(cfg.Issuer, a.tenancy, a.identity, a.identity,
-		a.identity, a.identity, a.auth, a.auth, a.tenancy, a.tenancy, a.auth,
+	oidc := authhttp.NewOIDCHandler(cfg.Issuer, a.passwordAuth, a.enrolGranter,
+		a.enrolment, a.tenancy,
+		a.identity, a.identity, a.identity, a.identity, a.auth, a.auth, a.tenancy, a.tenancy, a.auth,
 		cfg.DefaultTenant, cfg.Env == "prod", a.issuer, a.ring, a.clock, a.auditor, limiter, logger)
 	srv.HandleFunc("GET /v1/authorize", oidc.Authorize)
 	srv.HandleFunc("POST /v1/login", oidc.LoginForm)

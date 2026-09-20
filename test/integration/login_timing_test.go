@@ -53,8 +53,14 @@ func TestLoginTimingDoesNotRevealUserExistence(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	login := signin.NewLoginInteractor(tenancy, identity, identity, identity,
-		auth, auth, nopIssuer{}, keyring.NewManager(ring), auth, systemClock{}, nopAuditor{})
+	// The uniform-timing rule lives in the authenticator now, which is the
+	// piece both login doors call — so this measures the hosted sign-in page
+	// as much as it measures AuthService.Login.
+	passwords := signin.NewPasswordAuthenticator(tenancy, identity, identity,
+		identity, systemClock{}, nopAuditor{})
+	login := signin.NewLoginInteractor(passwords,
+		signin.NewEnrolmentGranter(keyring.NewManager(ring), systemClock{}), identity,
+		auth, auth, nopIssuer{}, keyring.NewManager(ring), auth, systemClock{})
 
 	var slug string
 	if err := pool.QueryRow(ctx, `SELECT slug FROM tenants ORDER BY created_at LIMIT 1`).Scan(&slug); err != nil {

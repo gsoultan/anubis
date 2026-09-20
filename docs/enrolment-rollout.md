@@ -116,6 +116,56 @@ Two safeguards are worth knowing about:
   identity. It is not a session, carries no scopes, and is issued only after
   the correct password was presented.
 
+## Both doors
+
+The policy is evaluated by one `signin.PasswordAuthenticator`, called by
+`AuthService.Login` and by the hosted sign-in page alike. That is deliberate
+and recent: until 2026-09-20 the page decided for itself and never asked about
+the deadline, so a realm in force refused API clients and admitted the same
+member through a browser.
+
+Both doors now refuse the same member AND offer the same way out, though they
+spend the grant differently:
+
+| | API (`AuthService.Login`) | Hosted page (`POST /v1/login`) |
+| :--- | :--- | :--- |
+| Past the deadline, nothing enrolled | Refused, with a 15-minute grant token the caller drives `BeginTOTP`/`ConfirmTOTP` with | Refused, and the page drives the same two calls itself — setup key, `otpauth://` link, code field, recovery codes shown once |
+| Inside the grace period | Signed in, plus the deadline and the missing factors | Signed in, then shown the date and the missing factor, with "set it up now" and "continue without it" |
+
+The browser never receives the grant. It holds an opaque single-use handle
+(`one_time_tokens.kind = 'browser_enrol'`) and the server keeps the grant,
+the pending enrolment token and the identity behind it.
+
+**A wrong code costs the whole key, on both doors.** `ConfirmTOTP` spends the
+enrolment token *before* it verifies the code, so a stolen grant buys one
+guess rather than unlimited ones. The page says so and issues a fresh key
+rather than pretending a retry is possible against a secret that no longer
+exists. Tell people to transfer the key carefully; it is not a typo-tolerant
+step.
+
+**There is no QR code.** Drawing one means writing a QR encoder — ADR-0002
+forbids the library that would otherwise do it — so the key is tapped
+(`otpauth://` opens an authenticator on a phone) or typed. That is the one
+place this flow is worse than a commercial IdP's.
+
+### What the warning does, and why it is skippable
+
+Inside the grace period the page writes the session and the cookie FIRST and
+then renders the warning, so both buttons lead somewhere and neither blocks.
+"Continue without it" re-enters `/v1/authorize`, which finds the cookie and
+issues the code without prompting — the warning cannot strand anybody.
+
+It appears on every sign-in during the grace period. That is deliberate: the
+deadline is a date the operator chose, and the runway only works if the people
+on it know about it. If that proves too noisy for a long grace period, the
+place to change it is here, not by making the warning conditional on something
+the page cannot see.
+
+Somebody who enrols from the warning is **not asked for their password
+again** — they already hold a session, and charging extra for complying early
+is how a rollout stalls. They get the recovery codes and a "continue" link.
+Somebody who was refused has no session, so they enrol and then sign in.
+
 ## Rolling back
 
 Setting `factor_enrolment_deadline` back to NULL — or removing the factor

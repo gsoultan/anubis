@@ -30,6 +30,9 @@ references". New topics live in their own file from 2026-09-11 on:
   trailing-underscore route, and the query-key prefix rule.
 - [[console-create-drawers]] — every create drawer's submit button was inert,
   and where the grant form lives now.
+- [[login-doors]] — the two login doors (RPC and hosted page), the one
+  PasswordAuthenticator they share, and why merging took the stricter of
+  two behaviours.
 - [[identity-directory-reads]] — the empty-uuid 500, the tenant filter the
   category query ignored, and the columns nothing ever selected.
 - [[tenant-scoped-reads]] — why a discarded principal is the tell for a
