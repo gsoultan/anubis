@@ -458,9 +458,13 @@ func TestBrowserLoginRefusesPasswordAloneOnceEnrolled(t *testing.T) {
 		t.Fatalf("create probe identity: %v", err)
 	}
 
-	first, err := authClient().Login(ctx, connect.NewRequest(&anubisv1.LoginRequest{
-		Tenant: tenant, Username: username, Password: password,
-	}))
+	// Every login in this package shares one limiter, and this test adds
+	// several more. Waiting for refill is the correct behaviour under test.
+	first, err := retryRateLimited(t, func() (*connect.Response[anubisv1.LoginResponse], error) {
+		return authClient().Login(ctx, connect.NewRequest(&anubisv1.LoginRequest{
+			Tenant: tenant, Username: username, Password: password,
+		}))
+	})
 	if err != nil {
 		t.Fatalf("initial login: %v", err)
 	}
@@ -488,9 +492,11 @@ func TestBrowserLoginRefusesPasswordAloneOnceEnrolled(t *testing.T) {
 
 	// The API now refuses password alone. Establishes that the identity is
 	// genuinely enrolled, so a pass below cannot be "TOTP was never on".
-	after, err := authClient().Login(ctx, connect.NewRequest(&anubisv1.LoginRequest{
-		Tenant: tenant, Username: username, Password: password,
-	}))
+	after, err := retryRateLimited(t, func() (*connect.Response[anubisv1.LoginResponse], error) {
+		return authClient().Login(ctx, connect.NewRequest(&anubisv1.LoginRequest{
+			Tenant: tenant, Username: username, Password: password,
+		}))
+	})
 	if err != nil {
 		t.Fatalf("login after enrolment: %v", err)
 	}
@@ -509,10 +515,7 @@ func TestBrowserLoginRefusesPasswordAloneOnceEnrolled(t *testing.T) {
 		"tenant": {tenant}, "realm": {"internal"},
 		"username": {username}, "password": {password},
 	}
-	resp, err := client.PostForm(baseURL+"/v1/login", form)
-	if err != nil {
-		t.Fatalf("browser login: %v", err)
-	}
+	resp := postLoginForm(t, client, form)
 	defer resp.Body.Close()
 
 	for _, c := range resp.Cookies() {
@@ -542,15 +545,12 @@ func TestBrowserLoginRefusesPasswordAloneOnceEnrolled(t *testing.T) {
 	// The enrolment code must NOT complete the browser sign-in either: a
 	// code is single-use whichever door it is presented at. The browser
 	// path goes through the same AdvanceCredentialStep guard.
-	stale, err := client.PostForm(baseURL+"/v1/login", url.Values{
+	stale := postLoginForm(t, client, url.Values{
 		"tenant": {tenant}, "realm": {"internal"},
 		"username": {username}, "password": {password},
 		"mfa_token": {token},
 		"code":      {totp.Generate(secret, time.Now(), totp.DefaultStep, totp.DefaultDigits)},
 	})
-	if err != nil {
-		t.Fatalf("stale-code submit: %v", err)
-	}
 	staleBody := readAll(t, stale)
 	for _, c := range stale.Cookies() {
 		if strings.Contains(c.Name, "anubis_sso") && c.Value != "" {
@@ -568,15 +568,12 @@ func TestBrowserLoginRefusesPasswordAloneOnceEnrolled(t *testing.T) {
 	// for the real boundary rather than generating a future code, which
 	// would fall outside the accepted skew.
 	waitForNextStep()
-	done, err := client.PostForm(baseURL+"/v1/login", url.Values{
+	done := postLoginForm(t, client, url.Values{
 		"tenant": {tenant}, "realm": {"internal"},
 		"username": {username}, "password": {password},
 		"mfa_token": {token},
 		"code":      {totp.Generate(secret, time.Now(), totp.DefaultStep, totp.DefaultDigits)},
 	})
-	if err != nil {
-		t.Fatalf("second-factor submit: %v", err)
-	}
 	var got string
 	doneBody := readAll(t, done)
 	for _, c := range done.Cookies() {
@@ -608,4 +605,24 @@ func firstBytes(s string, n int) string {
 		return s
 	}
 	return s[:n]
+}
+
+// postLoginForm posts the hosted sign-in form, waiting out the shared rate
+// limiter the same way retryRateLimited does for the RPC path. Every test in
+// this package hits one limiter from one IP, so throttling here is expected
+// under a full-suite run rather than a failure.
+func postLoginForm(t *testing.T, client *http.Client, form url.Values) *http.Response {
+	t.Helper()
+	deadline := time.Now().Add(90 * time.Second)
+	for {
+		resp, err := client.PostForm(baseURL+"/v1/login", form)
+		if err != nil {
+			t.Fatalf("browser login: %v", err)
+		}
+		if resp.StatusCode != http.StatusTooManyRequests || time.Now().After(deadline) {
+			return resp
+		}
+		resp.Body.Close()
+		time.Sleep(3 * time.Second)
+	}
 }
