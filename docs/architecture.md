@@ -148,9 +148,15 @@ is the most common mistake in homegrown SSO.
 | :--- | :--- | :--- | :--- |
 | **Access** | Yes — every application reads it | Many services, offline | **PASETO `v4.public`** (Ed25519) |
 | **Refresh** | Only to Anubis | Anubis, database-backed | **Opaque** 256-bit random, stored hashed |
-| **Internal state** — MFA challenge, password reset, device enrolment, back-channel logout | No | Anubis only | **`anb.local.v1`** — AES-256-GCM + HKDF-SHA256 |
+| **Internal state** — MFA challenge, device enrolment, email verification, back-channel logout | No | Anubis only | **`anb.local.v1`** — AES-256-GCM + HKDF-SHA256 |
 
 Rationale in [ADR-0001](adr/0001-token-format.md).
+
+Password reset is NOT in that list, though `one_time_tokens.kind` still
+permits `password_reset` and this row used to name it. There is no reset flow:
+nothing mints that kind and nothing consumes it. The console found the same
+gap from the other end — it drew a "Forgot password?" link that nothing
+rendered — so the inventory, not the feature, was the thing out of date.
 
 ### Access token claims
 
