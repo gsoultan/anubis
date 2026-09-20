@@ -56,6 +56,18 @@ func hashWith(password string, iterations int) (string, error) {
 func Verify(password, encoded string) (ok bool, needsRehash bool, err error) {
 	alg, iterations, salt, want, err := parse(encoded)
 	if err != nil {
+		// An absent or unreadable hash must cost what a real one costs.
+		// Returning here without doing the work is a user-enumeration
+		// oracle: the caller cannot tell the difference and a stopwatch
+		// can. Measured on the control plane before this existed — an
+		// operator who exists took 51.9 ms and one who does not took
+		// 0.35 ms, so every operator username was discoverable.
+		//
+		// The guard lives here rather than in each caller because that is
+		// where the work is. Two of the three call sites defaulted the hash
+		// to Dummy() themselves; the third passed whatever its repository
+		// returned, which for an unknown account was "".
+		burnDummy(password)
 		return false, false, err
 	}
 	if alg != algID {
@@ -78,6 +90,18 @@ var (
 	dummyOnce sync.Once
 	dummyHash string
 )
+
+// burnDummy runs one full-cost derivation against the dummy hash, for its
+// time rather than its answer. It is deliberately the same work Verify would
+// have done, so a caller cannot be timed into revealing whether the account
+// it looked up exists.
+func burnDummy(password string) {
+	_, iterations, salt, want, err := parse(Dummy())
+	if err != nil {
+		return
+	}
+	_, _ = pbkdf2.Key(sha256.New, password, salt, iterations, len(want))
+}
 
 // Dummy returns a stable, valid hash of an unguessable value.
 func Dummy() string {

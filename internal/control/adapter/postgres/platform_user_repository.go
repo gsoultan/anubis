@@ -147,6 +147,18 @@ func (s *Repository) SetStatus(ctx context.Context, id, status string) error {
 	return nil
 }
 
+// RehashPassword replaces a hash with one at the current cost, and only if
+// the stored hash is still the one that was just verified.
+//
+// Best effort by design: a login that verified must not fail because the
+// upgrade lost a race. It returns nil when nothing matched.
+func (s *Repository) RehashPassword(ctx context.Context, id, oldHash, newHash string) error {
+	if _, err := controlrquery.RehashPlatformUserPassword.Exec(ctx, s.ex(ctx), id, oldHash, newHash); err != nil {
+		return database.MapErr(err)
+	}
+	return nil
+}
+
 // TOTPSecret opens the sealed secret for one operator. It is unsealed only at
 // the moment a code is checked, never held.
 func (s *Repository) TOTPSecret(ctx context.Context, master []byte, id string) ([]byte, error) {

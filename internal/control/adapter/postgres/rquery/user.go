@@ -51,6 +51,18 @@ UPDATE platform_users
        token_epoch = token_epoch + CASE WHEN $2::text = 'disabled' THEN 1 ELSE 0 END
  WHERE id = $1`)
 
+// RehashPlatformUserPassword upgrades a hash whose KDF parameters are behind
+// the current default.
+//
+// It is guarded on the OLD hash rather than on the id alone. A rehash races
+// every other write to the row, and a bare `SET password_hash = $2` would
+// happily overwrite a password that changed between the read and this write —
+// putting back the one the operator just replaced.
+var RehashPlatformUserPassword = storm.SQLExec(`
+UPDATE platform_users
+   SET password_hash = $3, updated_at = now()
+ WHERE id = $1 AND password_hash = $2`)
+
 // TouchPlatformUserLogin records a sign-in against the server clock.
 var TouchPlatformUserLogin = storm.SQLExec(`
 UPDATE platform_users SET last_login_at = now() WHERE id = $1`)
