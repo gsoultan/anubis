@@ -14,4 +14,5 @@ type AuthzService interface {
 	Explain(ctx context.Context, in authzapp.AuthorizeInput) (*authzdomain.Explanation, error)
 	SwitchScope(ctx context.Context, scopes map[string]string) (*authapp.TokenPair, error)
 	ListEffectiveGrants(ctx context.Context, subject string) ([]authzdomain.EffectiveGrant, error)
+	GetScopeForest(ctx context.Context, axes []string) ([]authzdomain.ForestNode, error)
 }

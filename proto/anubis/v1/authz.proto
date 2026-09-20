@@ -34,6 +34,19 @@ service AuthzService {
   // fetch on a version change, decide in process, call nothing per request. A
   // caller invoking this per request has rebuilt the round trip it removes.
   rpc ListEffectiveGrants(ListEffectiveGrantsRequest) returns (ListEffectiveGrantsResponse);
+
+  // GetScopeForest returns the whole live forest on the requested axes.
+  //
+  // Tenant-readable, and the companion to ListEffectiveGrants: grants say WHAT
+  // a subject may do and WHERE it was granted, and only the forest says whether
+  // that where reaches the resource in hand. A PEP holding one without the
+  // other cannot decide.
+  //
+  // UNPAGED, deliberately. A PEP needs the whole forest or none of it: a
+  // partial one is not a smaller forest, it is a different one, because a node
+  // whose parent is missing has no ancestry and a grant above it stops reaching
+  // it. The bound is the caller's axis list.
+  rpc GetScopeForest(GetScopeForestRequest) returns (GetScopeForestResponse);
 }
 
 message AuthorizeRequest {
@@ -103,6 +116,14 @@ message EffectiveGrant {
   // EMPTY MEANS UNSCOPED, which in Anubis is every node on every axis — not
   // "no access". A caller reading empty as none has inverted the meaning.
   repeated EffectiveGrantScope scopes = 5;
+
+  // What role_name confers, already expanded through role inheritance.
+  //
+  // Carried on the grant because expanding a role otherwise means
+  // AuthzAdminService/GetRoleEffective, which refuses tenant callers — and a
+  // tenant-readable grant whose permissions need a platform credential answers
+  // nothing anybody can act on.
+  repeated string permissions = 6;
 }
 
 message EffectiveGrantScope {
@@ -115,6 +136,28 @@ message EffectiveGrantScope {
   // Exclude carves this node OUT of the grant's includes on the same axis.
   // Ignoring it produces a grant WIDER than the one held. See ADR-0004.
   bool exclude = 4;
+}
+
+message GetScopeForestRequest {
+  // Which axes to return. Empty is refused rather than meaning "all": a PEP
+  // that asked for nothing and got everything would cache an installation's
+  // whole scope graph by accident.
+  repeated string axes = 1;
+}
+
+message GetScopeForestResponse {
+  repeated ForestNode nodes = 1;
+}
+
+message ForestNode {
+  string axis = 1;
+  string id = 2;
+  string parent_id = 3;
+  // The axis the PARENT sits on, which is not always this node's: the forest
+  // crosses axes. Empty at a root.
+  string parent_axis = 4;
+  // For a picker, never for a decision.
+  string label = 5;
 }
 
 message SwitchScopeRequest {

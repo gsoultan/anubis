@@ -438,7 +438,14 @@ type EffectiveGrant struct {
 	SelfScoped bool `protobuf:"varint,4,opt,name=self_scoped,json=selfScoped,proto3" json:"self_scoped,omitempty"`
 	// EMPTY MEANS UNSCOPED, which in Anubis is every node on every axis — not
 	// "no access". A caller reading empty as none has inverted the meaning.
-	Scopes        []*EffectiveGrantScope `protobuf:"bytes,5,rep,name=scopes,proto3" json:"scopes,omitempty"`
+	Scopes []*EffectiveGrantScope `protobuf:"bytes,5,rep,name=scopes,proto3" json:"scopes,omitempty"`
+	// What role_name confers, already expanded through role inheritance.
+	//
+	// Carried on the grant because expanding a role otherwise means
+	// AuthzAdminService/GetRoleEffective, which refuses tenant callers — and a
+	// tenant-readable grant whose permissions need a platform credential answers
+	// nothing anybody can act on.
+	Permissions   []string `protobuf:"bytes,6,rep,name=permissions,proto3" json:"permissions,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -504,6 +511,13 @@ func (x *EffectiveGrant) GetSelfScoped() bool {
 func (x *EffectiveGrant) GetScopes() []*EffectiveGrantScope {
 	if x != nil {
 		return x.Scopes
+	}
+	return nil
+}
+
+func (x *EffectiveGrant) GetPermissions() []string {
+	if x != nil {
+		return x.Permissions
 	}
 	return nil
 }
@@ -579,6 +593,176 @@ func (x *EffectiveGrantScope) GetExclude() bool {
 	return false
 }
 
+type GetScopeForestRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Which axes to return. Empty is refused rather than meaning "all": a PEP
+	// that asked for nothing and got everything would cache an installation's
+	// whole scope graph by accident.
+	Axes          []string `protobuf:"bytes,1,rep,name=axes,proto3" json:"axes,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetScopeForestRequest) Reset() {
+	*x = GetScopeForestRequest{}
+	mi := &file_anubis_v1_authz_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetScopeForestRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetScopeForestRequest) ProtoMessage() {}
+
+func (x *GetScopeForestRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_anubis_v1_authz_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetScopeForestRequest.ProtoReflect.Descriptor instead.
+func (*GetScopeForestRequest) Descriptor() ([]byte, []int) {
+	return file_anubis_v1_authz_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *GetScopeForestRequest) GetAxes() []string {
+	if x != nil {
+		return x.Axes
+	}
+	return nil
+}
+
+type GetScopeForestResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Nodes         []*ForestNode          `protobuf:"bytes,1,rep,name=nodes,proto3" json:"nodes,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetScopeForestResponse) Reset() {
+	*x = GetScopeForestResponse{}
+	mi := &file_anubis_v1_authz_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetScopeForestResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetScopeForestResponse) ProtoMessage() {}
+
+func (x *GetScopeForestResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_anubis_v1_authz_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetScopeForestResponse.ProtoReflect.Descriptor instead.
+func (*GetScopeForestResponse) Descriptor() ([]byte, []int) {
+	return file_anubis_v1_authz_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *GetScopeForestResponse) GetNodes() []*ForestNode {
+	if x != nil {
+		return x.Nodes
+	}
+	return nil
+}
+
+type ForestNode struct {
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	Axis     string                 `protobuf:"bytes,1,opt,name=axis,proto3" json:"axis,omitempty"`
+	Id       string                 `protobuf:"bytes,2,opt,name=id,proto3" json:"id,omitempty"`
+	ParentId string                 `protobuf:"bytes,3,opt,name=parent_id,json=parentId,proto3" json:"parent_id,omitempty"`
+	// The axis the PARENT sits on, which is not always this node's: the forest
+	// crosses axes. Empty at a root.
+	ParentAxis string `protobuf:"bytes,4,opt,name=parent_axis,json=parentAxis,proto3" json:"parent_axis,omitempty"`
+	// For a picker, never for a decision.
+	Label         string `protobuf:"bytes,5,opt,name=label,proto3" json:"label,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ForestNode) Reset() {
+	*x = ForestNode{}
+	mi := &file_anubis_v1_authz_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ForestNode) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ForestNode) ProtoMessage() {}
+
+func (x *ForestNode) ProtoReflect() protoreflect.Message {
+	mi := &file_anubis_v1_authz_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ForestNode.ProtoReflect.Descriptor instead.
+func (*ForestNode) Descriptor() ([]byte, []int) {
+	return file_anubis_v1_authz_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *ForestNode) GetAxis() string {
+	if x != nil {
+		return x.Axis
+	}
+	return ""
+}
+
+func (x *ForestNode) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *ForestNode) GetParentId() string {
+	if x != nil {
+		return x.ParentId
+	}
+	return ""
+}
+
+func (x *ForestNode) GetParentAxis() string {
+	if x != nil {
+		return x.ParentAxis
+	}
+	return ""
+}
+
+func (x *ForestNode) GetLabel() string {
+	if x != nil {
+		return x.Label
+	}
+	return ""
+}
+
 type SwitchScopeRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Scopes        map[string]string      `protobuf:"bytes,1,rep,name=scopes,proto3" json:"scopes,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"` // desired active scope per axis
@@ -588,7 +772,7 @@ type SwitchScopeRequest struct {
 
 func (x *SwitchScopeRequest) Reset() {
 	*x = SwitchScopeRequest{}
-	mi := &file_anubis_v1_authz_proto_msgTypes[8]
+	mi := &file_anubis_v1_authz_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -600,7 +784,7 @@ func (x *SwitchScopeRequest) String() string {
 func (*SwitchScopeRequest) ProtoMessage() {}
 
 func (x *SwitchScopeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_authz_proto_msgTypes[8]
+	mi := &file_anubis_v1_authz_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -613,7 +797,7 @@ func (x *SwitchScopeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SwitchScopeRequest.ProtoReflect.Descriptor instead.
 func (*SwitchScopeRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_authz_proto_rawDescGZIP(), []int{8}
+	return file_anubis_v1_authz_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *SwitchScopeRequest) GetScopes() map[string]string {
@@ -632,7 +816,7 @@ type SwitchScopeResponse struct {
 
 func (x *SwitchScopeResponse) Reset() {
 	*x = SwitchScopeResponse{}
-	mi := &file_anubis_v1_authz_proto_msgTypes[9]
+	mi := &file_anubis_v1_authz_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -644,7 +828,7 @@ func (x *SwitchScopeResponse) String() string {
 func (*SwitchScopeResponse) ProtoMessage() {}
 
 func (x *SwitchScopeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_authz_proto_msgTypes[9]
+	mi := &file_anubis_v1_authz_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -657,7 +841,7 @@ func (x *SwitchScopeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SwitchScopeResponse.ProtoReflect.Descriptor instead.
 func (*SwitchScopeResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_authz_proto_rawDescGZIP(), []int{9}
+	return file_anubis_v1_authz_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *SwitchScopeResponse) GetTokens() *TokenPair {
@@ -712,31 +896,45 @@ const file_anubis_v1_authz_proto_rawDesc = "" +
 	"\x1aListEffectiveGrantsRequest\x12\x18\n" +
 	"\asubject\x18\x01 \x01(\tR\asubject\"P\n" +
 	"\x1bListEffectiveGrantsResponse\x121\n" +
-	"\x06grants\x18\x01 \x03(\v2\x19.anubis.v1.EffectiveGrantR\x06grants\"\xaf\x01\n" +
+	"\x06grants\x18\x01 \x03(\v2\x19.anubis.v1.EffectiveGrantR\x06grants\"\xd1\x01\n" +
 	"\x0eEffectiveGrant\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x17\n" +
 	"\arole_id\x18\x02 \x01(\tR\x06roleId\x12\x1b\n" +
 	"\trole_name\x18\x03 \x01(\tR\broleName\x12\x1f\n" +
 	"\vself_scoped\x18\x04 \x01(\bR\n" +
 	"selfScoped\x126\n" +
-	"\x06scopes\x18\x05 \x03(\v2\x1e.anubis.v1.EffectiveGrantScopeR\x06scopes\"v\n" +
+	"\x06scopes\x18\x05 \x03(\v2\x1e.anubis.v1.EffectiveGrantScopeR\x06scopes\x12 \n" +
+	"\vpermissions\x18\x06 \x03(\tR\vpermissions\"v\n" +
 	"\x13EffectiveGrantScope\x12\x12\n" +
 	"\x04axis\x18\x01 \x01(\tR\x04axis\x12\x17\n" +
 	"\anode_id\x18\x02 \x01(\tR\x06nodeId\x12\x18\n" +
 	"\ainherit\x18\x03 \x01(\bR\ainherit\x12\x18\n" +
-	"\aexclude\x18\x04 \x01(\bR\aexclude\"\x92\x01\n" +
+	"\aexclude\x18\x04 \x01(\bR\aexclude\"+\n" +
+	"\x15GetScopeForestRequest\x12\x12\n" +
+	"\x04axes\x18\x01 \x03(\tR\x04axes\"E\n" +
+	"\x16GetScopeForestResponse\x12+\n" +
+	"\x05nodes\x18\x01 \x03(\v2\x15.anubis.v1.ForestNodeR\x05nodes\"\x84\x01\n" +
+	"\n" +
+	"ForestNode\x12\x12\n" +
+	"\x04axis\x18\x01 \x01(\tR\x04axis\x12\x0e\n" +
+	"\x02id\x18\x02 \x01(\tR\x02id\x12\x1b\n" +
+	"\tparent_id\x18\x03 \x01(\tR\bparentId\x12\x1f\n" +
+	"\vparent_axis\x18\x04 \x01(\tR\n" +
+	"parentAxis\x12\x14\n" +
+	"\x05label\x18\x05 \x01(\tR\x05label\"\x92\x01\n" +
 	"\x12SwitchScopeRequest\x12A\n" +
 	"\x06scopes\x18\x01 \x03(\v2).anubis.v1.SwitchScopeRequest.ScopesEntryR\x06scopes\x1a9\n" +
 	"\vScopesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"C\n" +
 	"\x13SwitchScopeResponse\x12,\n" +
-	"\x06tokens\x18\x01 \x01(\v2\x14.anubis.v1.TokenPairR\x06tokens2\xcc\x02\n" +
+	"\x06tokens\x18\x01 \x01(\v2\x14.anubis.v1.TokenPairR\x06tokens2\xa3\x03\n" +
 	"\fAuthzService\x12F\n" +
 	"\tAuthorize\x12\x1b.anubis.v1.AuthorizeRequest\x1a\x1c.anubis.v1.AuthorizeResponse\x12@\n" +
 	"\aExplain\x12\x19.anubis.v1.ExplainRequest\x1a\x1a.anubis.v1.ExplainResponse\x12L\n" +
 	"\vSwitchScope\x12\x1d.anubis.v1.SwitchScopeRequest\x1a\x1e.anubis.v1.SwitchScopeResponse\x12d\n" +
-	"\x13ListEffectiveGrants\x12%.anubis.v1.ListEffectiveGrantsRequest\x1a&.anubis.v1.ListEffectiveGrantsResponseB6Z4github.com/gsoultan/anubis/gen/go/anubis/v1;anubisv1b\x06proto3"
+	"\x13ListEffectiveGrants\x12%.anubis.v1.ListEffectiveGrantsRequest\x1a&.anubis.v1.ListEffectiveGrantsResponse\x12U\n" +
+	"\x0eGetScopeForest\x12 .anubis.v1.GetScopeForestRequest\x1a!.anubis.v1.GetScopeForestResponseB6Z4github.com/gsoultan/anubis/gen/go/anubis/v1;anubisv1b\x06proto3"
 
 var (
 	file_anubis_v1_authz_proto_rawDescOnce sync.Once
@@ -750,7 +948,7 @@ func file_anubis_v1_authz_proto_rawDescGZIP() []byte {
 	return file_anubis_v1_authz_proto_rawDescData
 }
 
-var file_anubis_v1_authz_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
+var file_anubis_v1_authz_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
 var file_anubis_v1_authz_proto_goTypes = []any{
 	(*AuthorizeRequest)(nil),            // 0: anubis.v1.AuthorizeRequest
 	(*AuthorizeResponse)(nil),           // 1: anubis.v1.AuthorizeResponse
@@ -760,33 +958,39 @@ var file_anubis_v1_authz_proto_goTypes = []any{
 	(*ListEffectiveGrantsResponse)(nil), // 5: anubis.v1.ListEffectiveGrantsResponse
 	(*EffectiveGrant)(nil),              // 6: anubis.v1.EffectiveGrant
 	(*EffectiveGrantScope)(nil),         // 7: anubis.v1.EffectiveGrantScope
-	(*SwitchScopeRequest)(nil),          // 8: anubis.v1.SwitchScopeRequest
-	(*SwitchScopeResponse)(nil),         // 9: anubis.v1.SwitchScopeResponse
-	nil,                                 // 10: anubis.v1.AuthorizeRequest.ScopesEntry
-	nil,                                 // 11: anubis.v1.ExplainRequest.ScopesEntry
-	nil,                                 // 12: anubis.v1.SwitchScopeRequest.ScopesEntry
-	(*TokenPair)(nil),                   // 13: anubis.v1.TokenPair
+	(*GetScopeForestRequest)(nil),       // 8: anubis.v1.GetScopeForestRequest
+	(*GetScopeForestResponse)(nil),      // 9: anubis.v1.GetScopeForestResponse
+	(*ForestNode)(nil),                  // 10: anubis.v1.ForestNode
+	(*SwitchScopeRequest)(nil),          // 11: anubis.v1.SwitchScopeRequest
+	(*SwitchScopeResponse)(nil),         // 12: anubis.v1.SwitchScopeResponse
+	nil,                                 // 13: anubis.v1.AuthorizeRequest.ScopesEntry
+	nil,                                 // 14: anubis.v1.ExplainRequest.ScopesEntry
+	nil,                                 // 15: anubis.v1.SwitchScopeRequest.ScopesEntry
+	(*TokenPair)(nil),                   // 16: anubis.v1.TokenPair
 }
 var file_anubis_v1_authz_proto_depIdxs = []int32{
-	10, // 0: anubis.v1.AuthorizeRequest.scopes:type_name -> anubis.v1.AuthorizeRequest.ScopesEntry
-	11, // 1: anubis.v1.ExplainRequest.scopes:type_name -> anubis.v1.ExplainRequest.ScopesEntry
+	13, // 0: anubis.v1.AuthorizeRequest.scopes:type_name -> anubis.v1.AuthorizeRequest.ScopesEntry
+	14, // 1: anubis.v1.ExplainRequest.scopes:type_name -> anubis.v1.ExplainRequest.ScopesEntry
 	6,  // 2: anubis.v1.ListEffectiveGrantsResponse.grants:type_name -> anubis.v1.EffectiveGrant
 	7,  // 3: anubis.v1.EffectiveGrant.scopes:type_name -> anubis.v1.EffectiveGrantScope
-	12, // 4: anubis.v1.SwitchScopeRequest.scopes:type_name -> anubis.v1.SwitchScopeRequest.ScopesEntry
-	13, // 5: anubis.v1.SwitchScopeResponse.tokens:type_name -> anubis.v1.TokenPair
-	0,  // 6: anubis.v1.AuthzService.Authorize:input_type -> anubis.v1.AuthorizeRequest
-	2,  // 7: anubis.v1.AuthzService.Explain:input_type -> anubis.v1.ExplainRequest
-	8,  // 8: anubis.v1.AuthzService.SwitchScope:input_type -> anubis.v1.SwitchScopeRequest
-	4,  // 9: anubis.v1.AuthzService.ListEffectiveGrants:input_type -> anubis.v1.ListEffectiveGrantsRequest
-	1,  // 10: anubis.v1.AuthzService.Authorize:output_type -> anubis.v1.AuthorizeResponse
-	3,  // 11: anubis.v1.AuthzService.Explain:output_type -> anubis.v1.ExplainResponse
-	9,  // 12: anubis.v1.AuthzService.SwitchScope:output_type -> anubis.v1.SwitchScopeResponse
-	5,  // 13: anubis.v1.AuthzService.ListEffectiveGrants:output_type -> anubis.v1.ListEffectiveGrantsResponse
-	10, // [10:14] is the sub-list for method output_type
-	6,  // [6:10] is the sub-list for method input_type
-	6,  // [6:6] is the sub-list for extension type_name
-	6,  // [6:6] is the sub-list for extension extendee
-	0,  // [0:6] is the sub-list for field type_name
+	10, // 4: anubis.v1.GetScopeForestResponse.nodes:type_name -> anubis.v1.ForestNode
+	15, // 5: anubis.v1.SwitchScopeRequest.scopes:type_name -> anubis.v1.SwitchScopeRequest.ScopesEntry
+	16, // 6: anubis.v1.SwitchScopeResponse.tokens:type_name -> anubis.v1.TokenPair
+	0,  // 7: anubis.v1.AuthzService.Authorize:input_type -> anubis.v1.AuthorizeRequest
+	2,  // 8: anubis.v1.AuthzService.Explain:input_type -> anubis.v1.ExplainRequest
+	11, // 9: anubis.v1.AuthzService.SwitchScope:input_type -> anubis.v1.SwitchScopeRequest
+	4,  // 10: anubis.v1.AuthzService.ListEffectiveGrants:input_type -> anubis.v1.ListEffectiveGrantsRequest
+	8,  // 11: anubis.v1.AuthzService.GetScopeForest:input_type -> anubis.v1.GetScopeForestRequest
+	1,  // 12: anubis.v1.AuthzService.Authorize:output_type -> anubis.v1.AuthorizeResponse
+	3,  // 13: anubis.v1.AuthzService.Explain:output_type -> anubis.v1.ExplainResponse
+	12, // 14: anubis.v1.AuthzService.SwitchScope:output_type -> anubis.v1.SwitchScopeResponse
+	5,  // 15: anubis.v1.AuthzService.ListEffectiveGrants:output_type -> anubis.v1.ListEffectiveGrantsResponse
+	9,  // 16: anubis.v1.AuthzService.GetScopeForest:output_type -> anubis.v1.GetScopeForestResponse
+	12, // [12:17] is the sub-list for method output_type
+	7,  // [7:12] is the sub-list for method input_type
+	7,  // [7:7] is the sub-list for extension type_name
+	7,  // [7:7] is the sub-list for extension extendee
+	0,  // [0:7] is the sub-list for field type_name
 }
 
 func init() { file_anubis_v1_authz_proto_init() }
@@ -801,7 +1005,7 @@ func file_anubis_v1_authz_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_anubis_v1_authz_proto_rawDesc), len(file_anubis_v1_authz_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   13,
+			NumMessages:   16,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

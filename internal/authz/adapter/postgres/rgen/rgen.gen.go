@@ -39,6 +39,7 @@ func init() {
 	storm.RegisterScanner(scanPermissionMetaRow)
 	storm.RegisterScanner(scanRoleNameRow)
 	storm.RegisterScanner(scanEffectiveGrantRow)
+	storm.RegisterScanner(scanForestNodeRow)
 	storm.RegisterScanner(scanPermissionKeyRow)
 	storm.RegisterScanner(scanStrictSimRow)
 	storm.RegisterScanner(scanDecisionDetailRow)
@@ -250,7 +251,12 @@ SELECT g.id::text      AS grant_id,
        gs.axis_code    AS axis,
        gs.scope_node_id::text AS node_id,
        gs.inherit      AS inherit,
-       (gs.mode = 'exclude') AS exclude
+       (gs.mode = 'exclude') AS exclude,
+       COALESCE((SELECT array_agg(DISTINCT p.key ORDER BY p.key)
+                   FROM role_permissions_effective rpe
+                   JOIN permissions p ON p.id = rpe.permission_id
+                  WHERE rpe.role_id = g.role_id
+                    AND p.deprecated_at IS NULL), ARRAY[]::text[]) AS permissions
 FROM grants g
 JOIN roles r ON r.id = g.role_id
 LEFT JOIN grant_scopes gs ON gs.grant_id = g.id
@@ -351,6 +357,18 @@ FROM membership_entry_scopes mes
 JOIN scope_nodes sn ON sn.id = mes.scope_node_id
 WHERE mes.entry_id = ANY($1::uuid[])
 ORDER BY mes.entry_id, mes.axis_code, mes.mode DESC, sn.name`)
+	storm.RegisterStatement(`
+SELECT n.id::text        AS id,
+       n.axis_code       AS axis_code,
+       n.parent_id::text AS parent_id,
+       p.axis_code       AS parent_axis,
+       n.name            AS name
+FROM scope_nodes n
+LEFT JOIN scope_nodes p ON p.id = n.parent_id
+WHERE n.tenant_id = $1
+  AND n.axis_code = ANY($2::text[])
+  AND n.status = 'active'
+ORDER BY n.axis_code, n.id`)
 	storm.RegisterStatement(`
 SELECT p.id::text AS id, p.key, p.app_slug, p.resource, p.action, p.risk,
        p.description, p.min_assurance, p.requires_amr,
@@ -550,6 +568,7 @@ func scanRoleNameRow(rv [][]byte, r *authzrquery.RoleNameRow, sl *runtime.Slab) 
 }
 
 func scanEffectiveGrantRow(rv [][]byte, r *authzrquery.EffectiveGrantRow, sl *runtime.Slab) error {
+	var decErr error
 	r.GrantID = sl.Str(rv[0])
 	r.RoleID = sl.Str(rv[1])
 	r.RoleName = sl.Str(rv[2])
@@ -558,6 +577,19 @@ func scanEffectiveGrantRow(rv [][]byte, r *authzrquery.EffectiveGrantRow, sl *ru
 	r.NodeID = runtime.NullText(rv[5], sl)
 	r.Inherit = runtime.Nullable(rv[6], runtime.Bool)
 	r.Exclude = runtime.Nullable(rv[7], runtime.Bool)
+	r.Permissions, decErr = runtime.TextArray(rv[8], sl)
+	if decErr != nil {
+		return decErr
+	}
+	return nil
+}
+
+func scanForestNodeRow(rv [][]byte, r *authzrquery.ForestNodeRow, sl *runtime.Slab) error {
+	r.ID = sl.Str(rv[0])
+	r.AxisCode = sl.Str(rv[1])
+	r.ParentID = runtime.NullText(rv[2], sl)
+	r.ParentAxis = runtime.NullText(rv[3], sl)
+	r.Name = sl.Str(rv[4])
 	return nil
 }
 

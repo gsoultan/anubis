@@ -93,6 +93,13 @@ type EffectiveGrantRow struct {
 	NodeID     runtime.Null[string]
 	Inherit    runtime.Null[bool]
 	Exclude    runtime.Null[bool]
+
+	// Permissions is what the grant's ROLE confers, already expanded through
+	// role inheritance. Carried on the grant rather than left to a second call
+	// because the expansion lives on the ADMIN plane (GetRoleEffective), and a
+	// tenant-readable grant read whose permissions require a platform
+	// credential answers nothing anybody can act on.
+	Permissions []string
 }
 
 // EffectiveGrantsForIdentity lists an identity's live grants with their scopes.
@@ -122,7 +129,12 @@ SELECT g.id::text      AS grant_id,
        gs.axis_code    AS axis,
        gs.scope_node_id::text AS node_id,
        gs.inherit      AS inherit,
-       (gs.mode = 'exclude') AS exclude
+       (gs.mode = 'exclude') AS exclude,
+       COALESCE((SELECT array_agg(DISTINCT p.key ORDER BY p.key)
+                   FROM role_permissions_effective rpe
+                   JOIN permissions p ON p.id = rpe.permission_id
+                  WHERE rpe.role_id = g.role_id
+                    AND p.deprecated_at IS NULL), ARRAY[]::text[]) AS permissions
 FROM grants g
 JOIN roles r ON r.id = g.role_id
 LEFT JOIN grant_scopes gs ON gs.grant_id = g.id
@@ -130,6 +142,44 @@ WHERE g.identity_id = $1 AND g.tenant_id = $2
   AND g.revoked_at IS NULL AND g.valid_from <= now()
   AND (g.valid_until IS NULL OR g.valid_until > now())
 ORDER BY r.name, g.id, gs.axis_code, gs.scope_node_id`)
+
+// ForestNodeRow is one node of the scope forest a PEP caches.
+type ForestNodeRow struct {
+	ID         string
+	AxisCode   string
+	ParentID   runtime.Null[string]
+	ParentAxis runtime.Null[string]
+	Name       string
+}
+
+// ScopeForestForTenant returns every live node on the requested axes.
+//
+// TENANT-SCOPED, for the same reason as EffectiveGrantsForIdentity: the forest
+// is what a PEP needs to decide whether a grant at org:17 reaches a resource in
+// unit:42, and reading it through ScopeAdminService/ListScopeNodes required a
+// credential administering every tenant in the installation.
+//
+// The PARENT'S AXIS, not only its id. The forest crosses axes, so a consumer
+// holding a parent id alone cannot place the parent without reading every axis
+// and looking it up.
+//
+// Unpaged, deliberately: a PEP needs the WHOLE forest or none of it. A partial
+// one is not a smaller forest, it is a different one — a node whose parent is
+// missing has no ancestry, so a grant above it stops reaching it. The bound is
+// the caller's axis list, and an axis with hundreds of thousands of nodes is
+// one nobody should be caching in a PEP anyway.
+var ScopeForestForTenant = storm.SQL[ForestNodeRow](`
+SELECT n.id::text        AS id,
+       n.axis_code       AS axis_code,
+       n.parent_id::text AS parent_id,
+       p.axis_code       AS parent_axis,
+       n.name            AS name
+FROM scope_nodes n
+LEFT JOIN scope_nodes p ON p.id = n.parent_id
+WHERE n.tenant_id = $1
+  AND n.axis_code = ANY($2::text[])
+  AND n.status = 'active'
+ORDER BY n.axis_code, n.id`)
 
 // StrictSimRow is the strict dry-run verdict.
 type StrictSimRow struct {

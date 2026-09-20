@@ -162,7 +162,7 @@ func (s *Repository) EffectiveGrantsForIdentity(ctx context.Context, tenantID, i
 		if !seen {
 			out = append(out, authzdomain.EffectiveGrant{
 				ID: r.GrantID, RoleID: r.RoleID, Role: r.RoleName,
-				SelfScoped: r.SelfScoped,
+				SelfScoped: r.SelfScoped, Permissions: r.Permissions,
 			})
 			i = len(out) - 1
 			byID[r.GrantID] = i
@@ -178,6 +178,23 @@ func (s *Repository) EffectiveGrantsForIdentity(ctx context.Context, tenantID, i
 			NodeID:  r.NodeID.V,
 			Inherit: r.Inherit.Valid && r.Inherit.V,
 			Exclude: r.Exclude.Valid && r.Exclude.V,
+		})
+	}
+	return out, nil
+}
+
+// ScopeForestForTenant returns every live node on the requested axes.
+func (s *Repository) ScopeForestForTenant(ctx context.Context, tenantID string, axes []string) ([]authzdomain.ForestNode, error) {
+	rows, err := authzrquery.ScopeForestForTenant.Query(ctx, s.rex(ctx), tenantID, axes)
+	if err != nil {
+		return nil, database.MapErr(err)
+	}
+	out := make([]authzdomain.ForestNode, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, authzdomain.ForestNode{
+			Axis: r.AxisCode, ID: r.ID,
+			Parent: r.ParentID.V, ParentAxis: r.ParentAxis.V,
+			Label: r.Name,
 		})
 	}
 	return out, nil

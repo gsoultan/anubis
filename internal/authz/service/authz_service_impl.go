@@ -13,10 +13,11 @@ type authzService struct {
 	explain     authzapp.ExplainUsecase
 	switchScope authzapp.SwitchScopeUsecase
 	grants      authzapp.EffectiveGrantsUsecase
+	forest      authzapp.ScopeForestUsecase
 }
 
-func NewAuthzService(authorize authzapp.AuthorizeUsecase, explain authzapp.ExplainUsecase, switchScope authzapp.SwitchScopeUsecase, grants authzapp.EffectiveGrantsUsecase) AuthzService {
-	return &authzService{authorize: authorize, explain: explain, switchScope: switchScope, grants: grants}
+func NewAuthzService(authorize authzapp.AuthorizeUsecase, explain authzapp.ExplainUsecase, switchScope authzapp.SwitchScopeUsecase, grants authzapp.EffectiveGrantsUsecase, forest authzapp.ScopeForestUsecase) AuthzService {
+	return &authzService{authorize: authorize, explain: explain, switchScope: switchScope, grants: grants, forest: forest}
 }
 
 func (s *authzService) Authorize(ctx context.Context, in authzapp.AuthorizeInput) (*authzdomain.Decision, error) {
@@ -33,4 +34,8 @@ func (s *authzService) SwitchScope(ctx context.Context, scopes map[string]string
 
 func (s *authzService) ListEffectiveGrants(ctx context.Context, subject string) ([]authzdomain.EffectiveGrant, error) {
 	return s.grants.Execute(ctx, subject)
+}
+
+func (s *authzService) GetScopeForest(ctx context.Context, axes []string) ([]authzdomain.ForestNode, error) {
+	return s.forest.Execute(ctx, axes)
 }

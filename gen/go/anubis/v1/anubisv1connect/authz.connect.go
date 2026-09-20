@@ -43,6 +43,9 @@ const (
 	// AuthzServiceListEffectiveGrantsProcedure is the fully-qualified name of the AuthzService's
 	// ListEffectiveGrants RPC.
 	AuthzServiceListEffectiveGrantsProcedure = "/anubis.v1.AuthzService/ListEffectiveGrants"
+	// AuthzServiceGetScopeForestProcedure is the fully-qualified name of the AuthzService's
+	// GetScopeForest RPC.
+	AuthzServiceGetScopeForestProcedure = "/anubis.v1.AuthzService/GetScopeForest"
 )
 
 // AuthzServiceClient is a client for the anubis.v1.AuthzService service.
@@ -70,6 +73,18 @@ type AuthzServiceClient interface {
 	// fetch on a version change, decide in process, call nothing per request. A
 	// caller invoking this per request has rebuilt the round trip it removes.
 	ListEffectiveGrants(context.Context, *connect.Request[v1.ListEffectiveGrantsRequest]) (*connect.Response[v1.ListEffectiveGrantsResponse], error)
+	// GetScopeForest returns the whole live forest on the requested axes.
+	//
+	// Tenant-readable, and the companion to ListEffectiveGrants: grants say WHAT
+	// a subject may do and WHERE it was granted, and only the forest says whether
+	// that where reaches the resource in hand. A PEP holding one without the
+	// other cannot decide.
+	//
+	// UNPAGED, deliberately. A PEP needs the whole forest or none of it: a
+	// partial one is not a smaller forest, it is a different one, because a node
+	// whose parent is missing has no ancestry and a grant above it stops reaching
+	// it. The bound is the caller's axis list.
+	GetScopeForest(context.Context, *connect.Request[v1.GetScopeForestRequest]) (*connect.Response[v1.GetScopeForestResponse], error)
 }
 
 // NewAuthzServiceClient constructs a client for the anubis.v1.AuthzService service. By default, it
@@ -107,6 +122,12 @@ func NewAuthzServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 			connect.WithSchema(authzServiceMethods.ByName("ListEffectiveGrants")),
 			connect.WithClientOptions(opts...),
 		),
+		getScopeForest: connect.NewClient[v1.GetScopeForestRequest, v1.GetScopeForestResponse](
+			httpClient,
+			baseURL+AuthzServiceGetScopeForestProcedure,
+			connect.WithSchema(authzServiceMethods.ByName("GetScopeForest")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -116,6 +137,7 @@ type authzServiceClient struct {
 	explain             *connect.Client[v1.ExplainRequest, v1.ExplainResponse]
 	switchScope         *connect.Client[v1.SwitchScopeRequest, v1.SwitchScopeResponse]
 	listEffectiveGrants *connect.Client[v1.ListEffectiveGrantsRequest, v1.ListEffectiveGrantsResponse]
+	getScopeForest      *connect.Client[v1.GetScopeForestRequest, v1.GetScopeForestResponse]
 }
 
 // Authorize calls anubis.v1.AuthzService.Authorize.
@@ -136,6 +158,11 @@ func (c *authzServiceClient) SwitchScope(ctx context.Context, req *connect.Reque
 // ListEffectiveGrants calls anubis.v1.AuthzService.ListEffectiveGrants.
 func (c *authzServiceClient) ListEffectiveGrants(ctx context.Context, req *connect.Request[v1.ListEffectiveGrantsRequest]) (*connect.Response[v1.ListEffectiveGrantsResponse], error) {
 	return c.listEffectiveGrants.CallUnary(ctx, req)
+}
+
+// GetScopeForest calls anubis.v1.AuthzService.GetScopeForest.
+func (c *authzServiceClient) GetScopeForest(ctx context.Context, req *connect.Request[v1.GetScopeForestRequest]) (*connect.Response[v1.GetScopeForestResponse], error) {
+	return c.getScopeForest.CallUnary(ctx, req)
 }
 
 // AuthzServiceHandler is an implementation of the anubis.v1.AuthzService service.
@@ -163,6 +190,18 @@ type AuthzServiceHandler interface {
 	// fetch on a version change, decide in process, call nothing per request. A
 	// caller invoking this per request has rebuilt the round trip it removes.
 	ListEffectiveGrants(context.Context, *connect.Request[v1.ListEffectiveGrantsRequest]) (*connect.Response[v1.ListEffectiveGrantsResponse], error)
+	// GetScopeForest returns the whole live forest on the requested axes.
+	//
+	// Tenant-readable, and the companion to ListEffectiveGrants: grants say WHAT
+	// a subject may do and WHERE it was granted, and only the forest says whether
+	// that where reaches the resource in hand. A PEP holding one without the
+	// other cannot decide.
+	//
+	// UNPAGED, deliberately. A PEP needs the whole forest or none of it: a
+	// partial one is not a smaller forest, it is a different one, because a node
+	// whose parent is missing has no ancestry and a grant above it stops reaching
+	// it. The bound is the caller's axis list.
+	GetScopeForest(context.Context, *connect.Request[v1.GetScopeForestRequest]) (*connect.Response[v1.GetScopeForestResponse], error)
 }
 
 // NewAuthzServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -196,6 +235,12 @@ func NewAuthzServiceHandler(svc AuthzServiceHandler, opts ...connect.HandlerOpti
 		connect.WithSchema(authzServiceMethods.ByName("ListEffectiveGrants")),
 		connect.WithHandlerOptions(opts...),
 	)
+	authzServiceGetScopeForestHandler := connect.NewUnaryHandler(
+		AuthzServiceGetScopeForestProcedure,
+		svc.GetScopeForest,
+		connect.WithSchema(authzServiceMethods.ByName("GetScopeForest")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/anubis.v1.AuthzService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case AuthzServiceAuthorizeProcedure:
@@ -206,6 +251,8 @@ func NewAuthzServiceHandler(svc AuthzServiceHandler, opts ...connect.HandlerOpti
 			authzServiceSwitchScopeHandler.ServeHTTP(w, r)
 		case AuthzServiceListEffectiveGrantsProcedure:
 			authzServiceListEffectiveGrantsHandler.ServeHTTP(w, r)
+		case AuthzServiceGetScopeForestProcedure:
+			authzServiceGetScopeForestHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -229,4 +276,8 @@ func (UnimplementedAuthzServiceHandler) SwitchScope(context.Context, *connect.Re
 
 func (UnimplementedAuthzServiceHandler) ListEffectiveGrants(context.Context, *connect.Request[v1.ListEffectiveGrantsRequest]) (*connect.Response[v1.ListEffectiveGrantsResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.AuthzService.ListEffectiveGrants is not implemented"))
+}
+
+func (UnimplementedAuthzServiceHandler) GetScopeForest(context.Context, *connect.Request[v1.GetScopeForestRequest]) (*connect.Response[v1.GetScopeForestResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.AuthzService.GetScopeForest is not implemented"))
 }

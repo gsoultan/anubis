@@ -24,7 +24,7 @@ func Queries() []storm.RawDecl {
 	return []storm.RawDecl{
 		// authz.go
 		Authorize, AuthorizeExplain, GetPermissionByKey, RolesForIdentity,
-		EffectiveGrantsForIdentity,
+		EffectiveGrantsForIdentity, ScopeForestForTenant,
 		EffectivePermissionsForIdentity, AuthorizeStrictSim, SampleAuthorizeDecisions,
 		// role.go
 		ListRoles, GetRole, CreateRole, UpdateRole,

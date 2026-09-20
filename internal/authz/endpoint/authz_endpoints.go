@@ -19,6 +19,7 @@ type AuthzEndpoints struct {
 	// ListEffectiveGrants is tenant-readable, unlike the admin plane's
 	// equivalent. See the proto.
 	ListEffectiveGrants endpoint.Endpoint
+	GetScopeForest      endpoint.Endpoint
 }
 
 func NewAuthzEndpoints(svc authzsvc.AuthzService, logger *slog.Logger) AuthzEndpoints {
@@ -34,6 +35,9 @@ func NewAuthzEndpoints(svc authzsvc.AuthzService, logger *slog.Logger) AuthzEndp
 		}),
 		ListEffectiveGrants: mw.Chain("authz.list_effective_grants", logger)(func(ctx context.Context, req any) (any, error) {
 			return svc.ListEffectiveGrants(ctx, req.(string))
+		}),
+		GetScopeForest: mw.Chain("authz.get_scope_forest", logger)(func(ctx context.Context, req any) (any, error) {
+			return svc.GetScopeForest(ctx, req.([]string))
 		}),
 	}
 }

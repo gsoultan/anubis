@@ -85,7 +85,25 @@ func (h *AuthzHandler) ListEffectiveGrants(ctx context.Context, req *connect.Req
 		wire = append(wire, &anubisv1.EffectiveGrant{
 			Id: g.ID, RoleId: g.RoleID, RoleName: g.Role,
 			SelfScoped: g.SelfScoped, Scopes: scopes,
+			Permissions: g.Permissions,
 		})
 	}
 	return connect.NewResponse(&anubisv1.ListEffectiveGrantsResponse{Grants: wire}), nil
+}
+
+// GetScopeForest returns the live forest on the requested axes.
+func (h *AuthzHandler) GetScopeForest(ctx context.Context, req *connect.Request[anubisv1.GetScopeForestRequest]) (*connect.Response[anubisv1.GetScopeForestResponse], error) {
+	out, err := h.eps.GetScopeForest(ctx, req.Msg.Axes)
+	if err != nil {
+		return nil, apiconnect.Err(ctx, err)
+	}
+	nodes := out.([]authzdomain.ForestNode)
+	wire := make([]*anubisv1.ForestNode, 0, len(nodes))
+	for _, n := range nodes {
+		wire = append(wire, &anubisv1.ForestNode{
+			Axis: n.Axis, Id: n.ID, ParentId: n.Parent,
+			ParentAxis: n.ParentAxis, Label: n.Label,
+		})
+	}
+	return connect.NewResponse(&anubisv1.GetScopeForestResponse{Nodes: wire}), nil
 }

@@ -18,6 +18,10 @@ type AuthzRepository interface {
 	// EffectiveGrantsForIdentity returns the identity's live grants WITH their
 	// scopes, tenant-scoped so a tenant credential can call it.
 	EffectiveGrantsForIdentity(ctx context.Context, tenantID, identityID string) ([]authzdomain.EffectiveGrant, error)
+
+	// ScopeForestForTenant returns the whole live forest on the given axes,
+	// tenant-scoped so a tenant credential can call it.
+	ScopeForestForTenant(ctx context.Context, tenantID string, axes []string) ([]authzdomain.ForestNode, error)
 	EffectivePermissionsForIdentity(ctx context.Context, tenantID, identityID string) ([]string, error)
 	SampleAuthorizeDecisions(ctx context.Context, tenantID string, n int) ([][]byte, error)
 }

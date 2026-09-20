@@ -18,6 +18,12 @@ type EffectiveGrant struct {
 	// on every axis — not "no access". A caller that reads empty as none has
 	// inverted the meaning.
 	Scopes []GrantScope
+
+	// Permissions is what Role confers, already expanded through role
+	// inheritance. Carried here because expanding a role otherwise means
+	// GetRoleEffective, which is platform-only — so a tenant-readable grant
+	// without them answers nothing anybody can act on.
+	Permissions []string
 }
 
 // GrantScope is one node a grant names, and how.
@@ -41,4 +47,22 @@ func (g EffectiveGrant) HasExclusions() bool {
 		}
 	}
 	return false
+}
+
+// ForestNode is one node of the scope forest a PEP caches.
+//
+// Ref and parent only: the attributes behind a node belong to whichever service
+// owns the domain, and deciding whether a grant reaches a resource needs none
+// of them.
+type ForestNode struct {
+	Axis   string
+	ID     string
+	Parent string
+
+	// ParentAxis is the axis the PARENT sits on, which is not always this
+	// node's — the forest crosses axes. Empty at a root.
+	ParentAxis string
+
+	// Label is for a picker, never for a decision.
+	Label string
 }
