@@ -25,6 +25,9 @@ type OperatorAdminUsecase interface {
 	// SetOperatorStatus disables or restores a platform user. Disabling
 	// takes their live tokens down with them.
 	SetOperatorStatus(ctx context.Context, operatorID, status string) error
+	// ResetOperatorPassword issues a temporary password for an operator who
+	// has lost theirs, and returns it once.
+	ResetOperatorPassword(ctx context.Context, operatorID string) (string, error)
 }
 
 // ListOperatorsInput is one page request.

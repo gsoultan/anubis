@@ -60,7 +60,7 @@ func NewPlatformAPIKeyInteractor(
 	audit auditport.Auditor,
 ) PlatformAPIKeyUsecase {
 	return &apiKeyInteractor{
-		guard: platformGuard{read: read, clock: clk},
+		guard: platformGuard{read: read, users: users, clock: clk},
 		keys:  keys, users: users, clock: clk, audit: audit,
 	}
 }

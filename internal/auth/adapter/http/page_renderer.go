@@ -64,6 +64,10 @@ type PageView struct {
 	// with url.PathEscape and the query with Values.Encode, so nothing a
 	// username contains reaches the attribute raw.
 	EnrolURI template.URL
+	// EnrolQR is trusted markup: qr.SVG emits a fixed element whose only
+	// variable parts are integers it computed. Nothing a username contains
+	// reaches it — the URI is encoded as modules, not embedded as text.
+	EnrolQR template.HTML
 	// RecoveryCodes are rendered above the sign-in form and exist in
 	// readable form exactly once. Shown here or never.
 	RecoveryCodes []string

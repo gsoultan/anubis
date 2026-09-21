@@ -204,3 +204,18 @@ func (h *PlatformAdminHandler) SetOperatorStatus(ctx context.Context,
 	}
 	return connect.NewResponse(&anubisv1.SetOperatorStatusResponse{}), nil
 }
+
+// ResetOperatorPassword issues a temporary password and returns it once.
+func (h *PlatformAdminHandler) ResetOperatorPassword(ctx context.Context,
+	req *connect.Request[anubisv1.ResetOperatorPasswordRequest],
+) (*connect.Response[anubisv1.ResetOperatorPasswordResponse], error) {
+	out, err := h.f.Do(ctx, "admin.platform.operator_password_reset", func(ctx context.Context) (any, error) {
+		return h.svc.ResetOperatorPassword(ctx, req.Msg.OperatorId)
+	})
+	if err != nil {
+		return nil, apiconnect.Err(ctx, err)
+	}
+	return connect.NewResponse(&anubisv1.ResetOperatorPasswordResponse{
+		TemporaryPassword: out.(string),
+	}), nil
+}

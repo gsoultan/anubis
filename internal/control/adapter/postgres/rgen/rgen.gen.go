@@ -735,6 +735,10 @@ SET used_at = now()
 WHERE id = $1 AND used_at IS NULL AND revoked_at IS NULL`)
 	storm.RegisterStatement(`
 UPDATE platform_users
+   SET password_hash = $2, token_epoch = token_epoch + 1, updated_at = now()
+ WHERE id = $1`)
+	storm.RegisterStatement(`
+UPDATE platform_users
    SET password_hash = $3, updated_at = now()
  WHERE id = $1 AND password_hash = $2`)
 	storm.RegisterStatement(`

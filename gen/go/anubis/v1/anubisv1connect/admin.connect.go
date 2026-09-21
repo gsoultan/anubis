@@ -351,6 +351,9 @@ const (
 	// PlatformAdminServiceSetOperatorStatusProcedure is the fully-qualified name of the
 	// PlatformAdminService's SetOperatorStatus RPC.
 	PlatformAdminServiceSetOperatorStatusProcedure = "/anubis.v1.PlatformAdminService/SetOperatorStatus"
+	// PlatformAdminServiceResetOperatorPasswordProcedure is the fully-qualified name of the
+	// PlatformAdminService's ResetOperatorPassword RPC.
+	PlatformAdminServiceResetOperatorPasswordProcedure = "/anubis.v1.PlatformAdminService/ResetOperatorPassword"
 	// PlatformAuthServicePlatformLoginProcedure is the fully-qualified name of the
 	// PlatformAuthService's PlatformLogin RPC.
 	PlatformAuthServicePlatformLoginProcedure = "/anubis.v1.PlatformAuthService/PlatformLogin"
@@ -372,6 +375,9 @@ const (
 	// PlatformAuthServiceMyTenantsProcedure is the fully-qualified name of the PlatformAuthService's
 	// MyTenants RPC.
 	PlatformAuthServiceMyTenantsProcedure = "/anubis.v1.PlatformAuthService/MyTenants"
+	// PlatformAuthServiceChangePlatformPasswordProcedure is the fully-qualified name of the
+	// PlatformAuthService's ChangePlatformPassword RPC.
+	PlatformAuthServiceChangePlatformPasswordProcedure = "/anubis.v1.PlatformAuthService/ChangePlatformPassword"
 )
 
 // IdentityAdminServiceClient is a client for the anubis.v1.IdentityAdminService service.
@@ -3216,6 +3222,21 @@ type PlatformAdminServiceClient interface {
 	// SetOperatorStatus disables or restores a platform user. Disabling takes
 	// effect on their live tokens, not when those tokens expire.
 	SetOperatorStatus(context.Context, *connect.Request[v1.SetOperatorStatusRequest]) (*connect.Response[v1.SetOperatorStatusResponse], error)
+	// ResetOperatorPassword sets a temporary password for somebody who has
+	// lost theirs. ChangePlatformPassword covers the case where they still
+	// know it; this covers the case where they do not, and used to have no
+	// answer but disable-and-recreate.
+	//
+	// The temporary password is returned ONCE, in this response. It is
+	// generated rather than supplied: a password chosen by the person doing
+	// the resetting is a password somebody chose in a hurry.
+	//
+	// This is not a new privilege. CreateAPIKey already mints, for any
+	// operator named in the request, a credential that administers as its
+	// owner — behind this same permission. What a reset adds is that the
+	// target loses their own access until they are told the new password, so
+	// it ends their live sessions and is audited with both names.
+	ResetOperatorPassword(context.Context, *connect.Request[v1.ResetOperatorPasswordRequest]) (*connect.Response[v1.ResetOperatorPasswordResponse], error)
 }
 
 // NewPlatformAdminServiceClient constructs a client for the anubis.v1.PlatformAdminService service.
@@ -3277,19 +3298,26 @@ func NewPlatformAdminServiceClient(httpClient connect.HTTPClient, baseURL string
 			connect.WithSchema(platformAdminServiceMethods.ByName("SetOperatorStatus")),
 			connect.WithClientOptions(opts...),
 		),
+		resetOperatorPassword: connect.NewClient[v1.ResetOperatorPasswordRequest, v1.ResetOperatorPasswordResponse](
+			httpClient,
+			baseURL+PlatformAdminServiceResetOperatorPasswordProcedure,
+			connect.WithSchema(platformAdminServiceMethods.ByName("ResetOperatorPassword")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // platformAdminServiceClient implements PlatformAdminServiceClient.
 type platformAdminServiceClient struct {
-	listOperators        *connect.Client[v1.ListOperatorsRequest, v1.ListOperatorsResponse]
-	createPlatformApiKey *connect.Client[v1.CreatePlatformApiKeyRequest, v1.CreatePlatformApiKeyResponse]
-	listPlatformApiKeys  *connect.Client[v1.ListPlatformApiKeysRequest, v1.ListPlatformApiKeysResponse]
-	revokePlatformApiKey *connect.Client[v1.RevokePlatformApiKeyRequest, v1.RevokePlatformApiKeyResponse]
-	createOperator       *connect.Client[v1.CreateOperatorRequest, v1.CreateOperatorResponse]
-	assignOperator       *connect.Client[v1.AssignOperatorRequest, v1.AssignOperatorResponse]
-	revokeAssignment     *connect.Client[v1.RevokeAssignmentRequest, v1.RevokeAssignmentResponse]
-	setOperatorStatus    *connect.Client[v1.SetOperatorStatusRequest, v1.SetOperatorStatusResponse]
+	listOperators         *connect.Client[v1.ListOperatorsRequest, v1.ListOperatorsResponse]
+	createPlatformApiKey  *connect.Client[v1.CreatePlatformApiKeyRequest, v1.CreatePlatformApiKeyResponse]
+	listPlatformApiKeys   *connect.Client[v1.ListPlatformApiKeysRequest, v1.ListPlatformApiKeysResponse]
+	revokePlatformApiKey  *connect.Client[v1.RevokePlatformApiKeyRequest, v1.RevokePlatformApiKeyResponse]
+	createOperator        *connect.Client[v1.CreateOperatorRequest, v1.CreateOperatorResponse]
+	assignOperator        *connect.Client[v1.AssignOperatorRequest, v1.AssignOperatorResponse]
+	revokeAssignment      *connect.Client[v1.RevokeAssignmentRequest, v1.RevokeAssignmentResponse]
+	setOperatorStatus     *connect.Client[v1.SetOperatorStatusRequest, v1.SetOperatorStatusResponse]
+	resetOperatorPassword *connect.Client[v1.ResetOperatorPasswordRequest, v1.ResetOperatorPasswordResponse]
 }
 
 // ListOperators calls anubis.v1.PlatformAdminService.ListOperators.
@@ -3332,6 +3360,11 @@ func (c *platformAdminServiceClient) SetOperatorStatus(ctx context.Context, req 
 	return c.setOperatorStatus.CallUnary(ctx, req)
 }
 
+// ResetOperatorPassword calls anubis.v1.PlatformAdminService.ResetOperatorPassword.
+func (c *platformAdminServiceClient) ResetOperatorPassword(ctx context.Context, req *connect.Request[v1.ResetOperatorPasswordRequest]) (*connect.Response[v1.ResetOperatorPasswordResponse], error) {
+	return c.resetOperatorPassword.CallUnary(ctx, req)
+}
+
 // PlatformAdminServiceHandler is an implementation of the anubis.v1.PlatformAdminService service.
 type PlatformAdminServiceHandler interface {
 	// ListOperators is everyone who can administer this installation, with the
@@ -3354,6 +3387,21 @@ type PlatformAdminServiceHandler interface {
 	// SetOperatorStatus disables or restores a platform user. Disabling takes
 	// effect on their live tokens, not when those tokens expire.
 	SetOperatorStatus(context.Context, *connect.Request[v1.SetOperatorStatusRequest]) (*connect.Response[v1.SetOperatorStatusResponse], error)
+	// ResetOperatorPassword sets a temporary password for somebody who has
+	// lost theirs. ChangePlatformPassword covers the case where they still
+	// know it; this covers the case where they do not, and used to have no
+	// answer but disable-and-recreate.
+	//
+	// The temporary password is returned ONCE, in this response. It is
+	// generated rather than supplied: a password chosen by the person doing
+	// the resetting is a password somebody chose in a hurry.
+	//
+	// This is not a new privilege. CreateAPIKey already mints, for any
+	// operator named in the request, a credential that administers as its
+	// owner — behind this same permission. What a reset adds is that the
+	// target loses their own access until they are told the new password, so
+	// it ends their live sessions and is audited with both names.
+	ResetOperatorPassword(context.Context, *connect.Request[v1.ResetOperatorPasswordRequest]) (*connect.Response[v1.ResetOperatorPasswordResponse], error)
 }
 
 // NewPlatformAdminServiceHandler builds an HTTP handler from the service implementation. It returns
@@ -3411,6 +3459,12 @@ func NewPlatformAdminServiceHandler(svc PlatformAdminServiceHandler, opts ...con
 		connect.WithSchema(platformAdminServiceMethods.ByName("SetOperatorStatus")),
 		connect.WithHandlerOptions(opts...),
 	)
+	platformAdminServiceResetOperatorPasswordHandler := connect.NewUnaryHandler(
+		PlatformAdminServiceResetOperatorPasswordProcedure,
+		svc.ResetOperatorPassword,
+		connect.WithSchema(platformAdminServiceMethods.ByName("ResetOperatorPassword")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/anubis.v1.PlatformAdminService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case PlatformAdminServiceListOperatorsProcedure:
@@ -3429,6 +3483,8 @@ func NewPlatformAdminServiceHandler(svc PlatformAdminServiceHandler, opts ...con
 			platformAdminServiceRevokeAssignmentHandler.ServeHTTP(w, r)
 		case PlatformAdminServiceSetOperatorStatusProcedure:
 			platformAdminServiceSetOperatorStatusHandler.ServeHTTP(w, r)
+		case PlatformAdminServiceResetOperatorPasswordProcedure:
+			platformAdminServiceResetOperatorPasswordHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -3470,6 +3526,10 @@ func (UnimplementedPlatformAdminServiceHandler) SetOperatorStatus(context.Contex
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.PlatformAdminService.SetOperatorStatus is not implemented"))
 }
 
+func (UnimplementedPlatformAdminServiceHandler) ResetOperatorPassword(context.Context, *connect.Request[v1.ResetOperatorPasswordRequest]) (*connect.Response[v1.ResetOperatorPasswordResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.PlatformAdminService.ResetOperatorPassword is not implemented"))
+}
+
 // PlatformAuthServiceClient is a client for the anubis.v1.PlatformAuthService service.
 type PlatformAuthServiceClient interface {
 	PlatformLogin(context.Context, *connect.Request[v1.PlatformLoginRequest]) (*connect.Response[v1.PlatformLoginResponse], error)
@@ -3487,6 +3547,18 @@ type PlatformAuthServiceClient interface {
 	ConfirmTotpEnrolment(context.Context, *connect.Request[v1.ConfirmTotpEnrolmentRequest]) (*connect.Response[v1.ConfirmTotpEnrolmentResponse], error)
 	// MyTenants is which tenants this operator may administer.
 	MyTenants(context.Context, *connect.Request[v1.MyTenantsRequest]) (*connect.Response[v1.MyTenantsResponse], error)
+	// ChangePlatformPassword rotates the caller's own password.
+	//
+	// It exists because nothing else could: an operator password was written
+	// once at install or at CreateOperator and no route changed it, so the
+	// remedy for a suspected compromise was to disable the account and build
+	// another, losing its assignments.
+	//
+	// Every outstanding token for this operator stops working, including the
+	// caller's own. That is the point rather than a side effect: somebody
+	// changing their password because it leaked needs the sessions opened with
+	// it to end, and singling out their current one would leave the attacker's.
+	ChangePlatformPassword(context.Context, *connect.Request[v1.ChangePlatformPasswordRequest]) (*connect.Response[v1.ChangePlatformPasswordResponse], error)
 }
 
 // NewPlatformAuthServiceClient constructs a client for the anubis.v1.PlatformAuthService service.
@@ -3542,18 +3614,25 @@ func NewPlatformAuthServiceClient(httpClient connect.HTTPClient, baseURL string,
 			connect.WithSchema(platformAuthServiceMethods.ByName("MyTenants")),
 			connect.WithClientOptions(opts...),
 		),
+		changePlatformPassword: connect.NewClient[v1.ChangePlatformPasswordRequest, v1.ChangePlatformPasswordResponse](
+			httpClient,
+			baseURL+PlatformAuthServiceChangePlatformPasswordProcedure,
+			connect.WithSchema(platformAuthServiceMethods.ByName("ChangePlatformPassword")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // platformAuthServiceClient implements PlatformAuthServiceClient.
 type platformAuthServiceClient struct {
-	platformLogin        *connect.Client[v1.PlatformLoginRequest, v1.PlatformLoginResponse]
-	platformVerifyMfa    *connect.Client[v1.PlatformVerifyMfaRequest, v1.PlatformVerifyMfaResponse]
-	platformRefresh      *connect.Client[v1.PlatformRefreshRequest, v1.PlatformRefreshResponse]
-	platformLogout       *connect.Client[v1.PlatformLogoutRequest, v1.PlatformLogoutResponse]
-	beginTotpEnrolment   *connect.Client[v1.BeginTotpEnrolmentRequest, v1.BeginTotpEnrolmentResponse]
-	confirmTotpEnrolment *connect.Client[v1.ConfirmTotpEnrolmentRequest, v1.ConfirmTotpEnrolmentResponse]
-	myTenants            *connect.Client[v1.MyTenantsRequest, v1.MyTenantsResponse]
+	platformLogin          *connect.Client[v1.PlatformLoginRequest, v1.PlatformLoginResponse]
+	platformVerifyMfa      *connect.Client[v1.PlatformVerifyMfaRequest, v1.PlatformVerifyMfaResponse]
+	platformRefresh        *connect.Client[v1.PlatformRefreshRequest, v1.PlatformRefreshResponse]
+	platformLogout         *connect.Client[v1.PlatformLogoutRequest, v1.PlatformLogoutResponse]
+	beginTotpEnrolment     *connect.Client[v1.BeginTotpEnrolmentRequest, v1.BeginTotpEnrolmentResponse]
+	confirmTotpEnrolment   *connect.Client[v1.ConfirmTotpEnrolmentRequest, v1.ConfirmTotpEnrolmentResponse]
+	myTenants              *connect.Client[v1.MyTenantsRequest, v1.MyTenantsResponse]
+	changePlatformPassword *connect.Client[v1.ChangePlatformPasswordRequest, v1.ChangePlatformPasswordResponse]
 }
 
 // PlatformLogin calls anubis.v1.PlatformAuthService.PlatformLogin.
@@ -3591,6 +3670,11 @@ func (c *platformAuthServiceClient) MyTenants(ctx context.Context, req *connect.
 	return c.myTenants.CallUnary(ctx, req)
 }
 
+// ChangePlatformPassword calls anubis.v1.PlatformAuthService.ChangePlatformPassword.
+func (c *platformAuthServiceClient) ChangePlatformPassword(ctx context.Context, req *connect.Request[v1.ChangePlatformPasswordRequest]) (*connect.Response[v1.ChangePlatformPasswordResponse], error) {
+	return c.changePlatformPassword.CallUnary(ctx, req)
+}
+
 // PlatformAuthServiceHandler is an implementation of the anubis.v1.PlatformAuthService service.
 type PlatformAuthServiceHandler interface {
 	PlatformLogin(context.Context, *connect.Request[v1.PlatformLoginRequest]) (*connect.Response[v1.PlatformLoginResponse], error)
@@ -3608,6 +3692,18 @@ type PlatformAuthServiceHandler interface {
 	ConfirmTotpEnrolment(context.Context, *connect.Request[v1.ConfirmTotpEnrolmentRequest]) (*connect.Response[v1.ConfirmTotpEnrolmentResponse], error)
 	// MyTenants is which tenants this operator may administer.
 	MyTenants(context.Context, *connect.Request[v1.MyTenantsRequest]) (*connect.Response[v1.MyTenantsResponse], error)
+	// ChangePlatformPassword rotates the caller's own password.
+	//
+	// It exists because nothing else could: an operator password was written
+	// once at install or at CreateOperator and no route changed it, so the
+	// remedy for a suspected compromise was to disable the account and build
+	// another, losing its assignments.
+	//
+	// Every outstanding token for this operator stops working, including the
+	// caller's own. That is the point rather than a side effect: somebody
+	// changing their password because it leaked needs the sessions opened with
+	// it to end, and singling out their current one would leave the attacker's.
+	ChangePlatformPassword(context.Context, *connect.Request[v1.ChangePlatformPasswordRequest]) (*connect.Response[v1.ChangePlatformPasswordResponse], error)
 }
 
 // NewPlatformAuthServiceHandler builds an HTTP handler from the service implementation. It returns
@@ -3659,6 +3755,12 @@ func NewPlatformAuthServiceHandler(svc PlatformAuthServiceHandler, opts ...conne
 		connect.WithSchema(platformAuthServiceMethods.ByName("MyTenants")),
 		connect.WithHandlerOptions(opts...),
 	)
+	platformAuthServiceChangePlatformPasswordHandler := connect.NewUnaryHandler(
+		PlatformAuthServiceChangePlatformPasswordProcedure,
+		svc.ChangePlatformPassword,
+		connect.WithSchema(platformAuthServiceMethods.ByName("ChangePlatformPassword")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/anubis.v1.PlatformAuthService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case PlatformAuthServicePlatformLoginProcedure:
@@ -3675,6 +3777,8 @@ func NewPlatformAuthServiceHandler(svc PlatformAuthServiceHandler, opts ...conne
 			platformAuthServiceConfirmTotpEnrolmentHandler.ServeHTTP(w, r)
 		case PlatformAuthServiceMyTenantsProcedure:
 			platformAuthServiceMyTenantsHandler.ServeHTTP(w, r)
+		case PlatformAuthServiceChangePlatformPasswordProcedure:
+			platformAuthServiceChangePlatformPasswordHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -3710,4 +3814,8 @@ func (UnimplementedPlatformAuthServiceHandler) ConfirmTotpEnrolment(context.Cont
 
 func (UnimplementedPlatformAuthServiceHandler) MyTenants(context.Context, *connect.Request[v1.MyTenantsRequest]) (*connect.Response[v1.MyTenantsResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.PlatformAuthService.MyTenants is not implemented"))
+}
+
+func (UnimplementedPlatformAuthServiceHandler) ChangePlatformPassword(context.Context, *connect.Request[v1.ChangePlatformPasswordRequest]) (*connect.Response[v1.ChangePlatformPasswordResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.PlatformAuthService.ChangePlatformPassword is not implemented"))
 }

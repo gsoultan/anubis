@@ -187,10 +187,11 @@ body{padding:0;align-content:stretch;justify-items:stretch}
     <input type="hidden" name="enrol_token" value="{{$.EnrolToken}}">
     <input type="hidden" name="realm" value="{{$.Realm}}">
     {{if $.Error}}<div class="err">{{$.Error}}</div>{{end}}
-    <p class="sub">Add this key to an authenticator app, then enter the code it shows.</p>
-    {{/* A tap opens the authenticator on a phone. Elsewhere the key below is
-         typed in by hand — there is no QR here, because drawing one without a
-         third-party library is a feature of its own (ADR-0002). */}}
+    <p class="sub">Scan this with an authenticator app, then enter the code it shows.</p>
+    {{/* Three ways in, because the one that works depends on which device is
+         in front of you: scan it from another phone, tap it on this one, or
+         type the key. */}}
+    {{if $.EnrolQR}}<p class="sub">{{$.EnrolQR}}</p>{{end}}
     <p class="links"><a href="{{$.EnrolURI}}">Open in your authenticator app</a></p>
     <label for="k">Setup key</label>
     <p class="sub"><code>{{$.EnrolKey}}</code></p>

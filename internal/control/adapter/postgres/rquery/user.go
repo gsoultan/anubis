@@ -63,6 +63,19 @@ UPDATE platform_users
    SET password_hash = $3, updated_at = now()
  WHERE id = $1 AND password_hash = $2`)
 
+// SetPlatformUserPassword replaces the password and supersedes every token
+// minted under the old one.
+//
+// The two columns move together for the same reason SetPlatformUserStatus
+// moves three: token_epoch + 1 is what ends the sessions, and computing it in
+// the database keeps two concurrent changes from both reading N and both
+// writing N+1 — which would leave one of them believing it had cut off
+// tokens it had not.
+var SetPlatformUserPassword = storm.SQLExec(`
+UPDATE platform_users
+   SET password_hash = $2, token_epoch = token_epoch + 1, updated_at = now()
+ WHERE id = $1`)
+
 // TouchPlatformUserLogin records a sign-in against the server clock.
 var TouchPlatformUserLogin = storm.SQLExec(`
 UPDATE platform_users SET last_login_at = now() WHERE id = $1`)

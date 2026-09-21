@@ -20,7 +20,40 @@ import (
 // loop.
 type platformGuard struct {
 	read  controlport.AssignmentReader
+	users controlport.PlatformUserStore
 	clock clock.Clock
+}
+
+// stillValid rejects a token whose operator has been disabled, or whose epoch
+// the row has moved past.
+//
+// Both were minted into the token and neither was ever read back. The comment
+// on SetPlatformUserStatus said "token_epoch + 1 is what makes disabling take
+// effect NOW rather than whenever the token expired" — nothing compared it,
+// so disabling an operator did nothing at all until their access token aged
+// out, up to an hour of unchanged authority on the most privileged accounts
+// in the installation. Refresh checks Active(), which bounds the window; it
+// does not close it.
+//
+// One row read per platform request. The plane is operators rather than
+// traffic, and the guard already reads assignments on every call.
+func (g platformGuard) stillValid(ctx context.Context, p *authctx.Principal) error {
+	if g.users == nil {
+		return nil // constructed without the store; callers that need it pass one
+	}
+	who, _, err := g.users.PlatformUserByID(ctx, p.IdentityID)
+	if err != nil || who == nil {
+		return apperr.ErrUnauthenticated
+	}
+	if !who.Active() {
+		return apperr.ErrUnauthenticated
+	}
+	if p.Epoch != who.TokenEpoch {
+		// Superseded: the password changed, or the account was disabled and
+		// re-enabled, while this token was outstanding.
+		return apperr.ErrUnauthenticated
+	}
+	return nil
 }
 
 // require proves the caller is a platform user whose live assignments carry
@@ -36,6 +69,9 @@ func (g platformGuard) require(ctx context.Context, permission string) (*authctx
 	}
 	if !p.Platform {
 		return nil, nil, apperr.ErrPermissionDenied.With("permission", permission)
+	}
+	if err := g.stillValid(ctx, p); err != nil {
+		return nil, nil, err
 	}
 	all, err := g.read.Assignments(ctx)
 	if err != nil {

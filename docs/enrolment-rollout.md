@@ -143,10 +143,19 @@ rather than pretending a retry is possible against a secret that no longer
 exists. Tell people to transfer the key carefully; it is not a typo-tolerant
 step.
 
-**There is no QR code.** Drawing one means writing a QR encoder — ADR-0002
-forbids the library that would otherwise do it — so the key is tapped
-(`otpauth://` opens an authenticator on a phone) or typed. That is the one
-place this flow is worse than a commercial IdP's.
+**Three ways in**, because which one works depends on the device in front of
+the person: scan the QR from another phone, tap the `otpauth://` link to open
+an authenticator on this one, or type the key.
+
+The encoder is ours (`internal/platform/qr`) because ADR-0002 forbids the
+library that would otherwise draw it. Byte mode, level M, versions 1 to 10 —
+an `otpauth://` URI lands around version 6. It renders as inline SVG, so the
+page still fetches nothing and its `default-src 'none'` CSP is unchanged.
+
+**If a symbol ever fails to scan, the key beside it is the same secret.** The
+page logs a warning and carries on when the encoder returns an error, because
+a symbol that will not build is not a reason to refuse somebody an
+enrolment.
 
 ### What the warning does, and why it is skippable
 

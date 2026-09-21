@@ -925,6 +925,13 @@ func TestABrowserCanEnrolTheFactorItIsRefusedFor(t *testing.T) {
 	}
 	secret := decodeBase32(t, m[1])
 
+	// And a symbol to scan, inline so the page fetches nothing — its CSP
+	// allows no scripts and no network at all.
+	if !strings.Contains(body, "<svg") || !strings.Contains(body, "Enrolment QR code") {
+		t.Fatalf("the enrolment page offered no QR code, so the key must be "+
+			"typed by hand:\n%s", firstBytes(body, 800))
+	}
+
 	// 2. Enrol, submitting exactly what the page offers.
 	form := formFields(body)
 	if form.Get("password") != "" {
