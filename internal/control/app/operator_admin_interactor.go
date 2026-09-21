@@ -2,6 +2,7 @@ package controlapp
 
 import (
 	"context"
+	"github.com/gsoultan/anubis/internal/platform/crypto/secret"
 	"strings"
 
 	auditdomain "github.com/gsoultan/anubis/internal/audit/domain"
@@ -231,6 +232,55 @@ func (u *operatorAdminInteractor) SetOperatorStatus(ctx context.Context, operato
 	}
 	u.emit(ctx, p, "platform.operator_status", operatorID, map[string]string{"status": status})
 	return nil
+}
+
+// ResetOperatorPassword issues a temporary password for somebody who has
+// lost theirs.
+//
+// Gated on the same permission as creating an operator, assigning one, or
+// minting them an API key — and deliberately so, because CreateAPIKey
+// already hands out a credential that administers as any operator named in
+// the request. A reset is not more authority; it is the same authority
+// arriving by a route that also locks the target out, which is why it ends
+// their sessions and records both names.
+//
+// It refuses to reset YOU. ChangePlatformPassword exists for that and
+// requires the current password; allowing a self-reset here would be a way
+// around that check for anybody holding a stolen token with this permission.
+func (u *operatorAdminInteractor) ResetOperatorPassword(ctx context.Context, operatorID string) (string, error) {
+	p, _, err := u.guard.require(ctx, controldomain.PermAssignOperators)
+	if err != nil {
+		return "", err
+	}
+	if operatorID == p.IdentityID {
+		return "", apperr.ErrInvalidArgument.With("operator",
+			"use a password change for your own account, which asks for the current one")
+	}
+	who, _, err := u.users.PlatformUserByID(ctx, operatorID)
+	if err != nil {
+		return "", err
+	}
+	if who == nil {
+		return "", apperr.ErrNotFound.With("operator", operatorID)
+	}
+	// Generated, not supplied, and well past the installation's floor: this
+	// is typed once and replaced.
+	temporary, err := secret.New(24)
+	if err != nil {
+		return "", apperr.ErrInternal.Wrap(err)
+	}
+	hash, err := kdf.Hash(temporary)
+	if err != nil {
+		return "", apperr.ErrInternal.Wrap(err)
+	}
+	// SetPassword advances token_epoch in the same statement, so whatever
+	// the target had open stops working now rather than within the hour.
+	if err := u.users.SetPassword(ctx, who.ID, hash); err != nil {
+		return "", err
+	}
+	u.emit(ctx, p, "platform.operator_password_reset", who.ID,
+		map[string]string{"username": who.Username})
+	return temporary, nil
 }
 
 // resolveTenant turns a slug into an id. An empty slug means every tenant,

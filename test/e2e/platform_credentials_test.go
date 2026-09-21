@@ -197,6 +197,10 @@ func TestPlatformLogoutEndsTheFamily(t *testing.T) {
 // their username. It never touches the shared owner account: changing that
 // password would end every other test in this package.
 func newOperator(t *testing.T, password string) string {
+	return newOperatorWithRole(t, password, "support")
+}
+
+func newOperatorWithRole(t *testing.T, password, role string) string {
 	t.Helper()
 	ctx := context.Background()
 	token := platformLogin(t)
@@ -205,7 +209,7 @@ func newOperator(t *testing.T, password string) string {
 	username := fmt.Sprintf("op-%d", time.Now().UnixNano())
 	if _, err := admin.CreateOperator(ctx, bearer(connect.NewRequest(&anubisv1.CreateOperatorRequest{
 		Username: username, Email: username + "@example.test",
-		Password: password, Role: "support",
+		Password: password, Role: role,
 	}), token)); err != nil {
 		t.Fatalf("create operator: %v", err)
 	}
@@ -362,4 +366,123 @@ func TestDisablingAnOperatorEndsTheirSessionImmediately(t *testing.T) {
 		t.Fatal("a disabled operator's access token still works — disabling " +
 			"waits for the token to expire, up to an hour of unchanged authority")
 	}
+}
+
+// Somebody who has lost their password gets a new one without losing their
+// account.
+//
+// ChangePlatformPassword covers the case where they still know it. This
+// covers the case where they do not, which until now had no answer but
+// disable-and-recreate — and that costs the account its assignments and its
+// history, so in practice nobody did it and the password stayed.
+func TestAnOperatorPasswordCanBeResetForSomebodyElse(t *testing.T) {
+	requireServer(t)
+	ctx := context.Background()
+
+	const original = "operator-forgotten-password-12"
+	username := newOperator(t, original)
+	token, err := operatorLogin(t, username, original)
+	if err != nil {
+		t.Fatalf("sign in: %v", err)
+	}
+	id := operatorIDOf(t, username)
+
+	reset, err := platformAdmin().ResetOperatorPassword(ctx, bearer(connect.NewRequest(
+		&anubisv1.ResetOperatorPasswordRequest{OperatorId: id}), platformLogin(t)))
+	if err != nil {
+		t.Fatalf("reset: %v", err)
+	}
+	temporary := reset.Msg.TemporaryPassword
+	if len(temporary) < 12 {
+		t.Fatalf("temporary password is %d characters, under the installation floor", len(temporary))
+	}
+
+	// The old password is gone and the temporary one works.
+	if _, err := operatorLogin(t, username, original); err == nil {
+		t.Fatal("the old password still signs in after a reset")
+	}
+	if _, err := operatorLogin(t, username, temporary); err != nil {
+		t.Fatalf("the temporary password does not sign in: %v", err)
+	}
+	// And whatever the target had open is closed. A reset that leaves the
+	// old sessions running is a reset in name only.
+	if _, err := platformAuth().MyTenants(ctx, bearer(connect.NewRequest(
+		&anubisv1.MyTenantsRequest{}), token)); err == nil {
+		t.Fatal("a session opened before the reset still works")
+	}
+	// The account is the same one: it kept the assignment it was created
+	// with, which is the entire reason not to disable-and-recreate.
+	if _, err := platformAuth().MyTenants(ctx, bearer(connect.NewRequest(
+		&anubisv1.MyTenantsRequest{}), mustLogin(t, username, temporary))); err != nil {
+		t.Fatalf("the reset account lost its assignments: %v", err)
+	}
+}
+
+// You cannot reset your own password this way.
+//
+// ChangePlatformPassword exists for that and asks for the current one.
+// Allowing a self-reset here would be a way around that check for anybody
+// holding a stolen token that carries this permission.
+func TestResettingYourOwnPasswordIsRefused(t *testing.T) {
+	requireServer(t)
+	ctx := context.Background()
+
+	// A THROWAWAY owner asks to reset itself, rather than the shared dev
+	// owner. Mutation-testing this guard runs the unguarded path for real,
+	// and pointing that at the account every other test signs in with
+	// randomises its password — which is exactly what happened once.
+	const password = "operator-self-reset-pass-123"
+	username := newOperatorWithRole(t, password, "owner")
+	token, err := operatorLogin(t, username, password)
+	if err != nil {
+		t.Fatalf("sign in: %v", err)
+	}
+	self := operatorIDOf(t, username)
+
+	// It holds the permission — proved by resetting somebody else — and
+	// still may not point it at itself.
+	other := newOperator(t, "operator-other-password-1234")
+	if _, err := platformAdmin().ResetOperatorPassword(ctx, bearer(connect.NewRequest(
+		&anubisv1.ResetOperatorPasswordRequest{OperatorId: operatorIDOf(t, other)}), token)); err != nil {
+		t.Fatalf("this operator cannot reset anybody, so the refusal below "+
+			"would prove nothing: %v", err)
+	}
+	if _, err := platformAdmin().ResetOperatorPassword(ctx, bearer(connect.NewRequest(
+		&anubisv1.ResetOperatorPasswordRequest{OperatorId: self}), token)); err == nil {
+		t.Fatal("an operator reset their own password, skipping the " +
+			"current-password check that a change asks for")
+	}
+
+	// And somebody without the permission cannot reset anybody at all.
+	support := newOperator(t, "operator-support-password-12")
+	supportToken := mustLogin(t, support, "operator-support-password-12")
+	if _, err := platformAdmin().ResetOperatorPassword(ctx, bearer(connect.NewRequest(
+		&anubisv1.ResetOperatorPasswordRequest{OperatorId: self}), supportToken)); err == nil {
+		t.Fatal("an operator with no assign permission reset a password")
+	}
+}
+
+func operatorIDOf(t *testing.T, username string) string {
+	t.Helper()
+	list, err := platformAdmin().ListOperators(context.Background(), bearer(connect.NewRequest(
+		&anubisv1.ListOperatorsRequest{Query: username, PageSize: 20}), platformLogin(t)))
+	if err != nil {
+		t.Fatalf("list operators: %v", err)
+	}
+	for _, o := range list.Msg.Operators {
+		if o.Username == username {
+			return o.IdentityId
+		}
+	}
+	t.Fatalf("no operator named %q", username)
+	return ""
+}
+
+func mustLogin(t *testing.T, username, password string) string {
+	t.Helper()
+	token, err := operatorLogin(t, username, password)
+	if err != nil {
+		t.Fatalf("sign in as %s: %v", username, err)
+	}
+	return token
 }

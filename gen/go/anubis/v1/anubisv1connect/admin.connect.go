@@ -351,6 +351,9 @@ const (
 	// PlatformAdminServiceSetOperatorStatusProcedure is the fully-qualified name of the
 	// PlatformAdminService's SetOperatorStatus RPC.
 	PlatformAdminServiceSetOperatorStatusProcedure = "/anubis.v1.PlatformAdminService/SetOperatorStatus"
+	// PlatformAdminServiceResetOperatorPasswordProcedure is the fully-qualified name of the
+	// PlatformAdminService's ResetOperatorPassword RPC.
+	PlatformAdminServiceResetOperatorPasswordProcedure = "/anubis.v1.PlatformAdminService/ResetOperatorPassword"
 	// PlatformAuthServicePlatformLoginProcedure is the fully-qualified name of the
 	// PlatformAuthService's PlatformLogin RPC.
 	PlatformAuthServicePlatformLoginProcedure = "/anubis.v1.PlatformAuthService/PlatformLogin"
@@ -3219,6 +3222,21 @@ type PlatformAdminServiceClient interface {
 	// SetOperatorStatus disables or restores a platform user. Disabling takes
 	// effect on their live tokens, not when those tokens expire.
 	SetOperatorStatus(context.Context, *connect.Request[v1.SetOperatorStatusRequest]) (*connect.Response[v1.SetOperatorStatusResponse], error)
+	// ResetOperatorPassword sets a temporary password for somebody who has
+	// lost theirs. ChangePlatformPassword covers the case where they still
+	// know it; this covers the case where they do not, and used to have no
+	// answer but disable-and-recreate.
+	//
+	// The temporary password is returned ONCE, in this response. It is
+	// generated rather than supplied: a password chosen by the person doing
+	// the resetting is a password somebody chose in a hurry.
+	//
+	// This is not a new privilege. CreateAPIKey already mints, for any
+	// operator named in the request, a credential that administers as its
+	// owner — behind this same permission. What a reset adds is that the
+	// target loses their own access until they are told the new password, so
+	// it ends their live sessions and is audited with both names.
+	ResetOperatorPassword(context.Context, *connect.Request[v1.ResetOperatorPasswordRequest]) (*connect.Response[v1.ResetOperatorPasswordResponse], error)
 }
 
 // NewPlatformAdminServiceClient constructs a client for the anubis.v1.PlatformAdminService service.
@@ -3280,19 +3298,26 @@ func NewPlatformAdminServiceClient(httpClient connect.HTTPClient, baseURL string
 			connect.WithSchema(platformAdminServiceMethods.ByName("SetOperatorStatus")),
 			connect.WithClientOptions(opts...),
 		),
+		resetOperatorPassword: connect.NewClient[v1.ResetOperatorPasswordRequest, v1.ResetOperatorPasswordResponse](
+			httpClient,
+			baseURL+PlatformAdminServiceResetOperatorPasswordProcedure,
+			connect.WithSchema(platformAdminServiceMethods.ByName("ResetOperatorPassword")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // platformAdminServiceClient implements PlatformAdminServiceClient.
 type platformAdminServiceClient struct {
-	listOperators        *connect.Client[v1.ListOperatorsRequest, v1.ListOperatorsResponse]
-	createPlatformApiKey *connect.Client[v1.CreatePlatformApiKeyRequest, v1.CreatePlatformApiKeyResponse]
-	listPlatformApiKeys  *connect.Client[v1.ListPlatformApiKeysRequest, v1.ListPlatformApiKeysResponse]
-	revokePlatformApiKey *connect.Client[v1.RevokePlatformApiKeyRequest, v1.RevokePlatformApiKeyResponse]
-	createOperator       *connect.Client[v1.CreateOperatorRequest, v1.CreateOperatorResponse]
-	assignOperator       *connect.Client[v1.AssignOperatorRequest, v1.AssignOperatorResponse]
-	revokeAssignment     *connect.Client[v1.RevokeAssignmentRequest, v1.RevokeAssignmentResponse]
-	setOperatorStatus    *connect.Client[v1.SetOperatorStatusRequest, v1.SetOperatorStatusResponse]
+	listOperators         *connect.Client[v1.ListOperatorsRequest, v1.ListOperatorsResponse]
+	createPlatformApiKey  *connect.Client[v1.CreatePlatformApiKeyRequest, v1.CreatePlatformApiKeyResponse]
+	listPlatformApiKeys   *connect.Client[v1.ListPlatformApiKeysRequest, v1.ListPlatformApiKeysResponse]
+	revokePlatformApiKey  *connect.Client[v1.RevokePlatformApiKeyRequest, v1.RevokePlatformApiKeyResponse]
+	createOperator        *connect.Client[v1.CreateOperatorRequest, v1.CreateOperatorResponse]
+	assignOperator        *connect.Client[v1.AssignOperatorRequest, v1.AssignOperatorResponse]
+	revokeAssignment      *connect.Client[v1.RevokeAssignmentRequest, v1.RevokeAssignmentResponse]
+	setOperatorStatus     *connect.Client[v1.SetOperatorStatusRequest, v1.SetOperatorStatusResponse]
+	resetOperatorPassword *connect.Client[v1.ResetOperatorPasswordRequest, v1.ResetOperatorPasswordResponse]
 }
 
 // ListOperators calls anubis.v1.PlatformAdminService.ListOperators.
@@ -3335,6 +3360,11 @@ func (c *platformAdminServiceClient) SetOperatorStatus(ctx context.Context, req 
 	return c.setOperatorStatus.CallUnary(ctx, req)
 }
 
+// ResetOperatorPassword calls anubis.v1.PlatformAdminService.ResetOperatorPassword.
+func (c *platformAdminServiceClient) ResetOperatorPassword(ctx context.Context, req *connect.Request[v1.ResetOperatorPasswordRequest]) (*connect.Response[v1.ResetOperatorPasswordResponse], error) {
+	return c.resetOperatorPassword.CallUnary(ctx, req)
+}
+
 // PlatformAdminServiceHandler is an implementation of the anubis.v1.PlatformAdminService service.
 type PlatformAdminServiceHandler interface {
 	// ListOperators is everyone who can administer this installation, with the
@@ -3357,6 +3387,21 @@ type PlatformAdminServiceHandler interface {
 	// SetOperatorStatus disables or restores a platform user. Disabling takes
 	// effect on their live tokens, not when those tokens expire.
 	SetOperatorStatus(context.Context, *connect.Request[v1.SetOperatorStatusRequest]) (*connect.Response[v1.SetOperatorStatusResponse], error)
+	// ResetOperatorPassword sets a temporary password for somebody who has
+	// lost theirs. ChangePlatformPassword covers the case where they still
+	// know it; this covers the case where they do not, and used to have no
+	// answer but disable-and-recreate.
+	//
+	// The temporary password is returned ONCE, in this response. It is
+	// generated rather than supplied: a password chosen by the person doing
+	// the resetting is a password somebody chose in a hurry.
+	//
+	// This is not a new privilege. CreateAPIKey already mints, for any
+	// operator named in the request, a credential that administers as its
+	// owner — behind this same permission. What a reset adds is that the
+	// target loses their own access until they are told the new password, so
+	// it ends their live sessions and is audited with both names.
+	ResetOperatorPassword(context.Context, *connect.Request[v1.ResetOperatorPasswordRequest]) (*connect.Response[v1.ResetOperatorPasswordResponse], error)
 }
 
 // NewPlatformAdminServiceHandler builds an HTTP handler from the service implementation. It returns
@@ -3414,6 +3459,12 @@ func NewPlatformAdminServiceHandler(svc PlatformAdminServiceHandler, opts ...con
 		connect.WithSchema(platformAdminServiceMethods.ByName("SetOperatorStatus")),
 		connect.WithHandlerOptions(opts...),
 	)
+	platformAdminServiceResetOperatorPasswordHandler := connect.NewUnaryHandler(
+		PlatformAdminServiceResetOperatorPasswordProcedure,
+		svc.ResetOperatorPassword,
+		connect.WithSchema(platformAdminServiceMethods.ByName("ResetOperatorPassword")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/anubis.v1.PlatformAdminService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case PlatformAdminServiceListOperatorsProcedure:
@@ -3432,6 +3483,8 @@ func NewPlatformAdminServiceHandler(svc PlatformAdminServiceHandler, opts ...con
 			platformAdminServiceRevokeAssignmentHandler.ServeHTTP(w, r)
 		case PlatformAdminServiceSetOperatorStatusProcedure:
 			platformAdminServiceSetOperatorStatusHandler.ServeHTTP(w, r)
+		case PlatformAdminServiceResetOperatorPasswordProcedure:
+			platformAdminServiceResetOperatorPasswordHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -3471,6 +3524,10 @@ func (UnimplementedPlatformAdminServiceHandler) RevokeAssignment(context.Context
 
 func (UnimplementedPlatformAdminServiceHandler) SetOperatorStatus(context.Context, *connect.Request[v1.SetOperatorStatusRequest]) (*connect.Response[v1.SetOperatorStatusResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.PlatformAdminService.SetOperatorStatus is not implemented"))
+}
+
+func (UnimplementedPlatformAdminServiceHandler) ResetOperatorPassword(context.Context, *connect.Request[v1.ResetOperatorPasswordRequest]) (*connect.Response[v1.ResetOperatorPasswordResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.PlatformAdminService.ResetOperatorPassword is not implemented"))
 }
 
 // PlatformAuthServiceClient is a client for the anubis.v1.PlatformAuthService service.
