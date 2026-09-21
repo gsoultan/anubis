@@ -1,11 +1,12 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import { Button, Modal, PasswordInput, Select, TextInput } from '@mantine/core'
-import { IconCrown, IconPlus, IconShieldCog, IconShieldLock, IconTrash, IconUserPlus } from '@tabler/icons-react'
+import { IconCrown, IconKey, IconPlus, IconShieldCog, IconShieldLock, IconTrash, IconUserPlus } from '@tabler/icons-react'
 import { useState } from 'react'
 import { Page } from '@/components/shell/Page'
 import { notifyCreated, notifyRejected } from '@/components/create/shell'
 import { api } from '@/lib/anubis'
+import { useWho } from '@/stores/auth'
 
 export const Route = createFileRoute('/operators')({ component: Operators })
 
@@ -280,6 +281,8 @@ function ApiKeys() {
 }
 
 function Operators() {
+  const who = useWho()
+  const [resetting, setResetting] = useState<Operator | null>(null)
   const [query, setQuery] = useState('')
   /* A stack, not a page number: keyset paging can go forward from a cursor
      and back to one it has already seen, but it cannot jump to page 7. */
@@ -354,7 +357,19 @@ function Operators() {
                           no 2FA
                         </span>}
                   </span>
-                  <span className="t-xs">{o.email}</span>
+                  <span className="flex items-center gap-3">
+                    <span className="t-xs">{o.email}</span>
+                    {/* Not offered for yourself: a change asks for the current
+                        password and a reset does not, so the server refuses
+                        this and the screen should not pretend otherwise. */}
+                    {o.username !== who?.username && (
+                      <Button variant="subtle" size="compact-xs"
+                        leftSection={<IconKey size={13} />}
+                        onClick={() => setResetting(o)}>
+                        Reset password
+                      </Button>
+                    )}
+                  </span>
                 </div>
 
                 {o.assignments.length === 0 ? (
@@ -400,6 +415,60 @@ function Operators() {
       )}
 
       <ApiKeys />
+      <ResetPassword operator={resetting} onClose={() => { setResetting(null); void refetch() }} />
     </Page>
+  )
+}
+
+/** A reset for somebody who has lost their password.
+ *
+ *  The temporary password is shown once and never stored in readable form,
+ *  the same contract as an API key — so the screen says so, and refuses to
+ *  close itself until it has been acknowledged.
+ */
+function ResetPassword({ operator, onClose }: { operator: Operator | null; onClose: () => void }) {
+  const [issued, setIssued] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  const close = () => { setIssued(null); onClose() }
+
+  const reset = async () => {
+    if (!operator) return
+    setBusy(true)
+    try {
+      const resp = await api.platformAdmin.resetOperatorPassword({ operatorId: operator.identityId })
+      setIssued(resp.temporaryPassword)
+    } catch (e) { notifyRejected(e) } finally { setBusy(false) }
+  }
+
+  return (
+    <Modal opened={operator !== null} onClose={close} centered
+      title={issued ? 'Copy this password now' : `Reset ${operator?.username ?? ''}`}>
+      {issued ? (
+        <div className="flex flex-col gap-2.5">
+          <p className="t-sm">
+            This is the only time it is shown. Hand it over in person or by
+            something other than the account it opens.
+          </p>
+          <code className="panel-inset block break-all px-2.5 py-2" style={{ fontSize: 12 }}>{issued}</code>
+          <p className="t-xs">
+            Every session {operator?.username} had open has ended. They should
+            change it to something of their own once they are back in.
+          </p>
+          <Button onClick={close}>Done</Button>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-2.5">
+          <p className="t-sm">
+            A temporary password is generated and shown once.
+            {' '}<strong>{operator?.username}</strong> is signed out everywhere and
+            cannot get back in until somebody tells them what it is.
+          </p>
+          <Button color="red" loading={busy} onClick={() => void reset()}>
+            Reset password
+          </Button>
+        </div>
+      )}
+    </Modal>
   )
 }
