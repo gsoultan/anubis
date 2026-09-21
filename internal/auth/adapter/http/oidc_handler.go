@@ -25,6 +25,7 @@ import (
 	"github.com/gsoultan/anubis/internal/platform/crypto/keyring"
 	"github.com/gsoultan/anubis/internal/platform/crypto/secret"
 	"github.com/gsoultan/anubis/internal/platform/crypto/totp"
+	"github.com/gsoultan/anubis/internal/platform/qr"
 	"github.com/gsoultan/anubis/internal/platform/ratelimit"
 	"github.com/gsoultan/anubis/internal/shared/apperr"
 	"github.com/gsoultan/anubis/internal/shared/authctx"
@@ -604,6 +605,10 @@ type loginPageData struct {
 	EnrolToken string
 	EnrolKey   string
 	EnrolURI   string
+	// EnrolQR is the same URI as a scannable symbol. Inline SVG rather than
+	// an <img>: the page's CSP allows no scripts and fetches nothing, and a
+	// symbol drawn into the document needs neither.
+	EnrolQR template.HTML
 	// RecoveryCodes are shown exactly once, above the sign-in form, because
 	// that is the only moment they exist in readable form.
 	RecoveryCodes []string
@@ -642,8 +647,9 @@ func (h *OIDCHandler) renderLogin(w http.ResponseWriter, r *http.Request, tenant
 	view := PageView{
 		Cfg: cfg, Kind: "signin", LoginCSRF: csrf,
 		EnrolToken: data.EnrolToken, EnrolKey: data.EnrolKey,
-		EnrolURI: template.URL(data.EnrolURI), RecoveryCodes: data.RecoveryCodes,
-		WarnDeadline: data.WarnDeadline, WarnFactors: data.WarnFactors,
+		EnrolURI: template.URL(data.EnrolURI), EnrolQR: data.EnrolQR,
+		RecoveryCodes: data.RecoveryCodes,
+		WarnDeadline:  data.WarnDeadline, WarnFactors: data.WarnFactors,
 		ContinueURL: data.ContinueURL,
 		Tenant:      data.Tenant, Realm: data.Realm, ClientID: data.ClientID,
 		RedirectURI: data.RedirectURI, State: data.State,
@@ -857,6 +863,14 @@ func (h *OIDCHandler) promptForEnrolment(
 	data.EnrolToken = handle
 	data.EnrolKey = pending.Secret
 	data.EnrolURI = pending.ProvisioningURI
+	// A symbol that will not build is not a reason to refuse an enrolment:
+	// the key below it is the same secret, typed instead of scanned.
+	if code, qerr := qr.Encode(pending.ProvisioningURI); qerr == nil {
+		data.EnrolQR = template.HTML(code.SVG(200))
+	} else {
+		h.logger.Warn("enrolment QR could not be built; the page falls back to the typed key",
+			"error", qerr)
+	}
 	h.renderLogin(w, r, d.Tenant.ID, data)
 }
 
