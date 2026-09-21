@@ -83,7 +83,13 @@ are not copied anywhere. Enrolling from the warning does NOT re-ask for the
 password: that member already holds a session, and charging extra for
 complying early is how a rollout stalls.
 
-**Still missing: a QR code.** Only that.
+**The QR code exists now**: `internal/platform/qr`, written here because
+ADR-0002 forbids the library. Byte mode, level M, versions 1–10, inline SVG
+so the page's `default-src 'none'` CSP is untouched. Reed-Solomon is checked
+against the spec's worked example, the format/version strings against their
+published values and BCH distances, placement by a round-trip decoder in the
+test file. **Never verified by a camera** — the key renders beside it and the
+page carries on with a logged warning if the encoder errors.
 
 ## The hosted second-factor step had never worked
 
@@ -115,12 +121,20 @@ merged into `PasswordAuthenticator`. What had to be shared is the primitive:
 - **`scripts/check/kdf-rehash.sh`** fails the build if a `kdf.Verify` discards
   `needsRehash`, allowing only a deliberate burn against `kdf.Dummy()`.
 
-**Operator passwords cannot be rotated.** There is no self-service change and
-no admin reset anywhere in the API — create, assign, set-status, and that is
-all. A login rehash is therefore the only way an operator's KDF parameters
-ever move, which is why discarding the flag mattered more here than on the
-tenant plane. Remedy for a compromise is disable + recreate, losing the
-account's assignments. Open product decision, recorded in `security.md`.
+**Operator passwords rotate now** (`ChangePlatformPassword`, 2026-09-21). The
+current password is re-presented, so a stolen access token cannot take an
+account over permanently; the 12-character floor is the installation's;
+`SetPassword` advances `token_epoch` in the same statement as the hash.
+
+**The epoch was minted and never read back.** That is what made the rotation
+worth anything. `SetPlatformUserStatus` bumps it and its comment claims
+"disabling takes effect NOW" — nothing compared it, and the guard never read
+the operator's row, so it never saw `status='disabled'` either.
+`PlatformRefresh` checks `Active()`, which bounded the window at one
+access-token TTL (**one hour**) without closing it.
+`platformGuard.stillValid` and the interactor's `live()` now read the row on
+every platform request. There is still no ADMIN reset — a forgotten password
+is disable + recreate.
 
 ## Boot: fatal only for a key that must sign
 
