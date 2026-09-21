@@ -135,7 +135,7 @@ func (u *platformAuthInteractor) Login(ctx context.Context, username, password s
 	}
 	// Verify even when nobody was found, so a missing account and a wrong
 	// password cost the same time and cannot be told apart from outside.
-	ok, _, _ := kdf.Verify(password, hash)
+	ok, needsRehash, _ := kdf.Verify(password, hash)
 	if who == nil || !ok {
 		u.deny(ctx, username, "invalid_credentials")
 		return nil, apperr.ErrInvalidCredentials
@@ -143,6 +143,13 @@ func (u *platformAuthInteractor) Login(ctx context.Context, username, password s
 	if !who.Active() {
 		u.deny(ctx, username, "disabled")
 		return nil, apperr.ErrIdentityDisabled
+	}
+	if needsRehash {
+		// The only path by which an operator's KDF parameters ever move:
+		// nothing in the API changes a platform password, so a hash written
+		// at install time stays at that day's iteration count forever unless
+		// a successful login upgrades it.
+		_ = u.users.RehashPassword(ctx, who.ID, hash, mustRehash(password))
 	}
 
 	assignments, err := u.read.Assignments(ctx)
@@ -565,4 +572,15 @@ func (u *platformAuthInteractor) ConfirmTOTPEnrolment(ctx context.Context, code 
 		Action: "platform.mfa_enrol", Result: "allow", IP: authctx.ClientIP(ctx),
 	})
 	return nil
+}
+
+// mustRehash returns a fresh hash at the current cost, or "" when hashing
+// fails — which the guarded UPDATE then matches nothing for, leaving the
+// verified password exactly as it was.
+func mustRehash(password string) string {
+	h, err := kdf.Hash(password)
+	if err != nil {
+		return ""
+	}
+	return h
 }

@@ -735,6 +735,10 @@ SET used_at = now()
 WHERE id = $1 AND used_at IS NULL AND revoked_at IS NULL`)
 	storm.RegisterStatement(`
 UPDATE platform_users
+   SET password_hash = $3, updated_at = now()
+ WHERE id = $1 AND password_hash = $2`)
+	storm.RegisterStatement(`
+UPDATE platform_users
    SET status = $2, updated_at = now(),
        disabled_at = CASE WHEN $2::text = 'disabled' THEN now() ELSE NULL END,
        token_epoch = token_epoch + CASE WHEN $2::text = 'disabled' THEN 1 ELSE 0 END

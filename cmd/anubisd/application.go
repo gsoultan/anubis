@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"github.com/gsoultan/anubis/cmd/anubisd/keyload"
 	"log/slog"
 	"net/http"
 
@@ -130,7 +131,7 @@ func newApplication(ctx context.Context, cfg *config.Config, db *database.DB, lo
 		audit:               auditpg.New(db),
 		gate:                gatepg.New(db),
 	}
-	ring, err := loadRing(ctx, logger, a.auth, cfg.MasterKey, cfg.AutoKeys)
+	ring, err := keyload.Load(ctx, logger, a.auth, cfg.MasterKey, cfg.AutoKeys)
 	if err != nil {
 		return nil, err
 	}

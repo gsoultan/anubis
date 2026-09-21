@@ -24,6 +24,12 @@ type PlatformUserStore interface {
 	// the time is not a reason to refuse somebody entry.
 	TouchLogin(ctx context.Context, id string)
 	SetStatus(ctx context.Context, id, status string) error
+	// RehashPassword upgrades a verified password to the current KDF cost.
+	// Guarded on the old hash so it cannot resurrect a password that changed
+	// underneath it. Operators have no other migration path: nothing in the
+	// API changes a platform password, so a hash set at install time is
+	// otherwise frozen at whatever iteration count was current that day.
+	RehashPassword(ctx context.Context, id, oldHash, newHash string) error
 	PlatformUserByID(ctx context.Context, id string) (*controldomain.PlatformUser, string, error)
 	TOTPSecret(ctx context.Context, master []byte, id string) ([]byte, error)
 	StageTOTPSecret(ctx context.Context, master []byte, id string, secret []byte) error

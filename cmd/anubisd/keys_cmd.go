@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/gsoultan/anubis/cmd/anubisd/keyload"
 	"log/slog"
 	"time"
 
@@ -114,9 +115,9 @@ func prepareKey(ctx context.Context, keys authport.KeyRepository, master []byte,
 	var k *keyring.Key
 	var err error
 	if purpose == keyring.PurposeLocal {
-		k, err = keyring.GenerateLocalKey(now, keyLifetime)
+		k, err = keyring.GenerateLocalKey(now, keyload.Lifetime)
 	} else {
-		k, err = keyring.GenerateAccessKey(now, keyLifetime)
+		k, err = keyring.GenerateAccessKey(now, keyload.Lifetime)
 	}
 	if err != nil {
 		return err
@@ -131,7 +132,7 @@ func prepareKey(ctx context.Context, keys authport.KeyRepository, master []byte,
 	}
 	if err := keys.CreateKey(ctx, authdomain.KeyRecord{
 		Kid: k.Kid, Alg: k.Alg, Status: keyring.StatusPending, Purpose: k.Purpose,
-		PublicKey: orEmptyBytes(k.Public), PrivateKeyEnc: sealed,
+		PublicKey: keyload.OrEmptyBytes(k.Public), PrivateKeyEnc: sealed,
 		NotBefore: k.NotBefore, NotAfter: k.NotAfter,
 	}); err != nil {
 		return err

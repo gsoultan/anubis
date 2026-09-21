@@ -1,4 +1,4 @@
-# Login has two doors and one authenticator
+# Login has three doors, and one shared primitive
 
 Anubis authenticates a password at two places, and they are not
 interchangeable surfaces on one handler — they were, until 2026-09-20, two
@@ -99,6 +99,38 @@ password as the template always claimed, the identity comes from the token's
 payload rather than the form, and `CanAuthenticate` is re-checked at the
 submit that issues the session because an identity can be blocked between the
 two requests.
+
+## The THIRD door: the control plane
+
+`internal/control/app/platform_auth_interactor.go` is a separate
+implementation again, and deliberately so — ADR-0011 keeps platform users in
+their own table with nothing joining them to identities. It must NOT be
+merged into `PasswordAuthenticator`. What had to be shared is the primitive:
+
+- **Uniform timing is now inside `kdf.Verify`.** An absent or unparseable
+  hash burns a full dummy derivation. It used to be each caller's job and the
+  control plane did not do it: `PlatformUserByUsername` returns `""` for an
+  unknown operator, so an operator who exists took **51.9 ms and one who does
+  not took 0.35 ms**. Any future credential surface gets the property free.
+- **`scripts/check/kdf-rehash.sh`** fails the build if a `kdf.Verify` discards
+  `needsRehash`, allowing only a deliberate burn against `kdf.Dummy()`.
+
+**Operator passwords cannot be rotated.** There is no self-service change and
+no admin reset anywhere in the API — create, assign, set-status, and that is
+all. A login rehash is therefore the only way an operator's KDF parameters
+ever move, which is why discarding the flag mattered more here than on the
+tenant plane. Remedy for a compromise is disable + recreate, losing the
+account's assignments. Open product decision, recorded in `security.md`.
+
+## Boot: fatal only for a key that must sign
+
+`cmd/anubisd/keyload` (carved out of `cmd/anubisd` when the folder hit 11
+files). An unsealable **active or pending** key is fatal — this instance can
+issue nothing. A **retiring** one is logged at ERROR and loaded public-only:
+it exists to keep verifying, `NewRing` never selects it to sign, and treating
+it as fatal turned a botched `keys reseal` into a total outage. Anything still
+sealed under it cannot be opened; for local keys that is MFA challenges and
+enrolment grants, all minutes long.
 
 ## Adjacent bug, same day
 
