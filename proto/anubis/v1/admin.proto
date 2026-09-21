@@ -1544,7 +1544,28 @@ service PlatformAuthService {
   rpc ConfirmTotpEnrolment(ConfirmTotpEnrolmentRequest) returns (ConfirmTotpEnrolmentResponse);
   // MyTenants is which tenants this operator may administer.
   rpc MyTenants(MyTenantsRequest) returns (MyTenantsResponse);
+  // ChangePlatformPassword rotates the caller's own password.
+  //
+  // It exists because nothing else could: an operator password was written
+  // once at install or at CreateOperator and no route changed it, so the
+  // remedy for a suspected compromise was to disable the account and build
+  // another, losing its assignments.
+  //
+  // Every outstanding token for this operator stops working, including the
+  // caller's own. That is the point rather than a side effect: somebody
+  // changing their password because it leaked needs the sessions opened with
+  // it to end, and singling out their current one would leave the attacker's.
+  rpc ChangePlatformPassword(ChangePlatformPasswordRequest) returns (ChangePlatformPasswordResponse);
 }
+
+message ChangePlatformPasswordRequest {
+  // The current password, re-presented. A stolen ACCESS TOKEN must not be
+  // enough to take an account over permanently.
+  string current_password = 1;
+  string new_password = 2;
+}
+
+message ChangePlatformPasswordResponse {}
 
 message PlatformLoginRequest {
   // No tenant. Platform usernames are globally unique because an operator

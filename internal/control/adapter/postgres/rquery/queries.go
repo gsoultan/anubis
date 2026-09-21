@@ -43,6 +43,7 @@ func Queries() []storm.RawDecl {
 		// user.go
 		ListPlatformUsers,
 		SetPlatformUserStatus, TouchPlatformUserLogin, RehashPlatformUserPassword,
+		SetPlatformUserPassword,
 		StageTotpSecret, ConfirmTotpEnrolment, AdvanceTotpStep, ClearTotp,
 		// refresh.go
 		InsertPlatformRefreshRoot, PlatformRefreshByHash, ConsumePlatformRefresh,

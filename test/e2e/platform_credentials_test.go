@@ -4,8 +4,10 @@ package e2e
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"testing"
+	"time"
 
 	"connectrpc.com/connect"
 
@@ -14,10 +16,10 @@ import (
 )
 
 /*
-How the PLATFORM authenticates its operators: the two credentials that are not
-a password typed into the console -- a machine key, and the refresh family
-behind a session. They were two files; they are one concept, and the folder
-holds ten.
+How the PLATFORM authenticates its operators: the machine key, the refresh
+family behind a session, and the password itself -- who may change it, and
+what stops working when they do. They were separate files; they are one
+concept, and the folder holds ten.
 */
 
 func platformAdmin() anubisv1connect.PlatformAdminServiceClient {
@@ -188,5 +190,176 @@ func TestPlatformLogoutEndsTheFamily(t *testing.T) {
 	if _, err := platformAuth().PlatformLogout(ctx,
 		connect.NewRequest(&anubisv1.PlatformLogoutRequest{RefreshToken: sess.RefreshToken})); err != nil {
 		t.Fatalf("repeated logout errored: %v", err)
+	}
+}
+
+// newOperator creates a throwaway operator with a live assignment and returns
+// their username. It never touches the shared owner account: changing that
+// password would end every other test in this package.
+func newOperator(t *testing.T, password string) string {
+	t.Helper()
+	ctx := context.Background()
+	token := platformLogin(t)
+	admin := platformAdmin()
+
+	username := fmt.Sprintf("op-%d", time.Now().UnixNano())
+	if _, err := admin.CreateOperator(ctx, bearer(connect.NewRequest(&anubisv1.CreateOperatorRequest{
+		Username: username, Email: username + "@example.test",
+		Password: password, Role: "support",
+	}), token)); err != nil {
+		t.Fatalf("create operator: %v", err)
+	}
+	return username
+}
+
+func operatorLogin(t *testing.T, username, password string) (string, error) {
+	t.Helper()
+	pc := platformAuth()
+	deadline := time.Now().Add(90 * time.Second)
+	for {
+		resp, err := pc.PlatformLogin(context.Background(),
+			connect.NewRequest(&anubisv1.PlatformLoginRequest{
+				Username: username, Password: password,
+			}))
+		if connect.CodeOf(err) == connect.CodeResourceExhausted && time.Now().Before(deadline) {
+			time.Sleep(3 * time.Second)
+			continue
+		}
+		if err != nil {
+			return "", err
+		}
+		return resp.Msg.GetAccessToken(), nil
+	}
+}
+
+// An operator must be able to rotate their own password.
+//
+// Nothing could, until now. PlatformAuthService offered login, MFA, refresh,
+// logout and TOTP enrolment; operator admin offered create, assign and
+// set-status. A password written at install or at CreateOperator was
+// permanent, so the remedy for a suspected compromise was to disable the
+// account and build another — losing its assignments and its history.
+func TestAnOperatorCanChangeTheirPassword(t *testing.T) {
+	requireServer(t)
+	ctx := context.Background()
+
+	const first = "operator-first-password-1234"
+	const second = "operator-second-password-5678"
+	username := newOperator(t, first)
+
+	token, err := operatorLogin(t, username, first)
+	if err != nil {
+		t.Fatalf("sign in with the first password: %v", err)
+	}
+
+	pc := platformAuth()
+	if _, err := pc.ChangePlatformPassword(ctx, bearer(connect.NewRequest(
+		&anubisv1.ChangePlatformPasswordRequest{
+			CurrentPassword: first, NewPassword: second,
+		}), token)); err != nil {
+		t.Fatalf("change password: %v", err)
+	}
+
+	// The old password is dead.
+	if _, err := operatorLogin(t, username, first); err == nil {
+		t.Fatal("the old password still signs in — the rotation changed nothing")
+	}
+	// The new one works.
+	if _, err := operatorLogin(t, username, second); err != nil {
+		t.Fatalf("the new password does not sign in: %v", err)
+	}
+
+	// And the token held while changing it is dead too. Sparing the caller's
+	// own session would spare an attacker's, which is the case this exists
+	// for.
+	if _, err := pc.MyTenants(ctx, bearer(connect.NewRequest(
+		&anubisv1.MyTenantsRequest{}), token)); err == nil {
+		t.Fatal("a token minted under the OLD password still works after the " +
+			"rotation; every session it opened survives")
+	}
+}
+
+// The current password is required, so a stolen access token cannot be turned
+// into permanent ownership of the account.
+func TestChangingAPasswordNeedsTheCurrentOne(t *testing.T) {
+	requireServer(t)
+	ctx := context.Background()
+
+	const password = "operator-guard-password-1234"
+	username := newOperator(t, password)
+	token, err := operatorLogin(t, username, password)
+	if err != nil {
+		t.Fatalf("sign in: %v", err)
+	}
+
+	pc := platformAuth()
+	if _, err := pc.ChangePlatformPassword(ctx, bearer(connect.NewRequest(
+		&anubisv1.ChangePlatformPasswordRequest{
+			CurrentPassword: "not-the-current-password", NewPassword: "a-brand-new-password-9999",
+		}), token)); err == nil {
+		t.Fatal("an access token alone rewrote the password it could not produce")
+	}
+	// A password that is too short is refused before anything is written.
+	if _, err := pc.ChangePlatformPassword(ctx, bearer(connect.NewRequest(
+		&anubisv1.ChangePlatformPasswordRequest{
+			CurrentPassword: password, NewPassword: "short",
+		}), token)); err == nil {
+		t.Fatal("a password below the installation floor was accepted")
+	}
+	// The original still works: a refused change must change nothing.
+	if _, err := operatorLogin(t, username, password); err != nil {
+		t.Fatalf("a refused change broke the existing password: %v", err)
+	}
+}
+
+// Disabling an operator must take effect now, not when their token expires.
+//
+// SetPlatformUserStatus advances token_epoch and its comment says why —
+// "token_epoch + 1 is what makes disabling take effect NOW rather than
+// whenever the token expired". Nothing compared it. The guard checked
+// assignments and never read the operator's row, so a disabled operator kept
+// full authority for up to an hour: PlatformRefresh checks Active(), which
+// bounds the window at one access-token TTL without closing it.
+func TestDisablingAnOperatorEndsTheirSessionImmediately(t *testing.T) {
+	requireServer(t)
+	ctx := context.Background()
+
+	const password = "operator-disable-password-1234"
+	username := newOperator(t, password)
+	token, err := operatorLogin(t, username, password)
+	if err != nil {
+		t.Fatalf("sign in: %v", err)
+	}
+	pc := platformAuth()
+	if _, err := pc.MyTenants(ctx, bearer(connect.NewRequest(
+		&anubisv1.MyTenantsRequest{}), token)); err != nil {
+		t.Fatalf("the token does not work before disabling; this proves nothing: %v", err)
+	}
+
+	admin := platformAdmin()
+	list, err := admin.ListOperators(ctx, bearer(connect.NewRequest(
+		&anubisv1.ListOperatorsRequest{Query: username, PageSize: 10}), platformLogin(t)))
+	if err != nil {
+		t.Fatalf("list operators: %v", err)
+	}
+	var id string
+	for _, o := range list.Msg.Operators {
+		if o.Username == username {
+			id = o.IdentityId
+		}
+	}
+	if id == "" {
+		t.Fatalf("could not find the operator just created")
+	}
+	if _, err := admin.SetOperatorStatus(ctx, bearer(connect.NewRequest(
+		&anubisv1.SetOperatorStatusRequest{OperatorId: id, Status: "disabled"}),
+		platformLogin(t))); err != nil {
+		t.Fatalf("disable: %v", err)
+	}
+
+	if _, err := pc.MyTenants(ctx, bearer(connect.NewRequest(
+		&anubisv1.MyTenantsRequest{}), token)); err == nil {
+		t.Fatal("a disabled operator's access token still works — disabling " +
+			"waits for the token to expire, up to an hour of unchanged authority")
 	}
 }

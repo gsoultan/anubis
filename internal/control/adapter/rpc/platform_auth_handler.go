@@ -198,3 +198,19 @@ func (h *PlatformAuthHandler) ConfirmTotpEnrolment(ctx context.Context,
 	}
 	return connect.NewResponse(&anubisv1.ConfirmTotpEnrolmentResponse{}), nil
 }
+
+// ChangePlatformPassword rotates the caller's own password.
+//
+// Rate-limited like a login: this call verifies a password, so leaving it
+// unlimited would make it a guessing oracle for the one credential an
+// operator's access token cannot already produce.
+func (h *PlatformAuthHandler) ChangePlatformPassword(ctx context.Context,
+	req *connect.Request[anubisv1.ChangePlatformPasswordRequest],
+) (*connect.Response[anubisv1.ChangePlatformPasswordResponse], error) {
+	if _, err := h.f.Do(ctx, "platform.password_change", func(ctx context.Context) (any, error) {
+		return nil, h.uc.ChangePassword(ctx, req.Msg.CurrentPassword, req.Msg.NewPassword)
+	}); err != nil {
+		return nil, apiconnect.Err(ctx, err)
+	}
+	return connect.NewResponse(&anubisv1.ChangePlatformPasswordResponse{}), nil
+}

@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/base32"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	auditdomain "github.com/gsoultan/anubis/internal/audit/domain"
 	auditport "github.com/gsoultan/anubis/internal/audit/port"
@@ -52,6 +54,9 @@ type PlatformAuthUsecase interface {
 	Refresh(ctx context.Context, refreshToken string) (*PlatformSession, error)
 	// Logout ends the session the refresh token belongs to. Idempotent.
 	Logout(ctx context.Context, refreshToken string) error
+	// ChangePassword rotates the caller's own password and ends every session
+	// opened under the old one, including the caller's.
+	ChangePassword(ctx context.Context, current, next string) error
 	// BeginTOTPEnrolment issues a secret for the signed-in operator. Nothing
 	// is demanded of them until ConfirmTOTPEnrolment verifies a code.
 	BeginTOTPEnrolment(ctx context.Context) (secretB32, uri string, err error)
@@ -273,6 +278,12 @@ func (u *platformAuthInteractor) deny(ctx context.Context, username, reason stri
 func (u *platformAuthInteractor) live(ctx context.Context) (*authctx.Principal, []controldomain.AssignmentRecord, error) {
 	p, ok := authctx.From(ctx)
 	if !ok || !p.Platform {
+		return nil, nil, apperr.ErrUnauthenticated
+	}
+	// Same check the admin guard makes: a disabled operator, or one whose
+	// epoch the row has moved past, holds a token that is no longer theirs.
+	who, _, err := u.users.PlatformUserByID(ctx, p.IdentityID)
+	if err != nil || who == nil || !who.Active() || p.Epoch != who.TokenEpoch {
 		return nil, nil, apperr.ErrUnauthenticated
 	}
 	all, err := u.read.Assignments(ctx)
@@ -583,4 +594,53 @@ func mustRehash(password string) string {
 		return ""
 	}
 	return h
+}
+
+// ChangePassword rotates the caller's own password.
+//
+// The CURRENT password is re-presented, so a stolen access token is not
+// enough to take an account over permanently — the thief would need the
+// secret they were trying to replace.
+//
+// Every token for this operator stops working, the caller's included. That is
+// deliberate: somebody rotating a password because it leaked needs the
+// sessions opened with it to end, and sparing their current one would spare
+// the attacker's too. SetPassword advances token_epoch in the same statement,
+// which platformGuard.stillValid and live() now read back.
+func (u *platformAuthInteractor) ChangePassword(ctx context.Context, current, next string) error {
+	p, _, err := u.live(ctx)
+	if err != nil {
+		return err
+	}
+	who, hash, err := u.users.PlatformUserByID(ctx, p.IdentityID)
+	if err != nil || who == nil {
+		return apperr.ErrUnauthenticated
+	}
+	ok, _, _ := kdf.Verify(current, hash) // kdf-rehash-exempt: replaced below
+	if !ok {
+		u.deny(ctx, who.Username, "invalid_credentials")
+		return apperr.ErrInvalidCredentials
+	}
+	if utf8.RuneCountInString(next) < controldomain.MinOwnerPassword {
+		return apperr.ErrInvalidArgument.With("new_password",
+			fmt.Sprintf("at least %d characters", controldomain.MinOwnerPassword))
+	}
+	if next == current {
+		// Refusing this is not pedantry: the whole point of the call is to
+		// stop the old secret working.
+		return apperr.ErrInvalidArgument.With("new_password", "must differ from the current one")
+	}
+	fresh, err := kdf.Hash(next)
+	if err != nil {
+		return apperr.ErrInternal.Wrap(err)
+	}
+	if err := u.users.SetPassword(ctx, who.ID, fresh); err != nil {
+		return err
+	}
+	u.audit.Emit(ctx, auditdomain.AuditEvent{
+		TenantID: auditdomain.InstallationTenant,
+		ActorID:  who.ID, ActorKind: "platform_user", TargetID: who.ID,
+		Action: "platform.password_change", Result: "allow", IP: authctx.ClientIP(ctx),
+	})
+	return nil
 }

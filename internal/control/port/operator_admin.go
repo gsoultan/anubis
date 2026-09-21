@@ -30,6 +30,9 @@ type PlatformUserStore interface {
 	// API changes a platform password, so a hash set at install time is
 	// otherwise frozen at whatever iteration count was current that day.
 	RehashPassword(ctx context.Context, id, oldHash, newHash string) error
+	// SetPassword replaces the password and advances the token epoch in one
+	// statement, ending every session opened under the old one.
+	SetPassword(ctx context.Context, id, newHash string) error
 	PlatformUserByID(ctx context.Context, id string) (*controldomain.PlatformUser, string, error)
 	TOTPSecret(ctx context.Context, master []byte, id string) ([]byte, error)
 	StageTOTPSecret(ctx context.Context, master []byte, id string, secret []byte) error

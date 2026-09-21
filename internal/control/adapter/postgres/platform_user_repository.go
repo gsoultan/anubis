@@ -159,6 +159,19 @@ func (s *Repository) RehashPassword(ctx context.Context, id, oldHash, newHash st
 	return nil
 }
 
+// SetPassword replaces the password and advances the token epoch, so every
+// token minted under the old one stops working.
+func (s *Repository) SetPassword(ctx context.Context, id, newHash string) error {
+	n, err := controlrquery.SetPlatformUserPassword.Exec(ctx, s.ex(ctx), id, newHash)
+	if err != nil {
+		return database.MapErr(err)
+	}
+	if n == 0 {
+		return apperr.ErrNotFound.With("operator", id)
+	}
+	return nil
+}
+
 // TOTPSecret opens the sealed secret for one operator. It is unsealed only at
 // the moment a code is checked, never held.
 func (s *Repository) TOTPSecret(ctx context.Context, master []byte, id string) ([]byte, error) {

@@ -46,7 +46,7 @@ func NewOperatorAdminInteractor(
 	audit auditport.Auditor,
 ) OperatorAdminUsecase {
 	return &operatorAdminInteractor{
-		guard: platformGuard{read: read, clock: clk}, users: users, tenants: tenants,
+		guard: platformGuard{read: read, users: users, clock: clk}, users: users, tenants: tenants,
 		assign: assign, read: read, clock: clk, tx: tx, audit: audit,
 	}
 }
