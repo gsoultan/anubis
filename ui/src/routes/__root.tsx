@@ -15,6 +15,7 @@ import type { ReactNode } from 'react'
 import { CommandPalette } from '@/components/shell/CommandPalette'
 import { CreateDrawers } from '@/components/create'
 import { useCreate } from '@/stores/create'
+import { ChangePassword } from '@/components/shell/ChangePassword'
 import { signOut, useAuthed, useIsOwner, useWho } from '@/stores/auth'
 import { currentTenant, myTenants, setCurrentTenant } from '@/lib/anubis'
 import { queryClient } from '@/lib/query/client'
@@ -303,6 +304,7 @@ function Account() {
   const authed = useAuthed()
   const who = useWho()
   const navigate = useNavigate()
+  const [changing, setChanging] = useState(false)
 
   if (!authed) {
     return (
@@ -313,6 +315,7 @@ function Account() {
     )
   }
   return (
+    <>
     <Menu position="bottom-end" width={200}>
       <Menu.Target>
         <button className="flex items-center gap-2 pl-1 pr-2"
@@ -330,6 +333,9 @@ function Account() {
       </Menu.Target>
       <Menu.Dropdown>
         <Menu.Label>platform operator</Menu.Label>
+        <Menu.Item leftSection={<IconKey size={15} />} onClick={() => setChanging(true)}>
+          Change password
+        </Menu.Item>
         <Menu.Item
           leftSection={<IconLogout size={15} />}
           onClick={async () => { await signOut(); navigate({ to: '/signin', search: { next: '/' } }) }}
@@ -338,6 +344,8 @@ function Account() {
         </Menu.Item>
       </Menu.Dropdown>
     </Menu>
+    <ChangePassword opened={changing} onClose={() => setChanging(false)} />
+    </>
   )
 }
 
