@@ -4,10 +4,58 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="light dark" />
-    <title>Anubis Console</title>
-  <link rel="stylesheet" crossorigin href="./chunk-kd12b7wg.css"><script type="module" crossorigin src="./chunk-509r2w1k.js"></script></head>
+    <title>Anubis Console — not built</title>
+    <!--
+      This file is a PLACEHOLDER and is the version committed to git.
+
+      scripts/build-console.sh overwrites it with the real shell before the
+      binary is compiled, and greps for the words "Console not built" to prove
+      it did. That grep only means something while the committed copy still
+      contains them, so do not commit a built index.html over this one — the
+      chunk files it names are gitignored, so a fresh checkout would serve a
+      page whose script and stylesheet resolve to the SPA catch-all, arrive as
+      text/html under nosniff, and are refused. The operator gets a blank page
+      and two console errors instead of the sentence below.
+
+      scripts/check/console-placeholder.sh fails the build if that happens.
+
+      Deliberately self-contained: no stylesheet, no script, nothing to fetch.
+      A page explaining that the console is missing must not depend on
+      anything that could also be missing.
+    -->
+    <style>
+      :root { color-scheme: light dark; }
+      body {
+        margin: 0; min-height: 100vh; display: grid; place-items: center;
+        font: 15px/1.6 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+        background: #f6f6f7; color: #111827; padding: 24px;
+      }
+      main { max-width: 34rem; }
+      h1 { font-size: 1.25rem; margin: 0 0 .5rem; }
+      p { margin: 0 0 .75rem; color: #44474f; }
+      code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px;
+        background: #ffffff; border: 1px solid #cacccf; border-radius: 6px;
+        padding: .15rem .35rem;
+      }
+      @media (prefers-color-scheme: dark) {
+        body { background: #0b0d11; color: #e8eaed; }
+        p { color: #a2a6ad; }
+        code { background: #13161c; border-color: #2a2e36; }
+      }
+    </style>
+  </head>
   <body>
-    <div id="root"></div>
-    
+    <main>
+      <h1>Console not built</h1>
+      <p>
+        This binary was compiled without the admin console. The API, the OIDC
+        surface and the gate are unaffected — only this page is missing.
+      </p>
+      <p>
+        Build it with <code>scripts/build-console.sh</code> and compile again,
+        or use a release binary, which always ships with it.
+      </p>
+    </main>
   </body>
 </html>
