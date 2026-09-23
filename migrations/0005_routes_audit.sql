@@ -37,15 +37,8 @@ CREATE INDEX route_policies_app ON route_policies (application_id, priority);
 -- under an ACCESS EXCLUSIVE lock. On an auth service that means downtime for
 -- every application at once. Partition now; it is free today.
 --
--- prev_hash/entry_hash form a hash chain: an entry edited in place breaks the
--- next entry's prev_hash, and a deleted one leaves a gap in seq.
---
--- It does NOT stop a wholesale rewrite. Recompute every forward hash and the
--- chain is self-consistent again — this comment used to claim otherwise, and
--- what actually stood in the way was that anubis_app holds no UPDATE grant
--- (0023), which is a permissions property rather than a cryptographic one.
--- migrations/0049 adds the cryptographic half: signed anchors, which a
--- rewrite cannot reproduce without the key sealed under the master.
+-- prev_hash/entry_hash form a hash chain: an attacker with UPDATE rights on
+-- this table still cannot silently rewrite history.
 -- ---------------------------------------------------------------------------
 CREATE TABLE audit_log (
     occurred_at timestamptz NOT NULL DEFAULT now(),
