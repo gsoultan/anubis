@@ -427,6 +427,34 @@ third-party JOSE library instead should pin `EdDSA` and reject `alg: none`
 themselves — that is the property this project declined to depend on a
 library for, and ADR-0001 explains why.
 
+## Incident: nobody can sign in to the console
+
+An operator who still knows their password changes it from the console;
+an operator who does not is reset by another operator, also from the console.
+Both need somebody signed in and holding `anubis:platform:assign`.
+
+The case neither covers is the one that ends an installation: a single owner
+who has lost their password, with nobody left who can reset it for them.
+
+```
+anubisd operators reset-password <username>
+```
+
+It needs the host and `ANUBIS_DB_URL`, which is strictly more authority than
+any token buys — that is what makes it a break-glass tool rather than a hole.
+It prints a temporary password once, advances `token_epoch` so every session
+that account had open ends immediately, and records the reset under the
+installation tenant with `actor_kind = 'cli'`. Nobody was signed in, so the
+audit entry does not pretend a person did it; what it says is that somebody
+with the host did.
+
+Sign in with the temporary password and change it from the console straight
+away. It was printed to a terminal and is probably in a shell history.
+
+**This replaces writing a hash into `platform_users` by hand**, which is what
+there was before: no audit trail, no epoch bump, and a real chance of writing
+a malformed hash and turning a lockout into a permanent one.
+
 ## Incident: refresh token reuse
 
 `action=token.reuse_detected` in the audit log **means a refresh token was
