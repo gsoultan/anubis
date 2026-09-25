@@ -25,11 +25,13 @@ references". New topics live in their own file from 2026-09-11 on:
 - [[scope-exclusions]] — carve-outs on a grant (0046), why they are not the
   deny ADR-0004 deferred, and the aggregate that costs 1.1% instead of 9.2%.
 - [[console-tables]] — the one table primitive in `ui/`, why `.panel` must
-  use `overflow: clip`, and the column rules the People screen follows.
+  use `overflow: clip`, why a table scrolls sideways only while `data-wide`,
+  and the column rules the People screen follows.
 - [[console-person-page]] — why a record you can act on is a page, the
-  trailing-underscore route, and the query-key prefix rule.
+  trailing-underscore route, the query-key prefix rule, and why it was blank
+  on refresh (relative asset URLs; the build now refuses them).
 - [[console-create-drawers]] — every create drawer's submit button was inert,
-  and where the grant form lives now.
+  where the grant form lives now, and why render must never read `form.state`.
 - [[login-doors]] — the two login doors (RPC and hosted page), the one
   PasswordAuthenticator they share, and why merging took the stricter of
   two behaviours.

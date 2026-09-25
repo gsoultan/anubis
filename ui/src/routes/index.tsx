@@ -74,7 +74,9 @@ function StartHere() {
         <IconX size={14} />
       </ActionIcon>
       <div className="t-h2 mb-3">New here? Three steps.</div>
-      <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(3, minmax(0,1fr))' }}>
+      {/* One column below md. At three, each card got ~100px at 375 and its
+          button hung out over the next card's edge. */}
+      <div className="grid gap-3 md:grid-cols-3">
         {steps.map((st) => (
           <div key={st.n} className="panel-inset flex flex-col gap-2 px-3.5 py-3">
             <div className="flex items-center gap-2.5">
@@ -98,7 +100,7 @@ function Overview() {
   if (isLoading || !data) {
     return (
       <Page title="Overview">
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
           {[0, 1, 2, 3].map((i) => (
             <div key={i} className="panel h-[108px] animate-pulse" style={{ opacity: 0.4 }} />
           ))}
@@ -165,7 +167,10 @@ function Overview() {
 
         <StartHere />
 
-        <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(4, minmax(0,1fr))' }}>
+        {/* Two by two below md: four across clipped the numbers themselves —
+            "57,399" rendered as "57 4". The skeleton above matches, so the
+            page does not reflow when the counts arrive. */}
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
           <Stat label="Identities" value={total.toLocaleString()} to="/identities"
             icon={<IconUsers size={11} />}
             sub={`${data.identities_by_realm.length} populations`} />
@@ -184,7 +189,7 @@ function Overview() {
             ].filter(Boolean).join(' · ') || 'no decisions recorded'} />
         </div>
 
-        <div className="grid gap-4" style={{ gridTemplateColumns: 'minmax(0,7fr) minmax(0,5fr)' }}>
+        <div className="grid gap-4 md:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
           <div className="panel p-4">
             <div className="mb-3.5 flex items-baseline justify-between">
               <div className="t-label">Identities by population</div>

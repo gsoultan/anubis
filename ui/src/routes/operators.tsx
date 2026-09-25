@@ -207,7 +207,9 @@ function ApiKeys() {
 
   return (
     <div className="panel mt-5 p-4">
-      <div className="mb-2.5 flex items-start justify-between gap-3">
+      {/* Stacked below sm: beside a paragraph this long, the button was the
+          thing that gave way — its label clipped to 10px at phone width. */}
+      <div className="mb-2.5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <div className="t-h1">API keys</div>
           <p className="t-sm" style={{ maxWidth: 620 }}>
@@ -217,7 +219,8 @@ function ApiKeys() {
             is the ceiling.
           </p>
         </div>
-        <Button size="compact-sm" leftSection={<IconPlus size={14} />} onClick={() => setOpen(true)}>
+        <Button size="compact-sm" className="shrink-0 self-start"
+          leftSection={<IconPlus size={14} />} onClick={() => setOpen(true)}>
           New key
         </Button>
       </div>
@@ -240,7 +243,7 @@ function ApiKeys() {
                 </div>
               </div>
               {live(k) && (
-                <Button size="compact-xs" variant="subtle" color="red"
+                <Button size="compact-xs" variant="subtle" color="red" className="shrink-0"
                   leftSection={<IconTrash size={12} />}
                   onClick={() => void revoke(k.id, k.label || 'The key')}>
                   Revoke
@@ -337,9 +340,12 @@ function Operators() {
           <div className="flex flex-col gap-2">
             {data.operators.map((o) => (
               <div key={o.identityId} className="panel p-4">
-                <div className="mb-2 flex items-baseline justify-between gap-3">
-                  <span className="flex items-center gap-2">
-                    <span className="t-h1">{o.username}</span>
+                {/* Wraps rather than clipping. The right half — email and the
+                    reset action — sat past the card's edge at 375px, so the
+                    one control on the card could not be reached. */}
+                <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                  <span className="flex min-w-0 flex-wrap items-center gap-2">
+                    <span className="t-h1 [overflow-wrap:anywhere]">{o.username}</span>
                     {o.owner && (
                       <span className="chip chip-accent" title="Authority over every tenant">
                         <IconCrown size={11} style={{ marginRight: 4 }} />owner
@@ -357,8 +363,8 @@ function Operators() {
                           no 2FA
                         </span>}
                   </span>
-                  <span className="flex items-center gap-3">
-                    <span className="t-xs">{o.email}</span>
+                  <span className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+                    <span className="t-xs [overflow-wrap:anywhere]">{o.email}</span>
                     {/* Not offered for yourself: a change asks for the current
                         password and a reset does not, so the server refuses
                         this and the screen should not pretend otherwise. */}
@@ -380,13 +386,13 @@ function Operators() {
                   <div className="flex flex-col gap-1">
                     {o.assignments.map((a) => (
                       <div key={a.id} className="panel-inset flex items-center justify-between gap-3 px-2.5 py-1.5">
-                        <span className="flex items-center gap-2">
+                        <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
                           <IconShieldCog size={14} style={{ color: 'var(--ink-3)' }} />
                           <span className="t-body" style={{ fontWeight: 530 }}>{a.role}</span>
                           <span className="t-xs">on {scopeLabel(a)}</span>
                           {a.reason && <span className="t-xs">· {a.reason}</span>}
                         </span>
-                        <Button variant="subtle" size="compact-xs" color="red"
+                        <Button variant="subtle" size="compact-xs" color="red" className="shrink-0"
                           leftSection={<IconTrash size={13} />}
                           onClick={() => revoke(a.id, o.username)}>
                           Revoke

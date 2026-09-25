@@ -190,8 +190,8 @@ function Roles() {
         </div>
 
         <div>
-          <div className="mb-2.5 flex items-baseline justify-between">
-            <div className="flex items-center gap-3">
+          <div className="mb-2.5 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-2">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
               <div className="t-label">Permission catalog</div>
               <SegmentedControl size="xs" value={risk} onChange={setRisk}
                 data={[{ value: 'all', label: 'All' }, { value: 'normal', label: 'Normal' },

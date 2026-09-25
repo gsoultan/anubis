@@ -307,7 +307,9 @@ function Playground() {
         </>
       }
     >
-      <div className="grid gap-5" style={{ gridTemplateColumns: 'minmax(320px, 400px) minmax(0, 1fr)' }}>
+      {/* Side by side needs ~640px of content, which the sidebar leaves only
+          from lg up; below that the result goes under the composer. */}
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(320px,400px)_minmax(0,1fr)]">
         {/* ---------------- composer ---------------- */}
         <div className="flex flex-col gap-4">
           {/* Subject and permission are one question — "can this person do

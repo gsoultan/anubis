@@ -16,6 +16,26 @@ without creating a scroll container, which hands the header back to
 If a sticky header ever stops sticking, check for an `overflow: hidden`
 ancestor first.
 
+## A table scrolls sideways only while it does not fit (`data-wide`)
+
+`.panel` clips, so a table wider than its panel lost the columns past the
+edge with no way to reach them — not only on phones: at 1024px Audit, Grants,
+People and Applications were all cut off, and at 1280px Audit still lost
+19px (its Detail chips are `nowrap`, so the widest value sets the column).
+
+`overflow-x: auto` on `.tbl-body` fixes reach but makes it a scroll
+container, which takes the sticky header away from `<main>` — per spec a
+non-visible overflow on one axis turns the other into a scroller too, so no
+CSS keeps both. And CSS cannot say "only when it overflows": the property
+creates the container either way. So `DataTable` measures: a
+`ResizeObserver` on `.tbl-body` and its `<table>` sets `data-wide` while
+`scrollWidth > clientWidth`, and only `.tbl-body[data-wide]` scrolls. A table
+that fits keeps its sticky header; one that does not gives it up for reach.
+
+A phone-only `@media` rule was tried first and was wrong twice: it left every
+width between 768px and ~1300px clipped, and it cost tables that DO fit on a
+phone their header.
+
 ## Rails
 
 `DataTable` takes optional `toolbar` and `footer` rails rendered inside the

@@ -309,10 +309,13 @@ function ApiKeysPanel({ onSecret }: { onSecret: (s: string) => void }) {
   const live_ = (keys ?? []).filter((k) => !k.revoked_at)
   return (
     <div className="panel mt-6 p-4">
-      <div className="mb-1 flex items-center justify-between gap-3">
+      {/* Title, a 220px label field and the button need ~390px on one line;
+          a phone's panel has ~317, so below sm the field takes its own row. */}
+      <div className="mb-1 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
         <span className="t-h1">API keys</span>
         <div className="flex items-center gap-2">
-          <TextInput size="xs" w={220} placeholder="Label, e.g. gateway-prod"
+          <TextInput size="xs" className="min-w-0 flex-1 sm:w-[220px] sm:flex-none"
+            placeholder="Label, e.g. gateway-prod"
             value={label} onChange={(e) => setLabel(e.currentTarget.value)} />
           <Button size="compact-sm" disabled={!label.trim()} loading={busy}
             onClick={() => void create()}>Create key</Button>
@@ -328,7 +331,7 @@ function ApiKeysPanel({ onSecret }: { onSecret: (s: string) => void }) {
       <div className="flex flex-col gap-1">
         {live_.map((k) => (
           <div key={k.id} className="panel-inset flex items-center justify-between gap-3 px-2.5 py-1.5">
-            <span className="flex items-baseline gap-2">
+            <span className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
               <span className="t-body" style={{ fontWeight: 530 }}>{k.label || '(unlabelled)'}</span>
               <span className="chip">{k.prefix}</span>
               {k.created_by && <span className="t-xs">by {k.created_by}</span>}
@@ -336,7 +339,7 @@ function ApiKeysPanel({ onSecret }: { onSecret: (s: string) => void }) {
                 {k.last_used_at ? `last used ${k.last_used_at.slice(0, 10)}` : 'never used'}
               </span>
             </span>
-            <Button variant="subtle" size="compact-xs" color="red"
+            <Button variant="subtle" size="compact-xs" color="red" className="shrink-0"
               onClick={() => void revoke(k.id, k.prefix)}>Revoke</Button>
           </div>
         ))}

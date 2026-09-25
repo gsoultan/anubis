@@ -282,7 +282,9 @@ function PersonPage() {
           </div>
         )}
 
-        <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
+        {/* Two 180px tiles need 372px; a phone has ~351, so auto-fit gave each
+            tile its own row and the page spent 400px on four numbers. */}
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-[repeat(auto-fit,minmax(180px,1fr))]">
           <Metric label="Grants" value={accessLoading ? '—' : String(grants.length)}
             sub={derived > 0 ? `${derived} via membership` : 'all granted directly'} />
           <Metric label="Time-boxed" value={accessLoading ? '—' : String(expiring)}
@@ -300,8 +302,9 @@ function PersonPage() {
             sub={person.last_login_at ? undefined : 'an account nobody has used'} />
         </div>
 
-        <div className="grid gap-4 items-start"
-          style={{ gridTemplateColumns: 'minmax(0, 1.7fr) minmax(300px, 1fr)' }}>
+        {/* The identity column's 300px minimum left Access 35px wide at phone
+            width, under the panel beside it. Below lg it goes underneath. */}
+        <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1.7fr)_minmax(300px,1fr)]">
           {/* ---- Access, and the way to change it ---- */}
           <div className="flex flex-col gap-3">
             <div className="flex items-baseline justify-between gap-3">

@@ -43,10 +43,11 @@ export function CreateRole({ opened }: { opened: boolean }) {
         guard: an employee-only role can never be attached to a self-registered public
         account, even by a script that bypasses this console.</>}
       footer={
-        <form.Subscribe selector={(s) => [s.canSubmit, s.isSubmitting] as const}>
+        <form.Subscribe selector={(s) =>
+          [s.canSubmit && s.values.permission_keys.length > 0, s.isSubmitting] as const}>
           {([canSubmit, isSubmitting]) => (
             <CancelSubmit onCancel={close} onSubmit={() => void form.handleSubmit()}
-              canSubmit={!!canSubmit && form.state.values.permission_keys.length > 0}
+              canSubmit={!!canSubmit}
               submitting={!!isSubmitting} label="Add role" />
           )}
         </form.Subscribe>

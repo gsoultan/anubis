@@ -392,9 +392,11 @@ function Scope() {
              quarter and half to the tree that is the actual work — and because
              a grid stretches its columns to equal height, the tree panel grew
              to 860px to match the settings stack and rendered one row of
-             content inside an empty white rectangle. items-start stops that. */
-          <div className="grid items-start gap-4"
-            style={{ gridTemplateColumns: 'minmax(0,1fr) 400px' }}>
+             content inside an empty white rectangle. items-start stops that.
+             Below lg the sidebar leaves no room for a 400px rail beside a
+             usable tree — at phone width the tree was squeezed to 2px — so
+             the rail goes underneath. */
+          <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_400px]">
             <div className="panel overflow-clip">
               <div className="panel-head">
                 <span className="t-label">{axis.display_name} tree</span>

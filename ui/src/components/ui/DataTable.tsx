@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { Tooltip } from '@mantine/core'
 
 /* Sticky header, hover affordance, right-aligned numerics, and an empty state
@@ -35,6 +35,39 @@ export function DataTable<T>({
   /** Showing the previous page while the next one loads. Say so. */
   stale?: boolean
 }) {
+  /* A table wider than its panel scrolls sideways — and only then. .panel
+     clips, so without this the columns past its edge were unreachable, and
+     not only on phones: at 1024px four of the console's tables were cut off.
+     Scrolling costs the sticky header (see the .tbl-body note in index.css),
+     which is why it cannot simply be on everywhere, and CSS cannot say "only
+     when it overflows" because overflow-x: auto creates the scroll container
+     either way. So the body measures itself.
+
+     The toolbar rail is measured too. It wraps rather than crushing its
+     controls — at 375px Grants squeezed "Via membership" to "Via me" — so its
+     height is no longer a constant, and the sticky header has to sit below
+     whatever height it has. */
+  const bodyRef = useRef<HTMLDivElement>(null)
+  const railRef = useRef<HTMLDivElement>(null)
+  const [wide, setWide] = useState(false)
+  const [railH, setRailH] = useState<number>()
+  const hasTable = !(rows && rows.length === 0)
+  const hasToolbar = !!toolbar
+  useEffect(() => {
+    const el = bodyRef.current
+    if (!el) return
+    const rail = railRef.current
+    const ro = new ResizeObserver(() => {
+      setWide(el.scrollWidth > el.clientWidth + 1)
+      if (rail) setRailH(rail.offsetHeight)
+    })
+    ro.observe(el)
+    const table = el.querySelector('table')
+    if (table) ro.observe(table)
+    if (rail) ro.observe(rail)
+    return () => ro.disconnect()
+  }, [hasTable, hasToolbar])
+
   const head = (
     <thead>
       <tr>
@@ -107,9 +140,11 @@ export function DataTable<T>({
      nothing to stick to and scrolled away with the rows. `clip` clips without
      creating one, which hands the header back to <main>. */
   return (
-    <div className="panel overflow-clip">
-      {toolbar && <div className="tbl-rail tbl-rail-top">{toolbar}</div>}
-      <div data-stale={stale ? '' : undefined} className="tbl-body">{body}</div>
+    <div className="panel overflow-clip"
+      style={railH ? ({ '--rail-h': `${railH}px` } as CSSProperties) : undefined}>
+      {toolbar && <div ref={railRef} className="tbl-rail tbl-rail-top">{toolbar}</div>}
+      <div ref={bodyRef} data-stale={stale ? '' : undefined} data-wide={wide ? '' : undefined}
+        className="tbl-body">{body}</div>
       {footer && <div className="tbl-rail tbl-rail-bottom">{footer}</div>}
     </div>
   )

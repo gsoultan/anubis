@@ -414,21 +414,41 @@
   .tbl tbody tr:hover .row-go { opacity: 1; translate: 1px 0; }
   .tbl tbody tr[data-clickable]:focus-visible .row-go { opacity: 1; }
 
-  /* Toolbar / footer rails attached to a table panel. A rail is exactly --rail
-     tall so the sticky column header can offset past it by the same amount. */
+  /* Toolbar / footer rails attached to a table panel. A rail is --rail tall
+     while its controls fit on one line and wraps when they do not; DataTable
+     measures the top rail into --rail-h, so the sticky column header offsets
+     past whatever height it actually has. */
   .tbl-rail {
-    display: flex; align-items: center; gap: 10px;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
     min-height: var(--rail); padding: 7px 14px;
     background: var(--s-raised);
   }
   .tbl-rail-top { position: sticky; top: 0; z-index: 2; border-bottom: 1px solid var(--line); }
   .tbl-rail-bottom { border-top: 1px solid var(--line); }
-  .tbl-offset thead th { top: var(--rail); }
+  .tbl-offset thead th { top: var(--rail-h, var(--rail)); }
 
   /* Keyset paging keeps the previous page on screen while the next one loads.
      Fading it is the difference between "still working" and "nothing happened". */
   .tbl-body { transition: opacity var(--t-mid); }
   .tbl-body[data-stale] { opacity: .45; }
+
+  /* A table wider than its panel, and .panel clips — so the columns past the
+     edge were not hidden behind a scroll, they were unreachable. People at
+     375px showed two of its columns; at 1024px Audit, Grants, People and
+     Applications were all cut off, and at 1280px Audit still lost 19px.
+
+     Scrolling has a price: overflow-x makes .tbl-body a scroll container, so
+     the sticky header resolves against it instead of <main> and scrolls away
+     with the rows (see console-tables in the Serena memories). No CSS avoids
+     that — per spec, a non-visible overflow on one axis turns the other into
+     a scroller too. So DataTable sets data-wide only while the table does
+     not fit: reaching every column wins when they do not fit, and a table
+     that fits keeps its header. */
+  .tbl-body[data-wide] { overflow-x: auto; }
+  /* ...and that header stops being sticky. Against a box that never scrolls
+     vertically, sticky only applies its offset: a toolbar table's
+     top: var(--rail) pushed the header 44px down, over the first row. */
+  .tbl-body[data-wide] .tbl thead th { position: static; }
 
   /* ---- avatar ---------------------------------------------------------- */
   .avatar {

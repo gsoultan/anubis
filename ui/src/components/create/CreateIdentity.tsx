@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { useForm } from '@tanstack/react-form'
+import { useForm, useStore } from '@tanstack/react-form'
 import { Select, TextInput } from '@mantine/core'
 import { api } from '@/lib/api/client'
 import { qk } from '@/lib/query/keys'
@@ -39,7 +39,12 @@ export function CreateIdentity({ opened }: { opened: boolean }) {
     },
   })
 
-  const realm = realms?.find((r) => r.id === form.state.values.realm_id)
+  /* Subscribed, not read from form.state: that is a snapshot, and choosing a
+     population re-renders the field, not this component. The realm's facts
+     never appeared and its categories were never fetched, so nobody added
+     from here could be given a category. */
+  const realmId = useStore(form.store, (s) => s.values.realm_id)
+  const realm = realms?.find((r) => r.id === realmId)
   const { data: categories } = useQuery({
     queryKey: qk.realmCategories(realm?.id ?? ''),
     queryFn: () => api.realmCategories(realm!.id),
@@ -55,7 +60,7 @@ export function CreateIdentity({ opened }: { opened: boolean }) {
         <form.Subscribe selector={(s) => [s.canSubmit, s.isSubmitting] as const}>
           {([canSubmit, isSubmitting]) => (
             <CancelSubmit onCancel={close} onSubmit={() => void form.handleSubmit()}
-              canSubmit={!!canSubmit && !!form.state.values.realm_id}
+              canSubmit={!!canSubmit && !!realmId}
               submitting={!!isSubmitting} label="Add person" />
           )}
         </form.Subscribe>

@@ -27,3 +27,30 @@ them from `GrantFields` now, not from `CreateGrant`.
 
 The `ListRealmCategories` 500 found while verifying this is written up in
 [[identity-directory-reads]] — it is fixed.
+
+## Inert again, for a different reason: form state read as a snapshot (2026-09-25)
+
+`form.state` is tanstack-form's state at the moment it is read. Typing
+re-renders the field, never the component that owns the form, so anything
+computed from `form.state.values` during render is frozen.
+
+- `CreatePermission` built its key preview that way, and the submit button
+  required the preview: however the form was filled, the preview stayed
+  empty and the button stayed disabled. Picking a step-up factor never
+  revealed "Maximum authentication age" either.
+- `CreateIdentity` looked up the chosen population that way: its facts
+  (required factors, session TTL, retention) never appeared and its
+  categories were never fetched — nobody added from the console could be
+  given a category.
+- Axis, identity and role read values inside `<form.Subscribe>` whose
+  selector did not include them. They worked only because a field validator
+  flipped `canSubmit` after the relevant keystroke.
+
+Rule: render reads through `useStore(form.store, selector)` or a
+`<form.Subscribe>` selector; event handlers use `form.getFieldValue`.
+`scripts/check/console-form-snapshots.sh` fails on any `form.state.` in
+`ui/src`.
+
+A scripted `fill` (one input event carrying the whole value) and real typing
+behave differently here: the validity flip that rescued the Subscribe reads
+only happens keystroke by keystroke. Verify forms by typing.
