@@ -331,7 +331,9 @@ function PageBuilder() {
       </Modal>
 
       {cfg && (
-        <div className="grid gap-5" style={{ gridTemplateColumns: 'minmax(300px, 380px) minmax(0, 1fr)' }}>
+        // Editor beside preview needs ~640px of content, which the sidebar
+        // leaves only from lg up; below that the preview goes underneath.
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(300px,380px)_minmax(0,1fr)]">
           <div className="flex flex-col gap-4">
             <div className="panel flex flex-col gap-3 p-4">
               <div className="t-label">Pages</div>

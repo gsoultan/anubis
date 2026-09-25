@@ -80,8 +80,9 @@ export function AttributesModal(
 
           {rows.map((r, i) => (
             <div key={i} className="flex items-center gap-2">
-              <TextInput
-                placeholder="Field, e.g. employee_id" value={r.key} w={220}
+              {/* A fixed 220px name left the value 38px wide on a phone. */}
+              <TextInput className="min-w-0 flex-1 sm:w-[220px] sm:flex-none"
+                placeholder="Field, e.g. employee_id" value={r.key}
                 onChange={(e) => {
                   const v = e.currentTarget.value
                   setRows((rs) => rs.map((x, j) => (j === i ? { ...x, key: v } : x)))

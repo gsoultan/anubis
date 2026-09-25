@@ -5,7 +5,8 @@ import {
   IconFileDescription, IconAffiliate, IconWorld, IconTestPipe, IconSearch,
   IconPointFilled,
 } from '@tabler/icons-react'
-import { ActionIcon, Button, Menu, useComputedColorScheme, useMantineColorScheme } from '@mantine/core'
+import { ActionIcon, Burger, Button, Drawer, Menu, useComputedColorScheme, useMantineColorScheme } from '@mantine/core'
+import { useMediaQuery } from '@mantine/hooks'
 import {
   IconPlus, IconUserPlus, IconLicense, IconShieldPlus, IconCirclePlus,
   IconSitemapFilled, IconAxisY, IconSun, IconMoon, IconUsersGroup, IconTableImport,
@@ -252,7 +253,7 @@ function TenantPicker() {
           style={{ height: 32, borderRadius: 'var(--r-sm)',
             border: '1px solid var(--line)', background: 'var(--s-raised)' }}>
           <IconBuildingBank size={14} style={{ color: 'var(--accent)', flex: 'none' }} />
-          <span className="t-body truncate" style={{ fontWeight: 560, maxWidth: 180 }}>
+          <span className="t-body truncate max-w-[112px] md:max-w-[180px]" style={{ fontWeight: 560 }}>
             {active?.name ?? current}
           </span>
         </div>
@@ -271,7 +272,7 @@ function TenantPicker() {
           }}
         >
           <IconBuildingBank size={14} style={{ color: 'var(--accent)', flex: 'none' }} />
-          <span className="t-body truncate" style={{ fontWeight: 560, maxWidth: 180 }}>
+          <span className="t-body truncate max-w-[112px] md:max-w-[180px]" style={{ fontWeight: 560 }}>
             {active?.name ?? current}
           </span>
           <IconChevronDown size={13} style={{ color: 'var(--ink-3)', flex: 'none' }} />
@@ -326,7 +327,7 @@ function Account() {
             borderColor: 'var(--accent-line)' }}>
             {(who?.username ?? '?').slice(0, 1)}
           </span>
-          <span className="t-xs truncate" style={{ color: 'var(--ink-2)', fontWeight: 560, maxWidth: 110 }}>
+          <span className="t-xs hidden truncate md:block" style={{ color: 'var(--ink-2)', fontWeight: 560, maxWidth: 110 }}>
             {who?.username ?? 'signed in'}
           </span>
         </button>
@@ -349,30 +350,11 @@ function Account() {
   )
 }
 
-function RootLayout() {
-  const pathname = useRouterState({ select: (s) => s.location.pathname })
-  const authed = useAuthed()
-
-  /* Sign-in renders on its own. Wrapping it in the shell would put a nav
-     full of links behind a form whose whole point is that you are not
-     through yet. */
-  if (pathname === '/signin' || pathname === '/setup') return <Outlet />
-
+/* The nav's contents, rendered twice — as the fixed column from md up and
+   inside the drawer below it. One component, so the two cannot drift. */
+function NavContent({ authed }: { authed: boolean }) {
   return (
-    <div className="flex h-full" style={{ background: 'var(--s-base)' }}>
-      <CommandPalette />
-      <CreateDrawers />
-
-      {/* Sidebar. --nav-w wide: enough that no label truncates, narrow enough
-          that the content column keeps a comfortable measure. It sits on
-          --s-nav, which is below the page in dark and above it in light — in
-          both schemes the nav and the content are visibly different planes,
-          which the old two-point gap between surfaces never achieved. */}
-      <aside
-        className="flex shrink-0 flex-col"
-        style={{ width: 'var(--nav-w)', borderRight: '1px solid var(--line)',
-          background: 'var(--s-nav)' }}
-      >
+    <>
         <div className="flex items-center gap-2.5 px-4"
           style={{ height: 'var(--header-h)' }}>
           <Jackal />
@@ -400,7 +382,66 @@ function RootLayout() {
             </div>
           </div>
         </div>
+    </>
+  )
+}
+
+function RootLayout() {
+  const pathname = useRouterState({ select: (s) => s.location.pathname })
+  const authed = useAuthed()
+  /* Below md the nav is a drawer rather than a column. It was a fixed 232px
+     column at every width, so at 375px it kept two thirds of the screen and
+     the page underneath got about 145px — one word per line, and a document
+     662px wide inside a 375px viewport. */
+  const [navOpen, setNavOpen] = useState(false)
+  const wide = useMediaQuery('(min-width: 48em)')
+  // Choosing a destination is the end of the drawer's job.
+  useEffect(() => { setNavOpen(false) }, [pathname])
+  // And a drawer left open while the window grows past md would sit on top
+  // of the sidebar it duplicates.
+  useEffect(() => { if (wide) setNavOpen(false) }, [wide])
+
+  /* Sign-in renders on its own. Wrapping it in the shell would put a nav
+     full of links behind a form whose whole point is that you are not
+     through yet. */
+  if (pathname === '/signin' || pathname === '/setup') return <Outlet />
+
+  return (
+    <div className="flex h-full" style={{ background: 'var(--s-base)' }}>
+      <CommandPalette />
+      <CreateDrawers />
+
+      {/* Sidebar. --nav-w wide: enough that no label truncates, narrow enough
+          that the content column keeps a comfortable measure. It sits on
+          --s-nav, which is below the page in dark and above it in light — in
+          both schemes the nav and the content are visibly different planes,
+          which the old two-point gap between surfaces never achieved. */}
+      <aside
+        className="hidden shrink-0 flex-col md:flex"
+        style={{ width: 'var(--nav-w)', borderRight: '1px solid var(--line)',
+          background: 'var(--s-nav)' }}
+      >
+        <NavContent authed={authed} />
       </aside>
+
+      {/* The same nav below md, as a drawer over the page. Same --s-nav plane
+          and same --nav-w width as the column it replaces, and the create
+          drawers' scrim, so it reads as the sidebar slid in rather than a new
+          surface. Dismissed by the scrim, by Escape, or by going somewhere. */}
+      <Drawer
+        opened={navOpen}
+        onClose={() => setNavOpen(false)}
+        position="left"
+        size="var(--nav-w)"
+        withCloseButton={false}
+        overlayProps={{ blur: 2, backgroundOpacity: 0.45, color: 'var(--overlay-tint)' }}
+        styles={{
+          content: { background: 'var(--s-nav)', display: 'flex', flexDirection: 'column' },
+          body: { padding: 0, display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 },
+        }}
+      >
+        <NavContent authed={authed} />
+      </Drawer>
 
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Left is context — which tenant, and where inside it. Right is
@@ -410,15 +451,19 @@ function RootLayout() {
             "which one am I changing?" belongs at the start of the line, not
             filed with the preferences. */}
         <header
-          className="flex shrink-0 items-center justify-between gap-4 px-5"
+          className="flex shrink-0 items-center justify-between gap-2 px-3 md:gap-4 md:px-5"
           style={{ height: 'var(--header-h)', borderBottom: '1px solid var(--line)',
             background: 'var(--s-base)' }}
         >
-          <div className="flex min-w-0 items-center gap-3">
+          <div className="flex min-w-0 items-center gap-2 md:gap-3">
+            <Burger opened={navOpen} onClick={() => setNavOpen((o) => !o)}
+              size="sm" className="md:hidden" aria-label="Navigation" />
             <TenantPicker />
-            <Breadcrumb />
+            {/* Each page opens with its own title, so on a phone the crumb is
+                the thing to drop — the tenant it sits beside is not. */}
+            <div className="hidden min-w-0 sm:flex"><Breadcrumb /></div>
           </div>
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="flex shrink-0 items-center gap-1.5 md:gap-2">
             <button
               onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true }))}
               className="flex items-center gap-2 px-2.5"
@@ -427,11 +472,11 @@ function RootLayout() {
                 transition: 'border-color var(--t-fast), background var(--t-fast)' }}
             >
               <IconSearch size={14} style={{ color: 'var(--ink-3)' }} />
-              <span className="t-xs" style={{ minWidth: 88, textAlign: 'left' }}>Search…</span>
-              <kbd className="chip" style={{ fontSize: 9.5, padding: '3px 5px' }}>⌘K</kbd>
+              <span className="t-xs hidden md:inline" style={{ minWidth: 88, textAlign: 'left' }}>Search…</span>
+              <kbd className="chip hidden md:inline" style={{ fontSize: 9.5, padding: '3px 5px' }}>⌘K</kbd>
             </button>
             <NewMenu />
-            <div style={{ width: 1, height: 22, background: 'var(--line)' }} />
+            <div className="hidden md:block" style={{ width: 1, height: 22, background: 'var(--line)' }} />
             <ThemeToggle />
             <Account />
           </div>

@@ -85,9 +85,11 @@ export function CreatePermission({ opened }: { opened: boolean }) {
         </div>
 
         {preview && (
-          <div className="panel-inset flex items-center justify-between px-3 py-2.5">
+          <div className="panel-inset flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-3 py-2.5">
             <span className="t-xs">key (generated)</span>
-            <span className="chip chip-accent">{preview}</span>
+            {/* A chip never wraps, and resource and action are free text: at
+                phone width a long key would push past the drawer's edge. */}
+            <span className="chip chip-accent max-w-full whitespace-normal [overflow-wrap:anywhere]">{preview}</span>
           </div>
         )}
 

@@ -30,10 +30,15 @@ export function Page({
      — a fifth of a laptop screen spent on chrome. The description now sits on
      the title's own column at a reading measure, and the gutter is a single
      scale (px-5 / pt-5) shared with the header above it, so the page and the
-     shell line up on one vertical. */
+     shell line up on one vertical — px-3 below md, where the shell header
+     tightens too, and px-5 from md up.
+
+     Below md the heading and the actions STACK. Side by side, the actions
+     kept their full width and the title got the remainder: on Platform users
+     at 375px that was about 60px, one word per line. */
   return (
     <div className="fade">
-      <div className="flex items-start justify-between gap-6 px-5 pb-4 pt-5">
+      <div className="flex flex-col gap-3 px-3 pb-4 pt-4 md:flex-row md:items-start md:justify-between md:gap-6 md:px-5 md:pt-5">
         <div className="flex min-w-0 items-start gap-3">
           {lead}
           <div className="min-w-0">
@@ -56,9 +61,9 @@ export function Page({
             )}
           </div>
         </div>
-        {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
+        {actions && <div className="flex flex-wrap items-center gap-2 md:shrink-0">{actions}</div>}
       </div>
-      <div className={`px-5 pb-10 ${wide ? '' : 'max-w-[1440px]'}`}>{children}</div>
+      <div className={`px-3 pb-10 md:px-5 ${wide ? '' : 'max-w-[1440px]'}`}>{children}</div>
     </div>
   )
 }
