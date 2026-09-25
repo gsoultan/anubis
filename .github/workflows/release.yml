@@ -33,13 +33,25 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ env.BUN_VERSION }}
-      - name: install buf + sqlc + protoc plugins (pinned)
+      - name: refuse a lightweight tag
+        # The release notes lead with the annotated tag's message
+        # (.goreleaser.yaml, release.header: {{ .TagBody }}). A lightweight tag
+        # has no message, and goreleaser then falls back to the tagged commit's
+        # body without saying so — on a merge commit, a PR title standing in
+        # for the release notes. Refusing here is cheaper than noticing later.
+        run: |
+          if [ "$(git cat-file -t "$GITHUB_REF_NAME")" != "tag" ]; then
+            echo "::error::$GITHUB_REF_NAME is a lightweight tag. Tag with 'git tag -a' so the release notes carry its message." >&2
+            exit 1
+          fi
+      - name: install buf + protoc plugins (pinned)
         # The gates regenerate code to check for drift, so they need the
         # same toolchain CI uses — pinned to the versions that produced the
-        # committed bytes.
+        # committed bytes. No sqlc: nothing has run it since 2026-09-18, and
+        # an unused tool compiled inside the job that holds id-token: write is
+        # attack surface with no benefit.
         run: |
           go install github.com/bufbuild/buf/cmd/buf@v1.72.0
-          go install github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1
           go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.11
           go install connectrpc.com/connect/cmd/protoc-gen-connect-go@v1.20.0
       - name: gate the release on the suite that guards it

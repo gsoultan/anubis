@@ -1,6 +1,11 @@
 # ADR-0009 — All SQL lives in .sql files; sqlc compiles it
 
-**Status:** accepted, amended §5 · **Date:** 2026-08-22 · **Amended:** 2026-08-25
+**Status:** accepted, amended §5–§8 · **Date:** 2026-08-22 · **Amended:** 2026-09-18
+
+> **Current state: sqlc is gone** (§8). SQL lives in `migrations/` and in each
+> context's `adapter/postgres/rquery/`; builder queries are generated from its
+> `rmodel/`. The Decision below is the original, kept as the record of what was
+> decided on 2026-08-22 — read the amendments, newest first, for what holds now.
 
 ## Context
 
@@ -37,6 +42,39 @@ operator's own configured query verbatim, and `db_table` assembles a
 and quoted through `pgx.Identifier.Sanitize()`. Neither path can touch
 Anubis's own schema — a different connection, a different database.
 Everything reading Anubis's tables still goes through `db/queries`.
+
+## §8 Amendment (2026-09-18): sqlc is gone
+
+`f206fd45` removed `sqlc.yaml`, every `db/queries/*.sql` and every
+`adapter/postgres/gen/`. All nine contexts run on storm — v1.1.0 since #47,
+whose regeneration changed nothing but each generated file's header. §6's
+closing line, "**Still sqlc:** identity, auth, gate", was true when it was
+written and is not now.
+
+What each part of the original Decision became:
+
+| Decision | Now |
+| :--- | :--- |
+| §1 — every query authored in `db/queries/*.sql`, type-checked by sqlc against the schema | builder queries generated from each context's `rmodel/`; raw statements as `storm.SQL[T]` in its `rquery/`, which `cmd/stormgen` PREPAREs against the live schema, so column or type drift still fails the build |
+| §2 — sqlc generates into `adapter/postgres/gen/`, CI fails on drift | `stormgen` generates into `adapter/postgres/rgen/`; `scripts/check/gen-drift.sh` regenerates all nine contexts and fails on drift |
+| §3 — only the postgres adapter executes queries | each context's `adapter/postgres`, plus `platform/database` for the two session-scoped advisory locks |
+| §4 — `no-sql-in-go.sh` enforces it | unchanged, exempting `rquery/`, `rgen/` and `internal/platform/schema/` (§7) where it used to exempt `db/queries/` |
+
+The Consequences section's one negative — dynamic filters written as static
+queries with nullable parameters — no longer applies: a builder omits an absent
+predicate rather than carrying an inert one (§6).
+
+**What this ADR decides is unchanged.** SQL is reviewed in one designated place
+per context and checked against the real schema before it can build. The
+mechanism moved; the rule did not.
+
+**Why raw statements stay raw.** storm v1 can express `now()` and `col + 1` in a
+SET (`SetXNow`, `IncX`), so the question gets asked again with every upgrade.
+§6 answers it and the answer holds: what keeps a guarded update in SQL is its
+WHERE, not its SET. It addresses rows by something other than the primary key
+and carries the guard in the statement, because a read-then-write is the window
+the guard exists to close — the TOTP replay fixed on 2026-09-20 was exactly
+that window, open.
 
 ## §7 Amendment (2026-09-18): the model is the schema of record
 
@@ -176,7 +214,8 @@ tools never ship, so they are toolchain, not dependencies:
 
 | Tool | Version | Role |
 | :--- | :--- | :--- |
-| `sqlc` | 1.31.x | .sql → typed pgx code (build time) |
+| ~~`sqlc`~~ | ~~1.31.x~~ | removed 2026-09-18 — see §8 |
+| `storm` (`stormgen`, `stormddl`) | v1.1.0 | model → builders; raw `SQL[T]` PREPAREd against the live schema; schema of record → migrations (build time) |
 | `buf` + `protoc-gen-go` + `protoc-gen-connect-go` | current | proto → Go/TS (build time) |
 
 Versions are recorded here and checked by `scripts/gen.sh`; generated output

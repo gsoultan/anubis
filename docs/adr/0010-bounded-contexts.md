@@ -1,6 +1,12 @@
 # ADR-0010 — Bounded contexts, and folders that stay small
 
-**Status:** accepted · **Date:** 2026-08-23
+**Status:** accepted, amended · **Date:** 2026-08-23 · **Amended:** 2026-09-18
+
+> **Amended 2026-09-18:** the per-context generated package is storm's `rgen/`,
+> built from each context's `rmodel/` and `rquery/`; `sqlc.yaml` and
+> `db/queries/` are gone. The boundary this ADR draws is unchanged and now
+> enforced where the code is generated — `cmd/stormgen` hands storm only that
+> context's models. See ADR-0009 §8. The text below is as decided.
 
 ## Context
 
@@ -69,7 +75,7 @@ because it does not have one.
 | `folder-size.sh` | ≤ 10 Go files per folder (generated code exempt) |
 | `import-boundary.sh` | `*/domain` and `shared/*` import stdlib only |
 | `context-boundary.sh` | no context imports another context's `adapter/…` |
-| `no-sql-in-go.sh` | SQL only in `db/queries/<context>` and `migrations/` |
+| `no-sql-in-go.sh` | SQL only in each context's `rquery/` and `migrations/` (was `db/queries/<context>` until 2026-09-18) |
 
 ## Consequences
 

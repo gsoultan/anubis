@@ -45,17 +45,21 @@ references". New topics live in their own file from 2026-09-11 on:
 - ADR-0008: Connect RPC (connect-go v1.20, TS runtime v2) + go-kit endpoints.
   Two surfaces: Connect for RPC, stdlib net/http for OIDC/PKCE, well-known,
   gate check, health, hosted login. One server on :7448.
-- ADR-0009: all SQL in db/queries/*.sql via sqlc → internal/adapter/postgres/gen.
-  No SQL strings in hand-written Go (CI-enforced).
+- ADR-0009 (§8): SQL only in migrations/ and each context's
+  adapter/postgres/rquery/; builders generated from rmodel/ into rgen/ by
+  storm. sqlc and db/queries/ are gone (f206fd45, 2026-09-18). No SQL strings
+  in hand-written Go (CI-enforced).
 - pkg/anubis = nested zero-dependency Go module (verifier SDK). PASETO lives
   there; the server imports it for signing.
 
 ## Layout
-cmd/anubisd (serve|migrate|keys) · internal/{config,domain,usecase,port,
-endpoint,adapter/{postgres,connectapi,httpapi},crypto/{kdf,localtoken,keyring,
-totp},migrate,ratelimit,snapshot} · pkg/anubis · proto/anubis/v1 · db/queries
-· gen/go · migrations/ (forward-only, tracked in schema_migrations
-version+sha256 checksum — must stay compatible with scripts/db.sh).
+cmd/anubisd (serve|migrate|baseline|keys|operators|bootstrap|version) ·
+internal/<context>/{domain,port,app,service,endpoint,adapter} for the bounded
+contexts (see Structure below) · internal/platform/schema (schema of record)
+· pkg/anubis · proto/anubis/v1 · gen/go · migrations/ (forward-only,
+sha256-pinned in schema_migrations; NEVER edit one that has shipped — every
+install then logs checksum drift on every boot and `baseline` cannot clear
+it; scripts/check/migrations-are-immutable.sh).
 
 ## Sharp edges
 - authorize() semantics: OR within axis (bool_or, migration 0013), AND across
@@ -89,7 +93,7 @@ Anubis pool. Non-obvious invariants learned by building it:
   sync's to remove (verified against ~31k seeded nodes).
 - migration 0021 fixed dry runs resolving parents created in the same run.
 - db_table builds SQL from validated+quoted identifiers only; ADR-0009
-  records that exemption (foreign schemas sqlc cannot check).
+  records that exemption (foreign schemas no generator can check).
 
 ## Structure (ADR-0010, refactored 2026-08-23)
 Seven bounded contexts under internal/: identity, auth, authz, scope,
@@ -104,8 +108,9 @@ ratelimit). Conventions that surprise newcomers:
   Outgrowing it means a missing concept: that is why authz/domain/grant,
   authz/domain/membership and auth/app/{signin,mfa,device,session,token}
   exist.
-- One sqlc package PER CONTEXT (db/queries/<ctx> -> internal/<ctx>/adapter/
-  postgres/gen). No generated package holds another context's SQL.
+- One generated storm package PER CONTEXT (rmodel/ + rquery/ ->
+  internal/<ctx>/adapter/postgres/rgen). cmd/stormgen hands storm only that
+  context's models, so no generated package holds another context's SQL.
 - One repository type per context over platform/database (pool, WithinTx via
   context, MapErr + column helpers). The old god-Store is gone.
 - internal/api/{connect,http} is transport plumbing and must NOT import any
@@ -247,19 +252,17 @@ wall of failed requests instead of a sign-in form.
 ## Console sign-in is username + password ONLY (2026-08-23)
 The sign-in form has TWO fields. There is no tenant input and no "change"
 link; do not add one back.
-The tenant is resolved server-side and is a DATABASE fact, not configuration:
+(Rewritten 2026-09-25: the tenant-resolving version below it was replaced by
+ADR-0011, and ConsoleTenant() no longer exists.) The console signs in a
+PLATFORM OPERATOR, who belongs to no tenant — platform usernames are globally
+unique — so there is no tenant to resolve and none is asked for.
 GET /v1/console-config (internal/api/http/console_handler.go, unauthenticated)
-returns {tenant, issuer, setup_required} from tenancy's ConsoleTenant() ->
-db/queries/tenancy/tenant.sql GetConsoleTenant: the platform tenant if one
-exists, else the only tenant if there is exactly one, else NO ROW. There is no
-default tenant and ANUBIS_DEFAULT_TENANT is NOT consulted here — the first
-tenant is created by /setup.
-The console prefers ?tenant= then the hostname's first label then this
-endpoint; when all three come up empty it says the installation is not set up
-and DISABLES the button rather than asking anyone to type a slug.
-Invariants: the endpoint returns ONE slug, never a list (an unauthenticated
-tenant enumeration is a customer roster), and it is no-store because setup
-flips setup_required exactly once.
+returns {issuer, setup_required}, where setup_required is
+!control.AnyPlatformUser(): until an operator exists nobody could complete the
+form, so the console shows the installer instead.
+Invariant: it reports a BOOLEAN, never a list — an unauthenticated endpoint
+that enumerated anything is a roster for whoever curls it. no-store, because
+setup flips setup_required exactly once.
 The server still needs a tenant on LoginRequest — identities_username is
 unique on (tenant_id, realm_id, lower(username)), so a bare username cannot
 identify a person. Resolving it is the console's job, not the user's.
