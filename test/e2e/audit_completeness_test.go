@@ -121,12 +121,30 @@ func TestFailedPlatformLoginIsRecorded(t *testing.T) {
 
 	who := fmt.Sprintf("ghost-%d", time.Now().UnixNano())
 	pc := anubisv1connect.NewPlatformAuthServiceClient(http.DefaultClient, baseURL)
-	_, err := pc.PlatformLogin(context.Background(),
-		connect.NewRequest(&anubisv1.PlatformLoginRequest{
-			Username: who, Password: "definitely-not-the-password",
-		}))
+
+	// Wait out the limiter rather than counting a refusal as the refusal
+	// under test. PlatformLogin allows 5/min per account and this package
+	// shares one; a rate-limited attempt never reaches the audit path, so
+	// the poll below would hunt for an entry nothing ever wrote and report
+	// a missing audit trail instead of a busy limiter.
+	var err error
+	deadline429 := time.Now().Add(90 * time.Second)
+	for {
+		_, err = pc.PlatformLogin(context.Background(),
+			connect.NewRequest(&anubisv1.PlatformLoginRequest{
+				Username: who, Password: "definitely-not-the-password",
+			}))
+		if connect.CodeOf(err) == connect.CodeResourceExhausted && time.Now().Before(deadline429) {
+			time.Sleep(3 * time.Second)
+			continue
+		}
+		break
+	}
 	if err == nil {
 		t.Fatal("a login with a made-up username succeeded")
+	}
+	if connect.CodeOf(err) == connect.CodeResourceExhausted {
+		t.Fatalf("still rate limited after 90s; the attempt never reached the audit path: %v", err)
 	}
 
 	// No tenant header: an operator asking without one is asking about the

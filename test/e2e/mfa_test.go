@@ -1044,7 +1044,13 @@ func TestTheBrowserWarnsInsideTheGracePeriod(t *testing.T) {
 	}
 
 	// 2. And warned, naming the date and the factor.
-	if !strings.Contains(body, deadline.Format("2 January 2006")) {
+	// UTC, because that is what the page renders: the deadline arrives from
+	// Postgres as an instant and is formatted without a zone to convert to —
+	// there is no user timezone to use. Formatting the expectation LOCALLY
+	// made this test fail only on a machine east of UTC, late enough in the
+	// day that now+72h lands on a different calendar date in the two zones.
+	// CI runs in UTC, so it could never catch it.
+	if !strings.Contains(body, deadline.UTC().Format("2 January 2006")) {
 		t.Fatalf("signed in inside the grace period without naming the deadline "+
 			"(status %d):\n%s", resp.StatusCode, firstBytes(body, 600))
 	}
