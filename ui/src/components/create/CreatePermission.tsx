@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { useForm } from '@tanstack/react-form'
+import { useForm, useStore } from '@tanstack/react-form'
 import { MultiSelect, Select, TextInput } from '@mantine/core'
 import { api } from '@/lib/api/client'
 import { qk } from '@/lib/query/keys'
@@ -37,9 +37,13 @@ export function CreatePermission({ opened }: { opened: boolean }) {
     },
   })
 
-  const v = form.state.values
-  const preview = v.app_slug && v.resource && v.action
-    ? `${v.app_slug}:${v.resource}:${v.action}` : null
+  /* Subscribed, not read. form.state is a snapshot: typing re-renders the
+     field, never this component, so a preview computed from it stayed null
+     and the button it gates stayed disabled however the form was filled —
+     and picking a step-up factor never revealed the auth-age field. */
+  const preview = useStore(form.store, ({ values: v }) => v.app_slug && v.resource && v.action
+    ? `${v.app_slug}:${v.resource}:${v.action}` : null)
+  const stepUp = useStore(form.store, (s) => s.values.requires_amr.length > 0)
 
   return (
     <CreateShell
@@ -131,7 +135,7 @@ export function CreatePermission({ opened }: { opened: boolean }) {
           )}
         </form.Field>
 
-        {form.state.values.requires_amr.length > 0 && (
+        {stepUp && (
           <form.Field name="max_auth_age">
             {(f) => (
               <Select label="Maximum authentication age"

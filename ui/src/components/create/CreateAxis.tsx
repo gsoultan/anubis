@@ -43,10 +43,11 @@ export function CreateAxis({ opened }: { opened: boolean }) {
       opened={opened} onClose={close} title="Add a structure"
       description={<>A whole new way to limit access — by cost centre, by project, by region. Ready the moment you add it; nothing existing changes until you start using it.</>}
       footer={
-        <form.Subscribe selector={(s) => [s.canSubmit, s.isSubmitting] as const}>
+        <form.Subscribe selector={(s) =>
+          [s.canSubmit && !!s.values.code && !!s.values.display_name, s.isSubmitting] as const}>
           {([canSubmit, isSubmitting]) => (
             <CancelSubmit onCancel={close} onSubmit={() => void form.handleSubmit()}
-              canSubmit={!!canSubmit && !!form.state.values.code && !!form.state.values.display_name}
+              canSubmit={!!canSubmit}
               submitting={!!isSubmitting} label="Add structure" />
           )}
         </form.Subscribe>
