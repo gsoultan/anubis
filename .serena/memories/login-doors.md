@@ -64,9 +64,8 @@ Deliberate, not rough edges:
 - **A wrong code discards the key.** `ConfirmTOTP` spends the enrolment token
   *before* verifying the code, so a stolen grant buys one guess rather than
   thousands. The page issues a fresh key and says so.
-- **No QR.** A QR encoder is a feature of its own under ADR-0002; the
-  `otpauth://` link opens an authenticator on a phone, and the key is typed
-  anywhere else.
+- **Three ways in:** scan the QR (see below), tap the `otpauth://` link to
+  open an authenticator on the same phone, or type the key.
 - **`PageView.EnrolURI` is `template.URL`.** `html/template` rewrites
   `otpauth://` to `#ZgotmplZ` — the scheme is not on its allowlist — and the
   link renders dead with no error anywhere. See [[page-rendering]].
@@ -133,8 +132,15 @@ the operator's row, so it never saw `status='disabled'` either.
 `PlatformRefresh` checks `Active()`, which bounded the window at one
 access-token TTL (**one hour**) without closing it.
 `platformGuard.stillValid` and the interactor's `live()` now read the row on
-every platform request. There is still no ADMIN reset — a forgotten password
-is disable + recreate.
+every platform request.
+
+**And a forgotten one can be reset** (2026-09-22). `ResetOperatorPassword`
+needs another operator holding `anubis:platform:assign`, which is not a new
+privilege — `CreateAPIKey` already mints a credential that acts as any operator
+named — and it REFUSES a self-reset, which would skip the current-password
+check. For a lone owner with nobody left to help: `anubisd operators
+reset-password <username>` on the host, audited as `actor_kind = 'cli'`. Both
+bump `token_epoch`, so whatever the account had open ends.
 
 ## Boot: fatal only for a key that must sign
 

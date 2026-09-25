@@ -27,8 +27,8 @@ go run ./cmd/anubisd migrate
 # declaration, fails here naming the statement.
 # One invocation per bounded context: stormgen reads the context out of the
 # output path and hands storm only THAT context's models, so a query cannot
-# compile against a table its context does not own. Add a line when a context
-# moves off sqlc.
+# compile against a table its context does not own. All nine are listed; add a
+# line when a new context gets tables of its own.
 # Full paths, not a context name plus a template: the technical context's
 # generated package lives under internal/platform/database, not under an
 # adapter/postgres that it does not have.

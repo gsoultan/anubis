@@ -131,8 +131,10 @@ pkg/anubis/   public client SDK — zero dependencies, verifies offline
 
 Each context's `domain/` imports nothing outside the standard library, and
 each carries its own generated query package
-(`adapter/postgres/gen`, from `db/queries/<context>`), so no package holds
-another context's SQL. Enforced by `scripts/check/`.
+(`adapter/postgres/rgen`, built by storm from that context's `rmodel/` and
+`rquery/`), so no package holds another context's SQL. `cmd/stormgen` hands
+storm only the context's own models, which is where that boundary is enforced;
+`scripts/check/` holds it in CI.
 
 `pkg/anubis` ships as the public client SDK: fetch keys, cache them, verify
 offline, expose middleware. It is the highest-leverage code in the project —

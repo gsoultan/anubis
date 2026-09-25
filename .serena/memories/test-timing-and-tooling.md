@@ -33,9 +33,9 @@ rounds), not the budget.
     71 .sql file(s) contributed nothing to the graph because a dependency
     is missing: tree_sitter_sql
 
-For Anubis that is not a minor gap. ADR-0009 puts **all** SQL in
-`db/queries/*.sql`, and `authorize()` — the actual authorization decision — is
-SQL. A graph without it omits the load-bearing half of the system while
+For Anubis that is not a minor gap. ADR-0009 puts all hand-written SQL in
+`migrations/` and each context's `rquery/` (§8; sqlc and `db/queries/` are
+gone), and `authorize()` — the actual authorization decision — is SQL. A graph without it omits the load-bearing half of the system while
 looking complete.
 
     uv tool install --force "graphifyy[sql]"   # not pip; graphify is a uv tool
