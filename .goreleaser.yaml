@@ -125,8 +125,23 @@ changelog:
 release:
   draft: true
   prerelease: auto
+  # The annotated tag's own message leads, so each release says what it
+  # changed rather than repeating the same header every time. Before this, no
+  # release had ever shipped its own tag message: v0.4.0's "POST /v1/login now
+  # needs a CSRF token" reached its notes only because the draft was edited by
+  # hand, and would otherwise have appeared as nothing but a branch name in
+  # the commit list below.
+  #
+  # Verified on goreleaser 2.18: for an annotated tag, TagBody is the tag's
+  # message minus its subject line. For a LIGHTWEIGHT tag it silently falls
+  # back to the tagged commit's body — on a GitHub merge commit, the PR title.
+  # release.yml refuses a lightweight tag for that reason.
   header: |
     ## anubisd {{ .Version }}
+
+    {{ .TagBody }}
+
+    ---
 
     Linux amd64/arm64. The admin console is inside the binary — no separate
     asset to deploy, and it is served same-origin on the API port.

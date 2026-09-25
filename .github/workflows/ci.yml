@@ -14,7 +14,6 @@ concurrency:
 
 env:
   BUF_VERSION: "1.72.0"
-  SQLC_VERSION: "1.31.1"
   # The alert rules ship in packaging/; scripts/check/alert-rules.sh skips
   # itself without promtool, and a check that skips is not a check. Prometheus
   # cannot be `go install`ed — its go.mod carries replace directives — so the
@@ -35,14 +34,13 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
-      - name: install buf + sqlc + protoc plugins (pinned)
+      - name: install buf + protoc plugins (pinned)
         # buf.gen.yaml resolves protoc-gen-go and protoc-gen-connect-go from
         # PATH (`local:`), so the drift check cannot regenerate anything
         # without them. Versions track go.mod so CI reproduces the committed
         # bytes rather than rewriting them.
         run: |
           go install github.com/bufbuild/buf/cmd/buf@v${BUF_VERSION}
-          go install github.com/sqlc-dev/sqlc/cmd/sqlc@v${SQLC_VERSION}
           go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.11
           go install connectrpc.com/connect/cmd/protoc-gen-connect-go@v1.20.0
       - name: install promtool (pinned + checksummed)
