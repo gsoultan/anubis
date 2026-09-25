@@ -8,6 +8,29 @@ Pre-1.0, a minor bump carries deliberate behaviour changes and a patch does
 not. Releases are built and signed by tag and published by hand, so a tag
 existing does not mean a release was ever meant to be installed.
 
+## v0.4.1 — 2026-09-25
+
+Console fixes, every one of them present in v0.4.0. No schema, API or proto
+change: **a v0.4.0 database upgrades with `applied: 0, drifted: 0`**,
+verified before the tag.
+
+- **A person's page was blank on refresh.** The console loaded its assets by
+  relative URL, so a page more than one segment deep — `/identities/<id>` —
+  looked for them under its own path and got the page shell back instead.
+  Clicking through from People worked; a refresh or a shared link did not.
+- **Add a permission could never be submitted**, and **Add person never
+  offered a category** or showed the population's factors, session length
+  and retention. Both drawers read their own form's values as a snapshot
+  that typing never updated.
+- **Tables were cut off below ~1300px.** Columns past a panel's edge were
+  unreachable — at 1024px on People, Access, Audit and Applications. A table
+  now scrolls sideways while it does not fit and keeps its sticky header
+  when it does.
+- The console works on a phone. At 375px the sidebar is a drawer, two-column
+  pages stack, and nothing is wider than the screen.
+
+Internally, storm v0.16.0 → v1.1.0, which changes no query and no schema.
+
 ## v0.4.0 — 2026-09-23
 
 **Action required: `POST /v1/login` now needs a CSRF token.** The hosted
