@@ -61,3 +61,20 @@ heading weight is. `__root.tsx`'s `TITLES` map is keyed on an exact pathname,
 so `/identities/<ulid>` rendered "Not found" in the header of a page that had
 loaded fine; `PersonCrumb` reads the username out of the query cache the page
 itself fills — no second request, no store to keep in sync.
+
+## Blank on refresh until the build emitted root-absolute URLs (2026-09-25)
+
+`/identities/$id` was the first console path with a second segment, and the
+bundle loaded its assets by RELATIVE URL (`./chunk-….js`). Clicking through
+from People worked — the document was already loaded — but a refresh or a
+shared link resolved `./chunk.js` to `/identities/chunk.js`, the SPA
+fallback answered with index.html, the browser refused HTML as a script, and
+the page was blank. Shipped that way in v0.4.0.
+
+`ui/scripts/build-bun.ts` now sets `publicPath: '/'` and refuses to finish if
+the shell references any relative asset. `<base href="/">` is not an option:
+the shell's CSP sets `base-uri 'none'` (`internal/api/http/console_assets.go`).
+
+It was found because a width check "passed" on that page — a blank page has
+nothing to overflow. A check that asserts something is absent must first
+assert that the page rendered at all, and must load it by URL, not by click.
