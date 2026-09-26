@@ -77,13 +77,15 @@ Check, then Apply):
 
 ```jsonc
 {
-  "permissions": [ { "key": "invoice:approve", "description": "…" } ],
+  "permissions": [ { "resource": "invoice", "action": "approve", "description": "…" } ],
   "roles":       [ { "name": "clerk", "permissions": ["invoice:approve"] } ]
 }
 ```
 
-Two naming rules that cost people real time: inside the manifest, roles
-reference permissions as `resource:action` — **not** the full
+A permission is declared as separate `resource` and `action` fields; this
+example used to say `"key": "invoice:approve"`, which the parser ignores and
+then refuses as missing both. Two naming rules that cost people real time:
+inside the manifest, roles reference permissions as `resource:action` — **not** the full
 `app:resource:action` key — and role names come back prefixed with the app
 slug (`clerk` → `billing.clerk`). Everywhere *outside* the manifest (tokens,
 `Authorize` calls) the permission is the full key: `billing:invoice:approve`.
