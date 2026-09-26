@@ -33,6 +33,7 @@ type Row struct {
 	Status      string
 	TokenHash   []byte
 	BoundKey    runtime.Null[string]
+	ClientID    runtime.Null[string]
 }
 
 // Operator ids. Argument-taking operators are numbered first, so the
@@ -71,7 +72,7 @@ const (
 	opNotExists runtime.Op = 27
 )
 
-const nCols = 13
+const nCols = 14
 
 // Query is a value type: composing one allocates nothing. Predicates
 // are a postfix token stream, so disjunction and negation are
@@ -277,6 +278,13 @@ func (q *Query) cursor(col uint32, r Row) {
 		}
 		q.strs[q.ns] = r.BoundKey.V
 		q.ns++
+	case 13:
+		if int(q.ns) >= len(q.strs) {
+			q.over = true
+			return
+		}
+		q.strs[q.ns] = r.ClientID.V
+		q.ns++
 	}
 }
 
@@ -450,6 +458,7 @@ var (
 	Status      = TextCol{10}
 	TokenHash   = BytesCol{11}
 	BoundKey    = NullTextCol{12}
+	ClientID    = NullTextCol{13}
 )
 
 // TimeCol addresses a timestamptz column.
@@ -831,6 +840,13 @@ func (q *Query) leaf(p Pred) {
 			}
 			q.anyStr[q.nas] = p.anyStr
 			q.nas++
+		case 13:
+			if int(q.nas) >= 3 {
+				q.over = true
+				return
+			}
+			q.anyStr[q.nas] = p.anyStr
+			q.nas++
 		}
 		q.push(runtime.MakeLeaf(uint32(p.op), uint32(p.col)))
 		return
@@ -931,6 +947,13 @@ func (q *Query) leaf(p Pred) {
 		}
 		q.strs[q.ns] = p.str
 		q.ns++
+	case 13:
+		if int(q.ns) >= 6 {
+			q.over = true
+			return
+		}
+		q.strs[q.ns] = p.str
+		q.ns++
 	}
 	q.push(runtime.MakeLeaf(uint32(p.op), uint32(p.col)))
 }
@@ -1020,8 +1043,21 @@ func (q Query) BoundKeyIn(v ...string) Query         { return q.Where(BoundKey.I
 func (q Query) BoundKeyNotIn(v ...string) Query      { return q.Where(BoundKey.NotIn(v...)) }
 func (q Query) BoundKeyIsNull() Query                { return q.Where(BoundKey.IsNull()) }
 func (q Query) BoundKeyIsNotNull() Query             { return q.Where(BoundKey.IsNotNull()) }
+func (q Query) ClientIDEq(v string) Query            { return q.Where(ClientID.Eq(v)) }
+func (q Query) ClientIDNotEq(v string) Query         { return q.Where(ClientID.NotEq(v)) }
+func (q Query) ClientIDGt(v string) Query            { return q.Where(ClientID.Gt(v)) }
+func (q Query) ClientIDGte(v string) Query           { return q.Where(ClientID.Gte(v)) }
+func (q Query) ClientIDLt(v string) Query            { return q.Where(ClientID.Lt(v)) }
+func (q Query) ClientIDLte(v string) Query           { return q.Where(ClientID.Lte(v)) }
+func (q Query) ClientIDEqLower(v string) Query       { return q.Where(ClientID.EqLower(v)) }
+func (q Query) ClientIDLike(v string) Query          { return q.Where(ClientID.Like(v)) }
+func (q Query) ClientIDILike(v string) Query         { return q.Where(ClientID.ILike(v)) }
+func (q Query) ClientIDIn(v ...string) Query         { return q.Where(ClientID.In(v...)) }
+func (q Query) ClientIDNotIn(v ...string) Query      { return q.Where(ClientID.NotIn(v...)) }
+func (q Query) ClientIDIsNull() Query                { return q.Where(ClientID.IsNull()) }
+func (q Query) ClientIDIsNotNull() Query             { return q.Where(ClientID.IsNotNull()) }
 
-const selectPrefix = `SELECT "created_at", "expires_at", "consumed_at", "revoked_at", "id", "session_id", "tenant_id", "family_id", "successor_id", "generation", "status", "token_hash", "bound_key" FROM "refresh_tokens"`
+const selectPrefix = `SELECT "created_at", "expires_at", "consumed_at", "revoked_at", "id", "session_id", "tenant_id", "family_id", "successor_id", "generation", "status", "token_hash", "bound_key", "client_id" FROM "refresh_tokens"`
 const countPrefix = `SELECT count(*) FROM "refresh_tokens"`
 const existsPrefix = `SELECT 1 FROM "refresh_tokens"`
 const existsSuffix = ` LIMIT 1`
@@ -1136,6 +1172,12 @@ var orderTable = [nCols][4]string{
 		"\"bound_key\" ASC NULLS FIRST",
 		"\"bound_key\" DESC NULLS LAST",
 	},
+	{ // client_id
+		"\"client_id\"",
+		"\"client_id\" DESC",
+		"\"client_id\" ASC NULLS FIRST",
+		"\"client_id\" DESC NULLS LAST",
+	},
 }
 
 // identTable is each column's bare quoted name, for the left side of a
@@ -1154,6 +1196,7 @@ var identTable = [nCols]string{
 	"\"status\"",
 	"\"token_hash\"",
 	"\"bound_key\"",
+	"\"client_id\"",
 }
 
 var lowering = runtime.Lowering{
@@ -1186,7 +1229,7 @@ func orderOf(dir, col uint32) string {
 
 // fragTable is every predicate this table can produce, lowered at build
 // time. Runtime splices; it never formats.
-var fragTable = [13][28]runtime.Frag{
+var fragTable = [14][28]runtime.Frag{
 	{ // created_at
 		{}, // opNone
 		{A: "\"created_at\" = $", B: ""},
@@ -1577,6 +1620,36 @@ var fragTable = [13][28]runtime.Frag{
 		{},
 		{},
 	},
+	{ // client_id
+		{}, // opNone
+		{A: "\"client_id\" = $", B: ""},
+		{A: "\"client_id\" <> $", B: ""},
+		{A: "\"client_id\" > $", B: ""},
+		{A: "\"client_id\" >= $", B: ""},
+		{A: "\"client_id\" < $", B: ""},
+		{A: "\"client_id\" <= $", B: ""},
+		{A: "lower(\"client_id\") = lower($", B: ")"},
+		{A: "\"client_id\" LIKE $", B: ""},
+		{A: "\"client_id\" ILIKE $", B: ""},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{A: "\"client_id\" = ANY($", B: ")"},
+		{A: "\"client_id\" <> ALL($", B: ")"},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{A: "\"client_id\" IS NULL", B: ""},
+		{A: "\"client_id\" IS NOT NULL", B: ""},
+		{},
+		{},
+	},
 }
 
 func fragOf(op, col uint32) runtime.Frag {
@@ -1746,6 +1819,7 @@ func scan(rv [][]byte, r *Row, sl *runtime.Slab) error {
 	r.Status = sl.Str(rv[10])
 	r.TokenHash = runtime.Bytes(rv[11])
 	r.BoundKey = runtime.NullText(rv[12], sl)
+	r.ClientID = runtime.NullText(rv[13], sl)
 	return nil
 }
 
@@ -1848,6 +1922,10 @@ func (q Query) bindPreds(b *binder) []any {
 				b.anyStr[nas] = q.anyStr[nas]
 				v = append(v, &b.anyStr[nas])
 				nas++
+			case 13:
+				b.anyStr[nas] = q.anyStr[nas]
+				v = append(v, &b.anyStr[nas])
+				nas++
 			}
 			continue
 		}
@@ -1901,6 +1979,10 @@ func (q Query) bindPreds(b *binder) []any {
 			v = append(v, &b.byts[nby])
 			nby++
 		case 12:
+			b.strs[ns] = q.strs[ns]
+			v = append(v, &b.strs[ns])
+			ns++
+		case 13:
 			b.strs[ns] = q.strs[ns]
 			v = append(v, &b.strs[ns])
 			ns++
@@ -2041,7 +2123,7 @@ func (q Query) Prepare(b *Binder) (string, []any) {
 
 // insertSQL does not vary: the column list is fixed by the table, so
 // the placeholders are known at build time and nothing is spliced.
-const insertSQL = `INSERT INTO "refresh_tokens" ("created_at", "expires_at", "consumed_at", "revoked_at", "id", "session_id", "tenant_id", "family_id", "successor_id", "generation", "status", "token_hash", "bound_key") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING "created_at", "expires_at", "consumed_at", "revoked_at", "id", "session_id", "tenant_id", "family_id", "successor_id", "generation", "status", "token_hash", "bound_key"`
+const insertSQL = `INSERT INTO "refresh_tokens" ("created_at", "expires_at", "consumed_at", "revoked_at", "id", "session_id", "tenant_id", "family_id", "successor_id", "generation", "status", "token_hash", "bound_key", "client_id") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING "created_at", "expires_at", "consumed_at", "revoked_at", "id", "session_id", "tenant_id", "family_id", "successor_id", "generation", "status", "token_hash", "bound_key", "client_id"`
 
 const updatePrefix = `UPDATE "refresh_tokens" SET `
 const deletePrefix = `DELETE FROM "refresh_tokens"`
@@ -2060,9 +2142,10 @@ const (
 	dStatus      uint64 = 1 << 8
 	dTokenHash   uint64 = 1 << 9
 	dBoundKey    uint64 = 1 << 10
+	dClientID    uint64 = 1 << 11
 )
 
-const nUpdatable = 11
+const nUpdatable = 12
 
 // setFrags is every assignment this table can make, lowered at build time.
 var setFrags = [nUpdatable]runtime.Frag{
@@ -2077,6 +2160,7 @@ var setFrags = [nUpdatable]runtime.Frag{
 	{A: "\"status\" = $", B: ""},       // status
 	{A: "\"token_hash\" = $", B: ""},   // token_hash
 	{A: "\"bound_key\" = $", B: ""},    // bound_key
+	{A: "\"client_id\" = $", B: ""},    // client_id
 }
 
 // exprFrags is the SERVER-side assignment each column may take instead
@@ -2094,6 +2178,7 @@ var exprFrags = [nUpdatable]runtime.Frag{
 	{}, // status has no server-side form
 	{}, // token_hash has no server-side form
 	{}, // bound_key has no server-side form
+	{}, // client_id has no server-side form
 }
 
 // pkFrags addresses one row.
@@ -2119,9 +2204,10 @@ const (
 	iStatus      uint64 = 1 << 10
 	iTokenHash   uint64 = 1 << 11
 	iBoundKey    uint64 = 1 << 12
+	iClientID    uint64 = 1 << 13
 )
 
-const nInsertable = 13
+const nInsertable = 14
 
 // insCols is the quoted column name for each insert bit.
 var insCols = [nInsertable]string{
@@ -2138,6 +2224,7 @@ var insCols = [nInsertable]string{
 	"\"status\"",
 	"\"token_hash\"",
 	"\"bound_key\"",
+	"\"client_id\"",
 }
 
 // insParts and insPlaceholder come from the back end at build time; the
@@ -2146,7 +2233,7 @@ var insParts = runtime.InsertParts{Open: " (", Sep: ", ", Mid: ") VALUES (", Clo
 var insPlaceholder = runtime.Placeholder{}
 
 const insPrefix = "INSERT INTO \"refresh_tokens\""
-const insReturning = " RETURNING \"created_at\", \"expires_at\", \"consumed_at\", \"revoked_at\", \"id\", \"session_id\", \"tenant_id\", \"family_id\", \"successor_id\", \"generation\", \"status\", \"token_hash\", \"bound_key\""
+const insReturning = " RETURNING \"created_at\", \"expires_at\", \"consumed_at\", \"revoked_at\", \"id\", \"session_id\", \"tenant_id\", \"family_id\", \"successor_id\", \"generation\", \"status\", \"token_hash\", \"bound_key\", \"client_id\""
 
 var insCache = runtime.NewMaskCache()
 
@@ -2165,7 +2252,7 @@ var updOpCache = runtime.NewMaskCache()
 // part of it. Without it m.Row() would hold what the row held BEFORE
 // the statement, so a caller reading back the counter it just
 // incremented would get the old number and never know.
-const updReturning = " RETURNING \"created_at\", \"expires_at\", \"consumed_at\", \"revoked_at\", \"id\", \"session_id\", \"tenant_id\", \"family_id\", \"successor_id\", \"generation\", \"status\", \"token_hash\", \"bound_key\""
+const updReturning = " RETURNING \"created_at\", \"expires_at\", \"consumed_at\", \"revoked_at\", \"id\", \"session_id\", \"tenant_id\", \"family_id\", \"successor_id\", \"generation\", \"status\", \"token_hash\", \"bound_key\", \"client_id\""
 
 // Masks reports how many distinct UPDATE shapes have compiled.
 func Masks() int { return updCache.Masks() }
@@ -2355,6 +2442,20 @@ func (m *Mut) SetBoundKeyNull() {
 	m.expr &^= dBoundKey
 }
 
+func (m *Mut) SetClientID(v string) {
+	m.row.ClientID = runtime.Null[string]{V: v, Valid: true}
+	m.dirty |= dClientID
+	m.expr &^= dClientID
+}
+
+// SetClientIDNull writes SQL NULL. It is a separate method because a
+// zero value and an absent value are different facts.
+func (m *Mut) SetClientIDNull() {
+	m.row.ClientID = runtime.Null[string]{}
+	m.dirty |= dClientID
+	m.expr &^= dClientID
+}
+
 // Ins stages a new row. Unlike Mut it has a setter for every insertable
 // column including the primary key and Immutable ones — supplying your
 // own id is legitimate, changing it later is not.
@@ -2473,6 +2574,18 @@ func (n *Ins) SetBoundKeyNull() {
 	n.set |= iBoundKey
 }
 
+func (n *Ins) SetClientID(v string) {
+	n.row.ClientID = runtime.Null[string]{V: v, Valid: true}
+	n.set |= iClientID
+}
+
+// SetClientIDNull writes SQL NULL explicitly, which is not the same as
+// leaving the column unset and taking its default.
+func (n *Ins) SetClientIDNull() {
+	n.row.ClientID = runtime.Null[string]{}
+	n.set |= iClientID
+}
+
 // The conflict encoding. One byte holds both which unique index an
 // upsert names and what it does on collision, so the insert statement
 // cache stays keyed by one mask and one byte:
@@ -2519,7 +2632,7 @@ var conflictSpecs = []string{
 
 // assignable is the columns target i may overwrite, given the mask.
 func assignable(i uint8, mask uint64) []string {
-	set := make([]string, 0, 11)
+	set := make([]string, 0, 12)
 	switch i {
 	case 0:
 		if mask&(1<<0) != 0 {
@@ -2555,6 +2668,9 @@ func assignable(i uint8, mask uint64) []string {
 		if mask&(1<<12) != 0 {
 			set = append(set, "bound_key")
 		}
+		if mask&(1<<13) != 0 {
+			set = append(set, "client_id")
+		}
 	case 1:
 		if mask&(1<<0) != 0 {
 			set = append(set, "created_at")
@@ -2585,6 +2701,9 @@ func assignable(i uint8, mask uint64) []string {
 		}
 		if mask&(1<<12) != 0 {
 			set = append(set, "bound_key")
+		}
+		if mask&(1<<13) != 0 {
+			set = append(set, "client_id")
 		}
 	}
 	return set
@@ -2655,6 +2774,7 @@ var assignFor = map[string]string{
 	"status":       "\"status\" = EXCLUDED.\"status\"",
 	"token_hash":   "\"token_hash\" = EXCLUDED.\"token_hash\"",
 	"bound_key":    "\"bound_key\" = EXCLUDED.\"bound_key\"",
+	"client_id":    "\"client_id\" = EXCLUDED.\"client_id\"",
 }
 
 func assignExcluded(c string) string { return assignFor[c] }
@@ -2724,6 +2844,8 @@ func (n *Ins) Insert(ctx context.Context, ex runtime.Executor) (Row, error) {
 			args = append(args, n.row.TokenHash)
 		case 12:
 			args = append(args, n.row.BoundKey.Arg())
+		case 13:
+			args = append(args, n.row.ClientID.Arg())
 		}
 	}
 	var out Row
@@ -2761,7 +2883,7 @@ func Inserts() int { return insCache.Masks() }
 // not treat a zero as 'unset': that guess is why other ORMs cannot insert
 // a false, a 0 or an empty string into a column with a default.
 func Insert(ctx context.Context, ex runtime.Executor, r *Row) error {
-	args := make([]any, 0, 13)
+	args := make([]any, 0, 14)
 	args = append(args, r.CreatedAt)
 	args = append(args, r.ExpiresAt)
 	args = append(args, r.ConsumedAt.Arg())
@@ -2775,6 +2897,7 @@ func Insert(ctx context.Context, ex runtime.Executor, r *Row) error {
 	args = append(args, r.Status)
 	args = append(args, r.TokenHash)
 	args = append(args, r.BoundKey.Arg())
+	args = append(args, r.ClientID.Arg())
 	rows, err := ex.Query(ctx, insertSQL, args)
 	if err != nil {
 		return err
@@ -2814,13 +2937,14 @@ var copyCols = []string{
 	"status",
 	"token_hash",
 	"bound_key",
+	"client_id",
 }
 
 // rowSource walks a []Row for CopyFrom without copying any of it.
 type rowSource struct {
 	rows []Row
 	i    int
-	buf  [13]any
+	buf  [14]any
 }
 
 func (s *rowSource) Next() bool {
@@ -2851,6 +2975,7 @@ func (s *rowSource) Values() []any {
 	s.buf[10] = &r.Status
 	s.buf[11] = &r.TokenHash
 	s.buf[12] = r.BoundKey.Ptr()
+	s.buf[13] = r.ClientID.Ptr()
 	return s.buf[:]
 }
 
@@ -2894,8 +3019,9 @@ func InsertOp(r Row) runtime.BatchOp {
 	mask |= 1 << 10
 	mask |= 1 << 11
 	mask |= 1 << 12
+	mask |= 1 << 13
 	st := stmtForInsertNoReturn(mask, 0)
-	args := make([]any, 0, 13)
+	args := make([]any, 0, 14)
 	args = append(args, r.CreatedAt)
 	args = append(args, r.ExpiresAt)
 	args = append(args, r.ConsumedAt.Arg())
@@ -2909,6 +3035,7 @@ func InsertOp(r Row) runtime.BatchOp {
 	args = append(args, r.Status)
 	args = append(args, r.TokenHash)
 	args = append(args, r.BoundKey.Arg())
+	args = append(args, r.ClientID.Arg())
 	return runtime.BatchOp{SQL: st.SQL, Args: args}
 }
 
@@ -2968,6 +3095,8 @@ func (n *Ins) Op() (runtime.BatchOp, error) {
 			args = append(args, n.row.TokenHash)
 		case 12:
 			args = append(args, n.row.BoundKey.Arg())
+		case 13:
+			args = append(args, n.row.ClientID.Arg())
 		}
 	}
 	return runtime.BatchOp{SQL: st.SQL, Args: args}, nil
@@ -3036,6 +3165,8 @@ func (m *Mut) UpdateOp() (runtime.BatchOp, bool) {
 			args = append(args, m.row.TokenHash)
 		case 10:
 			args = append(args, m.row.BoundKey.Arg())
+		case 11:
+			args = append(args, m.row.ClientID.Arg())
 		}
 	}
 	args = append(args, m.row.ID)
@@ -3141,6 +3272,8 @@ func (m *Mut) Update(ctx context.Context, ex runtime.Executor) error {
 			args = append(args, m.row.TokenHash)
 		case 10:
 			args = append(args, m.row.BoundKey.Arg())
+		case 11:
+			args = append(args, m.row.ClientID.Arg())
 		}
 	}
 	args = append(args, m.row.ID)

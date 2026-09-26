@@ -60,8 +60,8 @@ RETURNING id::text AS id, tenant_id::text AS tenant_id, payload`)
 DELETE FROM one_time_tokens WHERE expires_at < now() - interval '1 hour'`)
 	storm.RegisterStatement(`
 INSERT INTO refresh_tokens (session_id, tenant_id, family_id, generation,
-                            token_hash, expires_at, bound_key)
-VALUES ($1, $2, $3, $4, $5, $6, nullif($7, ''))
+                            token_hash, expires_at, bound_key, client_id)
+VALUES ($1, $2, $3, $4, $5, $6, nullif($7, ''), nullif($8, ''))
 RETURNING id::text AS id`)
 	storm.RegisterStatement(`
 INSERT INTO sessions (identity_id, tenant_id, application_id, amr, device_fp,
@@ -133,7 +133,7 @@ WHERE token_hash = $1
   AND expires_at > now()
 RETURNING id::text AS id, session_id::text AS session_id,
           tenant_id::text AS tenant_id, family_id::text AS family_id,
-          generation, expires_at`)
+          generation, expires_at, coalesce(client_id, '') AS client_id`)
 	storm.RegisterStatement(`
 UPDATE refresh_tokens
 SET status = 'revoked', revoked_at = now()
@@ -288,6 +288,7 @@ func scanClaimedRefreshRow(rv [][]byte, r *authrquery.ClaimedRefreshRow, sl *run
 	r.FamilyID = sl.Str(rv[3])
 	r.Generation = runtime.Int4(rv[4])
 	r.ExpiresAt = runtime.Timestamptz(rv[5])
+	r.ClientID = sl.Str(rv[6])
 	return nil
 }
 

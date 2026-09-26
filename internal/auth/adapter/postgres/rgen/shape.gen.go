@@ -59,6 +59,7 @@ func _assertRefreshTokenShape(m m0.RefreshToken) {
 		m.Status,
 		m.TokenHash,
 		m.BoundKey,
+		m.ClientID,
 	}
 }
 
