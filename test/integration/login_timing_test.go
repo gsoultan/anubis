@@ -277,7 +277,9 @@ func TestAStaleOperatorPasswordIsUpgradedOnLogin(t *testing.T) {
 		t.Fatalf("seed operator: %v", err)
 	}
 	t.Cleanup(func() {
-		_, _ = pool.Exec(context.Background(), `DELETE FROM platform_users WHERE id = $1`, id)
+		if _, err := pool.Exec(context.Background(), `DELETE FROM platform_users WHERE id = $1`, id); err != nil {
+			t.Errorf("operator %v not removed: %v", username, err)
+		}
 	})
 
 	// The sign-in itself is refused for having no assignment, which is a

@@ -412,7 +412,7 @@ func seedMySQL(t *testing.T, dsn string) string {
 	if err != nil {
 		t.Fatalf("open mysql: %v", err)
 	}
-	defer db.Close()
+	t.Cleanup(func() { _ = db.Close() })
 
 	const table = "anubis_e2e_org"
 	// AAA sorts before the parent it names, so natural row order is wrong on
