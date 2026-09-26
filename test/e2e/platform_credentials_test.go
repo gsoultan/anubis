@@ -256,6 +256,18 @@ func TestAnOperatorCanChangeTheirPassword(t *testing.T) {
 		t.Fatalf("sign in with the first password: %v", err)
 	}
 
+	// Tenant administration is the other plane this token opens, and the one
+	// an operator spends their day in. Proved to work first, or its refusal
+	// below would prove nothing.
+	ids := anubisv1connect.NewIdentityAdminServiceClient(http.DefaultClient, baseURL)
+	administer := func() error {
+		_, err := ids.ListIdentities(ctx, operatorBearer(connect.NewRequest(
+			&anubisv1.ListIdentitiesRequest{PageSize: 1}), token))
+		return err
+	}
+	if err := administer(); err != nil {
+		t.Fatalf("the token cannot administer the tenant before the change; this proves nothing: %v", err)
+	}
 	pc := platformAuth()
 	if _, err := pc.ChangePlatformPassword(ctx, bearer(connect.NewRequest(
 		&anubisv1.ChangePlatformPasswordRequest{
@@ -280,6 +292,14 @@ func TestAnOperatorCanChangeTheirPassword(t *testing.T) {
 		&anubisv1.MyTenantsRequest{}), token)); err == nil {
 		t.Fatal("a token minted under the OLD password still works after the " +
 			"rotation; every session it opened survives")
+	}
+	// On BOTH planes. The platform guard compares the token's epoch with the
+	// row's; the tenant-administration guard read only assignments, so a
+	// token taken before the change kept administering every tenant the
+	// operator covers until it expired, an hour later.
+	if err := administer(); err == nil {
+		t.Fatal("a token minted under the OLD password still administers the " +
+			"tenant after the rotation")
 	}
 }
 

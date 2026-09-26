@@ -68,6 +68,20 @@ func (s *Repository) PlatformUserByID(ctx context.Context, id string) (*controld
 	return userOf(row), row.PasswordHash, nil
 }
 
+// OperatorStanding answers the tenant-administration guard: is this operator's
+// account active, and which token epoch is it on. An operator who no longer
+// exists is not in standing.
+func (s *Repository) OperatorStanding(ctx context.Context, operatorID string) (bool, int, error) {
+	who, _, err := s.PlatformUserByID(ctx, operatorID)
+	if err != nil {
+		return false, 0, err
+	}
+	if who == nil {
+		return false, 0, nil
+	}
+	return who.Active(), who.TokenEpoch, nil
+}
+
 // userOf maps a row onto the domain type. The password hash is returned
 // separately by the callers rather than carried on the struct, so a value that
 // reaches a log or a response cannot contain it.

@@ -148,3 +148,9 @@ type fakeOperators struct {
 func (f fakeOperators) AssignmentsForOperator(context.Context, string) ([]controldomain.AssignmentRecord, error) {
 	return f.rows, nil
 }
+
+// OperatorStanding: an active operator on epoch 0, which is what the import
+// tests' principals carry.
+func (f fakeOperators) OperatorStanding(context.Context, string) (bool, int, error) {
+	return true, 0, nil
+}
