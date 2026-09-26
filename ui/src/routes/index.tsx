@@ -76,7 +76,7 @@ function StartHere() {
       <div className="t-h2 mb-3">New here? Three steps.</div>
       {/* One column below md. At three, each card got ~100px at 375 and its
           button hung out over the next card's edge. */}
-      <div className="grid gap-3 md:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
         {steps.map((st) => (
           <div key={st.n} className="panel-inset flex flex-col gap-2 px-3.5 py-3">
             <div className="flex items-center gap-2.5">
@@ -189,7 +189,11 @@ function Overview() {
             ].filter(Boolean).join(' · ') || 'no decisions recorded'} />
         </div>
 
-        <div className="grid gap-4 md:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
+        {/* grid-cols-1 below md, not an implicit auto track: an auto column
+            grows to its widest unbreakable content, and one e2e population
+            code (e2e_enrol_probe_<19 digits>) widened both panels 134px past
+            a phone's edge. */}
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
           <div className="panel p-4">
             <div className="mb-3.5 flex items-baseline justify-between">
               <div className="t-label">Identities by population</div>
@@ -202,12 +206,12 @@ function Overview() {
                 return (
                   <div key={r.realm}>
                     <div className="mb-1.5 flex items-baseline justify-between gap-3">
-                      <div className="flex items-center gap-2">
-                        <span style={{ width: 7, height: 7, borderRadius: 99, background: colour }} />
-                        <span className="t-body" style={{ fontWeight: 520 }}>{r.realm}</span>
-                        <span className="chip">{r.kind}</span>
+                      <div className="flex min-w-0 items-center gap-2">
+                        <span className="shrink-0" style={{ width: 7, height: 7, borderRadius: 99, background: colour }} />
+                        <span className="t-body truncate" style={{ fontWeight: 520 }} title={r.realm}>{r.realm}</span>
+                        <span className="chip shrink-0">{r.kind}</span>
                       </div>
-                      <div className="flex items-baseline gap-2">
+                      <div className="flex shrink-0 items-baseline gap-2">
                         <span className="tnum t-body" style={{ fontWeight: 600 }}>
                           {r.count.toLocaleString()}
                         </span>
