@@ -4,8 +4,10 @@ package e2e
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"net/http"
+	"os"
 	"testing"
 	"time"
 
@@ -213,6 +215,22 @@ func newOperatorWithRole(t *testing.T, password, role string) string {
 	}), token)); err != nil {
 		t.Fatalf("create operator: %v", err)
 	}
+	// No RPC removes an operator — they are disabled, never deleted, so the
+	// audit trail keeps a name to point at. A test's operator is not worth
+	// keeping: without this every run left its operators behind, 63 of them
+	// in the dev database by 2026-09-26. Assignments and keys cascade.
+	t.Cleanup(func() {
+		db, err := sql.Open("pgx", os.Getenv("ANUBIS_DB_URL"))
+		if err != nil {
+			t.Errorf("operator %s not removed: %v", username, err)
+			return
+		}
+		defer db.Close()
+		if _, err := db.ExecContext(context.Background(),
+			`DELETE FROM platform_users WHERE username = $1`, username); err != nil {
+			t.Errorf("operator %s not removed: %v", username, err)
+		}
+	})
 	return username
 }
 

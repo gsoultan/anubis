@@ -29,7 +29,10 @@ func TestResetPasswordLetsALockedOutOperatorBackIn(t *testing.T) {
 	if err != nil {
 		t.Fatalf("connect: %v", err)
 	}
-	defer pool.Close()
+	// Not deferred: t.Cleanup runs after the function's defers, so a deferred
+	// Close shut the pool before the delete below could use it, and every run
+	// left its operator behind. Cleanups are LIFO; this one runs last.
+	t.Cleanup(pool.Close)
 
 	username := fmt.Sprintf("breakglass-%d", time.Now().UnixNano())
 	old, err := kdf.Hash("the-password-nobody-remembers")
@@ -45,7 +48,9 @@ func TestResetPasswordLetsALockedOutOperatorBackIn(t *testing.T) {
 		t.Fatalf("seed operator: %v", err)
 	}
 	t.Cleanup(func() {
-		_, _ = pool.Exec(context.Background(), `DELETE FROM platform_users WHERE id = $1`, id)
+		if _, err := pool.Exec(context.Background(), `DELETE FROM platform_users WHERE id = $1`, id); err != nil {
+			t.Errorf("operator %s not removed: %v", username, err)
+		}
 	})
 
 	if err := Run(ctx, quiet(), []string{"reset-password", username}); err != nil {
