@@ -51,8 +51,17 @@ function measureScreen() {
   }
   const docW = document.documentElement.scrollWidth
   if (docW > W + 1) problems.push(`the document is ${docW}px wide in a ${W}px viewport`)
-  if (main && main.scrollWidth > main.clientWidth + 1)
-    problems.push(`the page scrolls sideways by ${main.scrollWidth - main.clientWidth}px`)
+  if (main && main.scrollWidth > main.clientWidth + 1) {
+    // Name the element, or a CI failure means opening a browser to find it.
+    const mr = main.getBoundingClientRect()
+    const past = [...main.querySelectorAll('*')].filter((k) => {
+      const r = k.getBoundingClientRect()
+      return r.width > 0 && r.right > mr.right + 1 && !inScroller(k)
+    })
+    const leaf = past.find((el) => !past.some((o) => o !== el && el.contains(o)))
+    problems.push(`the page scrolls sideways by ${main.scrollWidth - main.clientWidth}px` +
+      (leaf ? `: ${desc(leaf)} ends at ${Math.round(leaf.getBoundingClientRect().right)}px` : ''))
+  }
 
   for (const p of document.querySelectorAll('main .panel')) {
     if (p.querySelector('.tbl-body') || p.scrollWidth <= p.clientWidth + 2) continue
