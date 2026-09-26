@@ -114,6 +114,16 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
+      # Built BEFORE the suite so the binary it serves embeds the real console:
+      # the suite ends with a browser smoke of every screen (ui/scripts/
+      # smoke.ts), driving the Chrome the runner image already carries.
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - run: bun install --frozen-lockfile
+        working-directory: ui
+      - run: bun run build
+        working-directory: ui
       - run: bash scripts/ci/backend-suite.sh
         env:
           # A shared runner is ~10x slower than a development machine (1,100
