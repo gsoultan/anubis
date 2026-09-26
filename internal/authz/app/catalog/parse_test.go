@@ -1,6 +1,8 @@
 package authzcatalog
 
 import (
+	"os"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -215,5 +217,41 @@ func TestSections(t *testing.T) {
 	got := strings.Join(d.Sections(), ",")
 	if got != "permissions,routes" {
 		t.Fatalf("sections = %q", got)
+	}
+}
+
+// Every manifest example a person is shown is one they will paste, so each
+// must be a manifest this parser accepts. The integration guide's first one
+// declared its permission as {"key": "invoice:approve"}: encoding/json dropped
+// the unknown field without a word, and Validate refused the result as
+// "permission missing resource/action" — the guide's own example could not be
+// applied. The console's "Add a permission" drawer shows one too.
+func TestTheManifestExamplesWeShowAreAccepted(t *testing.T) {
+	for _, src := range []struct{ path, block string }{
+		{"../../../../docs/integration.md", "(?s)```jsonc?\n(.*?)```"},
+		{"../../../../ui/src/components/create/CreatePermission.tsx", "(?s)const EXAMPLE = `(.*?)`"},
+	} {
+		text, err := os.ReadFile(src.path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var checked int
+		for _, b := range regexp.MustCompile(src.block).FindAllStringSubmatch(string(text), -1) {
+			if !strings.Contains(b[1], `"permissions"`) {
+				continue
+			}
+			checked++
+			d, err := Parse(b[1], "")
+			if err != nil {
+				t.Errorf("%s: example does not parse: %v\n%s", src.path, err, b[1])
+				continue
+			}
+			if err := d.Validate(); err != nil {
+				t.Errorf("%s: example is refused: %v\n%s", src.path, err, b[1])
+			}
+		}
+		if checked == 0 {
+			t.Errorf("%s: found no manifest example — the extraction is broken, not the file", src.path)
+		}
 	}
 }

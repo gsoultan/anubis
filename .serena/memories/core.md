@@ -328,9 +328,11 @@ prints a one-time setup key to STDOUT, and returns once setup wrote the
 config so runServe boots the real API on the same port. config.Configured()
 is true when ANUBIS_DB_URL is set OR config.yaml exists — a container handed a
 DSN by its orchestrator is configured and must never be shown an installer.
-STILL TO DO: the /setup wizard UI, and EnterTenant + the guard's operator
-branch (ADR-0011) — until that lands an operator's authority is recorded but
-not yet enforced at the guard.
+DONE since (checked 2026-09-26): the /setup wizard UI exists (routes/setup.tsx),
+and operator authority IS enforced — not by an operator branch in authz's
+guard, which this note once planned, but by a separate platformGuard
+(internal/control/app/platform_guard.go) that reads platform_assignments, so
+control depends on authz and never the reverse. EnterTenant was never built.
 
 ## Platform-user concept, as the owner stated it (2026-08-24)
 OWNER runs the installation: create/modify/delete TENANTS, and create
@@ -469,11 +471,12 @@ NOT the full "app:resource:action" key, and the role name is prefixed with
 the app slug automatically (name "clerk" -> role "billing.clerk"). The error
 now says so explicitly instead of just "invalid argument" against a value
 that looks correct.
-STILL MISSING for production, in priority order:
-1. The access-check playground is still sample data — it will confidently
-   show WRONG explanations of why access was denied.
-2. Platform tokens still have no refresh (1h, then re-login).
-3. dashboard(), syncSources/syncRuns/strictDryRun still sample data.
+The three gaps once listed here as STILL MISSING for production are closed
+(checked 2026-09-26): the playground calls the real authorize(); platform
+tokens refresh with rotation and theft detection (e2e
+TestPlatformRefreshRotationAndTheft); and ui/src/lib/api/client.ts states
+"there is no sample data left in the console's data path". docs/roadmap.md,
+not this file, is the list of what remains.
 
 ## Dev script owns the dev operator's second factor (2026-08-24)
 `db.sh devadmin` CLEARS any enrolled TOTP on the dev operator before printing
