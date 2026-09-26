@@ -43,12 +43,18 @@ type ClaimedRefreshRow struct {
 // recognised as THEFT — which is the whole design: the guard is in the
 // statement because a read-then-write would let both presentations pass the
 // read and both be issued a successor.
+//
+// bound_key IS NULL: a token bound to a key (0002 reserved it for DPoP-style
+// binding) must not rotate for somebody who cannot prove the key, and this
+// path cannot check a proof yet. Nothing binds a token today; this stops a
+// half-built binding from being quietly skipped here later.
 var ClaimRefreshToken = storm.SQL[ClaimedRefreshRow](`
 UPDATE refresh_tokens
 SET status = 'consumed', consumed_at = now()
 WHERE token_hash = $1
   AND status = 'active'
   AND expires_at > now()
+  AND bound_key IS NULL
 RETURNING id::text AS id, session_id::text AS session_id,
           tenant_id::text AS tenant_id, family_id::text AS family_id,
           generation, expires_at, coalesce(client_id, '') AS client_id`)

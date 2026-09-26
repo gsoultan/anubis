@@ -131,6 +131,7 @@ SET status = 'consumed', consumed_at = now()
 WHERE token_hash = $1
   AND status = 'active'
   AND expires_at > now()
+  AND bound_key IS NULL
 RETURNING id::text AS id, session_id::text AS session_id,
           tenant_id::text AS tenant_id, family_id::text AS family_id,
           generation, expires_at, coalesce(client_id, '') AS client_id`)
