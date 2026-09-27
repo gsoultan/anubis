@@ -26,6 +26,17 @@ fi
 
 promtool check rules "$RULES"
 
+# Syntax is not firing. A rule whose selector or threshold drifts still parses
+# and still evaluates to an empty result, which reads as "all quiet". The unit
+# tests feed each alert the series that should trigger it and assert it does —
+# and that a below-threshold series does not. (Metric NAMES have their own
+# guard: TestEveryAlertRuleMetricIsExported renders /metrics and checks every
+# name a rule references is exposed.)
+TESTS="packaging/anubis.rules_test.yml"
+if [ -f "$TESTS" ]; then
+  promtool test rules "$TESTS"
+fi
+
 # Every alert carries the two things an operator needs at 3am: what broke, and
 # where the answer is written down. promtool requires neither.
 #
