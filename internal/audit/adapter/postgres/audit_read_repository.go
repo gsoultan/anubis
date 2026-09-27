@@ -34,7 +34,12 @@ func (s *Repository) QueryAudit(ctx context.Context, tenantID string, q auditdom
 		}
 		b = b.Where(auditlog.ActorID.Eq(actor))
 	}
-	b = b.WhereIf(q.Action != "", auditlog.Action.Eq(q.Action))
+	// Substring, case-insensitive: an operator searching the log types
+	// "login" or "reuse", not the exact "auth.login". The action column is
+	// short and the result set is already bounded by tenant, seq order and a
+	// hard limit, so a scan here is cheap.
+	b = b.WhereIf(q.Action != "", auditlog.Action.ILike("%"+q.Action+"%"))
+	b = b.WhereIf(q.Result != "", auditlog.Result.Eq(q.Result))
 	if q.From != nil {
 		b = b.Where(auditlog.OccurredAt.Gte(*q.From))
 	}

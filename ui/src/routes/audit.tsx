@@ -7,13 +7,11 @@ import { Page } from '@/components/shell/Page'
 import { DataTable, Cell, type Column } from '@/components/ui/DataTable'
 import { api } from '@/lib/api/client'
 import { notifyCreated, notifyRejected } from '@/components/create/shell'
-import { qk } from '@/lib/query/keys'
 import type { AuditEntry } from '@/lib/api/types'
 
 export const Route = createFileRoute('/audit')({ component: Audit })
 
 function Audit() {
-  const { data: rows } = useQuery({ queryKey: qk.audit(), queryFn: api.audit })
   /* The description above promises the log is tamper-evident. Evidence
      nobody can check is not evidence, so the check is on the page that makes
      the claim. */
@@ -34,13 +32,33 @@ function Audit() {
     } catch (e) { notifyRejected(e) } finally { setVerifying(false) }
   }
 
+  /* Filter and page on the SERVER. The log holds far more than one page — an
+     installation runs to hundreds of thousands of entries — so filtering a
+     single fetched page in the browser showed the newest hundred and searched
+     only those, and told an investigation "no matches" when the match was on
+     entry a-hundred-and-one. The server matches action as a case-insensitive
+     substring and result exactly, over the whole log, and hands back a cursor.
+     A filter change starts paging over. */
   const [q, setQ] = useState('')
   const [result, setResult] = useState('all')
-  const needle = q.trim().toLowerCase()
-  const shown = (rows ?? []).filter((e) =>
-    (result === 'all' || e.result === result) &&
-    (!needle || e.actor_label.toLowerCase().includes(needle) ||
-      e.action.toLowerCase().includes(needle)))
+  const [trail, setTrail] = useState<string[]>([''])
+  const cursor = trail[trail.length - 1] ?? ''
+  const resetPaging = () => setTrail([''])
+
+  const { data: page, isFetching } = useQuery({
+    queryKey: ['audit', q.trim(), result, cursor],
+    queryFn: () => api.audit({
+      action: q.trim(),
+      result: result === 'all' ? '' : result,
+      cursor,
+      pageSize: 100,
+    }),
+    placeholderData: (prev) => prev,
+  })
+  // The server applied the filters; re-doing it here would hide rows it
+  // deliberately returned and make the page count lie.
+  const shown = page?.rows ?? []
+  const filtered = q.trim() !== '' || result !== 'all'
 
   const columns: Column<AuditEntry>[] = [
     { key: 'when', header: 'When', width: 165, render: (e) => (
@@ -81,31 +99,53 @@ function Audit() {
       ) },
   ]
 
+  const toolbar = (
+    <>
+      <TextInput size="xs" w={230} placeholder="Search action, e.g. login"
+        leftSection={<IconSearch size={14} />}
+        value={q} onChange={(e) => { setQ(e.currentTarget.value); resetPaging() }} />
+      <SegmentedControl size="xs" value={result}
+        onChange={(v) => { setResult(v); resetPaging() }}
+        data={[{ value: 'all', label: 'All' }, { value: 'allow', label: 'Allow' },
+               { value: 'deny', label: 'Deny' }, { value: 'error', label: 'Error' }]} />
+    </>
+  )
+
+  const footer = (
+    <>
+      <span className="t-xs tnum">
+        {shown.length} on this page
+        {trail.length > 1 && ` · page ${trail.length}`}
+      </span>
+      <div className="ml-auto flex items-center gap-2">
+        <Button variant="default" size="compact-sm" disabled={trail.length <= 1}
+          onClick={() => setTrail((t) => t.slice(0, -1))}>Previous</Button>
+        {/* The server returns a cursor only when a full page came back, so an
+            absent one means this is the last page. */}
+        <Button variant="default" size="compact-sm" disabled={!page?.next}
+          onClick={() => setTrail((t) => [...t, page?.next ?? ''])}>Older</Button>
+      </div>
+    </>
+  )
+
   return (
     <Page
       title="Audit"
       description="Every decision and change, in order, tamper-evident — each entry is chained to the previous one, so history cannot be silently rewritten."
       wide
       actions={
-        <>
-          <TextInput w={210} placeholder="Search actor or action"
-            leftSection={<IconSearch size={14} />}
-            value={q} onChange={(e) => setQ(e.currentTarget.value)} />
-          <SegmentedControl size="xs" value={result} onChange={setResult}
-            data={[{ value: 'all', label: 'All' }, { value: 'allow', label: 'Allow' },
-                   { value: 'deny', label: 'Deny' }, { value: 'error', label: 'Error' }]} />
-          <Tooltip label="Recomputes the hash chain and reports the first entry where it breaks.">
-            <Button variant="default" size="xs" loading={verifying}
-              leftSection={<IconShieldCheck size={14} />} onClick={verify}>
-              Verify chain
-            </Button>
-          </Tooltip>
-        </>
+        <Tooltip label="Recomputes the hash chain and reports the first entry where it breaks.">
+          <Button variant="default" size="xs" loading={verifying}
+            leftSection={<IconShieldCheck size={14} />} onClick={verify}>
+            Verify chain
+          </Button>
+        </Tooltip>
       }
     >
-      <DataTable columns={columns} rows={shown} rowKey={(e) => e.id}
-        empty={{ title: needle || result !== 'all' ? 'No entries match' : 'No audit entries yet',
-          ...(needle || result !== 'all' ? { hint: 'Try another search or result filter.' } : {}) }} />
+      <DataTable columns={columns} rows={page ? shown : undefined} rowKey={(e) => e.id}
+        toolbar={toolbar} footer={footer} stale={isFetching}
+        empty={{ title: filtered ? 'No entries match' : 'No audit entries yet',
+          ...(filtered ? { hint: 'Try another search or result filter.' } : {}) }} />
     </Page>
   )
 }

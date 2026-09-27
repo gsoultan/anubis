@@ -1240,11 +1240,12 @@ message AuditEntry {
 
 message QueryAuditRequest {
   string actor_id = 1;
-  string action = 2;
+  string action = 2;   // substring match, case-insensitive; empty = any
   int64 from = 3;  // unix seconds; 0 = unbounded
   int64 to = 4;
   int32 page_size = 5;
   string page_token = 6;
+  string result = 7;   // allow | deny | error; empty = any
 }
 
 message QueryAuditResponse {

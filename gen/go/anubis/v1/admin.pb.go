@@ -9749,11 +9749,12 @@ func (x *AuditEntry) GetEntryHash() string {
 type QueryAuditRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	ActorId       string                 `protobuf:"bytes,1,opt,name=actor_id,json=actorId,proto3" json:"actor_id,omitempty"`
-	Action        string                 `protobuf:"bytes,2,opt,name=action,proto3" json:"action,omitempty"`
-	From          int64                  `protobuf:"varint,3,opt,name=from,proto3" json:"from,omitempty"` // unix seconds; 0 = unbounded
+	Action        string                 `protobuf:"bytes,2,opt,name=action,proto3" json:"action,omitempty"` // substring match, case-insensitive; empty = any
+	From          int64                  `protobuf:"varint,3,opt,name=from,proto3" json:"from,omitempty"`    // unix seconds; 0 = unbounded
 	To            int64                  `protobuf:"varint,4,opt,name=to,proto3" json:"to,omitempty"`
 	PageSize      int32                  `protobuf:"varint,5,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty"`
 	PageToken     string                 `protobuf:"bytes,6,opt,name=page_token,json=pageToken,proto3" json:"page_token,omitempty"`
+	Result        string                 `protobuf:"bytes,7,opt,name=result,proto3" json:"result,omitempty"` // allow | deny | error; empty = any
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -9826,6 +9827,13 @@ func (x *QueryAuditRequest) GetPageSize() int32 {
 func (x *QueryAuditRequest) GetPageToken() string {
 	if x != nil {
 		return x.PageToken
+	}
+	return ""
+}
+
+func (x *QueryAuditRequest) GetResult() string {
+	if x != nil {
+		return x.Result
 	}
 	return ""
 }
@@ -15060,7 +15068,7 @@ const file_anubis_v1_admin_proto_rawDesc = "" +
 	"\vdetail_json\x18\v \x01(\tR\n" +
 	"detailJson\x12\x1d\n" +
 	"\n" +
-	"entry_hash\x18\f \x01(\tR\tentryHash\"\xa6\x01\n" +
+	"entry_hash\x18\f \x01(\tR\tentryHash\"\xbe\x01\n" +
 	"\x11QueryAuditRequest\x12\x19\n" +
 	"\bactor_id\x18\x01 \x01(\tR\aactorId\x12\x16\n" +
 	"\x06action\x18\x02 \x01(\tR\x06action\x12\x12\n" +
@@ -15068,7 +15076,8 @@ const file_anubis_v1_admin_proto_rawDesc = "" +
 	"\x02to\x18\x04 \x01(\x03R\x02to\x12\x1b\n" +
 	"\tpage_size\x18\x05 \x01(\x05R\bpageSize\x12\x1d\n" +
 	"\n" +
-	"page_token\x18\x06 \x01(\tR\tpageToken\"m\n" +
+	"page_token\x18\x06 \x01(\tR\tpageToken\x12\x16\n" +
+	"\x06result\x18\a \x01(\tR\x06result\"m\n" +
 	"\x12QueryAuditResponse\x12/\n" +
 	"\aentries\x18\x01 \x03(\v2\x15.anubis.v1.AuditEntryR\aentries\x12&\n" +
 	"\x0fnext_page_token\x18\x02 \x01(\tR\rnextPageToken\"=\n" +
