@@ -13,10 +13,18 @@ import (
 
 type fakeOps struct {
 	rows []controldomain.AssignmentRecord
+	// The zero value is an active operator on epoch 0, which is what every
+	// principal in these tests carries unless it says otherwise.
+	disabled bool
+	epoch    int
 }
 
 func (f fakeOps) AssignmentsForOperator(context.Context, string) ([]controldomain.AssignmentRecord, error) {
 	return f.rows, nil
+}
+
+func (f fakeOps) OperatorStanding(context.Context, string) (bool, int, error) {
+	return !f.disabled, f.epoch, nil
 }
 
 func ctxFor(p *authctx.Principal) context.Context {
@@ -133,5 +141,35 @@ func TestGlobalOwnerStillNeedsATenantForTenantScopedCalls(t *testing.T) {
 		if _, err := g.Require(ctxFor(p), perm); err != nil {
 			t.Fatalf("installation permission %q refused with no tenant: %v", perm, err)
 		}
+	}
+}
+
+// A token is its operator's only while the account is active and on the epoch
+// the token was minted in. The platform guard checked both; this one read only
+// assignments, so a token taken before a password change — or kept through a
+// disable and re-enable — administered every tenant its operator covers until
+// it expired.
+func TestASupersededOperatorTokenAdministersNothing(t *testing.T) {
+	rows := []controldomain.AssignmentRecord{{OperatorID: "op", TenantID: "t1", Role: controldomain.RoleAdmin}}
+	p := &authctx.Principal{IdentityID: "op", Platform: true, TenantID: "t1", Epoch: 3}
+	for _, c := range []struct {
+		name string
+		ops  fakeOps
+		ok   bool
+	}{
+		{"the token's own epoch", fakeOps{rows: rows, epoch: 3}, true},
+		{"the epoch moved on: the password changed", fakeOps{rows: rows, epoch: 4}, false},
+		{"the account is disabled", fakeOps{rows: rows, epoch: 3, disabled: true}, false},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			g := (&Guard{}).WithOperators(c.ops, time.Now)
+			_, err := g.Require(ctxFor(p), "anubis:identity:read")
+			if c.ok && err != nil {
+				t.Fatalf("refused: %v", err)
+			}
+			if !c.ok && !errors.Is(err, apperr.ErrUnauthenticated) {
+				t.Fatalf("got %v, want unauthenticated: the token is not this operator's any more", err)
+			}
+		})
 	}
 }

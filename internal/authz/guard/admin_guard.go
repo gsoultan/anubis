@@ -31,6 +31,10 @@ type Guard struct {
 // context's port so the dependency points one way.
 type OperatorAuthority interface {
 	AssignmentsForOperator(ctx context.Context, operatorID string) ([]controldomain.AssignmentRecord, error)
+	// OperatorStanding is whether the operator's account is active, and the
+	// token epoch it is on now. Narrow on purpose: the guard needs those two
+	// facts about an operator, not the row they live in.
+	OperatorStanding(ctx context.Context, operatorID string) (active bool, epoch int, err error)
 }
 
 // New returns a guard that refuses everyone: authority arrives only through
@@ -68,6 +72,21 @@ func (g *Guard) Require(ctx context.Context, permission string) (*authctx.Princi
 func (g *Guard) requirePlatform(ctx context.Context, p *authctx.Principal, permission string) (*authctx.Principal, error) {
 	if g.ops == nil {
 		return nil, apperr.ErrPermissionDenied.With("permission", permission)
+	}
+	// The token must still be the operator's: their account active, and on
+	// the epoch the token was minted in — the epoch moves when the password
+	// changes, or the account is disabled and re-enabled, while a token is
+	// outstanding. The platform guard has compared it since v0.4.0; this one
+	// read only assignments, so a token taken before a password change kept
+	// administering every tenant the operator covers until it expired, an
+	// hour later. Unauthenticated rather than denied: the token is dead, and
+	// the console answers that by signing in again.
+	active, epoch, err := g.ops.OperatorStanding(ctx, p.IdentityID)
+	if err != nil {
+		return nil, apperr.ErrInternal.Wrap(err)
+	}
+	if !active || epoch != p.Epoch {
+		return nil, apperr.ErrUnauthenticated
 	}
 	mine, err := g.ops.AssignmentsForOperator(ctx, p.IdentityID)
 	if err != nil {
