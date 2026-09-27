@@ -8,6 +8,42 @@ Pre-1.0, a minor bump carries deliberate behaviour changes and a patch does
 not. Releases are built and signed by tag and published by hand, so a tag
 existing does not mean a release was ever meant to be installed.
 
+## v0.4.2 — 2026-09-27
+
+Two security fixes and one standards fix, all present in v0.4.1. One
+migration, `0051`, a nullable column — **a v0.4.1 database upgrades with
+`applied: 1, drifted: 0`**, verified before the tag.
+
+- **An application could enrol an authenticator on its user's account.**
+  Signing in to an application hands it an access token, and Anubis's API
+  accepted a tenant token whatever application it was minted for. Enrolling an
+  authenticator asked for nothing more than a session, so an application could
+  register its own device key on the person's account and then sign in as
+  them, with no password and in a way that survives a password change.
+  Enrolling now requires a session Anubis issued for itself (`aud` contains
+  `anubis`) that signed in within the last ten minutes. **Action required:**
+  an integration that enrolled with the token its app received from the hosted
+  page must now use a token from `AuthService.Login`, taken just before
+  enrolling.
+- **An old operator token still administered every tenant.** After an operator
+  changed a password they believed compromised, a token issued before the
+  change kept administering every tenant they cover for up to an hour. The
+  tenant-administration guard checked the operator's assignments but not the
+  token epoch the platform guard already compared. It checks both now.
+- **The token endpoint refused to refresh.** Discovery advertises the
+  `refresh_token` grant and the code exchange issues a refresh token, but
+  `POST /v1/token` served only `authorization_code`. A standard OIDC client
+  lost its session at the first access-token expiry. The endpoint now serves
+  the refresh grant through the same rotation as `AuthService.Refresh`, so
+  reuse detection holds on both doors.
+
+Also, from the console and test work: a refresh token now records the
+application it was issued to, so a rotation re-issues with that application's
+audience, format and lifetimes rather than the server's own (`0051`); the
+console is tested in a real browser on every CI run; the "Add a permission"
+drawer explains the manifest instead of offering a form that could not
+succeed; and a class of tests that silently left rows behind now clean up.
+
 ## v0.4.1 — 2026-09-25
 
 Console fixes, every one of them present in v0.4.0. No schema, API or proto
