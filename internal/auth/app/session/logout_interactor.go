@@ -60,6 +60,16 @@ func (u *logoutSessionInteractor) Execute(ctx context.Context, sessionID string)
 	if !ok {
 		return apperr.ErrUnauthenticated
 	}
+	// Ending the token's OWN session is Logout by another name and stays open
+	// to any token. Ending a DIFFERENT session — "sign out my other devices" —
+	// is account management, and an application the person signed in to must
+	// not do it with the token it was handed: that lets a relying party sign
+	// the user out of every OTHER application at will. revokeOne still checks
+	// the target belongs to the caller; this decides who may ask.
+	if sessionID != p.SessionID && !p.FirstParty() {
+		return apperr.ErrPermissionDenied.
+			With("hint", "sign out another session with a token Anubis issued for itself")
+	}
 	return u.revokeOne(ctx, p, sessionID, "logout_session")
 }
 
@@ -74,6 +84,13 @@ func (u *logoutAllInteractor) Execute(ctx context.Context) (int, error) {
 	p, ok := authctx.From(ctx)
 	if !ok {
 		return 0, apperr.ErrUnauthenticated
+	}
+	// Signing the person out of EVERY session — including every other
+	// application's, plus a token-epoch bump — is the account holder's action,
+	// not something an application does with a token it was handed.
+	if !p.FirstParty() {
+		return 0, apperr.ErrPermissionDenied.
+			With("hint", "sign out everywhere with a token Anubis issued for itself")
 	}
 	var revoked []authdomain.RevokedSession
 	err := u.tx.WithinTx(ctx, func(ctx context.Context) error {
