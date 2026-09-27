@@ -98,6 +98,11 @@ type Application struct {
 	BackchannelLogoutURI   *string
 	TokenFormat            string
 	PostLogoutRedirectUris []string
+	// AllowedAudiences are the aud values this app's client_credentials tokens
+	// may request beyond its own slug. Empty means self only: without it a
+	// machine client could mint a token audienced at any sibling application
+	// and be accepted by it, defeating the cross-service replay control.
+	AllowedAudiences []string
 }
 
 func (m *Application) Schema(t *storm.Table) {
@@ -111,6 +116,7 @@ func (m *Application) Schema(t *storm.Table) {
 	t.Col(&m.RedirectUris).Default("'{}'::text[]")
 	t.Col(&m.TokenFormat).Default("'v4.public'::text")
 	t.Col(&m.PostLogoutRedirectUris).Default("'{}'::text[]")
+	t.Col(&m.AllowedAudiences).Default("'{}'::text[]")
 	t.UniqueNamed("applications_id_slug_key", &m.ID, &m.Slug)
 	t.UniqueNamed("applications_id_tenant_id_key", &m.ID, &m.Tenant)
 	t.UniqueNamed("applications_tenant_id_slug_key", &m.Tenant, &m.Slug)

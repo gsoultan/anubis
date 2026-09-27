@@ -67,6 +67,7 @@ type Application struct {
 	BackchannelLogoutURI   *string
 	TokenFormat            string
 	PostLogoutRedirectUris []string
+	AllowedAudiences       []string
 }
 
 func (m *Application) Schema(t *storm.Table) {
@@ -78,6 +79,7 @@ func (m *Application) Schema(t *storm.Table) {
 	t.Col(&m.RedirectUris).Default("'{}'::text[]")
 	t.Col(&m.TokenFormat).Default("'v4.public'::text")
 	t.Col(&m.PostLogoutRedirectUris).Default("'{}'::text[]")
+	t.Col(&m.AllowedAudiences).Default("'{}'::text[]")
 	t.Col(&m.Tenant).ConstraintName("applications_tenant_id_fkey")
 	t.Col(&m.Tenant).OnDelete(storm.Restrict)
 

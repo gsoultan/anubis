@@ -27,6 +27,7 @@ func _assertApplicationShape(m m0.Application) {
 		m.BackchannelLogoutURI,
 		m.TokenFormat,
 		m.PostLogoutRedirectUris,
+		m.AllowedAudiences,
 	}
 }
 

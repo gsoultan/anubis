@@ -418,9 +418,9 @@ DELETE FROM route_policies WHERE application_id = $1`)
 INSERT INTO applications (tenant_id, slug, name, kind, redirect_uris,
                           post_logout_redirect_uris, backchannel_logout_uri,
                           token_format, client_secret_hash,
-                          access_token_ttl, refresh_token_ttl)
+                          access_token_ttl, refresh_token_ttl, allowed_audiences)
 VALUES ($1, $2, $3, $4, $5::text[], $6::text[], nullif($7, ''), $8,
-        nullif($9, ''), $10::text::interval, $11::text::interval)
+        nullif($9, ''), $10::text::interval, $11::text::interval, $12::text[])
 RETURNING id::text AS id, manifest_version`)
 	storm.RegisterStatement(`
 INSERT INTO signin_pages (tenant_id, config, updated_at)
@@ -433,7 +433,8 @@ SELECT
        redirect_uris, post_logout_redirect_uris, backchannel_logout_uri,
        token_format, client_secret_hash, manifest_version,
        access_token_ttl::text AS access_token_ttl,
-       refresh_token_ttl::text AS refresh_token_ttl
+       refresh_token_ttl::text AS refresh_token_ttl,
+       allowed_audiences
 FROM applications
 WHERE id = $1 AND tenant_id = $2`)
 	storm.RegisterStatement(`
@@ -442,7 +443,8 @@ SELECT
        redirect_uris, post_logout_redirect_uris, backchannel_logout_uri,
        token_format, client_secret_hash, manifest_version,
        access_token_ttl::text AS access_token_ttl,
-       refresh_token_ttl::text AS refresh_token_ttl
+       refresh_token_ttl::text AS refresh_token_ttl,
+       allowed_audiences
 FROM applications
 WHERE tenant_id = $1
   AND ($2::text = '' OR slug ILIKE '%' || $2::text || '%' OR name ILIKE '%' || $2::text || '%')
@@ -455,7 +457,8 @@ SELECT
        redirect_uris, post_logout_redirect_uris, backchannel_logout_uri,
        token_format, client_secret_hash, manifest_version,
        access_token_ttl::text AS access_token_ttl,
-       refresh_token_ttl::text AS refresh_token_ttl
+       refresh_token_ttl::text AS refresh_token_ttl,
+       allowed_audiences
 FROM applications
 WHERE tenant_id = $1
 ORDER BY slug`)
@@ -466,6 +469,7 @@ SELECT
        token_format, client_secret_hash, manifest_version,
        access_token_ttl::text AS access_token_ttl,
        refresh_token_ttl::text AS refresh_token_ttl,
+       allowed_audiences,
        extract(epoch FROM access_token_ttl)::bigint  AS access_token_ttl_secs,
        extract(epoch FROM refresh_token_ttl)::bigint AS refresh_token_ttl_secs
 FROM applications
@@ -539,6 +543,7 @@ SET name = $3, status = $4, redirect_uris = $5::text[],
     backchannel_logout_uri = nullif($7, ''), token_format = $8,
     access_token_ttl = $9::text::interval,
     refresh_token_ttl = $10::text::interval,
+    allowed_audiences = $11::text[],
     updated_at = now()
 WHERE id = $1 AND tenant_id = $2`)
 	storm.RegisterStatement(`
@@ -587,8 +592,12 @@ func scanApplicationWithSecsRow(rv [][]byte, r *tenancyrquery.ApplicationWithSec
 	r.ManifestVersion = runtime.Int4(rv[11])
 	r.AccessTokenTtl = sl.Str(rv[12])
 	r.RefreshTokenTtl = sl.Str(rv[13])
-	r.AccessTokenTtlSecs = runtime.Int8(rv[14])
-	r.RefreshTokenTtlSecs = runtime.Int8(rv[15])
+	r.AllowedAudiences, decErr = runtime.TextArray(rv[14], sl)
+	if decErr != nil {
+		return decErr
+	}
+	r.AccessTokenTtlSecs = runtime.Int8(rv[15])
+	r.RefreshTokenTtlSecs = runtime.Int8(rv[16])
 	return nil
 }
 
@@ -614,6 +623,10 @@ func scanApplicationRow(rv [][]byte, r *tenancyrquery.ApplicationRow, sl *runtim
 	r.ManifestVersion = runtime.Int4(rv[11])
 	r.AccessTokenTtl = sl.Str(rv[12])
 	r.RefreshTokenTtl = sl.Str(rv[13])
+	r.AllowedAudiences, decErr = runtime.TextArray(rv[14], sl)
+	if decErr != nil {
+		return decErr
+	}
 	return nil
 }
 

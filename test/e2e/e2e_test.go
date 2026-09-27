@@ -641,3 +641,92 @@ func TestTokenEndpointRefreshGrant(t *testing.T) {
 		t.Fatal("the successor survived reuse detection at /v1/token: attacker and victim share a session")
 	}
 }
+
+// A machine client authenticates as ONE application and could ask for a token
+// audienced at ANOTHER — and get it, because the audience was whatever the
+// caller sent. That token is accepted by the other application (its verifier
+// checks aud), which is the cross-service replay the aud claim exists to stop,
+// defeated for machine tokens. A client may mint tokens for its own slug, or
+// for an audience the application has explicitly allow-listed.
+func TestClientCredentialsAudienceIsNotFreeToChoose(t *testing.T) {
+	requireServer(t)
+	ctx := context.Background()
+	op := platformLogin(t)
+	page := pageClient()
+
+	caller := uniqueSlug("cc-caller")
+	victim := uniqueSlug("cc-victim")
+
+	if _, err := page.CreateApplication(ctx, operatorBearer(connect.NewRequest(&anubisv1.CreateApplicationRequest{
+		Application: &anubisv1.Application{Slug: victim, Name: "cc victim", Kind: "service"},
+	}), op)); err != nil {
+		t.Fatalf("create victim app: %v", err)
+	}
+	made, err := page.CreateApplication(ctx, operatorBearer(connect.NewRequest(&anubisv1.CreateApplicationRequest{
+		Application: &anubisv1.Application{Slug: caller, Name: "cc caller", Kind: "server"},
+	}), op))
+	if err != nil {
+		t.Fatalf("create caller app: %v", err)
+	}
+	secret := made.Msg.ClientSecret
+	if secret == "" {
+		t.Fatal("a server application was created without a client secret")
+	}
+
+	mint := func(audience string) (*connect.Response[anubisv1.ClientCredentialsResponse], error) {
+		return authClient().ClientCredentials(ctx, connect.NewRequest(&anubisv1.ClientCredentialsRequest{
+			Tenant: tenant, ClientId: caller, ClientSecret: secret, Audience: audience,
+		}))
+	}
+
+	self, err := mint("")
+	if err != nil {
+		t.Fatalf("a client could not mint a token for its own audience: %v", err)
+	}
+	if got := clientTokenAudience(t, self.Msg.AccessToken); got != caller {
+		t.Fatalf("default audience = %q, want the caller %q", got, caller)
+	}
+
+	if _, err := mint(victim); connect.CodeOf(err) != connect.CodePermissionDenied {
+		t.Fatalf("a client minted a token audienced at another application (err %v)", err)
+	}
+
+	if _, err := page.UpdateApplication(ctx, operatorBearer(connect.NewRequest(&anubisv1.UpdateApplicationRequest{
+		Application: &anubisv1.Application{
+			Id: made.Msg.Application.Id, Slug: caller, Name: "cc caller", Kind: "server",
+			Status: "active", AllowedAudiences: []string{victim},
+		},
+	}), op)); err != nil {
+		t.Fatalf("allow-list the audience: %v", err)
+	}
+	allowed, err := mint(victim)
+	if err != nil {
+		t.Fatalf("an allow-listed audience was still refused: %v", err)
+	}
+	if got := clientTokenAudience(t, allowed.Msg.AccessToken); got != victim {
+		t.Fatalf("allow-listed token audience = %q, want %q", got, victim)
+	}
+}
+
+// clientTokenAudience reads the single aud out of a v4.public client token.
+func clientTokenAudience(t *testing.T, token string) string {
+	t.Helper()
+	parts := strings.Split(token, ".")
+	if len(parts) < 3 {
+		t.Fatalf("not a v4.public token: %.16s…", token)
+	}
+	raw, err := base64.RawURLEncoding.DecodeString(parts[2])
+	if err != nil || len(raw) <= 64 {
+		t.Fatalf("undecodable token body: %v", err)
+	}
+	var c struct {
+		Aud []string `json:"aud"`
+	}
+	if err := json.Unmarshal(raw[:len(raw)-64], &c); err != nil {
+		t.Fatalf("token claims: %v", err)
+	}
+	if len(c.Aud) != 1 {
+		t.Fatalf("client token aud = %v, want exactly one", c.Aud)
+	}
+	return c.Aud[0]
+}

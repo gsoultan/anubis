@@ -90,6 +90,7 @@ func appProto(a *tenancydomain.ApplicationRecord) *anubisv1.Application {
 		BackchannelLogoutUri: a.BackchannelLogoutURI,
 		TokenFormat:          a.TokenFormat, AccessTokenTtl: a.AccessTokenTTL,
 		RefreshTokenTtl: a.RefreshTokenTTL, ManifestVersion: int32(a.ManifestVersion),
+		AllowedAudiences: a.AllowedAudiences,
 	}
 }
 
@@ -233,7 +234,8 @@ func (h *TenantAdminHandler) CreateApplication(ctx context.Context, req *connect
 			RedirectURIs: a.RedirectUris, PostLogoutRedirectURIs: a.PostLogoutRedirectUris,
 			BackchannelLogoutURI: a.BackchannelLogoutUri,
 			TokenFormat:          a.TokenFormat, AccessTokenTTL: a.AccessTokenTtl,
-			RefreshTokenTTL: a.RefreshTokenTtl,
+			RefreshTokenTTL:  a.RefreshTokenTtl,
+			AllowedAudiences: a.AllowedAudiences,
 		})
 		if err != nil {
 			return nil, err
@@ -259,7 +261,8 @@ func (h *TenantAdminHandler) UpdateApplication(ctx context.Context, req *connect
 			RedirectURIs: a.RedirectUris, PostLogoutRedirectURIs: a.PostLogoutRedirectUris,
 			BackchannelLogoutURI: a.BackchannelLogoutUri,
 			TokenFormat:          a.TokenFormat, AccessTokenTTL: a.AccessTokenTtl,
-			RefreshTokenTTL: a.RefreshTokenTtl,
+			RefreshTokenTTL:  a.RefreshTokenTtl,
+			AllowedAudiences: a.AllowedAudiences,
 		})
 	})
 	if err != nil {

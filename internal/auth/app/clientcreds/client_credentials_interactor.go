@@ -65,9 +65,25 @@ func (u *clientCredentialsInteractor) Execute(ctx context.Context, in ClientCred
 		return nil, apperr.ErrInvalidCredentials
 	}
 
+	// The audience is caller-supplied, so it cannot be minted freely: a token
+	// audienced at a sibling application would be accepted by that application
+	// (pkg/anubis checks aud), which is the confused-deputy replay the aud
+	// claim exists to stop. A client may mint tokens for its OWN slug, or for
+	// an audience the application has explicitly opted into.
 	audience := in.Audience
 	if audience == "" {
 		audience = app.Slug
+	}
+	if audience != app.Slug && !contains(app.AllowedAudiences, audience) {
+		u.audit.Emit(ctx, auditdomain.AuditEvent{
+			TenantID: tenant.ID, ActorKind: "service", TargetID: app.ID,
+			Action: "auth.client_credentials", Result: "deny",
+			IP:     authctx.ClientIP(ctx),
+			Detail: jsonx.Must(map[string]string{"client_id": in.ClientID, "audience": audience, "reason": "audience_not_allowed"}),
+		})
+		return nil, apperr.ErrPermissionDenied.
+			With("audience", audience).
+			With("hint", "add it to the application's allowed_audiences to request it")
 	}
 	key, err := u.ring.Ring().ActiveAccess()
 	if err != nil {
@@ -134,4 +150,13 @@ func hexVal(c byte) (byte, bool) {
 		return c - 'A' + 10, true
 	}
 	return 0, false
+}
+
+func contains(xs []string, v string) bool {
+	for _, x := range xs {
+		if x == v {
+			return true
+		}
+	}
+	return false
 }

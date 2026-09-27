@@ -469,7 +469,7 @@ export async function createApplication(input: {
       redirectUris: input.redirectUris,
       postLogoutRedirectUris: input.postLogoutRedirectUris,
       backchannelLogoutUri: '', tokenFormat: '', accessTokenTtl: '',
-      refreshTokenTtl: '', manifestVersion: 0,
+      refreshTokenTtl: '', manifestVersion: 0, allowedAudiences: [],
     },
   })
   // Server and service clients get a secret, shown exactly once.
