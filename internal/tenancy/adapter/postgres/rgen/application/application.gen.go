@@ -36,6 +36,7 @@ type Row struct {
 	BackchannelLogoutURI   runtime.Null[string]
 	TokenFormat            string
 	PostLogoutRedirectUris []string
+	AllowedAudiences       []string
 }
 
 // Operator ids. Argument-taking operators are numbered first, so the
@@ -74,7 +75,7 @@ const (
 	opNotExists runtime.Op = 27
 )
 
-const nCols = 16
+const nCols = 17
 
 // Query is a value type: composing one allocates nothing. Predicates
 // are a postfix token stream, so disjunction and negation are
@@ -447,6 +448,7 @@ var (
 	BackchannelLogoutURI   = NullTextCol{13}
 	TokenFormat            = TextCol{14}
 	PostLogoutRedirectUris = TextArrayCol{15}
+	AllowedAudiences       = TextArrayCol{16}
 )
 
 // UUIDCol addresses a uuid column.
@@ -838,6 +840,13 @@ func (q *Query) leaf(p Pred) {
 			}
 			q.anyStr[q.nas] = p.anyStr
 			q.nas++
+		case 16:
+			if int(q.nas) >= 3 {
+				q.over = true
+				return
+			}
+			q.anyStr[q.nas] = p.anyStr
+			q.nas++
 		}
 		q.push(runtime.MakeLeaf(uint32(p.op), uint32(p.col)))
 		return
@@ -1071,8 +1080,17 @@ func (q Query) PostLogoutRedirectUrisContainedBy(v ...string) Query {
 func (q Query) PostLogoutRedirectUrisOverlaps(v ...string) Query {
 	return q.Where(PostLogoutRedirectUris.Overlaps(v...))
 }
+func (q Query) AllowedAudiencesContains(v ...string) Query {
+	return q.Where(AllowedAudiences.Contains(v...))
+}
+func (q Query) AllowedAudiencesContainedBy(v ...string) Query {
+	return q.Where(AllowedAudiences.ContainedBy(v...))
+}
+func (q Query) AllowedAudiencesOverlaps(v ...string) Query {
+	return q.Where(AllowedAudiences.Overlaps(v...))
+}
 
-const selectPrefix = `SELECT "id", "created_at", "updated_at", "access_token_ttl", "refresh_token_ttl", "tenant_id", "manifest_version", "kind", "status", "slug", "name", "client_secret_hash", "redirect_uris", "backchannel_logout_uri", "token_format", "post_logout_redirect_uris" FROM "applications"`
+const selectPrefix = `SELECT "id", "created_at", "updated_at", "access_token_ttl", "refresh_token_ttl", "tenant_id", "manifest_version", "kind", "status", "slug", "name", "client_secret_hash", "redirect_uris", "backchannel_logout_uri", "token_format", "post_logout_redirect_uris", "allowed_audiences" FROM "applications"`
 const countPrefix = `SELECT count(*) FROM "applications"`
 const existsPrefix = `SELECT 1 FROM "applications"`
 const existsSuffix = ` LIMIT 1`
@@ -1205,6 +1223,12 @@ var orderTable = [nCols][4]string{
 		"\"post_logout_redirect_uris\" ASC NULLS FIRST",
 		"\"post_logout_redirect_uris\" DESC NULLS LAST",
 	},
+	{ // allowed_audiences
+		"\"allowed_audiences\"",
+		"\"allowed_audiences\" DESC",
+		"\"allowed_audiences\" ASC NULLS FIRST",
+		"\"allowed_audiences\" DESC NULLS LAST",
+	},
 }
 
 // identTable is each column's bare quoted name, for the left side of a
@@ -1226,6 +1250,7 @@ var identTable = [nCols]string{
 	"\"backchannel_logout_uri\"",
 	"\"token_format\"",
 	"\"post_logout_redirect_uris\"",
+	"\"allowed_audiences\"",
 }
 
 var lowering = runtime.Lowering{
@@ -1258,7 +1283,7 @@ func orderOf(dir, col uint32) string {
 
 // fragTable is every predicate this table can produce, lowered at build
 // time. Runtime splices; it never formats.
-var fragTable = [16][28]runtime.Frag{
+var fragTable = [17][28]runtime.Frag{
 	{ // id
 		{}, // opNone
 		{A: "\"id\" = $", B: ""},
@@ -1739,6 +1764,36 @@ var fragTable = [16][28]runtime.Frag{
 		{},
 		{},
 	},
+	{ // allowed_audiences
+		{}, // opNone
+		{},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{A: "\"allowed_audiences\" @> $", B: ""},
+		{A: "\"allowed_audiences\" <@ $", B: ""},
+		{A: "\"allowed_audiences\" && $", B: ""},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{},
+	},
 }
 
 func fragOf(op, col uint32) runtime.Frag {
@@ -1923,6 +1978,10 @@ func scan(rv [][]byte, r *Row, sl *runtime.Slab) error {
 	if decErr != nil {
 		return decErr
 	}
+	r.AllowedAudiences, decErr = runtime.TextArray(rv[16], sl)
+	if decErr != nil {
+		return decErr
+	}
 	return decErr
 }
 
@@ -2037,6 +2096,10 @@ func (q Query) bindPreds(b *binder) []any {
 				v = append(v, &b.anyStr[nas])
 				nas++
 			case 15:
+				b.anyStr[nas] = q.anyStr[nas]
+				v = append(v, &b.anyStr[nas])
+				nas++
+			case 16:
 				b.anyStr[nas] = q.anyStr[nas]
 				v = append(v, &b.anyStr[nas])
 				nas++
@@ -2229,7 +2292,7 @@ func (q Query) Prepare(b *Binder) (string, []any) {
 
 // insertSQL does not vary: the column list is fixed by the table, so
 // the placeholders are known at build time and nothing is spliced.
-const insertSQL = `INSERT INTO "applications" ("id", "created_at", "updated_at", "access_token_ttl", "refresh_token_ttl", "tenant_id", "manifest_version", "kind", "status", "slug", "name", "client_secret_hash", "redirect_uris", "backchannel_logout_uri", "token_format", "post_logout_redirect_uris") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) RETURNING "id", "created_at", "updated_at", "access_token_ttl", "refresh_token_ttl", "tenant_id", "manifest_version", "kind", "status", "slug", "name", "client_secret_hash", "redirect_uris", "backchannel_logout_uri", "token_format", "post_logout_redirect_uris"`
+const insertSQL = `INSERT INTO "applications" ("id", "created_at", "updated_at", "access_token_ttl", "refresh_token_ttl", "tenant_id", "manifest_version", "kind", "status", "slug", "name", "client_secret_hash", "redirect_uris", "backchannel_logout_uri", "token_format", "post_logout_redirect_uris", "allowed_audiences") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17) RETURNING "id", "created_at", "updated_at", "access_token_ttl", "refresh_token_ttl", "tenant_id", "manifest_version", "kind", "status", "slug", "name", "client_secret_hash", "redirect_uris", "backchannel_logout_uri", "token_format", "post_logout_redirect_uris", "allowed_audiences"`
 
 const updatePrefix = `UPDATE "applications" SET `
 const deletePrefix = `DELETE FROM "applications"`
@@ -2251,9 +2314,10 @@ const (
 	dBackchannelLogoutURI   uint64 = 1 << 11
 	dTokenFormat            uint64 = 1 << 12
 	dPostLogoutRedirectUris uint64 = 1 << 13
+	dAllowedAudiences       uint64 = 1 << 14
 )
 
-const nUpdatable = 14
+const nUpdatable = 15
 
 // setFrags is every assignment this table can make, lowered at build time.
 var setFrags = [nUpdatable]runtime.Frag{
@@ -2271,6 +2335,7 @@ var setFrags = [nUpdatable]runtime.Frag{
 	{A: "\"backchannel_logout_uri\" = $", B: ""},    // backchannel_logout_uri
 	{A: "\"token_format\" = $", B: ""},              // token_format
 	{A: "\"post_logout_redirect_uris\" = $", B: ""}, // post_logout_redirect_uris
+	{A: "\"allowed_audiences\" = $", B: ""},         // allowed_audiences
 }
 
 // exprFrags is the SERVER-side assignment each column may take instead
@@ -2291,6 +2356,7 @@ var exprFrags = [nUpdatable]runtime.Frag{
 	{}, // backchannel_logout_uri has no server-side form
 	{}, // token_format has no server-side form
 	{}, // post_logout_redirect_uris has no server-side form
+	{}, // allowed_audiences has no server-side form
 }
 
 // pkFrags addresses one row.
@@ -2318,9 +2384,10 @@ const (
 	iBackchannelLogoutURI   uint64 = 1 << 13
 	iTokenFormat            uint64 = 1 << 14
 	iPostLogoutRedirectUris uint64 = 1 << 15
+	iAllowedAudiences       uint64 = 1 << 16
 )
 
-const nInsertable = 16
+const nInsertable = 17
 
 // insCols is the quoted column name for each insert bit.
 var insCols = [nInsertable]string{
@@ -2340,6 +2407,7 @@ var insCols = [nInsertable]string{
 	"\"backchannel_logout_uri\"",
 	"\"token_format\"",
 	"\"post_logout_redirect_uris\"",
+	"\"allowed_audiences\"",
 }
 
 // insParts and insPlaceholder come from the back end at build time; the
@@ -2348,7 +2416,7 @@ var insParts = runtime.InsertParts{Open: " (", Sep: ", ", Mid: ") VALUES (", Clo
 var insPlaceholder = runtime.Placeholder{}
 
 const insPrefix = "INSERT INTO \"applications\""
-const insReturning = " RETURNING \"id\", \"created_at\", \"updated_at\", \"access_token_ttl\", \"refresh_token_ttl\", \"tenant_id\", \"manifest_version\", \"kind\", \"status\", \"slug\", \"name\", \"client_secret_hash\", \"redirect_uris\", \"backchannel_logout_uri\", \"token_format\", \"post_logout_redirect_uris\""
+const insReturning = " RETURNING \"id\", \"created_at\", \"updated_at\", \"access_token_ttl\", \"refresh_token_ttl\", \"tenant_id\", \"manifest_version\", \"kind\", \"status\", \"slug\", \"name\", \"client_secret_hash\", \"redirect_uris\", \"backchannel_logout_uri\", \"token_format\", \"post_logout_redirect_uris\", \"allowed_audiences\""
 
 var insCache = runtime.NewMaskCache()
 
@@ -2367,7 +2435,7 @@ var updOpCache = runtime.NewMaskCache()
 // part of it. Without it m.Row() would hold what the row held BEFORE
 // the statement, so a caller reading back the counter it just
 // incremented would get the old number and never know.
-const updReturning = " RETURNING \"id\", \"created_at\", \"updated_at\", \"access_token_ttl\", \"refresh_token_ttl\", \"tenant_id\", \"manifest_version\", \"kind\", \"status\", \"slug\", \"name\", \"client_secret_hash\", \"redirect_uris\", \"backchannel_logout_uri\", \"token_format\", \"post_logout_redirect_uris\""
+const updReturning = " RETURNING \"id\", \"created_at\", \"updated_at\", \"access_token_ttl\", \"refresh_token_ttl\", \"tenant_id\", \"manifest_version\", \"kind\", \"status\", \"slug\", \"name\", \"client_secret_hash\", \"redirect_uris\", \"backchannel_logout_uri\", \"token_format\", \"post_logout_redirect_uris\", \"allowed_audiences\""
 
 // Masks reports how many distinct UPDATE shapes have compiled.
 func Masks() int { return updCache.Masks() }
@@ -2536,6 +2604,12 @@ func (m *Mut) SetPostLogoutRedirectUris(v []string) {
 	m.expr &^= dPostLogoutRedirectUris
 }
 
+func (m *Mut) SetAllowedAudiences(v []string) {
+	m.row.AllowedAudiences = v
+	m.dirty |= dAllowedAudiences
+	m.expr &^= dAllowedAudiences
+}
+
 // Ins stages a new row. Unlike Mut it has a setter for every insertable
 // column including the primary key and Immutable ones — supplying your
 // own id is legitimate, changing it later is not.
@@ -2655,6 +2729,11 @@ func (n *Ins) SetPostLogoutRedirectUris(v []string) {
 	n.set |= iPostLogoutRedirectUris
 }
 
+func (n *Ins) SetAllowedAudiences(v []string) {
+	n.row.AllowedAudiences = v
+	n.set |= iAllowedAudiences
+}
+
 // The conflict encoding. One byte holds both which unique index an
 // upsert names and what it does on collision, so the insert statement
 // cache stays keyed by one mask and one byte:
@@ -2703,7 +2782,7 @@ var conflictSpecs = []string{
 
 // assignable is the columns target i may overwrite, given the mask.
 func assignable(i uint8, mask uint64) []string {
-	set := make([]string, 0, 14)
+	set := make([]string, 0, 15)
 	switch i {
 	case 0:
 		if mask&(1<<2) != 0 {
@@ -2748,6 +2827,9 @@ func assignable(i uint8, mask uint64) []string {
 		if mask&(1<<15) != 0 {
 			set = append(set, "post_logout_redirect_uris")
 		}
+		if mask&(1<<16) != 0 {
+			set = append(set, "allowed_audiences")
+		}
 	case 1:
 		if mask&(1<<2) != 0 {
 			set = append(set, "updated_at")
@@ -2787,6 +2869,9 @@ func assignable(i uint8, mask uint64) []string {
 		}
 		if mask&(1<<15) != 0 {
 			set = append(set, "post_logout_redirect_uris")
+		}
+		if mask&(1<<16) != 0 {
+			set = append(set, "allowed_audiences")
 		}
 	case 2:
 		if mask&(1<<2) != 0 {
@@ -2828,6 +2913,9 @@ func assignable(i uint8, mask uint64) []string {
 		if mask&(1<<15) != 0 {
 			set = append(set, "post_logout_redirect_uris")
 		}
+		if mask&(1<<16) != 0 {
+			set = append(set, "allowed_audiences")
+		}
 	case 3:
 		if mask&(1<<2) != 0 {
 			set = append(set, "updated_at")
@@ -2864,6 +2952,9 @@ func assignable(i uint8, mask uint64) []string {
 		}
 		if mask&(1<<15) != 0 {
 			set = append(set, "post_logout_redirect_uris")
+		}
+		if mask&(1<<16) != 0 {
+			set = append(set, "allowed_audiences")
 		}
 	}
 	return set
@@ -2957,6 +3048,7 @@ var assignFor = map[string]string{
 	"backchannel_logout_uri":    "\"backchannel_logout_uri\" = EXCLUDED.\"backchannel_logout_uri\"",
 	"token_format":              "\"token_format\" = EXCLUDED.\"token_format\"",
 	"post_logout_redirect_uris": "\"post_logout_redirect_uris\" = EXCLUDED.\"post_logout_redirect_uris\"",
+	"allowed_audiences":         "\"allowed_audiences\" = EXCLUDED.\"allowed_audiences\"",
 }
 
 func assignExcluded(c string) string { return assignFor[c] }
@@ -3032,6 +3124,8 @@ func (n *Ins) Insert(ctx context.Context, ex runtime.Executor) (Row, error) {
 			args = append(args, n.row.TokenFormat)
 		case 15:
 			args = append(args, n.row.PostLogoutRedirectUris)
+		case 16:
+			args = append(args, n.row.AllowedAudiences)
 		}
 	}
 	var out Row
@@ -3069,7 +3163,7 @@ func Inserts() int { return insCache.Masks() }
 // not treat a zero as 'unset': that guess is why other ORMs cannot insert
 // a false, a 0 or an empty string into a column with a default.
 func Insert(ctx context.Context, ex runtime.Executor, r *Row) error {
-	args := make([]any, 0, 16)
+	args := make([]any, 0, 17)
 	args = append(args, r.ID)
 	args = append(args, r.CreatedAt)
 	args = append(args, r.UpdatedAt)
@@ -3086,6 +3180,7 @@ func Insert(ctx context.Context, ex runtime.Executor, r *Row) error {
 	args = append(args, r.BackchannelLogoutURI.Arg())
 	args = append(args, r.TokenFormat)
 	args = append(args, r.PostLogoutRedirectUris)
+	args = append(args, r.AllowedAudiences)
 	rows, err := ex.Query(ctx, insertSQL, args)
 	if err != nil {
 		return err
@@ -3128,13 +3223,14 @@ var copyCols = []string{
 	"backchannel_logout_uri",
 	"token_format",
 	"post_logout_redirect_uris",
+	"allowed_audiences",
 }
 
 // rowSource walks a []Row for CopyFrom without copying any of it.
 type rowSource struct {
 	rows []Row
 	i    int
-	buf  [16]any
+	buf  [17]any
 }
 
 func (s *rowSource) Next() bool {
@@ -3168,6 +3264,7 @@ func (s *rowSource) Values() []any {
 	s.buf[13] = r.BackchannelLogoutURI.Ptr()
 	s.buf[14] = &r.TokenFormat
 	s.buf[15] = &r.PostLogoutRedirectUris
+	s.buf[16] = &r.AllowedAudiences
 	return s.buf[:]
 }
 
@@ -3214,8 +3311,9 @@ func InsertOp(r Row) runtime.BatchOp {
 	mask |= 1 << 13
 	mask |= 1 << 14
 	mask |= 1 << 15
+	mask |= 1 << 16
 	st := stmtForInsertNoReturn(mask, 0)
-	args := make([]any, 0, 16)
+	args := make([]any, 0, 17)
 	args = append(args, r.ID)
 	args = append(args, r.CreatedAt)
 	args = append(args, r.UpdatedAt)
@@ -3232,6 +3330,7 @@ func InsertOp(r Row) runtime.BatchOp {
 	args = append(args, r.BackchannelLogoutURI.Arg())
 	args = append(args, r.TokenFormat)
 	args = append(args, r.PostLogoutRedirectUris)
+	args = append(args, r.AllowedAudiences)
 	return runtime.BatchOp{SQL: st.SQL, Args: args}
 }
 
@@ -3297,6 +3396,8 @@ func (n *Ins) Op() (runtime.BatchOp, error) {
 			args = append(args, n.row.TokenFormat)
 		case 15:
 			args = append(args, n.row.PostLogoutRedirectUris)
+		case 16:
+			args = append(args, n.row.AllowedAudiences)
 		}
 	}
 	return runtime.BatchOp{SQL: st.SQL, Args: args}, nil
@@ -3371,6 +3472,8 @@ func (m *Mut) UpdateOp() (runtime.BatchOp, bool) {
 			args = append(args, m.row.TokenFormat)
 		case 13:
 			args = append(args, m.row.PostLogoutRedirectUris)
+		case 14:
+			args = append(args, m.row.AllowedAudiences)
 		}
 	}
 	args = append(args, m.row.ID)
@@ -3481,6 +3584,8 @@ func (m *Mut) Update(ctx context.Context, ex runtime.Executor) error {
 			args = append(args, m.row.TokenFormat)
 		case 13:
 			args = append(args, m.row.PostLogoutRedirectUris)
+		case 14:
+			args = append(args, m.row.AllowedAudiences)
 		}
 	}
 	args = append(args, m.row.ID)

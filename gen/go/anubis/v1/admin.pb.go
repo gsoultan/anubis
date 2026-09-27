@@ -8905,8 +8905,12 @@ type Application struct {
 	AccessTokenTtl         string   `protobuf:"bytes,9,opt,name=access_token_ttl,json=accessTokenTtl,proto3" json:"access_token_ttl,omitempty"`
 	RefreshTokenTtl        string   `protobuf:"bytes,10,opt,name=refresh_token_ttl,json=refreshTokenTtl,proto3" json:"refresh_token_ttl,omitempty"`
 	ManifestVersion        int32    `protobuf:"varint,11,opt,name=manifest_version,json=manifestVersion,proto3" json:"manifest_version,omitempty"`
-	unknownFields          protoimpl.UnknownFields
-	sizeCache              protoimpl.SizeCache
+	// Audiences this app's client_credentials tokens may request beyond its own
+	// slug. Empty means self only; without an entry a machine client cannot
+	// mint a token audienced at another application.
+	AllowedAudiences []string `protobuf:"bytes,13,rep,name=allowed_audiences,json=allowedAudiences,proto3" json:"allowed_audiences,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *Application) Reset() {
@@ -9021,6 +9025,13 @@ func (x *Application) GetManifestVersion() int32 {
 		return x.ManifestVersion
 	}
 	return 0
+}
+
+func (x *Application) GetAllowedAudiences() []string {
+	if x != nil {
+		return x.AllowedAudiences
+	}
+	return nil
 }
 
 type ListApplicationsRequest struct {
@@ -14998,7 +15009,7 @@ const file_anubis_v1_admin_proto_rawDesc = "" +
 	"\x1aCreateRealmCategoryRequest\x124\n" +
 	"\bcategory\x18\x01 \x01(\v2\x18.anubis.v1.RealmCategoryR\bcategory\"S\n" +
 	"\x1bCreateRealmCategoryResponse\x124\n" +
-	"\bcategory\x18\x01 \x01(\v2\x18.anubis.v1.RealmCategoryR\bcategory\"\xab\x03\n" +
+	"\bcategory\x18\x01 \x01(\v2\x18.anubis.v1.RealmCategoryR\bcategory\"\xd8\x03\n" +
 	"\vApplication\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04slug\x18\x02 \x01(\tR\x04slug\x12\x12\n" +
@@ -15012,7 +15023,8 @@ const file_anubis_v1_admin_proto_rawDesc = "" +
 	"\x10access_token_ttl\x18\t \x01(\tR\x0eaccessTokenTtl\x12*\n" +
 	"\x11refresh_token_ttl\x18\n" +
 	" \x01(\tR\x0frefreshTokenTtl\x12)\n" +
-	"\x10manifest_version\x18\v \x01(\x05R\x0fmanifestVersion\"k\n" +
+	"\x10manifest_version\x18\v \x01(\x05R\x0fmanifestVersion\x12+\n" +
+	"\x11allowed_audiences\x18\r \x03(\tR\x10allowedAudiences\"k\n" +
 	"\x17ListApplicationsRequest\x12\x14\n" +
 	"\x05query\x18\x01 \x01(\tR\x05query\x12\x1b\n" +
 	"\tpage_size\x18\x02 \x01(\x05R\bpageSize\x12\x1d\n" +

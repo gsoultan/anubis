@@ -348,6 +348,13 @@ POST /anubis.v1.AuthService/ClientCredentials
 // → bare access token: no refresh, no session; sub = "app_billing-batch"
 ```
 
+A client may only request its **own** slug as the audience, or an audience the
+application has **allow-listed**. Set `allowed_audiences` on the calling
+application (`["reporting-api"]`) so `billing-batch` may mint a token
+`reporting-api` will accept. Without the entry the request is refused: an
+unlisted audience would let one application's machine credentials impersonate
+to another — the confused-deputy replay the `aud` claim exists to prevent.
+
 The receiving service verifies it with the same `pkg/anubis` middleware —
 `aud` binding is what stops a token minted for one service being replayed
 against another (the confused-deputy case the `Audience` config field

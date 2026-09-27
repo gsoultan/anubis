@@ -26,6 +26,7 @@ type ApplicationRow struct {
 	ManifestVersion        int32
 	AccessTokenTtl         string
 	RefreshTokenTtl        string
+	AllowedAudiences       []string
 }
 
 const appCols = `
@@ -33,7 +34,8 @@ const appCols = `
        redirect_uris, post_logout_redirect_uris, backchannel_logout_uri,
        token_format, client_secret_hash, manifest_version,
        access_token_ttl::text AS access_token_ttl,
-       refresh_token_ttl::text AS refresh_token_ttl`
+       refresh_token_ttl::text AS refresh_token_ttl,
+       allowed_audiences`
 
 // ApplicationWithSecsRow is an application plus its TTLs in seconds.
 //
@@ -55,6 +57,7 @@ type ApplicationWithSecsRow struct {
 	ManifestVersion        int32
 	AccessTokenTtl         string
 	RefreshTokenTtl        string
+	AllowedAudiences       []string
 	AccessTokenTtlSecs     int64
 	RefreshTokenTtlSecs    int64
 }
@@ -111,9 +114,9 @@ var CreateApplication = storm.SQL[CreatedApplicationRow](`
 INSERT INTO applications (tenant_id, slug, name, kind, redirect_uris,
                           post_logout_redirect_uris, backchannel_logout_uri,
                           token_format, client_secret_hash,
-                          access_token_ttl, refresh_token_ttl)
+                          access_token_ttl, refresh_token_ttl, allowed_audiences)
 VALUES ($1, $2, $3, $4, $5::text[], $6::text[], nullif($7, ''), $8,
-        nullif($9, ''), $10::text::interval, $11::text::interval)
+        nullif($9, ''), $10::text::interval, $11::text::interval, $12::text[])
 RETURNING id::text AS id, manifest_version`)
 
 var UpdateApplication = storm.SQLExec(`
@@ -123,6 +126,7 @@ SET name = $3, status = $4, redirect_uris = $5::text[],
     backchannel_logout_uri = nullif($7, ''), token_format = $8,
     access_token_ttl = $9::text::interval,
     refresh_token_ttl = $10::text::interval,
+    allowed_audiences = $11::text[],
     updated_at = now()
 WHERE id = $1 AND tenant_id = $2`)
 

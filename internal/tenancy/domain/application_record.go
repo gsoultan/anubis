@@ -8,13 +8,16 @@ type ApplicationRecord struct {
 	Status                 string
 	RedirectURIs           []string
 	PostLogoutRedirectURIs []string
-	BackchannelLogoutURI   string
-	TokenFormat            string
-	AccessTokenTTL         string
-	RefreshTokenTTL        string
-	AccessTokenTTLSecs     int64
-	RefreshTokenTTLSecs    int64
-	ManifestVersion        int
+	// AllowedAudiences: aud values this app's client_credentials tokens may
+	// request beyond its own slug. Empty means self only.
+	AllowedAudiences     []string
+	BackchannelLogoutURI string
+	TokenFormat          string
+	AccessTokenTTL       string
+	RefreshTokenTTL      string
+	AccessTokenTTLSecs   int64
+	RefreshTokenTTLSecs  int64
+	ManifestVersion      int
 	// IsSystem marks one of Anubis's own applications (ADR-0011). They own
 	// the permission catalog and are never something a tenant's people sign
 	// in to, so they stay out of the tenant's application list.
