@@ -8,6 +8,24 @@ Pre-1.0, a minor bump carries deliberate behaviour changes and a patch does
 not. Releases are built and signed by tag and published by hand, so a tag
 existing does not mean a release was ever meant to be installed.
 
+## v0.4.4 — 2026-09-27
+
+The audit log is searchable and pageable past its newest hundred entries. No
+migration and no breaking change — **a v0.4.3 database needs no upgrade**
+(`applied: 0, drifted: 0`), and the one proto change is an added field.
+
+- **The Audit screen showed only the newest hundred entries.** The console
+  fetched one page of a hundred and filtered the rest in the browser, so the
+  search box and the allow/deny/error filter narrowed those hundred rows and
+  there was no way to reach the others. On a log with a hundred thousand
+  entries an investigation searched the newest hundred and was told "no
+  matches" when the match was older. Filtering and paging now happen on the
+  server, over the whole log: `QueryAudit` matches `action` as a
+  case-insensitive substring and gains a `result` filter (added field
+  `result = 7`), the cursor the handler already returned is now actually read
+  back, and the console pages with a Previous/Older stack. Nothing is filtered
+  in the browser, so the page count no longer lies.
+
 ## v0.4.3 — 2026-09-27
 
 A security follow-up to v0.4.2. No migration, no proto change — **a v0.4.2
