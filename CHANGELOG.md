@@ -8,6 +8,32 @@ Pre-1.0, a minor bump carries deliberate behaviour changes and a patch does
 not. Releases are built and signed by tag and published by hand, so a tag
 existing does not mean a release was ever meant to be installed.
 
+## v0.4.5 — 2026-09-28
+
+A security fix for machine tokens, and the audit log gains an actor filter.
+One migration, `0052`, a nullable-free column with a default — **a v0.4.4
+database upgrades with `applied: 1, drifted: 0`**.
+
+- **A machine client could mint a token for any audience.** A token's `aud` is
+  what stops a token for one application being accepted by another. For a user
+  token Anubis sets it; for a `client_credentials` machine token the audience
+  was whatever the caller sent, unrestricted — so a client authenticated as
+  one application could mint a token audienced at a sibling and be accepted by
+  it, defeating the control for the grant most likely to talk
+  service-to-service. `applications.allowed_audiences` (`0052`) is the opt-in
+  list: a client may request its own slug or a listed audience, nothing else.
+  Default empty is self-only. **Action required:** an application whose machine
+  tokens call another must add that audience to its `allowed_audiences`.
+- **The audit log filters by actor.** Clicking an actor in the log filters to
+  everything that account did — server-side on the actor id, like the action
+  and result filters, so it narrows the whole log rather than a page.
+
+Internally, the alert rules gained firing tests: `promtool` unit tests assert
+each alert triggers on the series it is meant to, and a test renders
+`/metrics` and checks every metric a rule names is actually exposed — so a
+rule that would silently never fire is caught in CI rather than during the
+incident.
+
 ## v0.4.4 — 2026-09-27
 
 The audit log is searchable and pageable past its newest hundred entries. No
