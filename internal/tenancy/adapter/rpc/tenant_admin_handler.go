@@ -303,6 +303,7 @@ func (h *TenantAdminHandler) QueryAudit(ctx context.Context, req *connect.Reques
 	out, err := h.f.Do(ctx, "admin.audit.query", func(ctx context.Context) (any, error) {
 		q := auditdomain.AuditQuery{
 			ActorID: req.Msg.ActorId, Action: req.Msg.Action,
+			Result: req.Msg.Result, PageToken: req.Msg.PageToken,
 			Limit: int(req.Msg.PageSize),
 		}
 		if req.Msg.From > 0 {

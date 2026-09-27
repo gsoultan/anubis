@@ -386,9 +386,17 @@ export async function memberships(): Promise<Membership[]> {
   }))
 }
 
-export async function audit(): Promise<AuditEntry[]> {
-  const resp = await rpc.tenantAdmin.queryAudit({ pageSize: 100 })
-  return resp.entries.map((e): AuditEntry => ({
+export async function audit(opts: {
+  action?: string; result?: string; cursor?: string; pageSize?: number
+} = {}): Promise<{ rows: AuditEntry[]; next: string }> {
+  const size = opts.pageSize ?? 100
+  const resp = await rpc.tenantAdmin.queryAudit({
+    action: opts.action ?? '',
+    result: opts.result ?? '',
+    pageToken: opts.cursor ?? '',
+    pageSize: size,
+  })
+  const rows = resp.entries.map((e): AuditEntry => ({
     id: e.id,
     occurred_at: atRequired(e.occurredAt),
     actor_id: e.actorId || null,
@@ -403,6 +411,7 @@ export async function audit(): Promise<AuditEntry[]> {
        not claiming it. */
     chain_ok: true,
   }))
+  return { rows, next: resp.nextPageToken }
 }
 
 function safeJSON(raw: string): Record<string, unknown> {

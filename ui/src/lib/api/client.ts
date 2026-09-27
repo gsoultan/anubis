@@ -123,7 +123,7 @@ export const api = {
     Promise.reject(new Error('Node-type parents are set when the type is created.')),
   createAxis: (i: NewAxisInput) => live.createAxis(i),
   dashboard: () => live.dashboard(),
-  audit: () => live.audit(),
+  audit: (opts?: { action?: string; result?: string; cursor?: string; pageSize?: number }) => live.audit(opts),
   strictDryRun: (axis: string) => live.strictDryRun(axis),
   syncSources: () => live.syncSources(),
   syncRuns: (sourceId: Uuid) => live.syncRuns(sourceId),

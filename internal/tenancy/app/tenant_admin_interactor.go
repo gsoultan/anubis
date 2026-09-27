@@ -3,6 +3,7 @@ package tenancyapp
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"time"
 
@@ -400,6 +401,14 @@ func (u *tenantAdminInteractor) QueryAudit(ctx context.Context, q auditdomain.Au
 	if err != nil {
 		return nil, "", err
 	}
+	// The cursor from a previous page. Decoded here, next to encodeSeq, so the
+	// token format lives in one place; a malformed one is ignored rather than
+	// erroring, so a stale bookmark just starts from the top.
+	if q.PageToken != "" {
+		if seq, derr := decodeSeq(q.PageToken); derr == nil {
+			q.BeforeSeq = &seq
+		}
+	}
 	// An operator with no tenant selected is asking about the installation
 	// itself, which is where the platform plane files its own events —
 	// logins, API keys, refresh-token theft. Without this they are recorded
@@ -515,6 +524,24 @@ func encodeSeq(n int64) string {
 	}
 	return string(digits)
 }
+
+// decodeSeq reverses encodeSeq. A token that is not a run of digits is
+// rejected, so it cannot smuggle anything into the query.
+func decodeSeq(s string) (int64, error) {
+	if s == "" {
+		return 0, errBadCursor
+	}
+	var n int64
+	for i := 0; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return 0, errBadCursor
+		}
+		n = n*10 + int64(s[i]-'0')
+	}
+	return n, nil
+}
+
+var errBadCursor = errors.New("audit cursor: not a sequence number")
 
 func (u *tenantAdminInteractor) TenantStats(ctx context.Context, id string) (*tenancydomain.TenantStats, error) {
 	if _, err := u.guard.Require(ctx, "anubis:tenant:admin"); err != nil {
