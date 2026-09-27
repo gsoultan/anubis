@@ -4,6 +4,9 @@ package e2e
 
 import (
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
+	"encoding/base64"
 	"fmt"
 	"html"
 	"net/http"
@@ -1160,5 +1163,64 @@ func TestEnrolingFromTheWarningContinuesTheSignIn(t *testing.T) {
 	if loc := onward.Header.Get("Location"); !strings.Contains(loc, "code=") {
 		t.Fatalf("continuing after enrolling did not issue a code (status %d, location %q)",
 			onward.StatusCode, loc)
+	}
+}
+
+// A person who signs in to an application hands it their access token. The
+// application must not be able to turn that into a way in of its own. A
+// device key signs its holder in with no password and survives a password
+// change, and Anubis's own API accepted a tenant token whatever application it
+// was minted for — so an application could enrol ITS key on the person's
+// account and sign in as them from then on. That was proven end to end on a
+// throwaway account before this test existed: planted, then signed in with
+// amr=[device_key] and a refresh token.
+func TestAnApplicationCannotEnrolAnAuthenticatorForItsUser(t *testing.T) {
+	requireServer(t)
+	ctx := context.Background()
+	username, password := newPerson(t, "dk-app")
+	app := signInToAnApplication(t, username, password)
+
+	planted, _, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := authClient().EnrollDeviceKey(ctx, bearer(connect.NewRequest(&anubisv1.EnrollDeviceKeyRequest{
+		PublicKey: base64.RawURLEncoding.EncodeToString(planted), Label: "the application's own",
+	}), app.AccessToken)); connect.CodeOf(err) != connect.CodePermissionDenied {
+		t.Fatalf("%s enrolled a device key on its user's account with the token it was given (err %v)",
+			app.App, err)
+	}
+	if _, err := authClient().BeginTotpEnrollment(ctx, bearer(connect.NewRequest(
+		&anubisv1.BeginTotpEnrollmentRequest{}), app.AccessToken)); connect.CodeOf(err) != connect.CodePermissionDenied {
+		t.Fatalf("%s began a TOTP enrolment on its user's account (err %v)", app.App, err)
+	}
+
+	// The person still can, with a token Anubis issued for itself just after
+	// signing in — which is what a native app's "turn on biometric sign-in"
+	// does. And the key they enrol really signs them in.
+	own := signIn(t, &anubisv1.LoginRequest{
+		Tenant: tenant, Realm: "internal", Username: username, Password: password,
+	})
+	pub, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	enrolled, err := authClient().EnrollDeviceKey(ctx, bearer(connect.NewRequest(&anubisv1.EnrollDeviceKeyRequest{
+		PublicKey: base64.RawURLEncoding.EncodeToString(pub), Label: "their phone",
+	}), own.GetTokens().GetAccessToken()))
+	if err != nil {
+		t.Fatalf("a fresh first-party session could not enrol a device key: %v", err)
+	}
+	ch, err := authClient().DeviceChallenge(ctx, connect.NewRequest(&anubisv1.DeviceChallengeRequest{
+		Tenant: tenant, Realm: "internal", DeviceId: enrolled.Msg.CredentialId,
+	}))
+	if err != nil {
+		t.Fatalf("device challenge: %v", err)
+	}
+	if _, err := authClient().DeviceVerify(ctx, connect.NewRequest(&anubisv1.DeviceVerifyRequest{
+		Tenant: tenant, Nonce: ch.Msg.Nonce, KeyId: enrolled.Msg.CredentialId,
+		Signature: base64.RawURLEncoding.EncodeToString(ed25519.Sign(priv, []byte(ch.Msg.Nonce))),
+	})); err != nil {
+		t.Fatalf("the person's own device key does not sign them in: %v", err)
 	}
 }

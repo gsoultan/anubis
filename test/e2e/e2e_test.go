@@ -197,45 +197,9 @@ func TestRefreshTheftDetection(t *testing.T) {
 func TestRefreshKeepsTheApplication(t *testing.T) {
 	requireServer(t)
 	ctx := context.Background()
-	username := fmt.Sprintf("rt-app-%d", time.Now().UnixNano())
-	const password = "rt-app-password-1234"
-	if _, err := anubisv1connect.NewIdentityAdminServiceClient(http.DefaultClient, baseURL).CreateIdentity(ctx,
-		operatorBearer(connect.NewRequest(&anubisv1.CreateIdentityRequest{
-			Realm: "internal", Username: username, Password: password, AssuranceLevel: 1,
-		}), platformLogin(t))); err != nil {
-		t.Fatalf("create probe identity: %v", err)
-	}
-
-	// Signed in through the application's hosted page, as a person would.
-	client, form := signinPageForm(t)
-	app := form.Get("client_id")
-	form.Set("username", username)
-	form.Set("password", password)
-	resp := postLoginForm(t, client, form)
-	resp.Body.Close()
-	callback, err := url.Parse(resp.Header.Get("Location"))
-	if err != nil || callback.Query().Get("code") == "" {
-		t.Fatalf("sign-in issued no code (status %d, location %q)",
-			resp.StatusCode, resp.Header.Get("Location"))
-	}
-	// The page's challenge is RFC 7636's worked example; this is its verifier.
-	exchange, err := http.PostForm(baseURL+"/v1/token", url.Values{
-		"grant_type": {"authorization_code"}, "code": {callback.Query().Get("code")},
-		"code_verifier": {"dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"},
-		"redirect_uri":  {callback.Scheme + "://" + callback.Host + callback.Path},
-		"client_id":     {app},
-	})
-	if err != nil {
-		t.Fatalf("code exchange: %v", err)
-	}
-	defer exchange.Body.Close()
-	var issued struct {
-		AccessToken  string `json:"access_token"`
-		RefreshToken string `json:"refresh_token"`
-	}
-	if err := json.NewDecoder(exchange.Body).Decode(&issued); err != nil || issued.RefreshToken == "" {
-		t.Fatalf("code exchange returned no tokens (status %d): %v", exchange.StatusCode, err)
-	}
+	username, password := newPerson(t, "rt-app")
+	issued := signInToAnApplication(t, username, password)
+	app := issued.App
 	if got := audienceOf(t, issued.AccessToken); !slices.Equal(got, []string{app}) {
 		t.Fatalf("the code exchange issued for %v, want [%s]", got, app)
 	}
@@ -260,6 +224,61 @@ func TestRefreshKeepsTheApplication(t *testing.T) {
 	if got := audienceOf(t, r2.Msg.Tokens.AccessToken); !slices.Equal(got, []string{app}) {
 		t.Fatalf("a second refresh re-issued %s's token for %v", app, got)
 	}
+}
+
+// newPerson creates somebody in the internal population — which allows every
+// factor, device keys included — and returns how they sign in.
+func newPerson(t *testing.T, prefix string) (username, password string) {
+	t.Helper()
+	username = fmt.Sprintf("%s-%d", prefix, time.Now().UnixNano())
+	password = prefix + "-password-1234"
+	if _, err := anubisv1connect.NewIdentityAdminServiceClient(http.DefaultClient, baseURL).CreateIdentity(
+		context.Background(), operatorBearer(connect.NewRequest(&anubisv1.CreateIdentityRequest{
+			Realm: "internal", Username: username, Password: password, AssuranceLevel: 1,
+		}), platformLogin(t))); err != nil {
+		t.Fatalf("create %s: %v", username, err)
+	}
+	return username, password
+}
+
+// appSignIn is what an application holds once a person has signed in to it.
+type appSignIn struct {
+	App          string
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
+}
+
+// signInToAnApplication signs a person in to a freshly registered application
+// through its hosted page and exchanges the code with PKCE — what the
+// application itself would do, and what it would hold afterwards.
+func signInToAnApplication(t *testing.T, username, password string) appSignIn {
+	t.Helper()
+	client, form := signinPageForm(t)
+	form.Set("username", username)
+	form.Set("password", password)
+	resp := postLoginForm(t, client, form)
+	resp.Body.Close()
+	callback, err := url.Parse(resp.Header.Get("Location"))
+	if err != nil || callback.Query().Get("code") == "" {
+		t.Fatalf("sign-in issued no code (status %d, location %q)",
+			resp.StatusCode, resp.Header.Get("Location"))
+	}
+	// The page's challenge is RFC 7636's worked example; this is its verifier.
+	exchange, err := http.PostForm(baseURL+"/v1/token", url.Values{
+		"grant_type": {"authorization_code"}, "code": {callback.Query().Get("code")},
+		"code_verifier": {"dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"},
+		"redirect_uri":  {callback.Scheme + "://" + callback.Host + callback.Path},
+		"client_id":     {form.Get("client_id")},
+	})
+	if err != nil {
+		t.Fatalf("code exchange: %v", err)
+	}
+	defer exchange.Body.Close()
+	out := appSignIn{App: form.Get("client_id")}
+	if err := json.NewDecoder(exchange.Body).Decode(&out); err != nil || out.RefreshToken == "" {
+		t.Fatalf("code exchange returned no tokens (status %d): %v", exchange.StatusCode, err)
+	}
+	return out
 }
 
 // audienceOf reads aud out of a v4.public token without verifying it: the
