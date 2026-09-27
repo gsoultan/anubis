@@ -1224,3 +1224,52 @@ func TestAnApplicationCannotEnrolAnAuthenticatorForItsUser(t *testing.T) {
 		t.Fatalf("the person's own device key does not sign them in: %v", err)
 	}
 }
+
+// Managing the account behind a session — listing the person's other
+// sessions, or ending them — is the account holder's own action. An
+// application the person signed in to holds a token minted for that
+// application (aud = its slug, not "anubis"), and must not turn it into
+// control over the person's OTHER sessions: reading where else they are
+// signed in, or signing them out of everything. A token Anubis issued for
+// itself still may.
+func TestAnApplicationCannotManageItsUsersSessions(t *testing.T) {
+	requireServer(t)
+	ctx := context.Background()
+	username, password := newPerson(t, "sess-app")
+
+	// The application's token, from the hosted OIDC flow.
+	app := signInToAnApplication(t, username, password)
+	appTok := app.AccessToken
+	sc := anubisv1connect.NewSessionServiceClient(http.DefaultClient, baseURL)
+	auth := authClient()
+
+	if _, err := sc.ListSessions(ctx, bearer(connect.NewRequest(
+		&anubisv1.ListSessionsRequest{}), appTok)); connect.CodeOf(err) != connect.CodePermissionDenied {
+		t.Fatalf("an application read its user's session list with the token it was given (err %v)", err)
+	}
+	if _, err := auth.LogoutAll(ctx, bearer(connect.NewRequest(
+		&anubisv1.LogoutAllRequest{}), appTok)); connect.CodeOf(err) != connect.CodePermissionDenied {
+		t.Fatalf("an application signed its user out of every session (err %v)", err)
+	}
+	// Ending a session OTHER than the app's own is refused; a made-up id is
+	// enough to reach the check, which runs before any lookup.
+	if _, err := auth.LogoutSession(ctx, bearer(connect.NewRequest(
+		&anubisv1.LogoutSessionRequest{SessionId: "01000000-0000-7000-8000-000000000000"}, //nolint
+	), appTok)); connect.CodeOf(err) != connect.CodePermissionDenied {
+		t.Fatalf("an application ended another of its user's sessions (err %v)", err)
+	}
+
+	// A token Anubis issued for itself — a direct sign-in, no application —
+	// manages the account normally.
+	own := signIn(t, &anubisv1.LoginRequest{
+		Tenant: tenant, Realm: "internal", Username: username, Password: password,
+	}).GetTokens().GetAccessToken()
+	if _, err := sc.ListSessions(ctx, bearer(connect.NewRequest(
+		&anubisv1.ListSessionsRequest{}), own)); err != nil {
+		t.Fatalf("a first-party session could not list its own sessions: %v", err)
+	}
+	if _, err := auth.LogoutAll(ctx, bearer(connect.NewRequest(
+		&anubisv1.LogoutAllRequest{}), own)); err != nil {
+		t.Fatalf("a first-party session could not sign out everywhere: %v", err)
+	}
+}

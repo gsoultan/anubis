@@ -1,7 +1,6 @@
 package enroll
 
 import (
-	"slices"
 	"strings"
 	"time"
 
@@ -16,11 +15,6 @@ import (
 // cannot plant one.
 const bindingWindow = 10 * time.Minute
 
-// anubisAudience is the audience of a token Anubis issued for itself: a
-// sign-in through AuthService.Login, or any sign-in that named no
-// application.
-const anubisAudience = "anubis"
-
 // mayBindAuthenticator decides whether a SESSION may add an authenticator to
 // its own account.
 //
@@ -32,8 +26,8 @@ const anubisAudience = "anubis"
 // and sign in as them from then on. Two rules close that:
 //
 //   - the token must be one Anubis issued for itself, not one issued to an
-//     application: binding an authenticator is not something an application
-//     does on a person's behalf;
+//     application (Principal.FirstParty): binding an authenticator is not
+//     something an application does on a person's behalf;
 //   - the sign-in must be recent, so a token that outlived the moment of
 //     sign-in cannot bind one either.
 //
@@ -41,7 +35,7 @@ const anubisAudience = "anubis"
 // grant is minted by Anubis's own refused sign-in, redeemed on its own hosted
 // page, and only ever adds the FIRST factor.
 func mayBindAuthenticator(p *authctx.Principal, now time.Time) error {
-	if !slices.Contains(p.Audience, anubisAudience) {
+	if !p.FirstParty() {
 		return apperr.ErrPermissionDenied.
 			With("audience", strings.Join(p.Audience, ",")).
 			With("hint", "authenticators are enrolled with a token Anubis issued for itself, not one issued to an application")
