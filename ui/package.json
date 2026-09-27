@@ -12,7 +12,8 @@
     "build:vite": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
     "routes": "tsr generate",
-    "preview": "bun run --bun vite preview"
+    "preview": "bun run --bun vite preview",
+    "smoke": "bun run scripts/smoke.ts"
   },
   "dependencies": {
     "@bufbuild/protobuf": "^2",
@@ -47,6 +48,7 @@
     "postcss": "^8.5.6",
     "postcss-preset-mantine": "^1.18.0",
     "postcss-simple-vars": "^7.0.1",
+    "puppeteer-core": "25.12.0",
     "tailwindcss": "^4.3.3",
     "typescript": "^7.0.2",
     "vite": "^8.2.2"

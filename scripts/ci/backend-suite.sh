@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # CI backend suite against a FRESH scratch database: migrate -> bootstrap ->
-# serve -> integration + e2e + fuzz smoke. Locally reproducible:
+# serve -> integration + e2e + console smoke + fuzz smoke. Locally reproducible:
 #
 #   container exec anubis-dev-pg psql -U anubis -c "CREATE DATABASE anubis_ci"
+#   (cd ui && bun run build)   # else the console smoke is skipped, saying so
 #   ANUBIS_DB_URL="postgres://anubis:anubis@localhost:7449/anubis_ci?sslmode=disable" \
+#   CHROME_BIN="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
 #     scripts/ci/backend-suite.sh
 #
 # The suite provisions everything it needs; it never touches the dev database.
@@ -96,6 +98,21 @@ done
 # test cache cannot see, so a cached "ok" would be a lie.
 go test -count=1 -tags integration ./test/integration/
 go test -count=1 -tags integration ./test/e2e/
+
+# The console, in a real browser, against this server and the data the suites
+# above just wrote: every screen loaded by URL at 375px and 1280px, every
+# create drawer opened. Nothing else in CI renders it, and v0.4.0 shipped a
+# blank page and a phone layout 662px wide past every check above. It needs
+# the console BUILT into the binary; the placeholder has nothing to test.
+if grep -q "Console not built" ui/dist/index.html; then
+  if [ -n "${CI:-}" ]; then
+    echo "FAIL: the console was not built before this suite, so its smoke cannot run" >&2
+    exit 1
+  fi
+  echo "console smoke: SKIPPED — ui/dist is the placeholder; 'bun run build' in ui/ first to include it"
+else
+  (cd ui && bun run smoke)
+fi
 
 # The MySQL probe is a unit test, but the only job holding a MySQL service is
 # this one — left where it lives it would skip in CI forever, which reads the
