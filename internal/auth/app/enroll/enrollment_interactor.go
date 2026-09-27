@@ -203,9 +203,12 @@ func (u *enrollmentInteractor) ConfirmTOTP(ctx context.Context, enrollmentToken,
 }
 
 func (u *enrollmentInteractor) EnrollDeviceKey(ctx context.Context, publicKey, label string) (string, error) {
-	p, ok := authctx.From(ctx)
-	if !ok || p.Service {
-		return "", apperr.ErrUnauthenticated
+	// Through caller, so a device key answers to the same rules as TOTP — a
+	// session Anubis issued for itself, signed in recently. It has no grant
+	// path: nothing on a refused sign-in offers one.
+	p, err := u.caller(ctx, "")
+	if err != nil {
+		return "", err
 	}
 	raw, err := base64.RawURLEncoding.DecodeString(publicKey)
 	if err != nil || len(raw) != ed25519.PublicKeySize {
@@ -276,6 +279,9 @@ func (u *enrollmentInteractor) caller(ctx context.Context, grantToken string) (*
 		p, ok := authctx.From(ctx)
 		if !ok || p.Service {
 			return nil, apperr.ErrUnauthenticated
+		}
+		if err := mayBindAuthenticator(p, u.clock.Now()); err != nil {
+			return nil, err
 		}
 		return p, nil
 	}
