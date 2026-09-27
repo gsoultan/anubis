@@ -16,10 +16,13 @@ type IDRow struct {
 //
 // nullif on bound_key: ” is not a binding, and a token bound to the empty
 // string would match a presenter who sent no key at all.
+//
+// client_id is the application the family was issued to (0051), written on
+// every generation so a rotation can re-issue for it; empty means none.
 var CreateRefreshToken = storm.SQL[IDRow](`
 INSERT INTO refresh_tokens (session_id, tenant_id, family_id, generation,
-                            token_hash, expires_at, bound_key)
-VALUES ($1, $2, $3, $4, $5, $6, nullif($7, ''))
+                            token_hash, expires_at, bound_key, client_id)
+VALUES ($1, $2, $3, $4, $5, $6, nullif($7, ''), nullif($8, ''))
 RETURNING id::text AS id`)
 
 // ClaimedRefreshRow is the token a caller just won the right to rotate.
@@ -30,6 +33,7 @@ type ClaimedRefreshRow struct {
 	FamilyID   string
 	Generation int32
 	ExpiresAt  time.Time
+	ClientID   string
 }
 
 // ClaimRefreshToken is the rotation core.
@@ -39,15 +43,21 @@ type ClaimedRefreshRow struct {
 // recognised as THEFT — which is the whole design: the guard is in the
 // statement because a read-then-write would let both presentations pass the
 // read and both be issued a successor.
+//
+// bound_key IS NULL: a token bound to a key (0002 reserved it for DPoP-style
+// binding) must not rotate for somebody who cannot prove the key, and this
+// path cannot check a proof yet. Nothing binds a token today; this stops a
+// half-built binding from being quietly skipped here later.
 var ClaimRefreshToken = storm.SQL[ClaimedRefreshRow](`
 UPDATE refresh_tokens
 SET status = 'consumed', consumed_at = now()
 WHERE token_hash = $1
   AND status = 'active'
   AND expires_at > now()
+  AND bound_key IS NULL
 RETURNING id::text AS id, session_id::text AS session_id,
           tenant_id::text AS tenant_id, family_id::text AS family_id,
-          generation, expires_at`)
+          generation, expires_at, coalesce(client_id, '') AS client_id`)
 
 // SetRefreshSuccessor links a consumed token to the one that replaced it.
 //

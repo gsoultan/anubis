@@ -63,6 +63,15 @@ func (t *pasetoTokenIssuer) Issue(ctx context.Context, in IssueInput) (*TokenPai
 	now := t.clock.Now()
 	s := in.Session
 
+	// A rotation re-issues for the application the family was issued to,
+	// whatever the caller named: the refresh path names none, and a family
+	// must not change hands. Without this every refresh minted a token for
+	// "anubis" in the default format, with the population's lifetimes instead
+	// of the application's stricter ones.
+	if in.RotateFrom != nil {
+		in.ClientID = in.RotateFrom.ClientID
+	}
+
 	accessTTL, refreshTTL, aud, appID, format, err := t.ttls(ctx, s, in.ClientID)
 	if err != nil {
 		return nil, err
@@ -168,6 +177,7 @@ func (t *pasetoTokenIssuer) Issue(ctx context.Context, in IssueInput) (*TokenPai
 		Generation: generation,
 		TokenHash:  secret.Hash(refreshToken),
 		ExpiresAt:  now.Add(refreshTTL),
+		ClientID:   in.ClientID,
 	})
 	if err != nil {
 		return nil, apperr.ErrInternal.Wrap(err)

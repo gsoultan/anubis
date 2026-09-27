@@ -12,7 +12,7 @@ import (
 func (s *Repository) CreateRefresh(ctx context.Context, in authdomain.RefreshInput) (string, error) {
 	row, _, err := authrquery.CreateRefreshToken.One(ctx, s.ex(ctx),
 		in.SessionID, in.TenantID, in.FamilyID, in.Generation,
-		in.TokenHash, in.ExpiresAt, in.BoundKey)
+		in.TokenHash, in.ExpiresAt, in.BoundKey, in.ClientID)
 	if err != nil {
 		return "", database.MapErr(err)
 	}
@@ -39,7 +39,7 @@ func (s *Repository) ClaimRefresh(ctx context.Context, hash []byte) (*authdomain
 	return &authdomain.RefreshClaim{
 		ID: row.ID, SessionID: row.SessionID, TenantID: row.TenantID,
 		FamilyID: row.FamilyID, Generation: int(row.Generation),
-		ExpiresAt: row.ExpiresAt,
+		ExpiresAt: row.ExpiresAt, ClientID: row.ClientID,
 	}, nil
 }
 

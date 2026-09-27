@@ -10,4 +10,5 @@ type RefreshInput struct {
 	TokenHash  []byte
 	ExpiresAt  time.Time
 	BoundKey   string
+	ClientID   string
 }

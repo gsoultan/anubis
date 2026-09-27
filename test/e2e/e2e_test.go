@@ -9,9 +9,15 @@ package e2e
 
 import (
 	"context"
+	"crypto/ed25519"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
+	"slices"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -179,6 +185,103 @@ func TestRefreshTheftDetection(t *testing.T) {
 	if connect.CodeOf(err) != connect.CodeUnauthenticated {
 		t.Fatalf("successor survived family revocation: %v", err)
 	}
+}
+
+// A refresh hands back a token for the application the refreshed one was
+// issued to. The refresh row never recorded which application that was, so
+// rotation re-issued with no client at all: audience "anubis" — this
+// server's own — instead of the application's, the default format instead of
+// the application's, and the population's lifetimes instead of the
+// application's stricter ones. An application whose verifier checks
+// audience, as pkg/anubis does, had its sessions die at the first refresh.
+func TestRefreshKeepsTheApplication(t *testing.T) {
+	requireServer(t)
+	ctx := context.Background()
+	username := fmt.Sprintf("rt-app-%d", time.Now().UnixNano())
+	const password = "rt-app-password-1234"
+	if _, err := anubisv1connect.NewIdentityAdminServiceClient(http.DefaultClient, baseURL).CreateIdentity(ctx,
+		operatorBearer(connect.NewRequest(&anubisv1.CreateIdentityRequest{
+			Realm: "internal", Username: username, Password: password, AssuranceLevel: 1,
+		}), platformLogin(t))); err != nil {
+		t.Fatalf("create probe identity: %v", err)
+	}
+
+	// Signed in through the application's hosted page, as a person would.
+	client, form := signinPageForm(t)
+	app := form.Get("client_id")
+	form.Set("username", username)
+	form.Set("password", password)
+	resp := postLoginForm(t, client, form)
+	resp.Body.Close()
+	callback, err := url.Parse(resp.Header.Get("Location"))
+	if err != nil || callback.Query().Get("code") == "" {
+		t.Fatalf("sign-in issued no code (status %d, location %q)",
+			resp.StatusCode, resp.Header.Get("Location"))
+	}
+	// The page's challenge is RFC 7636's worked example; this is its verifier.
+	exchange, err := http.PostForm(baseURL+"/v1/token", url.Values{
+		"grant_type": {"authorization_code"}, "code": {callback.Query().Get("code")},
+		"code_verifier": {"dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"},
+		"redirect_uri":  {callback.Scheme + "://" + callback.Host + callback.Path},
+		"client_id":     {app},
+	})
+	if err != nil {
+		t.Fatalf("code exchange: %v", err)
+	}
+	defer exchange.Body.Close()
+	var issued struct {
+		AccessToken  string `json:"access_token"`
+		RefreshToken string `json:"refresh_token"`
+	}
+	if err := json.NewDecoder(exchange.Body).Decode(&issued); err != nil || issued.RefreshToken == "" {
+		t.Fatalf("code exchange returned no tokens (status %d): %v", exchange.StatusCode, err)
+	}
+	if got := audienceOf(t, issued.AccessToken); !slices.Equal(got, []string{app}) {
+		t.Fatalf("the code exchange issued for %v, want [%s]", got, app)
+	}
+
+	r, err := authClient().Refresh(ctx, connect.NewRequest(&anubisv1.RefreshRequest{
+		RefreshToken: issued.RefreshToken,
+	}))
+	if err != nil {
+		t.Fatalf("refresh: %v", err)
+	}
+	if got := audienceOf(t, r.Msg.Tokens.AccessToken); !slices.Equal(got, []string{app}) {
+		t.Fatalf("a refresh re-issued %s's token for %v", app, got)
+	}
+	// And the next generation too: the application must survive every
+	// rotation, not only the first.
+	r2, err := authClient().Refresh(ctx, connect.NewRequest(&anubisv1.RefreshRequest{
+		RefreshToken: r.Msg.Tokens.RefreshToken,
+	}))
+	if err != nil {
+		t.Fatalf("second refresh: %v", err)
+	}
+	if got := audienceOf(t, r2.Msg.Tokens.AccessToken); !slices.Equal(got, []string{app}) {
+		t.Fatalf("a second refresh re-issued %s's token for %v", app, got)
+	}
+}
+
+// audienceOf reads aud out of a v4.public token without verifying it: the
+// question is what was issued, and the signature is not in doubt here.
+// Layout: v4.public.<base64url(message || 64-byte signature)>[.<footer>].
+func audienceOf(t *testing.T, token string) []string {
+	t.Helper()
+	parts := strings.Split(token, ".")
+	if len(parts) < 3 || parts[0] != "v4" || parts[1] != "public" {
+		t.Fatalf("not a v4.public token: %.24s…", token)
+	}
+	raw, err := base64.RawURLEncoding.DecodeString(parts[2])
+	if err != nil || len(raw) <= ed25519.SignatureSize {
+		t.Fatalf("undecodable token body: %v", err)
+	}
+	var claims struct {
+		Aud []string `json:"aud"`
+	}
+	if err := json.Unmarshal(raw[:len(raw)-ed25519.SignatureSize], &claims); err != nil {
+		t.Fatalf("token claims: %v", err)
+	}
+	return claims.Aud
 }
 
 // TestAuthorizeThroughEngine drives the decision API with a catalog the test

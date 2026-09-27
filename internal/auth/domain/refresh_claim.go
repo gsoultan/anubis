@@ -9,4 +9,6 @@ type RefreshClaim struct {
 	FamilyID   string
 	Generation int
 	ExpiresAt  time.Time
+	// ClientID is the application the family was issued to; "" = none.
+	ClientID string
 }

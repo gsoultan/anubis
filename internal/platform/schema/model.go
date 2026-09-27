@@ -987,6 +987,10 @@ type RefreshToken struct {
 	Status      string
 	TokenHash   []byte
 	BoundKey    *string
+	// ClientID is the application the family was issued to, carried from
+	// generation to generation so a rotation re-issues for the same one —
+	// audience, format and lifetimes. NULL: issued with no client.
+	ClientID *string
 }
 
 func (m *RefreshToken) Schema(t *storm.Table) {

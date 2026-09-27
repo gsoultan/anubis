@@ -193,6 +193,29 @@ func TestClaimRefreshIsSingleUse(t *testing.T) {
 	}
 }
 
+// refresh_tokens.bound_key has been in the schema since 0002 — "optional
+// proof-of-possession public key (DPoP-style binding)" — and nothing has ever
+// checked it: the claim rotated a bound token for anyone holding the string.
+// Nothing binds a token today, so nothing is exposed; but a binding that is
+// written and never enforced is a check waiting to be skipped. Until the
+// refresh path can verify a proof, a bound token does not rotate at all.
+func TestABoundRefreshTokenDoesNotRotateWithoutItsKey(t *testing.T) {
+	r := repo(t)
+	ctx := context.Background()
+	sess := newSession(t, r)
+	h := hash(t)
+	if _, err := r.CreateRefresh(ctx, authdomain.RefreshInput{
+		SessionID: sess.ID, TenantID: tenant, FamilyID: sess.ID,
+		Generation: 0, TokenHash: h, ExpiresAt: time.Now().Add(24 * time.Hour),
+		BoundKey: "ed25519:the-presenter-must-prove-this",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.ClaimRefresh(ctx, h); err == nil {
+		t.Fatal("a key-bound refresh token rotated with no proof of the key")
+	}
+}
+
 // The theft response: the whole family dies, whatever generation the attacker
 // holds.
 func TestRevokeRefreshFamilyKillsEveryGeneration(t *testing.T) {
