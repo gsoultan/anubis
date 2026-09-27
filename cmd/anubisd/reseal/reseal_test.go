@@ -37,7 +37,11 @@ func TestResealKeepsEverySecretReadable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer pool.Close()
+	// Not deferred: t.Cleanup runs after the function's defers, so a deferred
+	// Close shut the pool before any cleanup below — or seedIdentity's — could
+	// use it, and every run left a key, an operator and a tenant behind.
+	// Cleanups are LIFO; this one runs last.
+	t.Cleanup(pool.Close)
 	db := database.New(pool)
 
 	oldMaster := randomKey(t)
@@ -69,7 +73,9 @@ func TestResealKeepsEverySecretReadable(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		_, _ = pool.Exec(context.Background(), `DELETE FROM signing_keys WHERE kid = $1`, kid)
+		if _, err := pool.Exec(context.Background(), `DELETE FROM signing_keys WHERE kid = $1`, kid); err != nil {
+			t.Errorf("signing key %s not removed: %v", kid, err)
+		}
 	})
 
 	// ---- a PII key, sealed with AAD = "pii:" || identity_id ---------------
@@ -94,7 +100,9 @@ func TestResealKeepsEverySecretReadable(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		_, _ = pool.Exec(context.Background(), `DELETE FROM platform_users WHERE id = $1::uuid`, opID)
+		if _, err := pool.Exec(context.Background(), `DELETE FROM platform_users WHERE id = $1::uuid`, opID); err != nil {
+			t.Errorf("operator %s not removed: %v", opName, err)
+		}
 	})
 	totpSecret := randomKey(t)
 	if err := ctlStore.StageTOTPSecret(ctx, oldMaster, opID, totpSecret); err != nil {
@@ -264,7 +272,9 @@ func seedIdentity(t *testing.T, pool *pgxpool.Pool, n int64) (tenantID, identity
 			`DELETE FROM realms WHERE tenant_id = $1::uuid`,
 			`DELETE FROM tenants WHERE id = $1::uuid`,
 		} {
-			_, _ = pool.Exec(c, q, tenantID)
+			if _, err := pool.Exec(c, q, tenantID); err != nil {
+				t.Errorf("probe tenant %s not removed (%s): %v", tenantID, q, err)
+			}
 		}
 	})
 	return tenantID, identityID

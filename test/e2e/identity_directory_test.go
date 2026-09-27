@@ -79,7 +79,7 @@ func TestIdentityAttributesAreSealedInTheDatabase(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
-	defer db.Close()
+	t.Cleanup(func() { _ = db.Close() })
 	var stored, keyID string
 	if err := db.QueryRowContext(ctx,
 		`SELECT attributes::text, coalesce(pii_key_id::text,'') FROM identities WHERE id = $1`,
@@ -192,7 +192,7 @@ func TestClearingAttributesEmptiesTheColumn(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
-	defer db.Close()
+	t.Cleanup(func() { _ = db.Close() })
 	var stored string
 	if err := db.QueryRowContext(ctx,
 		`SELECT attributes::text FROM identities WHERE id = $1`, id).Scan(&stored); err != nil {
@@ -562,7 +562,7 @@ func TestIdentityCarriesItsRetentionDeadline(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
-	defer db.Close()
+	t.Cleanup(func() { _ = db.Close() })
 	deadline := time.Now().Add(72 * time.Hour).UTC().Truncate(time.Second)
 	if _, err := db.ExecContext(ctx,
 		`UPDATE identities SET retention_until = $1 WHERE id = $2`, deadline, id); err != nil {

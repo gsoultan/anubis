@@ -70,7 +70,7 @@ func seedCustomers(t *testing.T, dsn string) string {
 	if err != nil {
 		t.Fatalf("open mysql: %v", err)
 	}
-	defer db.Close()
+	t.Cleanup(func() { _ = db.Close() })
 
 	const table = "anubis_probe_customers"
 	for _, stmt := range []string{

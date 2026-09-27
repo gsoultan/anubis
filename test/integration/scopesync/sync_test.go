@@ -83,7 +83,9 @@ func mkSourceOn(t *testing.T, r *scopepg.Repository, ax string, interval int32) 
 		t.Fatalf("create sync source: %v", err)
 	}
 	t.Cleanup(func() {
-		_, _ = pool.Exec(context.Background(), `DELETE FROM scope_sync_sources WHERE id = $1`, id)
+		if _, err := pool.Exec(context.Background(), `DELETE FROM scope_sync_sources WHERE id = $1`, id); err != nil {
+			t.Errorf("sync source %v not removed: %v", id, err)
+		}
 	})
 	return id
 }
@@ -102,7 +104,9 @@ func mkAxis(t *testing.T) string {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		_, _ = pool.Exec(context.Background(), `DELETE FROM scope_axes WHERE code = $1`, code)
+		if _, err := pool.Exec(context.Background(), `DELETE FROM scope_axes WHERE code = $1`, code); err != nil {
+			t.Errorf("axis %v not removed: %v", code, err)
+		}
 	})
 	return code
 }

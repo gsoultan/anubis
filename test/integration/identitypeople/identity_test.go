@@ -322,7 +322,9 @@ func TestCorrectEmptyRealmRefusesAPopulatedRealm(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		_, _ = pool.Exec(context.Background(), `DELETE FROM realms WHERE id = $1`, emptyRealm)
+		if _, err := pool.Exec(context.Background(), `DELETE FROM realms WHERE id = $1`, emptyRealm); err != nil {
+			t.Errorf("realm %v not removed: %v", emptyRealm, err)
+		}
 	})
 
 	ok, err := r.CorrectEmptyRealmIdentity(ctx, tenant, emptyRealm, code+"x", "internal")

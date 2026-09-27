@@ -609,7 +609,9 @@ func TestRevokedSessionSurvivesTheVersionGate(t *testing.T) {
 		t.Fatalf("seed identity: %v", err) // not Skip: a skip here would hide the whole test
 	}
 	t.Cleanup(func() {
-		_, _ = pool.Exec(context.WithoutCancel(ctx), `DELETE FROM identities WHERE id=$1`, ident)
+		if _, err := pool.Exec(context.WithoutCancel(ctx), `DELETE FROM identities WHERE id=$1`, ident); err != nil {
+			t.Errorf("identity %v not removed: %v", ident, err)
+		}
 	})
 	var sess string
 	if err := pool.QueryRow(ctx,

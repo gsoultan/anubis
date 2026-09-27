@@ -49,7 +49,9 @@ func benchSetup(b *testing.B) (context.Context, string, []byte) {
 		b.Fatal(err)
 	}
 	b.Cleanup(func() {
-		_, _ = pool.Exec(context.Background(), `DELETE FROM sessions WHERE id = $1`, s.ID)
+		if _, err := pool.Exec(context.Background(), `DELETE FROM sessions WHERE id = $1`, s.ID); err != nil {
+			b.Errorf("session %v not removed: %v", s.ID, err)
+		}
 	})
 	return ctx, s.ID, ck
 }
