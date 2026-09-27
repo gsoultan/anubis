@@ -133,6 +133,19 @@ is accepted by the payments application. Every application must reject tokens
 whose `aud` does not include itself — `pkg/anubis` enforces this, which is the
 main reason to ship an SDK rather than let each team write a verifier.
 
+**Anubis's own first-party surface checks it too.** A person signs in to an
+application through the OIDC flow and hands it a token with `aud = <that app>`.
+Managing the *account itself* — enrolling an authenticator, listing or ending
+the person's other sessions — is the account holder's action, not something an
+application does with a token it was handed, so those calls require a token
+Anubis issued for *itself* (`aud` contains `anubis`, which a direct
+`AuthService.Login` produces). `Principal.FirstParty` is the check;
+`EnrollDeviceKey`/`BeginTotpEnrollment`/`ConfirmTotpEnrollment` also require a
+recent sign-in. Reading one's own profile (`GetMe`) and ending one's own
+session (`Logout`) stay open to any token — the relying party was given the
+token for exactly that. See the enrolment and session-management rows under
+[Known gaps](#known-gaps).
+
 ### Algorithm confusion
 
 Structurally impossible: PASETO's version *is* the cipher suite, with no
@@ -316,6 +329,10 @@ Stated plainly rather than left implicit.
 | **The hosted second-factor form could not be submitted** | **Fixed** (2026-09-20) | Found by writing a test that posts *what the page contains* instead of hand-built values. The MFA branch of the template carries `mfa_token` and a code and no credentials — "the password is not asked for again, and nothing on this page can replay it" — but `LoginForm` required a valid password on every submit, so a real browser got "Invalid username or password" after typing a correct code. The hosted second-factor step had never worked. The existing test passed because it posted a username and password the form does not have, which is the general lesson: **a form test that builds its own values is testing a client nobody ships.** `TestTheRenderedSecondFactorFormCanBeSubmitted` parses the rendered inputs and submits those. |
 | **An enrol-or-deny refusal was a dead end in the browser** | **Fixed** (2026-09-20) | Correct, and unusable: the page refused an overdue member and had nowhere for them to enrol, so the policy was unsatisfiable by everyone who only uses SSO. The page now spends the enrol grant itself — setup key, `otpauth://` link, code, recovery codes shown once — and keeps the grant server-side behind a single-use handle (`browser_enrol`, migration 0050). A wrong code discards the key by design: `ConfirmTOTP` spends the enrolment token before checking the code, so a stolen grant buys one guess. |
 | **Bot protection on public registration** | Decided against | Rate limits bound the damage; they do not stop a determined script. [ADR-0014](adr/0014-bot-protection-on-registration.md) weighs that against a third-party script on a credential page, and documents the escape hatch. |
+| **An application could enrol an authenticator on its user's account** | **Fixed** (v0.4.2) | An application, handed a person's token at sign-in, could register its OWN device key on their account and then sign in as them — no password, a session that survives a password change. Anubis's API accepted a tenant token whatever application it was minted for, and enrolment asked only for a session. Enrolling an authenticator now requires a first-party session (`aud` contains `anubis`) that signed in within the last ten minutes. `TestAnApplicationCannotEnrolAnAuthenticatorForItsUser` fails on the old code. **This is the confused-deputy control applied to Anubis's own surface**, not just to relying parties. |
+| **The same token reached the rest of the self-service surface** | **Fixed** (v0.4.3) | The enrolment fix left the neighbours: an application could read the person's whole session list — every other application, device, IP — and sign them out of everything, or end their other sessions. Ownership was always checked, so this was disruption and disclosure rather than takeover. `ListSessions`/`LogoutAll` now require a first-party token; `LogoutSession` requires one unless the target is the token's own session. `TestAnApplicationCannotManageItsUsersSessions` fails on the old code. |
+| **A refresh re-issued for Anubis, not the application** | **Fixed** (v0.4.2) | A refresh token never recorded which application it was issued to, so every rotation re-issued through the no-client path: audience `anubis` instead of the application's, the default format instead of the application's, and the population's lifetimes instead of the application's stricter ones. An application whose verifier checks `aud` — as `pkg/anubis` does — lost its session at the first refresh. Migration `0051` carries the application on the refresh family; `TestRefreshKeepsTheApplication` fails on the old code. |
+| **The token endpoint advertised a grant it refused** | **Fixed** (v0.4.2) | Discovery listed `grant_types_supported: [authorization_code, refresh_token]` and the code exchange issued a refresh token, but `POST /v1/token` served only `authorization_code`. A standard OIDC client lost its session at the first access-token expiry. The endpoint now serves the refresh grant through the same rotation as `AuthService.Refresh`, so reuse detection holds on both doors. `TestTokenEndpointRefreshGrant` fails on the old code. |
 
 **This document now describes running code.** The application layer is built
 and its security properties are tested rather than asserted: uniform login

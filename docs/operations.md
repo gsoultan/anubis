@@ -3,6 +3,9 @@
 Everything an on-call engineer needs at 3am, and nothing that duplicates
 [architecture.md](architecture.md) or [security.md](security.md).
 
+First real install? [go-live.md](go-live.md) sequences the sections below into
+an ordered checklist, with the restore drill as a gate.
+
 ## Contents
 
 1. [Deploying](#deploying)
