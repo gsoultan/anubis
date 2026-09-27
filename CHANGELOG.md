@@ -8,6 +8,26 @@ Pre-1.0, a minor bump carries deliberate behaviour changes and a patch does
 not. Releases are built and signed by tag and published by hand, so a tag
 existing does not mean a release was ever meant to be installed.
 
+## v0.4.3 — 2026-09-27
+
+A security follow-up to v0.4.2. No migration, no proto change — **a v0.4.2
+database needs no upgrade** (`applied: 0, drifted: 0`).
+
+- **An application could manage its user's sessions.** v0.4.2 stopped an
+  application enrolling an authenticator with the token a person handed it at
+  sign-in; the same token still reached the rest of the self-service surface.
+  An application could read the person's whole session list — every other
+  application, device and IP — and sign them out of everything, or end their
+  other sessions one at a time. Ownership was always checked, so this is
+  disruption and disclosure rather than takeover, but it is still a relying
+  party acting as the account holder. `ListSessions` and `LogoutAll` now
+  require a token Anubis issued for itself (`aud` contains `anubis`, which a
+  direct `AuthService.Login` produces); `LogoutSession` requires one unless
+  the target is the token's own session. `Logout` (own session) and `GetMe`
+  are unchanged. **Action required:** an integration that lists or ends a
+  person's sessions must use a token from `AuthService.Login`, not one from
+  the OIDC application flow.
+
 ## v0.4.2 — 2026-09-27
 
 Two security fixes and one standards fix, all present in v0.4.1. One
