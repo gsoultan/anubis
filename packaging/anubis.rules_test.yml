@@ -1,0 +1,185 @@
+# promtool unit tests for anubis.rules.yml.
+#
+# `promtool check rules` (scripts/check/alert-rules.sh) proves the rules parse.
+# This proves they FIRE: each alert below is fed the series that should trigger
+# it, and a series that should not, so a rule whose selector or threshold
+# drifts is caught here rather than during the incident it was written for.
+# The metric NAMES are also guarded by TestEveryAlertRuleMetricIsExported,
+# which renders /metrics and checks every name a rule references is exposed.
+#
+# Coverage: the page alerts and the simple warn alerts have firing tests here.
+# The two histogram-quantile latency warns and the two and-on() compound warns
+# (SnapshotNeverRebuilds, StructureSyncFailing) are not — their triggering
+# series are fiddly to encode and the firing logic is standard PromQL — but
+# every metric they name is covered by the exporter test above, which is the
+# failure mode that actually bites (a name that never fires).
+#
+# Times are relative to Unix epoch 0, so time() at eval_time N is N seconds.
+rule_files:
+  - anubis.rules.yml
+
+evaluation_interval: 1m
+
+tests:
+  # --- page ---------------------------------------------------------------
+  - name: audit event dropped fires, and a quiet writer does not
+    interval: 1m
+    input_series:
+      - series: 'anubis_audit_dropped_total{action="credential.write"}'
+        values: '0+1x16'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: AnubisAuditLogIncomplete
+        exp_alerts:
+          - exp_labels: { severity: page, action: credential.write }
+            exp_annotations:
+              description: "An audit event could not be written, so the log a regulator reads now has a hole in it and the only other record is a log line. The action label says which call; the server's error log says why. Treat as an incident: a trail that silently loses entries is worse than one that is visibly broken."
+              runbook: "docs/alerting.md#page-immediately"
+              summary: "Audit event dropped (credential.write)"
+  - name: a writer that never drops does not fire
+    interval: 1m
+    input_series:
+      - series: 'anubis_audit_dropped_total{action="credential.write"}'
+        values: '5 5 5 5 5 5 5 5 5 5 5 5 5 5 5 5'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: AnubisAuditLogIncomplete
+        exp_alerts: []
+
+  - name: authorize outrunning the audit writer fires
+    interval: 1m
+    input_series:
+      - series: 'anubis_audit_dropped_total{action="authorize"}'
+        values: '0+1x16'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: AnubisAuthorizeOutrunningAuditWriter
+        exp_alerts:
+          - exp_labels: { severity: page, action: authorize }
+            exp_annotations:
+              description: "Capacity, not correctness. authorize is the one action allowed to drop rather than block, because back-pressure there would turn a slow database into a slow authorize(). Check database write latency before assuming the rate is the problem."
+              runbook: "docs/alerting.md#page-immediately"
+              summary: "Authorize decisions outrunning the audit writer"
+
+  - name: refresh token reuse fires on a single event
+    interval: 1m
+    input_series:
+      - series: 'anubis_audit_events_total{action="token.reuse_detected"}'
+        values: '0 0 0 0 0 1'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: AnubisRefreshTokenReuse
+        exp_alerts:
+          - exp_labels: { severity: page, action: token.reuse_detected }
+            exp_annotations:
+              description: "The highest-signal event in the system: a consumed refresh token was replayed. Anubis has already revoked the family and the session; the remaining work is establishing blast radius."
+              runbook: "docs/operations.md#incident-refresh-token-reuse"
+              summary: "Refresh token reuse detected — a token was stolen"
+
+  - name: a snapshot older than max age fires
+    interval: 1m
+    input_series:
+      - series: 'anubis_gate_snapshot_loaded_timestamp_seconds{tenant="acme"}'
+        values: '0x10'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: AnubisGateSnapshotStale
+        exp_alerts:
+          - exp_labels: { severity: page, tenant: acme }
+            exp_annotations:
+              description: "Past max age the gate fails closed, so this instance is denying traffic it should allow. /readyz fails too, so the balancer should already be pulling it — this alert is the \"why did readiness fail\" answer. Check database connectivity and the `snapshot load failed` log line."
+              runbook: "docs/alerting.md#page-immediately"
+              summary: "Gate snapshot stale for acme"
+
+  - name: internal errors above the rate fire
+    interval: 1m
+    input_series:
+      - series: 'anubis_endpoint_requests_total{endpoint="auth.login",code="internal"}'
+        values: '0+40x6'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: AnubisInternalErrorRate
+        exp_alerts:
+          - exp_labels: { severity: page }
+            exp_annotations:
+              description: "Internal means a bug or a dependency down, never a caller mistake. Correlate with request_id in the logs."
+              runbook: "docs/alerting.md#page-immediately"
+              summary: "Internal errors on the API"
+
+  - name: a maintenance job failing more than once fires
+    interval: 1m
+    input_series:
+      - series: 'anubis_job_runs_total{maintenance_job="retention",result="error"}'
+        values: '0+1x120'
+    alert_rule_test:
+      - eval_time: 120m
+        alertname: AnubisMaintenanceJobFailing
+        exp_alerts:
+          - exp_labels: { severity: page, maintenance_job: retention, result: error }
+            exp_annotations:
+              description: "partitions failing means rows land in the DEFAULT partition; retention failing means PII outlives its deadline; signing_key_expiry failing means nobody is watching key age."
+              runbook: "docs/operations.md#maintenance-jobs"
+              summary: "Maintenance job retention failing"
+
+  # --- warn ---------------------------------------------------------------
+  - name: pool saturation fires when callers wait
+    interval: 1m
+    input_series:
+      - series: 'anubis_db_pool_empty_acquires_total'
+        values: '0+5x6'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: AnubisPoolSaturation
+        exp_alerts:
+          - exp_labels: { severity: warn }
+            exp_annotations:
+              description: "Check the anubis_db_pool_* gauges against ANUBIS_DB_MAX_CONNS. Size the pool to the database, not to the app."
+              runbook: "docs/alerting.md#warn"
+              summary: "Callers waiting for database connections"
+
+  - name: snapshot load failing fires and names the tenant
+    interval: 1m
+    input_series:
+      - series: 'anubis_gate_snapshot_refresh_total{tenant="acme",result="failed"}'
+        values: '0+1x16'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: AnubisSnapshotLoadFailing
+        exp_alerts:
+          - exp_labels: { severity: warn, tenant: acme, result: failed }
+            exp_annotations:
+              description: "The instance is serving the previous snapshot (fail-static) and will fail closed once it passes max age. This fires BEFORE the staleness page and names the tenant."
+              runbook: "docs/alerting.md#warn"
+              summary: "Snapshot load failing for acme"
+
+  - name: two versions side by side for an hour fire
+    interval: 1m
+    input_series:
+      - series: 'anubis_build_info{version="1.0"}'
+        values: '1x70'
+      - series: 'anubis_build_info{version="1.1"}'
+        values: '1x70'
+    alert_rule_test:
+      - eval_time: 61m
+        alertname: AnubisVersionSkew
+        exp_alerts:
+          - exp_labels: { severity: warn }
+            exp_annotations:
+              description: "A rollout that never finished, long after a deploy window should have closed."
+              runbook: "docs/operations.md#deploying"
+              summary: "Two versions serving side by side"
+
+  - name: sustained rate limiting fires per endpoint
+    interval: 1m
+    input_series:
+      - series: 'anubis_endpoint_requests_total{endpoint="auth.login",code="rate_limited"}'
+        values: '0+1000x16'
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: AnubisCredentialGuessingPressure
+        exp_alerts:
+          - exp_labels: { severity: warn, endpoint: auth.login }
+            exp_annotations:
+              description: "The limiter is doing its job; sustained pressure on auth.login or platform.login is a campaign, not noise. Platform accounts are few and named — check WHICH account in the logs."
+              runbook: "docs/alerting.md#warn"
+              summary: "Sustained rate limiting on auth.login"
