@@ -1,150 +1,63 @@
-import { useQuery } from '@tanstack/react-query'
-import { useForm, useStore } from '@tanstack/react-form'
-import { MultiSelect, Select, TextInput } from '@mantine/core'
-import { api } from '@/lib/api/client'
-import { qk } from '@/lib/query/keys'
-import { queryClient } from '@/lib/query/client'
+import { useNavigate } from '@tanstack/react-router'
 import { useCreate } from '@/stores/create'
-import { CreateShell, CancelSubmit, notifyCreated, notifyRejected } from './shell'
-import type { Ial, Risk } from '@/lib/api/types'
+import { CreateShell, CancelSubmit } from './shell'
 
-const snake = ({ value }: { value: string }) =>
-  value && !/^[a-z][a-z0-9_]{1,30}$/.test(value)
-    ? 'Lowercase snake_case, starting with a letter.' : undefined
+/* Permissions are not created here, and never were. There is no
+   CreatePermission RPC: an application declares the permissions it enforces
+   in its manifest, so the catalog and the code that checks it cannot drift.
+
+   This drawer used to be a form that suggested otherwise. It asked for an
+   application, a resource and an action, previewed the key — and its button
+   could only ever answer "declared by the manifest". Until v0.4.1 it could not
+   even do that, because the button never enabled; and it refused names over
+   31 characters, a limit the manifest does not have. Every way in — the Add
+   menu, the palette, the Roles page, ?new=permission — now lands on the
+   answer and a way to act on it, instead of a form. */
+// One field per line so it reads at phone width without scrolling sideways.
+// internal/authz/app/catalog parses and validates it, as it does the guide's.
+const EXAMPLE = `{
+  "permissions": [
+    {
+      "resource": "invoice",
+      "action": "approve",
+      "description": "Approve an invoice",
+      "risk": "sensitive",
+      "min_assurance": 2,
+      "requires_amr": ["otp"],
+      "max_auth_age": "5m"
+    }
+  ]
+}`
 
 export function CreatePermission({ opened }: { opened: boolean }) {
   const { close } = useCreate()
-  const { data: apps } = useQuery({ queryKey: ['applications'], queryFn: api.applications })
-
-  const form = useForm({
-    defaultValues: {
-      app_slug: '', resource: '', action: '', description: '',
-      risk: 'normal', min_assurance: '1', requires_amr: [] as string[], max_auth_age: '5m',
-    },
-    onSubmit: async ({ value }) => {
-      try {
-        await api.createPermission({
-          app_slug: value.app_slug, resource: value.resource, action: value.action,
-          description: value.description, risk: value.risk as Risk,
-          min_assurance: Number(value.min_assurance) as Ial,
-          requires_amr: value.requires_amr,
-          max_auth_age: value.requires_amr.length ? value.max_auth_age : null,
-        })
-        notifyCreated('Permission registered', `${value.app_slug}:${value.resource}:${value.action}`)
-        await queryClient.invalidateQueries({ queryKey: qk.permissions() })
-        form.reset(); close()
-      } catch (e) { notifyRejected(e) }
-    },
-  })
-
-  /* Subscribed, not read. form.state is a snapshot: typing re-renders the
-     field, never this component, so a preview computed from it stayed null
-     and the button it gates stayed disabled however the form was filled —
-     and picking a step-up factor never revealed the auth-age field. */
-  const preview = useStore(form.store, ({ values: v }) => v.app_slug && v.resource && v.action
-    ? `${v.app_slug}:${v.resource}:${v.action}` : null)
-  const stepUp = useStore(form.store, (s) => s.values.requires_amr.length > 0)
+  const navigate = useNavigate()
 
   return (
     <CreateShell
       opened={opened} onClose={close} title="Add a permission"
-      description={<>Permissions are owned by applications and namespaced by them, so
-        <b> billing:invoice:approve</b> and <b>procure:invoice:approve</b> can coexist.
-        In production these arrive via the application manifest.</>}
+      description={<>Permissions are declared by the application that enforces them, in its
+        <b> manifest</b> — so the catalog and the code that checks it cannot drift. There is
+        nothing to fill in here.</>}
       footer={
-        <form.Subscribe selector={(s) => [s.canSubmit, s.isSubmitting] as const}>
-          {([canSubmit, isSubmitting]) => (
-            <CancelSubmit onCancel={close} onSubmit={() => void form.handleSubmit()}
-              canSubmit={!!canSubmit && !!preview}
-              submitting={!!isSubmitting} label="Add permission" />
-          )}
-        </form.Subscribe>
+        <CancelSubmit onCancel={close} canSubmit submitting={false} label="Open Applications"
+          onSubmit={() => { close(); void navigate({ to: '/applications' }) }} />
       }
     >
-      <form onSubmit={(e) => { e.preventDefault(); void form.handleSubmit() }}
-        className="flex flex-col gap-4">
-        <form.Field name="app_slug">
-          {(f) => (
-            <Select label="Application" required placeholder="Which app owns this?"
-              data={(apps ?? []).map((a) => ({ value: a.slug, label: `${a.name} (${a.slug})` }))}
-              value={f.state.value} onChange={(x) => f.handleChange(x ?? '')} />
-          )}
-        </form.Field>
-
-        <div className="grid grid-cols-2 gap-3">
-          <form.Field name="resource" validators={{ onChange: snake }}>
-            {(f) => (
-              <TextInput label="Resource" placeholder="invoice" required
-                value={f.state.value} onChange={(e) => f.handleChange(e.currentTarget.value)}
-                error={f.state.meta.errors[0]} />
-            )}
-          </form.Field>
-          <form.Field name="action" validators={{ onChange: snake }}>
-            {(f) => (
-              <TextInput label="Action" placeholder="approve" required
-                value={f.state.value} onChange={(e) => f.handleChange(e.currentTarget.value)}
-                error={f.state.meta.errors[0]} />
-            )}
-          </form.Field>
-        </div>
-
-        {preview && (
-          <div className="panel-inset flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-3 py-2.5">
-            <span className="t-xs">key (generated)</span>
-            {/* A chip never wraps, and resource and action are free text: at
-                phone width a long key would push past the drawer's edge. */}
-            <span className="chip chip-accent max-w-full whitespace-normal [overflow-wrap:anywhere]">{preview}</span>
-          </div>
-        )}
-
-        <form.Field name="description">
-          {(f) => (
-            <TextInput label="Description" placeholder="What does holding this allow?"
-              value={f.state.value} onChange={(e) => f.handleChange(e.currentTarget.value)} />
-          )}
-        </form.Field>
-
-        <div className="grid grid-cols-2 gap-3">
-          <form.Field name="risk">
-            {(f) => (
-              <Select label="Risk"
-                data={[
-                  { value: 'normal', label: 'normal' },
-                  { value: 'sensitive', label: 'sensitive' },
-                  { value: 'critical', label: 'critical' },
-                ]}
-                value={f.state.value} onChange={(x) => f.handleChange(x ?? 'normal')} />
-            )}
-          </form.Field>
-          <form.Field name="min_assurance">
-            {(f) => (
-              <Select label="Minimum assurance"
-                description="Denied below this even with a grant"
-                data={[{ value: '1', label: 'IAL1' }, { value: '2', label: 'IAL2' }, { value: '3', label: 'IAL3' }]}
-                value={f.state.value} onChange={(x) => f.handleChange(x ?? '1')} />
-            )}
-          </form.Field>
-        </div>
-
-        <form.Field name="requires_amr">
-          {(f) => (
-            <MultiSelect label="Step-up factors" placeholder="None — no step-up"
-              description="If set, the session must have authenticated with these recently."
-              data={[{ value: 'otp', label: 'otp — TOTP code' }, { value: 'device_key', label: 'device_key — biometric' }]}
-              value={f.state.value} onChange={(x) => f.handleChange(x)} />
-          )}
-        </form.Field>
-
-        {stepUp && (
-          <form.Field name="max_auth_age">
-            {(f) => (
-              <Select label="Maximum authentication age"
-                data={['2m', '5m', '10m', '30m'].map((x) => ({ value: x, label: `within ${x}` }))}
-                value={f.state.value} onChange={(x) => f.handleChange(x ?? '5m')} />
-            )}
-          </form.Field>
-        )}
-      </form>
+      <div className="flex flex-col gap-3">
+        <p className="t-sm">
+          On <b>Applications</b>, choose <b>Manifest</b> on the application that owns it and add
+          it under <code>permissions</code>. Only <code>resource</code> and <code>action</code> are
+          required; risk, assurance and step-up are optional.
+        </p>
+        <pre className="panel-inset overflow-x-auto px-3 py-2.5 font-mono"
+          style={{ fontSize: 11.5, lineHeight: 1.55 }}>{EXAMPLE}</pre>
+        <p className="t-sm">
+          It becomes <code>&lt;app&gt;:invoice:approve</code>. <b>Check</b> first — the report says
+          what would change before anything does. A spreadsheet works too: a CSV whose header
+          starts <code>resource, action</code>.
+        </p>
+      </div>
     </CreateShell>
   )
 }

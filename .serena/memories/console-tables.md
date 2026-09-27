@@ -86,3 +86,30 @@ drawer; `.row-go` is the chevron affordance, hidden until the row is hovered
 or focused so fifty rows do not each carry a permanent arrow.
 
 Related: [[page-resolution]] for what a person sees when signing in.
+
+## Audit at 1280px: wrapping the Detail values was measured and rejected (2026-09-26)
+
+Audit's fixed columns total 765px and its Detail chips are `nowrap`, so the
+widest value on the page — usually `subject=<uuid>`, ~300px — sets the
+column, and at 1280px the table outgrows its panel, scrolls (`data-wide`) and
+loses its sticky header. Letting the chips break anywhere was tried:
+
+  1280px  table fits, header sticks — but 74 of 100 rows grew, up to 156px
+  1440px  19 of 100 rows grew
+  1024px  still too wide (the fixed columns alone exceed 750px), and Detail
+          collapsed to a sliver: one row was 1,169px tall
+
+Truncating is not an option either: Audit has no detail view, so the cell is
+the only place those values appear. One-line rows win for a list read by
+scanning (see `Cell` in DataTable.tsx), so Audit keeps `nowrap` chips and
+scrolls sideways where it must. Do not retry wrapping without a detail view.
+
+## Audit shows only the newest 100 entries, and searches only those (2026-09-26)
+
+`live.audit()` calls `QueryAudit({ pageSize: 100 })` with no page token and
+no paging controls, and audit.tsx filters the result in the browser. An
+installation with 100k entries shows its newest 100, and "Search actor or
+action" answers from those 100 alone — an investigation can find nothing and
+be told so. This is the client-side-filter-of-a-server-page rule above,
+broken. The server already takes actor_id, action, from/to and page_token;
+it has no result filter. Not fixed yet.

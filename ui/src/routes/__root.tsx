@@ -140,7 +140,7 @@ function NewMenu() {
     { kind: 'grant' as const, label: 'Access', icon: <IconCirclePlus size={15} />, hint: 'give a person a role, limited to a place' },
     { kind: 'membership' as const, label: 'Membership', icon: <IconUsersGroup size={15} />, hint: 'a role bundle for easy onboarding' },
     { kind: 'role' as const, label: 'Role', icon: <IconShieldPlus size={15} />, hint: 'a named bundle of permissions' },
-    { kind: 'permission' as const, label: 'Permission', icon: <IconLicense size={15} />, hint: 'one action in one app' },
+    { kind: 'permission' as const, label: 'Permission', icon: <IconLicense size={15} />, hint: 'declared in its app’s manifest' },
     { kind: 'node' as const, label: 'Structure item', icon: <IconSitemapFilled size={15} />, hint: 'an office, product line, customer…' },
     { kind: 'axis' as const, label: 'Structure', icon: <IconAxisY size={15} />, hint: 'a whole new way to limit access' },
   ]
