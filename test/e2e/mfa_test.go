@@ -87,11 +87,19 @@ func TestSecondFactorLifecycle(t *testing.T) {
 	// Enrolment shares the credential-flow limiter with every other test in
 	// this package, so a full-suite run can legitimately be throttled here.
 	// Waiting for refill is the correct behaviour under test.
+	//
+	// enrolCode captures the code that ACTUALLY completed enrolment — the one
+	// generated on the call that succeeded, regenerated per attempt so a
+	// throttle-and-wait that crosses a step boundary still confirms with a
+	// live code. Step 4a replays exactly this, which is what makes the replay
+	// assertion independent of the clock.
+	var enrolCode string
 	confirm, err := retryRateLimited(t, func() (*connect.Response[anubisv1.ConfirmTotpEnrollmentResponse], error) {
+		enrolCode = totp.Generate(secret, time.Now(), totp.DefaultStep, totp.DefaultDigits)
 		return authClient().ConfirmTotpEnrollment(ctx,
 			bearer(connect.NewRequest(&anubisv1.ConfirmTotpEnrollmentRequest{
 				EnrollmentToken: begin.Msg.EnrollmentToken,
-				Code:            totp.Generate(secret, time.Now(), totp.DefaultStep, totp.DefaultDigits),
+				Code:            enrolCode,
 			}), tokens.AccessToken))
 	})
 	if err != nil {
@@ -116,12 +124,16 @@ func TestSecondFactorLifecycle(t *testing.T) {
 		t.Fatal("challenge response also carried tokens")
 	}
 
-	// 4a. REPLAY GUARD: the code that completed enrolment cannot be reused to
-	//     sign in. A TOTP code is single-use — otherwise one shoulder-surfed
-	//     or phished code works for the rest of its 30-second window.
+	// 4a. REPLAY GUARD: the exact code that completed enrolment cannot be
+	//     reused to sign in. A TOTP code is single-use — otherwise one
+	//     shoulder-surfed or phished code works for the rest of its 30-second
+	//     window. Replaying the enrolment code itself, not a freshly generated
+	//     one: the server refuses any code at or before the last accepted step,
+	//     so the enrolment code is refused whatever the clock now reads. A
+	//     regenerated code could land in a LATER step and be legitimately
+	//     accepted, which is what made this assertion flake on a slow runner.
 	if _, err := authClient().VerifyMfa(ctx, connect.NewRequest(&anubisv1.VerifyMfaRequest{
-		MfaToken: challenge.MfaToken, Method: "totp",
-		Code: totp.Generate(secret, time.Now(), totp.DefaultStep, totp.DefaultDigits),
+		MfaToken: challenge.MfaToken, Method: "totp", Code: enrolCode,
 	})); err == nil {
 		t.Fatal("the enrolment code was accepted a second time: TOTP replay is possible")
 	}
