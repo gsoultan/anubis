@@ -41,15 +41,20 @@ function Audit() {
      A filter change starts paging over. */
   const [q, setQ] = useState('')
   const [result, setResult] = useState('all')
+  // Filter to one actor by clicking their cell — an investigation almost
+  // always starts "everything this account did". The server filters on the
+  // actor id (exact); the label is kept only to name the chip.
+  const [actor, setActor] = useState<{ id: string; label: string } | null>(null)
   const [trail, setTrail] = useState<string[]>([''])
   const cursor = trail[trail.length - 1] ?? ''
   const resetPaging = () => setTrail([''])
 
   const { data: page, isFetching } = useQuery({
-    queryKey: ['audit', q.trim(), result, cursor],
+    queryKey: ['audit', q.trim(), result, actor?.id ?? '', cursor],
     queryFn: () => api.audit({
       action: q.trim(),
       result: result === 'all' ? '' : result,
+      actorId: actor?.id ?? '',
       cursor,
       pageSize: 100,
     }),
@@ -58,7 +63,7 @@ function Audit() {
   // The server applied the filters; re-doing it here would hide rows it
   // deliberately returned and make the page count lie.
   const shown = page?.rows ?? []
-  const filtered = q.trim() !== '' || result !== 'all'
+  const filtered = q.trim() !== '' || result !== 'all' || actor !== null
 
   const columns: Column<AuditEntry>[] = [
     { key: 'when', header: 'When', width: 165, render: (e) => (
@@ -66,7 +71,12 @@ function Audit() {
           bottom={e.occurred_at.slice(0, 10)} />
       ) },
     { key: 'actor', header: 'Actor', width: 200, render: (e) => (
-        <Cell top={e.actor_label} bottom={e.ip ?? undefined} />
+        e.actor_id
+          ? <button className="text-left" title="Filter to this actor"
+              onClick={() => { setActor({ id: e.actor_id!, label: e.actor_label }); resetPaging() }}>
+              <Cell top={e.actor_label} bottom={e.ip ?? undefined} />
+            </button>
+          : <Cell top={e.actor_label} bottom={e.ip ?? undefined} />
       ) },
     { key: 'action', header: 'Action', width: 230, render: (e) => (
         <span className="font-mono" style={{ fontSize: 11.5 }}>{e.action}</span>
@@ -108,6 +118,12 @@ function Audit() {
         onChange={(v) => { setResult(v); resetPaging() }}
         data={[{ value: 'all', label: 'All' }, { value: 'allow', label: 'Allow' },
                { value: 'deny', label: 'Deny' }, { value: 'error', label: 'Error' }]} />
+      {actor && (
+        <button className="chip chip-accent" title="Clear actor filter"
+          onClick={() => { setActor(null); resetPaging() }}>
+          actor: {actor.label} ✕
+        </button>
+      )}
     </>
   )
 

@@ -387,12 +387,13 @@ export async function memberships(): Promise<Membership[]> {
 }
 
 export async function audit(opts: {
-  action?: string; result?: string; cursor?: string; pageSize?: number
+  action?: string; result?: string; actorId?: string; cursor?: string; pageSize?: number
 } = {}): Promise<{ rows: AuditEntry[]; next: string }> {
   const size = opts.pageSize ?? 100
   const resp = await rpc.tenantAdmin.queryAudit({
     action: opts.action ?? '',
     result: opts.result ?? '',
+    actorId: opts.actorId ?? '',
     pageToken: opts.cursor ?? '',
     pageSize: size,
   })
