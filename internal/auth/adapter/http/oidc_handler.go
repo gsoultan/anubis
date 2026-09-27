@@ -18,6 +18,7 @@ import (
 	authapp "github.com/gsoultan/anubis/internal/auth/app"
 	"github.com/gsoultan/anubis/internal/auth/app/enroll"
 	"github.com/gsoultan/anubis/internal/auth/app/signin"
+	tokenapp "github.com/gsoultan/anubis/internal/auth/app/token"
 	authdomain "github.com/gsoultan/anubis/internal/auth/domain"
 	authport "github.com/gsoultan/anubis/internal/auth/port"
 	identitydomain "github.com/gsoultan/anubis/internal/identity/domain"
@@ -48,19 +49,24 @@ type OIDCHandler struct {
 	// Connect login service uses: this page is the second door onto one
 	// identity, and a policy it evaluated for itself was a policy it got
 	// wrong twice.
-	auth          *signin.PasswordAuthenticator
-	granter       *signin.EnrolmentGranter
-	enrolment     enroll.EnrollmentUsecase
-	tenants       tenancyport.TenantRepository
-	realms        identityport.RealmRepository
-	realmsAdmin   identityport.RealmAdminRepository
-	ids           identityport.IdentityRepository
-	creds         identityport.CredentialRepository
-	sessions      authport.SessionRepository
-	onetime       authport.OneTimeRepository
-	apps          tenancyport.ApplicationRepository
-	pages         tenancyport.AuthPageRepository
-	refresh       authport.RefreshRepository
+	auth        *signin.PasswordAuthenticator
+	granter     *signin.EnrolmentGranter
+	enrolment   enroll.EnrollmentUsecase
+	tenants     tenancyport.TenantRepository
+	realms      identityport.RealmRepository
+	realmsAdmin identityport.RealmAdminRepository
+	ids         identityport.IdentityRepository
+	creds       identityport.CredentialRepository
+	sessions    authport.SessionRepository
+	onetime     authport.OneTimeRepository
+	apps        tenancyport.ApplicationRepository
+	pages       tenancyport.AuthPageRepository
+	refresh     authport.RefreshRepository
+	// refreshUC is the SAME rotation the Connect AuthService.Refresh uses:
+	// the /v1/token refresh_token grant is the second door onto one refresh
+	// family, and re-implementing rotation here is how theft detection ends
+	// up enforced in one place and not the other.
+	refreshUC     tokenapp.RefreshUsecase
 	renderer      *PageRenderer
 	defaultTenant string
 	issuerUC      authapp.TokenIssuer
@@ -90,6 +96,7 @@ func NewOIDCHandler(
 	apps tenancyport.ApplicationRepository,
 	pages tenancyport.AuthPageRepository,
 	refresh authport.RefreshRepository,
+	refreshUC tokenapp.RefreshUsecase,
 	defaultTenant string,
 	prod bool,
 	issuerUC authapp.TokenIssuer,
@@ -104,7 +111,7 @@ func NewOIDCHandler(
 		tenants: tenants, realms: realms,
 		realmsAdmin: realmsAdmin, ids: ids,
 		creds: creds, sessions: sessions, onetime: onetime, apps: apps,
-		pages: pages, refresh: refresh, renderer: NewPageRenderer(),
+		pages: pages, refresh: refresh, refreshUC: refreshUC, renderer: NewPageRenderer(),
 		defaultTenant: defaultTenant, issuerUC: issuerUC, ring: ring,
 		cookies: cookiePolicy{prod: prod}, clock: clock, audit: audit,
 		limiter: limiter, logger: logger,
@@ -487,16 +494,54 @@ func (h *OIDCHandler) issueCode(w http.ResponseWriter, r *http.Request, tenant *
 	http.Redirect(w, r, u.String(), http.StatusFound)
 }
 
-// Token is POST /v1/token — the code exchange (single use, PKCE-verified).
+// Token is POST /v1/token. It serves the two grants the discovery document
+// advertises: authorization_code (the PKCE exchange) and refresh_token. The
+// well-known handler names both; before this, the endpoint answered only the
+// first, so a standard OIDC client rotating on the refresh token it was issued
+// got "authorization_code only" and its session died at the first expiry.
 func (h *OIDCHandler) Token(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		apihttp.WriteError(w, r, apperr.ErrInvalidArgument)
 		return
 	}
-	if r.PostFormValue("grant_type") != "authorization_code" {
-		apihttp.WriteError(w, r, apperr.ErrInvalidArgument.With("grant_type", "authorization_code only"))
+	switch r.PostFormValue("grant_type") {
+	case "authorization_code":
+		h.tokenAuthCode(w, r)
+	case "refresh_token":
+		h.tokenRefresh(w, r)
+	default:
+		apihttp.WriteError(w, r, apperr.ErrInvalidArgument.
+			With("grant_type", "authorization_code or refresh_token"))
+	}
+}
+
+// tokenRefresh rotates a refresh token through the SAME usecase as
+// AuthService.Refresh, so reuse detection — a consumed token replayed revokes
+// the whole family and its session — holds identically on both doors. RFC 6749
+// §6 puts the token in the form body; there is no PKCE on this grant.
+func (h *OIDCHandler) tokenRefresh(w http.ResponseWriter, r *http.Request) {
+	token := r.PostFormValue("refresh_token")
+	if token == "" {
+		apihttp.WriteError(w, r, apperr.ErrInvalidArgument.With("refresh_token", "required"))
 		return
 	}
+	pair, err := h.refreshUC.Execute(r.Context(), tokenapp.RefreshInput{RefreshToken: token})
+	if err != nil {
+		apihttp.WriteError(w, r, err)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	apihttp.WriteJSON(w, http.StatusOK, map[string]any{
+		"access_token":  pair.AccessToken,
+		"refresh_token": pair.RefreshToken,
+		"token_type":    pair.TokenType,
+		"expires_in":    pair.ExpiresIn,
+		"session_id":    pair.SessionID,
+	})
+}
+
+// tokenAuthCode is the code exchange (single use, PKCE-verified).
+func (h *OIDCHandler) tokenAuthCode(w http.ResponseWriter, r *http.Request) {
 	code := r.PostFormValue("code")
 	verifier := r.PostFormValue("code_verifier")
 	if code == "" || verifier == "" {

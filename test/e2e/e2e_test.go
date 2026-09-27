@@ -589,3 +589,55 @@ var slugSeq atomic.Uint64
 func uniqueSlug(prefix string) string {
 	return fmt.Sprintf("%s-%d-%d", prefix, time.Now().UnixNano(), slugSeq.Add(1))
 }
+
+// postTokenRefresh is the RFC 6749 §6 refresh grant a standard OIDC client
+// makes: grant_type and the token in the form body of POST /v1/token. It
+// returns the HTTP status and the decoded body so a test can assert both a
+// success and a refusal.
+func postTokenRefresh(t *testing.T, refreshToken string) (int, appSignIn) {
+	t.Helper()
+	resp, err := http.PostForm(baseURL+"/v1/token", url.Values{
+		"grant_type":    {"refresh_token"},
+		"refresh_token": {refreshToken},
+	})
+	if err != nil {
+		t.Fatalf("POST /v1/token refresh: %v", err)
+	}
+	defer resp.Body.Close()
+	var out appSignIn
+	_ = json.NewDecoder(resp.Body).Decode(&out)
+	return resp.StatusCode, out
+}
+
+// A standard OIDC client rotates on the refresh token it was issued, at the
+// token endpoint the discovery document advertises. /v1/token answered only
+// authorization_code, so every such client lost its session at the first
+// access-token expiry. The rotation must keep the application, and it must
+// carry the same reuse detection as AuthService.Refresh — a consumed token
+// replayed kills the family.
+func TestTokenEndpointRefreshGrant(t *testing.T) {
+	requireServer(t)
+	username, password := newPerson(t, "oidc-rt")
+	issued := signInToAnApplication(t, username, password)
+
+	status, rotated := postTokenRefresh(t, issued.RefreshToken)
+	if status != http.StatusOK || rotated.RefreshToken == "" {
+		t.Fatalf("the token endpoint refused a refresh_token grant (status %d): a standard "+
+			"OIDC client cannot keep its session", status)
+	}
+	if rotated.RefreshToken == issued.RefreshToken {
+		t.Fatal("the refresh grant returned the same token: no rotation, so no theft detection")
+	}
+	if got := audienceOf(t, rotated.AccessToken); !slices.Equal(got, []string{issued.App}) {
+		t.Fatalf("the refreshed token was minted for %v, want [%s]", got, issued.App)
+	}
+
+	// Replaying the consumed token is theft: refused, and the family dies with
+	// it — the successor this rotation just minted must stop working too.
+	if status, _ := postTokenRefresh(t, issued.RefreshToken); status == http.StatusOK {
+		t.Fatal("a consumed refresh token was accepted twice at /v1/token")
+	}
+	if status, _ := postTokenRefresh(t, rotated.RefreshToken); status == http.StatusOK {
+		t.Fatal("the successor survived reuse detection at /v1/token: attacker and victim share a session")
+	}
+}

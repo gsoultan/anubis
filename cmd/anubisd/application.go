@@ -328,10 +328,14 @@ func (a *application) registerHTTP(ctx context.Context, srv *apihttp.Server,
 	srv.HandleFunc("GET /.well-known/anubis-keys.json", wellKnown.Keys)
 	srv.HandleFunc("GET /.well-known/openid-configuration", wellKnown.OpenIDConfiguration)
 
+	// The same rotation the Connect AuthService.Refresh uses (see registerRPC):
+	// /v1/token's refresh_token grant is the second door onto one refresh
+	// family, so it must run the identical claim-and-theft-detect path.
+	refresh := tokenapp.NewRefreshInteractor(a.auth, a.auth, a.tenancy, a.issuer, a.auth, a.auditor, logger)
 	oidc := authhttp.NewOIDCHandler(cfg.Issuer, a.passwordAuth, a.enrolGranter,
 		a.enrolment, a.tenancy,
 		a.identity, a.identity, a.identity, a.identity, a.auth, a.auth, a.tenancy, a.tenancy, a.auth,
-		cfg.DefaultTenant, cfg.Env == "prod", a.issuer, a.ring, a.clock, a.auditor, limiter, logger)
+		refresh, cfg.DefaultTenant, cfg.Env == "prod", a.issuer, a.ring, a.clock, a.auditor, limiter, logger)
 	srv.HandleFunc("GET /v1/authorize", oidc.Authorize)
 	srv.HandleFunc("POST /v1/login", oidc.LoginForm)
 	srv.HandleFunc("POST /v1/token", oidc.Token)
