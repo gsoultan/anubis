@@ -46,9 +46,11 @@ func TestSecondFactorLifecycle(t *testing.T) {
 	}
 
 	// 1. Password alone works while nothing is enrolled.
-	first, err := authClient().Login(ctx, connect.NewRequest(&anubisv1.LoginRequest{
-		Tenant: tenant, Username: username, Password: password,
-	}))
+	first, err := retryRateLimited(t, func() (*connect.Response[anubisv1.LoginResponse], error) {
+		return authClient().Login(ctx, connect.NewRequest(&anubisv1.LoginRequest{
+			Tenant: tenant, Username: username, Password: password,
+		}))
+	})
 	if err != nil {
 		t.Fatalf("initial login: %v", err)
 	}
@@ -110,9 +112,11 @@ func TestSecondFactorLifecycle(t *testing.T) {
 	}
 
 	// 3. Password alone must now be refused.
-	second, err := authClient().Login(ctx, connect.NewRequest(&anubisv1.LoginRequest{
-		Tenant: tenant, Username: username, Password: password,
-	}))
+	second, err := retryRateLimited(t, func() (*connect.Response[anubisv1.LoginResponse], error) {
+		return authClient().Login(ctx, connect.NewRequest(&anubisv1.LoginRequest{
+			Tenant: tenant, Username: username, Password: password,
+		}))
+	})
 	if err != nil {
 		t.Fatalf("login after enrolment: %v", err)
 	}
@@ -173,9 +177,11 @@ func TestSecondFactorLifecycle(t *testing.T) {
 // challenge back.
 func mustChallenge(t *testing.T, username, password string) *anubisv1.MfaChallenge {
 	t.Helper()
-	resp, err := authClient().Login(context.Background(), connect.NewRequest(&anubisv1.LoginRequest{
-		Tenant: tenant, Username: username, Password: password,
-	}))
+	resp, err := retryRateLimited(t, func() (*connect.Response[anubisv1.LoginResponse], error) {
+		return authClient().Login(context.Background(), connect.NewRequest(&anubisv1.LoginRequest{
+			Tenant: tenant, Username: username, Password: password,
+		}))
+	})
 	if err != nil {
 		t.Fatalf("login: %v", err)
 	}
@@ -196,6 +202,12 @@ func waitForNextStep() {
 
 // retryRateLimited waits out the limiter rather than failing on it: being
 // throttled is the system working, not a defect.
+//
+// Every password login in this file goes through it as well as the
+// second-factor calls: the limiter counts logins from one address, the suite
+// is one address, and each test added ahead of this one moves it nearer the
+// limit. Unwrapped, a login here failed the suite for reasons that had
+// nothing to do with second factors.
 func retryRateLimited[T any](t *testing.T, call func() (T, error)) (T, error) {
 	t.Helper()
 	var zero T
