@@ -64,6 +64,7 @@ func init() {
 	storm.RegisterScanner(scanAssignRow)
 	storm.RegisterScanner(scanUnassignRow)
 	storm.RegisterScanner(scanResyncRow)
+	storm.RegisterScanner(scanAssignmentRow)
 	storm.RegisterScanner(scanPermissionRow)
 	storm.RegisterScanner(scanUpsertedPermissionRow)
 	storm.RegisterScanner(scanDeprecatedKeyRow)
@@ -74,8 +75,6 @@ func init() {
 	storm.RegisterScanner(scanLastAppliedDigestRow)
 	storm.RegisterStatement(`
 DELETE FROM catalog_sync_sources WHERE id = $1 AND tenant_id = $2`)
-	storm.RegisterStatement(`
-DELETE FROM membership_entries WHERE membership_id = $1`)
 	storm.RegisterStatement(`
 DELETE FROM role_parents WHERE role_id = $1`)
 	storm.RegisterStatement(`
@@ -110,8 +109,8 @@ INSERT INTO membership_entry_scopes (entry_id, tenant_id, axis_code,
                                      scope_node_id, inherit, mode)
 VALUES ($1, $2, $3, $4, $5, CASE WHEN $6::boolean THEN 'exclude' ELSE 'include' END)`)
 	storm.RegisterStatement(`
-INSERT INTO memberships (tenant_id, name, description)
-VALUES ($1, $2, $3)
+INSERT INTO memberships (tenant_id, name, description, anchor_axis)
+VALUES ($1, $2, $3, NULLIF($4, ''))
 RETURNING id::text AS id`)
 	storm.RegisterStatement(`
 INSERT INTO permissions (application_id, tenant_id, app_slug, resource, action,
@@ -197,6 +196,9 @@ ORDER BY s.name`)
 	storm.RegisterStatement(`
 SELECT (role_recompute_effective($1) IS NULL) AS done`)
 	storm.RegisterStatement(`
+SELECT COALESCE(membership_assign($1::uuid, $2::uuid, $3::uuid, NULLIF($4::text, '')::uuid,
+                                  $5::boolean, $6::timestamptz, $7::text)::text, '') AS assignment_id`)
+	storm.RegisterStatement(`
 SELECT DISTINCT p.key
 FROM grants g
 JOIN role_permissions_effective rpe ON rpe.role_id = g.role_id
@@ -228,6 +230,8 @@ SELECT count(*) AS count FROM grants
 WHERE tenant_id = $1 AND revoked_at IS NULL
   AND (valid_until IS NULL OR valid_until > now())`)
 	storm.RegisterStatement(`
+SELECT count(*) AS count FROM grants WHERE via_member_id = $1::uuid AND revoked_at IS NULL`)
+	storm.RegisterStatement(`
 SELECT detail
 FROM audit_log
 WHERE tenant_id = $1
@@ -245,8 +249,9 @@ LIMIT 1`)
 SELECT g.id::text AS id, g.identity_id::text AS identity_id,
        g.role_id::text AS role_id, r.name AS role_name, g.self_scoped,
        g.valid_from, g.valid_until, g.revoked_at,
-       g.granted_by::text AS granted_by, g.reason,
-       g.via_membership_id::text AS via_membership_id
+       g.granted_by::text AS granted_by, g.reason, g.revoke_reason,
+       g.via_membership_id::text AS via_membership_id,
+       g.via_member_id::text AS via_member_id
 FROM grants g
 JOIN roles r ON r.id = g.role_id
 WHERE g.identity_id = $1 AND g.tenant_id = $2
@@ -256,8 +261,9 @@ ORDER BY g.created_at DESC`)
 SELECT g.id::text AS id, g.identity_id::text AS identity_id, i.username,
        g.role_id::text AS role_id, r.name AS role_name,
        g.self_scoped, g.valid_from, g.valid_until, g.revoked_at,
-       g.granted_by::text AS granted_by, g.reason,
-       g.via_membership_id::text AS via_membership_id, g.created_at
+       g.granted_by::text AS granted_by, g.reason, g.revoke_reason,
+       g.via_membership_id::text AS via_membership_id,
+       g.via_member_id::text AS via_member_id, g.created_at
   FROM grants g
   JOIN roles r      ON r.id = g.role_id
   JOIN identities i ON i.id = g.identity_id
@@ -302,13 +308,14 @@ WHERE source_id = $1
 ORDER BY started_at DESC
 LIMIT $2`)
 	storm.RegisterStatement(`
-SELECT id::text AS id, tenant_id::text AS tenant_id, name, description
+SELECT id::text AS id, tenant_id::text AS tenant_id, name, description, anchor_axis
 FROM memberships
 WHERE id = $1 AND tenant_id = $2`)
 	storm.RegisterStatement(`
-SELECT m.id::text AS id, m.name, m.description,
-       (SELECT count(*) FROM membership_members mm
-         WHERE mm.membership_id = m.id)::int AS member_count
+SELECT m.id::text AS id, m.name, m.description, m.anchor_axis,
+       (SELECT count(DISTINCT mm.identity_id) FROM membership_members mm
+         WHERE mm.membership_id = m.id AND mm.removed_at IS NULL
+           AND (mm.valid_until IS NULL OR mm.valid_until > now()))::int AS member_count
 FROM memberships m
 WHERE m.tenant_id = $1
 ORDER BY m.name`)
@@ -317,14 +324,16 @@ SELECT me.id::text AS id, me.membership_id::text AS membership_id,
        me.role_id::text AS role_id, r.name AS role_name
 FROM membership_entries me
 JOIN roles r ON r.id = me.role_id
-WHERE me.membership_id = ANY($1::uuid[])
+WHERE me.membership_id = ANY($1::uuid[]) AND me.retired_at IS NULL
 ORDER BY r.name`)
 	storm.RegisterStatement(`
-SELECT membership_assign($1, $2, $3) AS grants_created`)
+SELECT membership_leave(mm.id, $3::uuid, $4::text) AS grants_revoked
+  FROM membership_members mm
+ WHERE mm.id = NULLIF($1::text, '')::uuid AND mm.tenant_id = $2::uuid AND mm.removed_at IS NULL`)
 	storm.RegisterStatement(`
 SELECT membership_resync($1) AS grants_changed`)
 	storm.RegisterStatement(`
-SELECT membership_unassign($1, $2) AS grants_revoked`)
+SELECT membership_unassign($1::uuid, $2::uuid, $3::uuid, $4::text) AS grants_revoked`)
 	storm.RegisterStatement(`
 SELECT mes.entry_id::text AS entry_id, mes.axis_code,
        mes.scope_node_id::text AS scope_node_id, mes.inherit,
@@ -334,6 +343,25 @@ FROM membership_entry_scopes mes
 JOIN scope_nodes sn ON sn.id = mes.scope_node_id
 WHERE mes.entry_id = ANY($1::uuid[])
 ORDER BY mes.entry_id, mes.axis_code, mes.mode DESC, sn.name`)
+	storm.RegisterStatement(`
+SELECT mm.id::text AS id, mm.membership_id::text AS membership_id,
+       m.name AS membership_name, m.anchor_axis,
+       mm.identity_id::text AS identity_id, i.username,
+       mm.scope_node_id::text AS node_id, sn.name AS node_name, mm.inherit,
+       mm.valid_until, mm.reason, mm.assigned_at, mm.assigned_by::text AS assigned_by
+  FROM membership_members mm
+  JOIN memberships m      ON m.id = mm.membership_id
+  JOIN identities i       ON i.id = mm.identity_id
+  LEFT JOIN scope_nodes sn ON sn.id = mm.scope_node_id
+ WHERE mm.tenant_id = $1 AND mm.removed_at IS NULL
+   AND ($2::text = '' OR mm.membership_id = NULLIF($2::text, '')::uuid)
+   AND ($3::text = '' OR mm.identity_id = NULLIF($3::text, '')::uuid)
+   AND ($4::text = ''
+        OR (mm.assigned_at, mm.id) < (
+             SELECT a.assigned_at, a.id FROM membership_members a
+              WHERE a.id = NULLIF($4::text, '')::uuid))
+ ORDER BY mm.assigned_at DESC, mm.id DESC
+ LIMIT $5`)
 	storm.RegisterStatement(`
 SELECT p.id::text AS id, p.key, p.app_slug, p.resource, p.action, p.risk,
        p.description, p.min_assurance, p.requires_amr,
@@ -403,10 +431,13 @@ WHERE id = $1 AND tenant_id = $2`)
 	storm.RegisterStatement(`
 UPDATE grants
 SET revoked_at = now(),
-    reason = CASE WHEN $3 = '' THEN reason ELSE $3 END
+    revoke_reason = nullif($3, '')
 WHERE id = $1 AND tenant_id = $2 AND revoked_at IS NULL
 RETURNING id::text AS id, identity_id::text AS identity_id,
           role_id::text AS role_id`)
+	storm.RegisterStatement(`
+UPDATE membership_entries SET retired_at = now()
+ WHERE membership_id = $1 AND id = ANY($2::uuid[]) AND retired_at IS NULL`)
 	storm.RegisterStatement(`
 UPDATE permissions
 SET deprecated_at = now()
@@ -615,7 +646,9 @@ func scanGrantRow(rv [][]byte, r *authzrquery.GrantRow, sl *runtime.Slab) error 
 	r.RevokedAt = runtime.Nullable(rv[7], runtime.Timestamptz)
 	r.GrantedBy = sl.Str(rv[8])
 	r.Reason = runtime.NullText(rv[9], sl)
-	r.ViaMembershipID = runtime.NullText(rv[10], sl)
+	r.RevokeReason = runtime.NullText(rv[10], sl)
+	r.ViaMembershipID = runtime.NullText(rv[11], sl)
+	r.ViaMemberID = runtime.NullText(rv[12], sl)
 	return nil
 }
 
@@ -654,8 +687,10 @@ func scanSearchGrantRow(rv [][]byte, r *authzrquery.SearchGrantRow, sl *runtime.
 	r.RevokedAt = runtime.Nullable(rv[8], runtime.Timestamptz)
 	r.GrantedBy = sl.Str(rv[9])
 	r.Reason = runtime.NullText(rv[10], sl)
-	r.ViaMembershipID = runtime.NullText(rv[11], sl)
-	r.CreatedAt = runtime.Timestamptz(rv[12])
+	r.RevokeReason = runtime.NullText(rv[11], sl)
+	r.ViaMembershipID = runtime.NullText(rv[12], sl)
+	r.ViaMemberID = runtime.NullText(rv[13], sl)
+	r.CreatedAt = runtime.Timestamptz(rv[14])
 	return nil
 }
 
@@ -668,7 +703,8 @@ func scanMembershipListRow(rv [][]byte, r *authzrquery.MembershipListRow, sl *ru
 	r.ID = sl.Str(rv[0])
 	r.Name = sl.Str(rv[1])
 	r.Description = sl.Str(rv[2])
-	r.MemberCount = runtime.Int4(rv[3])
+	r.AnchorAxis = runtime.NullText(rv[3], sl)
+	r.MemberCount = runtime.Int4(rv[4])
 	return nil
 }
 
@@ -677,6 +713,7 @@ func scanMembershipRow(rv [][]byte, r *authzrquery.MembershipRow, sl *runtime.Sl
 	r.TenantID = sl.Str(rv[1])
 	r.Name = sl.Str(rv[2])
 	r.Description = sl.Str(rv[3])
+	r.AnchorAxis = runtime.NullText(rv[4], sl)
 	return nil
 }
 
@@ -709,7 +746,7 @@ func scanInsertedEntryRow(rv [][]byte, r *authzrquery.InsertedEntryRow, sl *runt
 }
 
 func scanAssignRow(rv [][]byte, r *authzrquery.AssignRow, sl *runtime.Slab) error {
-	r.GrantsCreated = runtime.Int4(rv[0])
+	r.AssignmentID = sl.Str(rv[0])
 	return nil
 }
 
@@ -720,6 +757,23 @@ func scanUnassignRow(rv [][]byte, r *authzrquery.UnassignRow, sl *runtime.Slab) 
 
 func scanResyncRow(rv [][]byte, r *authzrquery.ResyncRow, sl *runtime.Slab) error {
 	r.GrantsChanged = runtime.Int4(rv[0])
+	return nil
+}
+
+func scanAssignmentRow(rv [][]byte, r *authzrquery.AssignmentRow, sl *runtime.Slab) error {
+	r.ID = sl.Str(rv[0])
+	r.MembershipID = sl.Str(rv[1])
+	r.MembershipName = sl.Str(rv[2])
+	r.AnchorAxis = runtime.NullText(rv[3], sl)
+	r.IdentityID = sl.Str(rv[4])
+	r.Username = sl.Str(rv[5])
+	r.NodeID = runtime.NullText(rv[6], sl)
+	r.NodeName = runtime.NullText(rv[7], sl)
+	r.Inherit = runtime.Bool(rv[8])
+	r.ValidUntil = runtime.Nullable(rv[9], runtime.Timestamptz)
+	r.Reason = runtime.NullText(rv[10], sl)
+	r.AssignedAt = runtime.Timestamptz(rv[11])
+	r.AssignedBy = sl.Str(rv[12])
 	return nil
 }
 

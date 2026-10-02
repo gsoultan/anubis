@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	auditdomain "github.com/gsoultan/anubis/internal/audit/domain"
 	auditport "github.com/gsoultan/anubis/internal/audit/port"
@@ -96,7 +97,7 @@ func (u *scopeAdminInteractor) ListScopeAxes(ctx context.Context) ([]scopedomain
 	return u.axes.ListScopeAxes(ctx)
 }
 
-func (u *scopeAdminInteractor) CreateScopeAxis(ctx context.Context, a scopedomain.ScopeAxisRecord) (*scopedomain.ScopeAxisRecord, error) {
+func (u *scopeAdminInteractor) CreateScopeAxis(ctx context.Context, a scopedomain.ScopeAxisRecord, top *scopedomain.ScopeNodeTypeRecord) (*scopedomain.ScopeAxisRecord, error) {
 	p, err := u.guard.Require(ctx, "anubis:scope:admin")
 	if err != nil {
 		return nil, err
@@ -104,11 +105,54 @@ func (u *scopeAdminInteractor) CreateScopeAxis(ctx context.Context, a scopedomai
 	if !validate.ValidCode(a.Code) {
 		return nil, apperr.ErrInvalidArgument.With("code", a.Code)
 	}
-	if err := u.axes.CreateScopeAxis(ctx, a); err != nil {
+	if top != nil {
+		top.Axis, top.ParentTypes = a.Code, nil
+		if err := validLevel(*top); err != nil {
+			return nil, err
+		}
+	}
+	// One transaction: a structure that exists without its top level cannot
+	// hold a single item, and the console would have to notice and repair it.
+	if err := u.tx.WithinTx(ctx, func(ctx context.Context) error {
+		if err := u.axes.CreateScopeAxis(ctx, a); err != nil {
+			return err
+		}
+		if top == nil {
+			return nil
+		}
+		return u.nodes.CreateScopeNodeType(ctx, *top)
+	}); err != nil {
 		return nil, err
 	}
 	u.emit(ctx, p, "scope.axis_create", "", map[string]string{"axis": a.Code, "effect": a.DefaultEffect})
+	if top != nil {
+		u.emit(ctx, p, "scope.node_type_create", "", map[string]string{"axis": a.Code, "node_type": top.Code})
+	}
 	return u.axes.ScopeAxis(ctx, a.Code)
+}
+
+// maxLevelName bounds a level's display name; it labels pickers and rows.
+const maxLevelName = 80
+
+// validLevel says what is wrong with a level in words an operator can act on.
+// The structural rules (one top level, parents of the same structure, rules in
+// use) are migration 0055's trigger, which sees every writer, not just this one.
+func validLevel(t scopedomain.ScopeNodeTypeRecord) error {
+	if !validate.ValidCode(t.Code) {
+		return apperr.ErrInvalidArgument.With("code", "lowercase letters, digits and _, 2 to 31 long")
+	}
+	name := strings.TrimSpace(t.DisplayName)
+	if name == "" || utf8.RuneCountInString(name) > maxLevelName {
+		return apperr.ErrInvalidArgument.With("display_name", "1 to 80 characters")
+	}
+	seen := make(map[string]bool, len(t.ParentTypes))
+	for _, pt := range t.ParentTypes {
+		if seen[pt] {
+			return apperr.ErrInvalidArgument.With("parent_types", "names "+pt+" twice")
+		}
+		seen[pt] = true
+	}
+	return nil
 }
 
 func (u *scopeAdminInteractor) UpdateScopeAxis(ctx context.Context, a scopedomain.ScopeAxisRecord) (*scopedomain.ScopeAxisRecord, error) {
@@ -180,10 +224,37 @@ func (u *scopeAdminInteractor) CreateScopeNodeType(ctx context.Context, t scoped
 	if err != nil {
 		return err
 	}
+	if err := validLevel(t); err != nil {
+		return err
+	}
+	if _, err := u.axes.ScopeAxis(ctx, t.Axis); err != nil {
+		return apperr.ErrInvalidArgument.With("axis", "no such structure")
+	}
 	if err := u.nodes.CreateScopeNodeType(ctx, t); err != nil {
 		return err
 	}
 	u.emit(ctx, p, "scope.node_type_create", "", map[string]string{"axis": t.Axis, "node_type": t.Code})
+	return nil
+}
+
+// UpdateScopeNodeType edits a level. Levels belong to the installation, not a
+// tenant — the same as creating one, which is why the same permission guards
+// both.
+func (u *scopeAdminInteractor) UpdateScopeNodeType(ctx context.Context, t scopedomain.ScopeNodeTypeRecord) error {
+	p, err := u.guard.Require(ctx, "anubis:scope:admin")
+	if err != nil {
+		return err
+	}
+	if err := validLevel(t); err != nil {
+		return err
+	}
+	t.DisplayName = strings.TrimSpace(t.DisplayName)
+	if err := u.nodes.UpdateScopeNodeType(ctx, t); err != nil {
+		return err
+	}
+	u.emit(ctx, p, "scope.node_type_update", "", map[string]string{
+		"axis": t.Axis, "node_type": t.Code, "parent_types": strings.Join(t.ParentTypes, ","),
+	})
 	return nil
 }
 
@@ -291,6 +362,46 @@ func (u *scopeAdminInteractor) ArchiveScopeNode(ctx context.Context, nodeID stri
 		return err
 	}
 	u.emit(ctx, p, "scope.node_archive", nodeID, nil)
+	return nil
+}
+
+func (u *scopeAdminInteractor) RestoreScopeNode(ctx context.Context, nodeID string) error {
+	p, err := u.guard.Require(ctx, "anubis:scope:admin")
+	if err != nil {
+		return err
+	}
+	if err := u.nodes.RestoreScopeNode(ctx, p.TenantID, nodeID); err != nil {
+		return err
+	}
+	u.emit(ctx, p, "scope.node_restore", nodeID, nil)
+	return nil
+}
+
+// maxNodeName bounds an item's name, which is what every picker prints.
+const maxNodeName = 200
+
+func (u *scopeAdminInteractor) RenameScopeNode(ctx context.Context, nodeID, name string) error {
+	p, err := u.guard.Require(ctx, "anubis:scope:admin")
+	if err != nil {
+		return err
+	}
+	name = strings.TrimSpace(name)
+	if name == "" || utf8.RuneCountInString(name) > maxNodeName {
+		return apperr.ErrInvalidArgument.With("name", "1 to 200 characters")
+	}
+	n, err := u.nodes.ScopeNode(ctx, p.TenantID, nodeID)
+	if err != nil {
+		return apperr.ErrNotFound
+	}
+	// The statement also un-archives — that is how a sync brings a node back.
+	// Here it would be a restore nobody asked for, hidden inside a rename.
+	if n.Status == "archived" {
+		return apperr.ErrInvalidArgument.With("node", "archived; restore it before renaming")
+	}
+	if err := u.nodes.RenameScopeNode(ctx, p.TenantID, nodeID, name); err != nil {
+		return err
+	}
+	u.emit(ctx, p, "scope.node_rename", nodeID, map[string]string{"from": n.Name, "to": name})
 	return nil
 }
 

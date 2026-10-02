@@ -493,3 +493,91 @@ func TestIssuesNameTheSheetAndRow(t *testing.T) {
 		t.Errorf("message = %q", i.Message)
 	}
 }
+
+// --- where-assigned memberships ----------------------------------------
+
+func placedMembershipsSheet(rows ...[]string) xlsx.Sheet {
+	return sheet(schema.SheetMemberships,
+		[]string{"realm", "username", "membership", "scope_ref", "scope_inherit", "valid_until", "reason"}, rows...)
+}
+
+// withCouncil adds a membership that applies where each member is assigned,
+// in the "region" structure the harness's scope fake knows.
+func withCouncil(h *harness) *harness {
+	h.access.memberships = append(h.access.memberships,
+		membership.MembershipRecord{ID: "mem-council", Name: "marketing-council", AnchorAxis: "region"})
+	return h
+}
+
+// A where-assigned membership's row names the place, looked up in the
+// membership's own structure, and carries its reach, end date and note.
+func TestWhereAssignedMembershipTakesItsPlaceFromTheRow(t *testing.T) {
+	h := withCouncil(newHarness(controldomain.RoleAdmin))
+	rep, err := h.uc.ImportWorkbook(adminCtx(), ImportInput{
+		Data: book(t,
+			peopleSheet([]string{"staff", "ada", "ada@example.com"}),
+			placedMembershipsSheet([]string{"staff", "ada", "marketing-council", "apac", "false", "2027-06-30", "Q3 council"}),
+		),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !rep.Applied || !rep.OK() {
+		t.Fatalf("report = %+v", rep)
+	}
+	if len(h.writer.assignments) != 1 {
+		t.Fatalf("assignments = %+v", h.writer.assignments)
+	}
+	a := h.writer.assignments[0]
+	if a.MembershipID != "mem-council" || a.IdentityID != "new-ada" || a.NodeID != "node-apac" || !a.Exact ||
+		a.Reason != "Q3 council" || a.ValidUntil == nil || a.ValidUntil.Format("2006-01-02") != "2027-06-30" {
+		t.Fatalf("assignment = %+v", a)
+	}
+}
+
+// Each way a row can disagree with its membership is an issue on that row,
+// and any issue blocks the whole import: nothing is assigned.
+func TestMembershipRowsThatDisagreeWithTheirMembershipAreIssues(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		row  []string
+		want string
+	}{
+		{"a where-assigned membership with no place",
+			[]string{"staff", "ada", "marketing-council", "", "", "", ""}, "name the place"},
+		{"a same-for-everyone membership given a place",
+			[]string{"staff", "ada", "support-team", "apac", "", "", ""}, "leave this blank"},
+		{"a place that does not exist in the membership's structure",
+			[]string{"staff", "ada", "marketing-council", "atlantis", "", "", ""}, "no place with this reference"},
+		{"an end date that is not in the future",
+			[]string{"staff", "ada", "marketing-council", "apac", "", "2026-01-01", ""}, "not in the future"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h := withCouncil(newHarness(controldomain.RoleAdmin))
+			rep, err := h.uc.ImportWorkbook(adminCtx(), ImportInput{
+				Data: book(t,
+					peopleSheet([]string{"staff", "ada", "ada@example.com"}),
+					placedMembershipsSheet(tc.row),
+				),
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if rep.Applied || rep.OK() {
+				t.Fatalf("applied a row that should be an issue: %+v", rep)
+			}
+			found := false
+			for _, is := range rep.Issues {
+				if is.Sheet == schema.SheetMemberships && strings.Contains(is.Message, tc.want) {
+					found = true
+				}
+			}
+			if !found {
+				t.Fatalf("issues = %+v, want one on the Memberships sheet saying %q", rep.Issues, tc.want)
+			}
+			if len(h.writer.assignments) != 0 {
+				t.Fatalf("assigned %+v despite the issue", h.writer.assignments)
+			}
+		})
+	}
+}

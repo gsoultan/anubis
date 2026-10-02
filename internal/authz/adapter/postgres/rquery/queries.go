@@ -38,8 +38,9 @@ func Queries() []storm.RawDecl {
 		// membership.go
 		ListMemberships, GetMembership, CreateMembership,
 		ListMembershipEntries, ListMembershipEntryScopes,
-		DeleteMembershipEntries, InsertMembershipEntry, InsertMembershipEntryScope,
-		AssignMembership, UnassignMembership, ResyncMembership,
+		RetireMembershipEntries, InsertMembershipEntry, InsertMembershipEntryScope,
+		AssignMembership, UnassignMembership, LeaveMembership, ResyncMembership,
+		ListMembershipAssignments, CountAssignmentGrants,
 		// permission.go
 		ListPermissions, UpsertPermission, DeprecatePermissionsExcept, PermissionIDByKey,
 		// catalog_sync.go

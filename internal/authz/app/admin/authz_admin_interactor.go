@@ -294,23 +294,60 @@ func (u *authzAdminInteractor) ListMemberships(ctx context.Context) ([]membershi
 	return ms, entries, scopes, nil
 }
 
-func (u *authzAdminInteractor) CreateMembership(ctx context.Context, name, description string) (*membership.MembershipRecord, error) {
+func (u *authzAdminInteractor) CreateMembership(ctx context.Context, name, description, anchorAxis string) (*membership.MembershipRecord, error) {
 	p, err := u.guard.Require(ctx, "anubis:membership:admin")
 	if err != nil {
 		return nil, err
 	}
-	id, err := u.members.CreateMembership(ctx, p.TenantID, name, description)
+	anchorAxis = strings.TrimSpace(anchorAxis)
+	id, err := u.members.CreateMembership(ctx, p.TenantID, name, description, anchorAxis)
 	if err != nil {
 		return nil, err
 	}
-	u.emit(ctx, p, "membership.create", id, map[string]string{"name": name})
-	return &membership.MembershipRecord{ID: id, Name: name, Description: description}, nil
+	detail := map[string]string{"name": name}
+	if anchorAxis != "" {
+		detail["applies_where_assigned_in"] = anchorAxis
+	}
+	u.emit(ctx, p, "membership.create", id, detail)
+	return &membership.MembershipRecord{ID: id, Name: name, Description: description, AnchorAxis: anchorAxis}, nil
+}
+
+// membershipInTenant is the check every membership write makes first: the id
+// it was handed belongs to the caller's tenant. The guard answers "may this
+// caller administer memberships?", never "is THIS membership theirs?" — and
+// assign, unassign and resync used to discard the principal after the guard,
+// so an operator of one tenant could put a second tenant's person into that
+// tenant's membership. The foreign keys only checked the pair agreed with
+// itself.
+func (u *authzAdminInteractor) membershipInTenant(ctx context.Context, tenantID, membershipID string) (*membership.MembershipRecord, error) {
+	if strings.TrimSpace(membershipID) == "" {
+		return nil, apperr.ErrInvalidArgument.With("membership_id", "required")
+	}
+	return u.members.MembershipByID(ctx, tenantID, membershipID)
 }
 
 func (u *authzAdminInteractor) SetMembershipEntries(ctx context.Context, membershipID string, entries []membership.MembershipEntryInput) (int, error) {
 	p, err := u.guard.Require(ctx, "anubis:membership:admin")
 	if err != nil {
 		return 0, err
+	}
+	m, err := u.membershipInTenant(ctx, p.TenantID, membershipID)
+	if err != nil {
+		return 0, err
+	}
+	// Said here, in words, before the schema's trigger says it as a
+	// constraint error: a membership that takes its place from each
+	// assignment cannot also name places on that same structure.
+	if m.AnchorAxis != "" {
+		for _, e := range entries {
+			for _, sc := range e.Scopes {
+				if sc.Axis == m.AnchorAxis {
+					return 0, apperr.ErrInvalidArgument.With("scopes",
+						"this membership applies where each member is assigned in "+m.AnchorAxis+
+							", so its roles may not name places there themselves")
+				}
+			}
+		}
 	}
 	var changed int
 	err = u.tx.WithinTx(ctx, func(ctx context.Context) error {
@@ -328,29 +365,87 @@ func (u *authzAdminInteractor) SetMembershipEntries(ctx context.Context, members
 	return changed, nil
 }
 
-func (u *authzAdminInteractor) AssignMembership(ctx context.Context, membershipID, identityID string) (int, error) {
+// maxAssignmentReason bounds the note kept on an assignment and every grant
+// it gives. Generous for a ticket reference and a sentence; not a document.
+const maxAssignmentReason = 500
+
+func (u *authzAdminInteractor) AssignMembership(ctx context.Context, in membership.MembershipAssignmentInput) (membership.MembershipAssignOutcome, error) {
 	p, err := u.guard.Require(ctx, "anubis:grant:admin")
 	if err != nil {
-		return 0, err
+		return membership.MembershipAssignOutcome{}, err
 	}
-	n, err := u.members.AssignMembership(ctx, identityID, membershipID, p.IdentityID)
+	m, err := u.membershipInTenant(ctx, p.TenantID, in.MembershipID)
 	if err != nil {
-		return 0, err
+		return membership.MembershipAssignOutcome{}, err
 	}
-	u.emit(ctx, p, "membership.assign", identityID, map[string]string{"membership_id": membershipID})
-	return n, nil
+	in.NodeID = strings.TrimSpace(in.NodeID)
+	in.Reason = strings.TrimSpace(in.Reason)
+	switch {
+	case strings.TrimSpace(in.IdentityID) == "":
+		return membership.MembershipAssignOutcome{}, apperr.ErrInvalidArgument.With("identity_id", "required")
+	case m.AnchorAxis != "" && in.NodeID == "":
+		return membership.MembershipAssignOutcome{}, apperr.ErrInvalidArgument.With("scope_node_id",
+			"this membership applies where each member is assigned: choose a place in "+m.AnchorAxis)
+	case m.AnchorAxis == "" && in.NodeID != "":
+		return membership.MembershipAssignOutcome{}, apperr.ErrInvalidArgument.With("scope_node_id",
+			"this membership gives every member the same places; an assignment names no place of its own")
+	case in.ValidUntil != nil && !in.ValidUntil.After(time.Now()):
+		return membership.MembershipAssignOutcome{}, apperr.ErrInvalidArgument.With("valid_until", "must be in the future")
+	case len([]rune(in.Reason)) > maxAssignmentReason:
+		return membership.MembershipAssignOutcome{}, apperr.ErrInvalidArgument.With("reason",
+			fmt.Sprintf("at most %d characters", maxAssignmentReason))
+	}
+	out, err := u.members.AssignMembership(ctx, in, p.IdentityID)
+	if err != nil {
+		return membership.MembershipAssignOutcome{}, err
+	}
+	if out.AssignmentID != "" {
+		detail := map[string]string{"membership_id": in.MembershipID, "assignment_id": out.AssignmentID}
+		if in.NodeID != "" {
+			detail["place"] = in.NodeID
+			if in.Exact {
+				detail["exact"] = "true"
+			}
+		}
+		if in.ValidUntil != nil {
+			detail["valid_until"] = in.ValidUntil.UTC().Format(time.RFC3339)
+		}
+		u.emit(ctx, p, "membership.assign", in.IdentityID, detail)
+	}
+	return out, nil
 }
 
-func (u *authzAdminInteractor) UnassignMembership(ctx context.Context, membershipID, identityID string) (int, error) {
+func (u *authzAdminInteractor) UnassignMembership(ctx context.Context, membershipID, identityID, reason string) (int, error) {
 	p, err := u.guard.Require(ctx, "anubis:grant:admin")
 	if err != nil {
 		return 0, err
 	}
-	n, err := u.members.UnassignMembership(ctx, identityID, membershipID)
+	if _, err := u.membershipInTenant(ctx, p.TenantID, membershipID); err != nil {
+		return 0, err
+	}
+	n, err := u.members.UnassignMembership(ctx, identityID, membershipID, p.IdentityID, strings.TrimSpace(reason))
 	if err != nil {
 		return 0, err
 	}
 	u.emit(ctx, p, "membership.unassign", identityID, map[string]string{"membership_id": membershipID})
+	return n, nil
+}
+
+func (u *authzAdminInteractor) RemoveMembershipAssignment(ctx context.Context, assignmentID, reason string) (int, error) {
+	p, err := u.guard.Require(ctx, "anubis:grant:admin")
+	if err != nil {
+		return 0, err
+	}
+	if strings.TrimSpace(assignmentID) == "" {
+		return 0, apperr.ErrInvalidArgument.With("assignment_id", "required")
+	}
+	// The tenant is in the statement: an assignment id from anywhere else
+	// matches no row and comes back not found.
+	n, err := u.members.LeaveMembership(ctx, p.TenantID, assignmentID, p.IdentityID, strings.TrimSpace(reason))
+	if err != nil {
+		return 0, err
+	}
+	u.emit(ctx, p, "membership.leave", assignmentID, map[string]string{"grants_revoked": fmt.Sprint(n)})
 	return n, nil
 }
 
@@ -359,11 +454,35 @@ func (u *authzAdminInteractor) ResyncMembership(ctx context.Context, membershipI
 	if err != nil {
 		return 0, err
 	}
+	if _, err := u.membershipInTenant(ctx, p.TenantID, membershipID); err != nil {
+		return 0, err
+	}
 	n, err := u.members.ResyncMembership(ctx, membershipID)
 	if err == nil {
 		u.emit(ctx, p, "membership.resync", membershipID, nil)
 	}
 	return n, err
+}
+
+func (u *authzAdminInteractor) ListMembershipAssignments(ctx context.Context, f membership.MembershipAssignmentFilter) ([]membership.MembershipAssignmentRecord, string, error) {
+	// Who holds what is the same question as a person's grants, so it is read
+	// with the same permission.
+	p, err := u.guard.Require(ctx, "anubis:identity:read")
+	if err != nil {
+		return nil, "", err
+	}
+	if f.PageSize <= 0 || f.PageSize > 200 {
+		f.PageSize = 50
+	}
+	page, err := u.members.ListMembershipAssignments(ctx, p.TenantID, f)
+	if err != nil {
+		return nil, "", err
+	}
+	var next string
+	if len(page) == f.PageSize {
+		next = page[len(page)-1].ID
+	}
+	return page, next, nil
 }
 
 // ApplyManifest is registration-by-manifest: validate, diff, apply.

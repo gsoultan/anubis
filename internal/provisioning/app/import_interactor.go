@@ -8,6 +8,7 @@ import (
 	auditdomain "github.com/gsoultan/anubis/internal/audit/domain"
 	auditport "github.com/gsoultan/anubis/internal/audit/port"
 	"github.com/gsoultan/anubis/internal/authz/domain/grant"
+	"github.com/gsoultan/anubis/internal/authz/domain/membership"
 	"github.com/gsoultan/anubis/internal/authz/guard"
 	identityapp "github.com/gsoultan/anubis/internal/identity/app"
 	"github.com/gsoultan/anubis/internal/platform/xlsx"
@@ -224,10 +225,37 @@ func (u *importInteractor) validate(ctx context.Context, res *resolver,
 		} else if !ok {
 			continue
 		}
-		if _, found, err := res.membershipID(ctx, m.Name); err != nil {
+		ref, found, err := res.membership(ctx, m.Name)
+		if err != nil {
 			return err
-		} else if !found {
+		}
+		if !found {
 			rep.AddIssue(issue(schema.SheetMemberships, m.Row, schema.ColMembership, "no membership with this name"))
+			continue
+		}
+		// A where-assigned membership needs the row to say where; one that
+		// gives everybody the same places must not be told a place it would
+		// silently ignore.
+		switch {
+		case ref.anchorAxis != "" && m.PlaceRef == "":
+			rep.AddIssue(issue(schema.SheetMemberships, m.Row, schema.ColScopeRef,
+				"this membership applies where each member is assigned: name the place in "+ref.anchorAxis))
+			continue
+		case ref.anchorAxis == "" && m.PlaceRef != "":
+			rep.AddIssue(issue(schema.SheetMemberships, m.Row, schema.ColScopeRef,
+				"this membership gives every member the same places; leave this blank"))
+			continue
+		case m.PlaceRef != "":
+			if _, ok, err := res.nodeID(ctx, ref.anchorAxis, m.PlaceRef); err != nil {
+				return err
+			} else if !ok {
+				rep.AddIssue(issue(schema.SheetMemberships, m.Row, schema.ColScopeRef,
+					"no place with this reference in "+ref.anchorAxis))
+				continue
+			}
+		}
+		if m.ValidUntil != nil && !m.ValidUntil.After(u.clock.Now()) {
+			rep.AddIssue(issue(schema.SheetMemberships, m.Row, schema.ColValidUntil, "is not in the future"))
 			continue
 		}
 		rep.MembershipsAssigned++
@@ -308,21 +336,35 @@ func (u *importInteractor) apply(ctx context.Context, res *resolver,
 		if !ok {
 			return rowErr(schema.SheetMemberships, m.Row, apperr.ErrNotFound.With("username", m.Username))
 		}
-		membershipID, ok, err := res.membershipID(ctx, m.Name)
+		ref, ok, err := res.membership(ctx, m.Name)
 		if err != nil {
 			return err
 		}
 		if !ok {
 			return rowErr(schema.SheetMemberships, m.Row, apperr.ErrNotFound.With("membership", m.Name))
 		}
-		// AssignMembership is already idempotent and reports how many
-		// rows it touched, which is the one thing validation could not
-		// know — so the real numbers replace its projection here.
-		n, err := u.writer.AssignMembership(ctx, membershipID, identityID)
+		in := membership.MembershipAssignmentInput{
+			MembershipID: ref.id, IdentityID: identityID,
+			Exact: m.Exact, ValidUntil: m.ValidUntil, Reason: m.Reason,
+		}
+		if m.PlaceRef != "" {
+			nodeID, ok, err := res.nodeID(ctx, ref.anchorAxis, m.PlaceRef)
+			if err != nil {
+				return err
+			}
+			if !ok {
+				return rowErr(schema.SheetMemberships, m.Row, apperr.ErrNotFound.With("scope_ref", m.PlaceRef))
+			}
+			in.NodeID = nodeID
+		}
+		// AssignMembership is already idempotent and says whether it created
+		// anything, which is the one thing validation could not know — so the
+		// real numbers replace its projection here.
+		out, err := u.writer.AssignMembership(ctx, in)
 		if err != nil {
 			return rowErr(schema.SheetMemberships, m.Row, err)
 		}
-		if n == 0 {
+		if out.AssignmentID == "" {
 			rep.MembershipsExisting++
 		} else {
 			rep.MembershipsAssigned++

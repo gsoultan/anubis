@@ -23,6 +23,9 @@ type NodeRow struct {
 	Name        string
 	ExternalRef runtime.Null[string]
 	ChildCount  int32
+	// Path is the names between the top item and this one, top first. Only a
+	// search fills it: a hit called "Sales" says nothing until it says whose.
+	Path []string
 }
 
 const nodeCols = `
@@ -37,6 +40,9 @@ const nodeCols = `
 // unique, which is why id is in both the ORDER BY and the comparison.
 // Index: scope_nodes_paging (0039).
 //
+// A search ($4) also returns each hit's path, read from the closure table:
+// one index probe per ancestor, and only for the page being returned.
+//
 // The child count costs a per-row index scan on scope_nodes_sibling_slug:
 // measured 0.154 ms -> 0.393 ms for a 200-row page of the 20k-node customer
 // axis, which is the price of a chevron that tells the truth.
@@ -44,7 +50,12 @@ var ListScopeNodes = storm.SQL[NodeRow](`
 SELECT` + nodeCols + `,
        (SELECT count(*) FROM scope_nodes c
          WHERE c.parent_id = n.id
-           AND ($6::boolean OR c.status = 'active'))::int AS child_count
+           AND ($6::boolean OR c.status = 'active'))::int AS child_count,
+       CASE WHEN $4::text IS NULL THEN '{}'::text[] ELSE
+         COALESCE((SELECT array_agg(a.name ORDER BY c.depth DESC)
+                     FROM scope_closure c JOIN scope_nodes a ON a.id = c.ancestor_id
+                    WHERE c.descendant_id = n.id AND c.depth > 0 AND NOT a.is_axis_root),
+                  '{}'::text[]) END AS path
 FROM scope_nodes n
 WHERE n.tenant_id = $1
   AND n.axis_code = $2
@@ -59,7 +70,8 @@ LIMIT $8`)
 
 const activeChildCount = `
        (SELECT count(*) FROM scope_nodes c
-         WHERE c.parent_id = n.id AND c.status = 'active')::int AS child_count`
+         WHERE c.parent_id = n.id AND c.status = 'active')::int AS child_count,
+       '{}'::text[] AS path`
 
 var GetScopeNode = storm.SQL[NodeRow](`
 SELECT` + nodeCols + `,` + activeChildCount + `
@@ -111,6 +123,12 @@ SELECT n.id::text AS id, n.axis_code, n.node_type, n.parent_id::text AS parent_i
 var ArchiveScopeNode = storm.SQLExec(`
 UPDATE scope_nodes SET status = 'archived', updated_at = now()
 WHERE id = $1 AND tenant_id = $2 AND NOT is_axis_root`)
+
+// RestoreScopeNode brings an archived node back into the pickers. Nothing
+// else about it changed while it was archived — its grants kept deciding.
+var RestoreScopeNode = storm.SQLExec(`
+UPDATE scope_nodes SET status = 'active', updated_at = now()
+WHERE id = $1 AND tenant_id = $2 AND status = 'archived'`)
 
 // RenameScopeNode also REACTIVATES, because a rename is how an operator
 // un-archives: the node came back in the feed under a new name.

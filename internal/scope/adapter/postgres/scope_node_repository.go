@@ -29,6 +29,23 @@ func (s *Repository) ListScopeNodeTypes(ctx context.Context, axis string) ([]sco
 	return out, nil
 }
 
+// UpdateScopeNodeType renames a level and replaces what it may sit under.
+// Whether the new rules hold together is migration 0055's trigger to say.
+func (s *Repository) UpdateScopeNodeType(ctx context.Context, t scopedomain.ScopeNodeTypeRecord) error {
+	parents := t.ParentTypes
+	if parents == nil {
+		parents = []string{} // NULL would trip the NOT NULL, not mean "top"
+	}
+	n, err := scopermquery.UpdateScopeNodeType.Exec(ctx, s.ex(ctx), t.Code, t.Axis, t.DisplayName, parents)
+	if err != nil {
+		return database.MapErrSaying(err)
+	}
+	if n == 0 {
+		return database.NotFound()
+	}
+	return nil
+}
+
 func (s *Repository) CreateScopeNodeType(ctx context.Context, t scopedomain.ScopeNodeTypeRecord) error {
 	n := scopenodetype.Create()
 	n.SetCode(t.Code)
@@ -40,7 +57,7 @@ func (s *Repository) CreateScopeNodeType(ctx context.Context, t scopedomain.Scop
 		n.SetParentTypes(t.ParentTypes)
 	}
 	_, err := n.Insert(ctx, s.ex(ctx))
-	return database.MapErr(err)
+	return database.MapErrSaying(err)
 }
 
 // ListScopeNodes is one keyset page of a tenant's tree for one axis.
@@ -73,8 +90,10 @@ func nodeRecords(rows []scopermquery.NodeRow) []scopedomain.ScopeNodeRecord {
 }
 
 func nodeRecord(r scopermquery.NodeRow) scopedomain.ScopeNodeRecord {
-	return scopeNodeFromRow(r.ID, r.AxisCode, r.NodeType, nstr(r.ParentID),
+	rec := scopeNodeFromRow(r.ID, r.AxisCode, r.NodeType, nstr(r.ParentID),
 		r.Slug, r.Name, nstr(r.ExternalRef), r.Status, r.IsAxisRoot, r.ChildCount)
+	rec.Path = r.Path
+	return rec
 }
 
 func (s *Repository) ScopeNode(ctx context.Context, tenantID, id string) (*scopedomain.ScopeNodeRecord, error) {
@@ -129,14 +148,14 @@ func (s *Repository) AddScopeNode(ctx context.Context, tenantID, axis, nodeType,
 	row, _, err := scopermquery.AddScopeNode.One(ctx, s.ex(ctx),
 		tenantID, axis, nodeType, parentID, slug, name, externalRef)
 	if err != nil {
-		return "", database.MapErr(err)
+		return "", database.MapErrSaying(err)
 	}
 	return row.NodeID, nil
 }
 
 func (s *Repository) MoveScopeNode(ctx context.Context, nodeID, newParentID string) error {
 	_, _, err := scopermquery.MoveScopeNode.One(ctx, s.ex(ctx), nodeID, newParentID)
-	return database.MapErr(err)
+	return database.MapErrSaying(err)
 }
 
 func (s *Repository) ArchiveScopeNode(ctx context.Context, tenantID, id string) error {
@@ -147,6 +166,19 @@ func (s *Repository) ArchiveScopeNode(ctx context.Context, tenantID, id string) 
 	if n == 0 {
 		// Either it does not exist, or it is the axis root — which this
 		// refuses, because archiving it would leave the axis with no tree.
+		return database.NotFound()
+	}
+	return nil
+}
+
+// RestoreScopeNode un-archives a node of this tenant. No row means it is not
+// archived, not this tenant's, or not there — one answer for all three.
+func (s *Repository) RestoreScopeNode(ctx context.Context, tenantID, id string) error {
+	n, err := scopermquery.RestoreScopeNode.Exec(ctx, s.ex(ctx), id, tenantID)
+	if err != nil {
+		return database.MapErr(err)
+	}
+	if n == 0 {
 		return database.NotFound()
 	}
 	return nil

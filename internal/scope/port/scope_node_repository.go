@@ -9,6 +9,7 @@ import (
 type ScopeNodeRepository interface {
 	ListScopeNodeTypes(ctx context.Context, axis string) ([]scopedomain.ScopeNodeTypeRecord, error)
 	CreateScopeNodeType(ctx context.Context, t scopedomain.ScopeNodeTypeRecord) error
+	UpdateScopeNodeType(ctx context.Context, t scopedomain.ScopeNodeTypeRecord) error
 	// ListScopeNodes returns ONE KEYSET PAGE, at most f.Limit rows. Callers
 	// that need the whole axis must page with ScopeNodeFilter.After until a
 	// short page comes back — see EachScopeNode.
@@ -25,5 +26,6 @@ type ScopeNodeRepository interface {
 	AddScopeNode(ctx context.Context, tenantID, axis, nodeType, parentID, slug, name, externalRef string) (string, error)
 	MoveScopeNode(ctx context.Context, nodeID, newParentID string) error
 	ArchiveScopeNode(ctx context.Context, tenantID, id string) error
+	RestoreScopeNode(ctx context.Context, tenantID, id string) error
 	RenameScopeNode(ctx context.Context, tenantID, id, name string) error
 }
