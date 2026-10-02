@@ -1,3 +1,4 @@
+import { explain } from '@/lib/errors'
 import { Button, Drawer } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import { IconCheck, IconX } from '@tabler/icons-react'
@@ -6,9 +7,14 @@ import type { ReactNode } from 'react'
 /* One shell for every create form: right-hand drawer, consistent header,
    sticky footer. Drawers beat modals here because the operator often needs to
    read the page underneath — "which department was it called?" — while filling
-   the form in. */
+   the form in.
+
+   `size` is for the one form that needs room for two panes (giving access);
+   every other drawer keeps 460px. `status` sits at the start of the footer and
+   says why the button is off — a disabled button with no sentence beside it
+   is a form that has stopped explaining itself. */
 export function CreateShell({
-  opened, onClose, title, description, children, footer,
+  opened, onClose, title, description, children, footer, size = 460, status,
 }: {
   opened: boolean
   onClose: () => void
@@ -16,13 +22,15 @@ export function CreateShell({
   description: ReactNode
   children: ReactNode
   footer: ReactNode
+  size?: number | string
+  status?: ReactNode
 }) {
   return (
     <Drawer
       opened={opened}
       onClose={onClose}
       position="right"
-      size={460}
+      size={size}
       overlayProps={{ blur: 2, backgroundOpacity: 0.45, color: 'var(--overlay-tint)' }}
       styles={{
         content: { background: 'var(--s-raised)', display: 'flex', flexDirection: 'column' },
@@ -32,12 +40,13 @@ export function CreateShell({
       }}
       title={title}
     >
-      <div className="t-sm px-5 pt-3.5" style={{ maxWidth: 400 }}>{description}</div>
-      <div className="flex-1 overflow-y-auto px-5 py-4">{children}</div>
+      <div className="t-sm px-5 pt-3.5" style={{ maxWidth: 560 }}>{description}</div>
+      <div className="@container flex-1 overflow-y-auto px-5 py-4">{children}</div>
       <div
         className="flex items-center justify-end gap-2 px-5 py-3.5"
         style={{ borderTop: '1px solid var(--line)', background: 'var(--s-raised)' }}
       >
+        {status && <div className="t-xs mr-auto min-w-0 truncate">{status}</div>}
         {footer}
       </div>
     </Drawer>
@@ -74,13 +83,12 @@ export function CancelSubmit({
 export const notifyCreated = (title: string, message: string) =>
   notifications.show({ color: 'teal', icon: <IconCheck size={15} />, title, message })
 
-/* Guard violations from the backend arrive as thrown Errors with the same
-   message the SQL trigger raises. Showing them verbatim is the point — the
-   console demonstrates the schema guard instead of translating it into a
-   generic "something went wrong". */
+/* A refusal says what was wrong: the field the server named, or the sentence
+   the database guard raised — not the transport's string around them
+   (lib/errors.ts). */
 export const notifyRejected = (err: unknown) =>
   notifications.show({
     color: 'red', icon: <IconX size={15} />, title: 'Rejected',
-    message: err instanceof Error ? err.message : String(err),
+    message: explain(err),
     autoClose: 8000,
   })

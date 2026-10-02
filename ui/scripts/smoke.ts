@@ -20,7 +20,7 @@ const USER = process.env.ANUBIS_SMOKE_USER ?? 'devadmin'
 const PASS = process.env.ANUBIS_SMOKE_PASSWORD ?? 'anubis-dev-password'
 const CHROME = process.env.CHROME_BIN ?? '/usr/bin/google-chrome'
 
-const ROUTES = ['/', '/identities', '/grants', '/memberships', '/operators', '/audit', '/realms',
+const ROUTES = ['/', '/identities', '/memberships', '/operators', '/audit', '/realms',
   '/roles', '/applications', '/tenants', '/catalog', '/import', '/keys', '/playground', '/scope',
   '/signin-page']
 const DRAWERS = ['identity', 'permission', 'role', 'grant', 'node', 'axis', 'membership']
@@ -163,9 +163,11 @@ try {
   // URL like everything else — which is how the blank-on-refresh bug hid.
   await visit(page, '/identities', errors)
   const row = await page.$('tbody tr[data-clickable]')
+  let person = ''
   if (row) {
     await Promise.all([page.waitForFunction(() => /^\/identities\/./.test(location.pathname)), row.click()])
-    ROUTES.push(await page.evaluate(() => location.pathname))
+    person = await page.evaluate(() => location.pathname)
+    ROUTES.push(person)
   } else {
     report('/identities/<id>', ['no person to open: the People table has no clickable rows'])
   }
@@ -179,11 +181,58 @@ try {
     }
   }
 
+  // What a click away from a screen reveals: the Levels pane and the item
+  // inspector on Structure, and a membership's roster. None of them is on
+  // screen at load, so the pass above measures none of them.
+  const press = (sel: string, text: string) => page.evaluate((sel, text) => {
+    const el = [...document.querySelectorAll(sel)].find((e) => (e.textContent ?? '').trim().startsWith(text))
+    if (el instanceof HTMLElement) el.click()
+    return !!el
+  }, sel, text)
+  for (const [w, h] of WIDTHS) {
+    await page.setViewport({ width: w, height: h })
+    await visit(page, '/scope', errors)
+    const found = [
+      (await press('main .mantine-SegmentedControl-label', 'Levels')) || 'no Levels pane to open',
+      (await press('main .scope-row button + button', '')) || 'no item in the tree to inspect',
+    ].filter((x): x is string => typeof x === 'string')
+    await settle(page)
+    report(`${w}px /scope levels + item`, [...found, ...(await page.evaluate(measureScreen)), ...errors])
+
+    await visit(page, '/memberships', errors)
+    // No membership is not a failure here: a fresh database has none.
+    if (await press('main button.access-group', '')) {
+      await settle(page)
+      report(`${w}px /memberships roster`, [...(await page.evaluate(measureScreen)), ...errors])
+    }
+  }
+
   await page.setViewport({ width: 375, height: 812 })
   for (const kind of DRAWERS) {
     await visit(page, `/?new=${kind}`, errors)
     const problems = await page.evaluate(measureDrawer)
     report(`375px drawer ${kind}`, [...problems, ...errors])
+  }
+
+  // Giving access from a person's page — the one sheet with two panes, so the
+  // one most likely to outgrow a phone. Opened by URL like everything else,
+  // with the place picker showing: that is the part with the width in it.
+  if (person) {
+    for (const [w, h] of WIDTHS) {
+      await page.setViewport({ width: w, height: h })
+      await visit(page, `${person}?give=true`, errors)
+      const clicked = await page.evaluate(() => {
+        const card = [...document.querySelectorAll('.mantine-Drawer-content [role=radio]')]
+          .find((e) => (e.textContent ?? '').includes('Specific places'))
+        if (card instanceof HTMLElement) card.click()
+        return !!card
+      })
+      await settle(page)
+      const problems = await page.evaluate(measureDrawer)
+      if (!clicked) problems.push('no "Specific places" choice to open the place picker with')
+      else if (!(await page.$('.mantine-Drawer-content .picker'))) problems.push('the place picker did not open')
+      report(`${w}px /identities/<id>?give=true`, [...problems, ...errors])
+    }
   }
 } finally {
   await browser.close()

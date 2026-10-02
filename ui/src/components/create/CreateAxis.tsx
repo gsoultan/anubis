@@ -16,7 +16,7 @@ export function CreateAxis({ opened }: { opened: boolean }) {
   const form = useForm({
     defaultValues: {
       code: '', display_name: '', default_effect: 'unconstrained',
-      resolution_from: 'context', picker: 'tree', icon: 'tag',
+      resolution_from: 'context', picker: 'tree', icon: 'tag', top_level_name: '',
     },
     onSubmit: async ({ value }) => {
       try {
@@ -27,9 +27,10 @@ export function CreateAxis({ opened }: { opened: boolean }) {
           resolution_key: `${value.code}_id`,
           picker: value.picker as 'tree' | 'select' | 'search',
           icon: value.icon,
+          top_level_name: value.top_level_name.trim() || `All ${value.display_name.trim()}`,
         })
         notifyCreated(`Structure "${value.display_name}" added`,
-          'It now appears in every picker — add items to it next.')
+          'It has its top level. Add the levels under it next, then the items.')
         await queryClient.invalidateQueries({ queryKey: qk.axes() })
         await queryClient.invalidateQueries({ queryKey: qk.nodeTypes() })
         await queryClient.invalidateQueries({ queryKey: qk.scope() })
@@ -107,11 +108,25 @@ export function CreateAxis({ opened }: { opened: boolean }) {
           </form.Field>
         </div>
 
+        <form.Subscribe selector={(s) => s.values.display_name}>
+          {(displayName) => (
+            <form.Field name="top_level_name">
+              {(f) => (
+                <TextInput label="Top level"
+                  description="The one item everything else in this structure sits under. Access given there covers the whole structure."
+                  placeholder={`All ${displayName.trim() || 'cost centres'}`}
+                  maxLength={80}
+                  value={f.state.value} onChange={(e) => f.handleChange(e.currentTarget.value)} />
+              )}
+            </form.Field>
+          )}
+        </form.Subscribe>
+
         <div className="panel-inset flex items-start gap-2.5 px-3 py-2.5">
           <IconInfoCircle size={14} style={{ color: 'var(--ink-3)', marginTop: 1, flexShrink: 0 }} />
           <span className="t-xs">
-            Registration provisions the axis root (“All …”) and an item type, so you can add
-            nodes immediately after — or point your ERP sync at it.
+            The structure and its top level are created together. Next, under Levels, say what
+            sits under what — companies in a group, departments in a company — and add the items.
           </span>
         </div>
       </form>

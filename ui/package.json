@@ -13,6 +13,7 @@
     "typecheck": "tsc --noEmit",
     "routes": "tsr generate",
     "preview": "bun run --bun vite preview",
+    "test": "bun test ./test",
     "smoke": "bun run scripts/smoke.ts"
   },
   "dependencies": {

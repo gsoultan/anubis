@@ -83,6 +83,9 @@ export interface ScopeNode {
       on it, and an undefined that quietly reads as 0 is a tree that will not
       open — which is exactly how it shipped. */
   child_count: number
+  /** Names from the top of the structure down to the parent, top first.
+      Search results carry it; the tree does not need it and gets []. */
+  path: string[]
 }
 
 export interface RealmCategory {
@@ -175,6 +178,30 @@ export interface Membership {
   /** How many people are in this membership. Falls back to member_ids.length
       for the sample data, which carries a roster rather than a count. */
   member_count?: number
+  /** The structure each member is placed in, when this membership applies
+      where each member is assigned; null when its entries name the places
+      and they are the same for everyone. Fixed at creation. */
+  anchor_axis: string | null
+}
+
+/** One person holding one membership at one place (0054). A person may hold
+    a where-assigned membership at several places, each its own assignment. */
+export interface MembershipAssignment {
+  id: Uuid
+  membership_id: Uuid
+  membership_name: string
+  anchor_axis: string | null
+  identity_id: Uuid
+  username: string
+  /** Null for a membership whose places are the same for everyone. */
+  place_id: Uuid | null
+  place_name: string | null
+  /** Only the place itself, not what sits inside it. */
+  exact: boolean
+  valid_until: string | null
+  reason: string | null
+  assigned_at: string
+  assigned_by: Uuid
 }
 
 export interface Grant {
@@ -184,13 +211,19 @@ export interface Grant {
   role_name: string
   /** Set when this grant derives from a membership. Managed there, not here. */
   via_membership_id: Uuid | null
+  /** Which assignment of that membership gave it: one person can hold a
+      membership at several places, and each is removed on its own. */
+  via_assignment_id: Uuid | null
   /** "only your own record" -- mutually exclusive with axis constraints. */
   self_scoped: boolean
   valid_from: string
   valid_until: string | null
   revoked_at: string | null
   granted_by: Uuid
+  /** Why the access was given. A revoke never writes it (0053). */
   reason: string | null
+  /** Why it was taken away; null while live, or when no reason was given. */
+  revoke_reason: string | null
   scopes: GrantScope[]
 }
 
@@ -553,6 +586,8 @@ export interface NewGrantInput {
   self_scoped: boolean
   valid_until: string | null
   scopes: GrantScope[]
+  /** Why — a ticket, a request. Stored on the grant; '' stores nothing. */
+  reason?: string
 }
 
 export interface NewNodeInput {
@@ -572,6 +607,9 @@ export interface NewAxisInput {
   resolution_key: string | null
   picker: 'tree' | 'select' | 'search'
   icon: string
+  /** Name of the structure's top level, created with it — "Group",
+      "All regions". The structure can hold nothing without one. */
+  top_level_name: string
 }
 
 /* --- catalog sync ---------------------------------------------------------

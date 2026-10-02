@@ -1,161 +1,238 @@
-import { createFileRoute } from '@tanstack/react-router'
-import { useQuery } from '@tanstack/react-query'
-import { Button, Select, TextInput } from '@mantine/core'
-import { IconPlus, IconSearch, IconUsersGroup, IconX } from '@tabler/icons-react'
+import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
+import { Button, Modal, TextInput, UnstyledButton } from '@mantine/core'
+import { notifications } from '@mantine/notifications'
+import {
+  IconChevronRight, IconMapPin, IconPencil, IconPlus, IconSearch, IconUserMinus,
+  IconUserPlus, IconUsersGroup,
+} from '@tabler/icons-react'
 import { useState } from 'react'
-import { useDebouncedValue } from '@mantine/hooks'
 import { Page } from '@/components/shell/Page'
 import { api } from '@/lib/api/client'
-import * as live from '@/lib/api/live'
 import { qk } from '@/lib/query/keys'
 import { queryClient } from '@/lib/query/client'
+import { fmtDate } from '@/lib/access'
 import { useCreate } from '@/stores/create'
 import { notifyCreated, notifyRejected } from '@/components/create/shell'
-import type { Membership } from '@/lib/api/types'
+import { ConfirmModal } from '@/components/ui/ConfirmModal'
+import { Initial } from '@/components/ui/Initial'
+import { GiveAccessSheet } from '@/components/access/GiveAccessSheet'
+import { GrantWhere } from '@/components/access/GrantWhere'
+import { MembershipEntries, type EntryDraft } from '@/components/access/MembershipEntries'
+import type { Membership, MembershipAssignment, ScopeAxis } from '@/lib/api/types'
 
 export const Route = createFileRoute('/memberships')({ component: Memberships })
 
-function MembershipCard({ m }: { m: Membership }) {
-  /* The picker SEARCHES the server rather than loading the directory. It
-     used to pull up to 2000 identities to populate a dropdown over 57,000
-     people — so the person you wanted was often simply not in the list. */
-  const [search, setSearch] = useState('')
-  const [debounced] = useDebouncedValue(search, 250)
-  const { data: found } = useQuery({
-    queryKey: ['member-search', debounced],
-    queryFn: () => live.identitiesPage(undefined, debounced || undefined, '', 20),
-    placeholderData: (prev) => prev,
+const refresh = async () => {
+  await queryClient.invalidateQueries({ queryKey: qk.memberships() })
+  await queryClient.invalidateQueries({ queryKey: ['grants'] })
+  await queryClient.invalidateQueries({ queryKey: qk.dashboard() })
+}
+
+/* Who holds it, a page at a time and only when asked. A membership can hold
+   thousands, and a page of twenty memberships that each fetched a roster on
+   arrival would be twenty requests nobody had read yet. */
+function Roster({ m }: { m: Membership }) {
+  const navigate = useNavigate()
+  const [leaving, setLeaving] = useState<MembershipAssignment | null>(null)
+  const [why, setWhy] = useState('')
+  const q = useInfiniteQuery({
+    queryKey: qk.membershipAssignments({ membershipId: m.id }),
+    queryFn: ({ pageParam }) => api.membershipAssignments({ membershipId: m.id, cursor: pageParam, pageSize: 25 }),
+    initialPageParam: '',
+    getNextPageParam: (last) => last.next || undefined,
   })
-  const { data: realms } = useQuery({ queryKey: qk.realms(), queryFn: api.realms })
-  /* Only the scopes this card actually shows. Pulling every node of every
-     axis (32k here) to label a few chips was the previous approach. */
+  const rows = q.data?.pages.flatMap((p) => p.rows) ?? []
+
+  async function remove(a: MembershipAssignment) {
+    let n: number
+    try {
+      n = await api.removeAssignment(a.id, why)
+    } catch (e) {
+      notifyRejected(e)
+      throw e
+    }
+    notifications.show({
+      color: 'orange', title: 'Member removed',
+      message: `${a.username} left “${m.name}”${a.place_name ? ` at ${a.place_name}` : ''} — ${n} grant${n === 1 ? '' : 's'} revoked.`,
+    })
+    await refresh()
+  }
+
+  return (
+    <div>
+      {q.isLoading && <div className="t-xs px-4 py-3">Loading…</div>}
+      {!q.isLoading && rows.length === 0 && <div className="t-xs px-4 py-3">Nobody holds this yet.</div>}
+      {rows.map((a) => (
+        <div key={a.id} className="roster-row">
+          <UnstyledButton className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
+            onClick={() => void navigate({ to: '/identities/$id', params: { id: a.identity_id } })}
+            aria-label={`Open ${a.username}`}>
+            <Initial name={a.username} colour="var(--ink-3)" size={24} />
+            <span className="min-w-0">
+              <span className="t-body block truncate" style={{ fontWeight: 540 }}>{a.username}</span>
+              <span className="t-xs block truncate">
+                {[
+                  a.place_name && (a.exact ? `Only ${a.place_name}` : `${a.place_name} and inside`),
+                  a.valid_until ? `until ${fmtDate(a.valid_until)}` : `since ${fmtDate(a.assigned_at)}`,
+                  a.reason && `“${a.reason}”`,
+                ].filter(Boolean).join(' · ')}
+              </span>
+            </span>
+          </UnstyledButton>
+          <Button size="compact-xs" variant="subtle" color="deny" leftSection={<IconUserMinus size={13} />}
+            onClick={() => setLeaving(a)}>
+            Remove
+          </Button>
+        </div>
+      ))}
+      {q.hasNextPage && (
+        <div className="px-4 py-2">
+          <Button size="compact-xs" variant="subtle" loading={q.isFetchingNextPage}
+            onClick={() => void q.fetchNextPage()}>
+            Show more
+          </Button>
+        </div>
+      )}
+
+      <ConfirmModal opened={!!leaving} onClose={() => { setLeaving(null); setWhy('') }}
+        title="Remove this member?" confirmLabel="Remove"
+        onConfirm={() => (leaving ? remove(leaving) : Promise.resolve())}>
+        <p>
+          <b style={{ color: 'var(--ink)' }}>{leaving?.username}</b> will leave{' '}
+          <b style={{ color: 'var(--ink)' }}>{m.name}</b>
+          {leaving?.place_name && <> at <b style={{ color: 'var(--ink)' }}>{leaving.place_name}</b></>}
+          {' '}and lose what it gave them{leaving?.place_name ? ' there' : ''}. New decisions are denied at once.
+        </p>
+        <TextInput label="Why" description="Optional. Kept with each grant this takes away."
+          maxLength={200} data-autofocus value={why} onChange={(e) => setWhy(e.currentTarget.value)} />
+        <p className="t-xs">
+          {leaving?.place_name
+            ? 'Only this place. Anywhere else they hold this membership stays, and so does access given to them directly.'
+            : 'Other members keep theirs. Access given to this person directly is not touched.'}
+        </p>
+      </ConfirmModal>
+    </div>
+  )
+}
+
+/* Changing what a membership gives changes it for everybody in it, at once.
+   The dialog says so before the button does it. */
+function EditGives({ m, axes, onClose }: { m: Membership; axes: ScopeAxis[] | undefined; onClose: () => void }) {
+  const [entries, setEntries] = useState<EntryDraft[]>(
+    () => m.entries.map((e) => ({ role_id: e.role_id, role_name: e.role_name, scopes: e.scopes })))
+  const [busy, setBusy] = useState(false)
+  const count = m.member_count ?? 0
+  const save = async () => {
+    setBusy(true)
+    try {
+      const n = await api.setMembershipEntries(m.id, entries)
+      notifyCreated('Membership updated',
+        n === 0 ? 'Nobody’s access changed.' : `${n} grant${n === 1 ? '' : 's'} changed across its members.`)
+      await refresh()
+      onClose()
+    } catch (e) { notifyRejected(e) }
+    setBusy(false)
+  }
+  return (
+    <Modal opened onClose={busy ? () => {} : onClose} title={`What “${m.name}” gives`} size={520}>
+      <div className="@container flex flex-col gap-4 pt-1">
+        <div className="t-sm">
+          {count === 0
+            ? 'Nobody holds this yet, so nothing changes for anyone.'
+            : `${count.toLocaleString()} ${count === 1 ? 'person holds' : 'people hold'} this. They gain every role you add and lose every role you remove, as soon as you save.`}
+        </div>
+        <MembershipEntries anchorAxis={m.anchor_axis} axes={axes} entries={entries} onChange={setEntries} />
+        <div className="flex justify-end gap-2">
+          <Button variant="default" size="sm" onClick={onClose} disabled={busy}>Cancel</Button>
+          <Button size="sm" loading={busy} onClick={() => void save()}>Save</Button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+function MembershipCard({ m, axes }: { m: Membership; axes: ScopeAxis[] | undefined }) {
+  /* Only the places this card shows. Pulling every node of every structure
+     (32k here) to label a few chips was the previous approach. */
   const scopeIds = [...new Set(m.entries.flatMap((e) => e.scopes.map((s) => s.scope_node_id)))].sort()
   const { data: nodes } = useQuery({
     queryKey: ['scope-names', scopeIds],
     queryFn: () => api.scopeNodesByIds(scopeIds),
     enabled: scopeIds.length > 0,
   })
-  const [pick, setPick] = useState<string | null>(null)
-  const [busy, setBusy] = useState(false)
-  const nodeName = (id: string) => nodes?.find((n) => n.id === id)?.name ?? id
+  const nodeName = (id: string) => nodes?.find((n) => n.id === id)?.name ?? '…'
+  const [open, setOpen] = useState(false)
+  const [adding, setAdding] = useState(false)
+  const [editing, setEditing] = useState(false)
   const count = m.member_count ?? m.member_ids.length
-
-  const refresh = async () => {
-    await queryClient.invalidateQueries({ queryKey: qk.memberships() })
-    await queryClient.invalidateQueries({ queryKey: ['grants'] })
-  }
-  const assign = async () => {
-    if (!pick) return
-    setBusy(true)
-    try {
-      const n = await api.assignMembership(pick, m.id)
-      notifyCreated('Member added', `${found?.rows.find((i) => i.id === pick)?.username ?? 'The person'} received ${n} access grant${n > 1 ? 's' : ''}.`)
-      await refresh(); setPick(null)
-    } catch (e) { notifyRejected(e) }
-    setBusy(false)
-  }
-  const unassign = async (id: string) => {
-    try {
-      const n = await api.unassignMembership(id, m.id)
-      notifyCreated('Member removed', `${n} derived grant${n === 1 ? '' : 's'} revoked immediately.`)
-      await refresh()
-    } catch (e) { notifyRejected(e) }
-  }
-
-  const candidates = (realms ?? []).map((r) => ({
-    group: r.display_name,
-    /* No exclusion of existing members: the server reports a COUNT, not a
-       roster, and AssignMembership is idempotent — so adding somebody twice
-       costs nothing, while hiding them would need a roster nobody sends. */
-    items: (found?.rows ?? [])
-      .filter((i) => i.realm_id === r.id)
-      .map((i) => ({ value: i.id, label: i.username })),
-  })).filter((g) => g.items.length > 0)
+  const anchor = axes?.find((a) => a.code === m.anchor_axis)?.display_name ?? m.anchor_axis
 
   return (
-    <div className="panel p-4">
-      <div className="mb-1 flex items-baseline justify-between gap-2">
-        <span className="t-h1">{m.name}</span>
-        <span className="t-xs">{count} member{count === 1 ? '' : 's'}</span>
-      </div>
-      {m.description && <div className="t-sm mb-3">{m.description}</div>}
-
-      <div className="t-label mb-1.5">Grants every member</div>
-      <div className="mb-3 flex flex-col gap-1">
-        {m.entries.map((e) => {
-          /* Group per structure: "or" is only correct WITHIN one structure.
-             Across structures the semantics are AND — joining everything with
-             "or" would display the opposite of what the engine enforces. The
-             same applies to an exclusion inside one structure: it subtracts
-             from the list beside it, so it reads "except", not "or". */
-          const byAxis = new Map<string, typeof e.scopes>()
-          for (const sc of e.scopes) {
-            const list = byAxis.get(sc.axis_code) ?? []
-            list.push(sc); byAxis.set(sc.axis_code, list)
-          }
-          return (
-            <div key={e.id} className="panel-inset px-2.5 py-1.5">
-              <span className="t-body" style={{ fontWeight: 530 }}>{e.role_name}</span>
-              {e.scopes.length === 0 ? (
-                <span className="t-xs" style={{ marginLeft: 6 }}>everywhere</span>
-              ) : (
-                <span className="t-xs" style={{ marginLeft: 6 }}>
-                  {[...byAxis].map(([axis, list], i) => (
-                    <span key={axis}>
-                      {i > 0 && <span style={{ margin: '0 4px', color: 'var(--ink-4)' }}>·</span>}
-                      <span className="chip" style={{ marginRight: 4, fontSize: 9.5 }}>{axis}</span>
-                      {list.filter((sc) => !sc.exclude).map((sc) => nodeName(sc.scope_node_id)).join(' or ')}
-                      {list.some((sc) => sc.exclude) && (
-                        <span style={{ color: 'var(--deny)' }}>
-                          {' except '}
-                          {list.filter((sc) => sc.exclude).map((sc) => nodeName(sc.scope_node_id)).join(' and ')}
-                        </span>
-                      )}
-                    </span>
-                  ))}
-                </span>
-              )}
-            </div>
-          )
-        })}
+    <section className="@container panel overflow-clip">
+      <div className="panel-head">
+        <div className="min-w-0">
+          <h2 className="t-h1 truncate">{m.name}</h2>
+          {m.description && <div className="t-xs mt-0.5 truncate">{m.description}</div>}
+        </div>
+        <div className="flex shrink-0 items-center gap-1.5">
+          <Button size="xs" variant="default" leftSection={<IconPencil size={13} />} onClick={() => setEditing(true)}>
+            Edit
+          </Button>
+          <Button size="xs" leftSection={<IconUserPlus size={13} />} onClick={() => setAdding(true)}>
+            Add member
+          </Button>
+        </div>
       </div>
 
-      <div className="t-label mb-1.5">Members</div>
-      <div className="mb-2.5 flex flex-wrap gap-1.5">
-        {/* The API reports a COUNT, not a roster: a membership can hold
-            thousands, and no screen needs the list to say "412 members".
-            This used to render the empty roster as "Nobody yet." — which
-            read as a fact and was one for no membership at all. */}
-        {count === 0
-          ? <span className="t-xs">Nobody yet.</span>
-          : <span className="t-xs">{count.toLocaleString()} {count === 1 ? 'person holds' : 'people hold'} this membership. Find them on Access, filtered by membership.</span>}
+      <div className="flex flex-col gap-3 px-4 py-3.5">
+        <div className="t-xs flex items-center gap-1.5">
+          {m.anchor_axis ? <IconMapPin size={13} /> : <IconUsersGroup size={13} />}
+          {m.anchor_axis
+            ? <>Applies where each member is placed in <b style={{ color: 'var(--ink-2)', fontWeight: 560 }}>{anchor}</b></>
+            : 'Same places for every member'}
+        </div>
+        <div>
+          <div className="t-label mb-1.5">Gives every member</div>
+          {m.entries.length === 0 && <div className="t-xs">No roles yet — holding it gives nothing.</div>}
+          <div className="flex flex-col gap-2">
+            {m.entries.map((e) => (
+              <div key={e.id} className="panel-inset flex flex-col gap-1 px-2.5 py-2">
+                <span className="t-body" style={{ fontWeight: 560 }}>{e.role_name}</span>
+                {/* A placed membership's entry that names no place means "at
+                    the member's place", which GrantWhere would call everywhere. */}
+                {m.anchor_axis && e.scopes.length === 0
+                  ? <span className="t-xs">At the place each member holds it</span>
+                  : <GrantWhere scopes={e.scopes} selfScoped={false} axes={axes} nodeName={nodeName} compact />}
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
-      <div className="flex items-center gap-1.5">
-        <Select size="xs" searchable placeholder="Search for a person…" data={candidates}
-          value={pick} onChange={setPick} style={{ flex: 1 }}
-          searchValue={search} onSearchChange={setSearch}
-          /* The server already filtered; filtering again would hide matches
-             it deliberately returned. */
-          filter={({ options }) => options}
-          nothingFoundMessage={debounced ? 'Nobody matches' : 'Type to search'} />
-        <Button size="xs" variant="light" loading={busy} disabled={!pick} onClick={() => void assign()}>
-          Assign
-        </Button>
-        {/* Removing works through the same search. Without a roster from the
-            server there is nobody to click on, and the chips this replaced
-            were never populated. */}
-        <Button size="xs" variant="subtle" color="red" loading={busy} disabled={!pick}
-          leftSection={<IconX size={12} />} onClick={() => pick && void unassign(pick)}>
-          Remove
-        </Button>
+
+      <div style={{ borderTop: '1px solid var(--line-soft)' }}>
+        <UnstyledButton className="access-group w-full" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+          <span className="flex items-center gap-2">
+            <IconChevronRight size={13}
+              style={{ color: 'var(--ink-3)', transform: open ? 'rotate(90deg)' : undefined, transition: 'transform var(--t-fast)' }} />
+            <span className="t-body" style={{ fontWeight: 580 }}>Members</span>
+            <span className="count-pill">{count.toLocaleString()}</span>
+          </span>
+          <span className="t-xs">{open ? 'Hide' : 'Show'}</span>
+        </UnstyledButton>
+        {open && <Roster m={m} />}
       </div>
-    </div>
+
+      <GiveAccessSheet opened={adding} onClose={() => setAdding(false)} pickSubject membershipId={m.id} />
+      {editing && <EditGives m={m} axes={axes} onClose={() => setEditing(false)} />}
+    </section>
   )
 }
 
 function Memberships() {
   const { openCreate } = useCreate()
   const { data: memberships } = useQuery({ queryKey: qk.memberships(), queryFn: api.memberships })
+  const { data: axes } = useQuery({ queryKey: qk.axes(), queryFn: api.axes })
   const [q, setQ] = useState('')
   const needle = q.trim().toLowerCase()
   const shown = (memberships ?? []).filter((m) =>
@@ -164,7 +241,7 @@ function Memberships() {
   return (
     <Page
       title="Memberships"
-      description="Bundles of roles, each pinned to any mix of structures — organisation, product lines, customers — assigned as one unit. Removing a member revokes everything the membership gave them, instantly."
+      description="Named sets of roles that people hold together — a team, a council. Add someone and they get all of it; remove them and it is taken back at once."
       actions={
         <>
           <TextInput w={200} placeholder="Search memberships"
@@ -181,12 +258,12 @@ function Memberships() {
           <IconUsersGroup size={26} style={{ color: 'var(--ink-3)', margin: '0 auto 10px' }} />
           <div className="t-h2">{needle ? 'No memberships match' : 'No memberships yet'}</div>
           <div className="t-sm mt-1.5">
-            {needle ? `Nothing matching “${q}”.` : 'Bundle the roles a typical hire needs, then onboarding is one action.'}
+            {needle ? `Nothing matching “${q}”.` : 'Put the roles a team or council shares in one place, then adding someone is one action.'}
           </div>
         </div>
       ) : (
-        <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))' }}>
-          {shown.map((m) => <MembershipCard key={m.id} m={m} />)}
+        <div className="grid items-start gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(min(380px, 100%), 1fr))' }}>
+          {shown.map((m) => <MembershipCard key={m.id} m={m} axes={axes} />)}
         </div>
       )}
     </Page>

@@ -2,7 +2,7 @@ import { createRootRoute, Link, Outlet, redirect, useNavigate, useRouterState } 
 import { Tooltip } from '@mantine/core'
 import {
   IconLayoutDashboard, IconUsers, IconSitemap, IconKey, IconShieldCheck,
-  IconFileDescription, IconAffiliate, IconWorld, IconTestPipe, IconSearch,
+  IconFileDescription, IconWorld, IconTestPipe, IconSearch,
   IconPointFilled,
 } from '@tabler/icons-react'
 import { ActionIcon, Burger, Button, Drawer, Menu, useComputedColorScheme, useMantineColorScheme } from '@mantine/core'
@@ -56,7 +56,8 @@ const GROUPS: { title: string | null; items: Item[] }[] = [
   {
     title: 'People',
     items: [
-      { to: '/identities', label: 'People', icon: <IconUsers size={15} /> },
+      { to: '/identities', label: 'People', icon: <IconUsers size={15} />,
+        hint: 'Everyone who can sign in — open a person to give or take away access' },
       { to: '/realms', label: 'Populations', icon: <IconWorld size={15} />,
         hint: 'Internal, partners and public — and their sign-in rules' },
       { to: '/signin-page', label: 'Sign-in & sign-out', icon: <IconBrush size={15} />,
@@ -65,11 +66,12 @@ const GROUPS: { title: string | null; items: Item[] }[] = [
         hint: 'Bring people and their access in from a spreadsheet' },
     ],
   },
+  /* No "Access" list here any more. A person's access is read and changed on
+     their own page (People → a person), which is where the question starts;
+     this group is what access is MADE of. */
   {
     title: 'Access',
     items: [
-      { to: '/grants', label: 'Access', icon: <IconAffiliate size={15} />,
-        hint: 'Who can do what, and where' },
       { to: '/memberships', label: 'Memberships', icon: <IconUsersGroup size={15} />,
         hint: 'Role bundles — onboard a hire in one action' },
       { to: '/roles', label: 'Roles & permissions', icon: <IconShieldCheck size={15} /> },
@@ -137,7 +139,7 @@ function NewMenu() {
   const { openCreate } = useCreate()
   const items = [
     { kind: 'identity' as const, label: 'Person', icon: <IconUserPlus size={15} />, hint: 'someone internal, a partner contact, or a public user' },
-    { kind: 'grant' as const, label: 'Access', icon: <IconCirclePlus size={15} />, hint: 'give a person a role, limited to a place' },
+    { kind: 'grant' as const, label: 'Access for someone', icon: <IconCirclePlus size={15} />, hint: 'give a person a role or a membership, limited to places' },
     { kind: 'membership' as const, label: 'Membership', icon: <IconUsersGroup size={15} />, hint: 'a role bundle for easy onboarding' },
     { kind: 'role' as const, label: 'Role', icon: <IconShieldPlus size={15} />, hint: 'a named bundle of permissions' },
     { kind: 'permission' as const, label: 'Permission', icon: <IconLicense size={15} />, hint: 'declared in its app’s manifest' },
@@ -522,7 +524,7 @@ export const Route = createRootRoute({
 
 const TITLES: Record<string, string> = {
   '/': 'Overview', '/playground': 'Access check', '/identities': 'People',
-  '/realms': 'Populations', '/scope': 'Structure', '/grants': 'Access',
+  '/realms': 'Populations', '/scope': 'Structure',
   '/roles': 'Roles & permissions', '/memberships': 'Memberships',
   '/audit': 'Audit', '/keys': 'Signing keys',
   '/tenants': 'Tenants', '/signin-page': 'Sign-in & sign-out',

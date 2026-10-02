@@ -8,11 +8,12 @@
    realm id, unix seconds rather than ISO strings — the translation happens
    here and nowhere else. */
 import { api as rpc } from '@/lib/anubis'
+import { levelCode } from '@/lib/levels'
 import type {
   AuditEntry, AuthorizeRequest, AuthorizeResponse, AxisDefaultEffect,
   AxisUiSchema, AxisVerdict, DashboardStats, DenyReason, Grant,
   GrantEvaluation, GrantScope,
-  Identity, Membership, MembershipEntry, NewAxisInput, NewGrantInput,
+  Identity, Membership, MembershipAssignment, MembershipEntry, NewAxisInput, NewGrantInput,
   NewIdentityInput, NewNodeInput, NewRoleInput, Permission, Realm,
   RealmCategory, RealmKind, Role, ScopeAxis, ScopeNode, ScopeNodeType,
   SecuritySignal,  StrictDryRun, SyncPlan, SyncRun, SyncSource, Tenant,
@@ -284,8 +285,9 @@ export async function searchGrants(opts: {
 
 function toGrant(g: {
   id: string; identityId: string; roleId: string; roleName: string
-  viaMembershipId: string; selfScoped: boolean; validFrom: bigint
+  viaMembershipId: string; viaAssignmentId: string; selfScoped: boolean; validFrom: bigint
   validUntil: bigint; revokedAt: bigint; grantedBy: string; reason: string
+  revokeReason: string
   scopes: { axis: string; nodeId: string; inherit: boolean; exclude: boolean }[]
 }): Grant {
   return {
@@ -294,12 +296,14 @@ function toGrant(g: {
     role_id: g.roleId,
     role_name: g.roleName,
     via_membership_id: g.viaMembershipId || null,
+    via_assignment_id: g.viaAssignmentId || null,
     self_scoped: g.selfScoped,
     valid_from: atRequired(g.validFrom),
     valid_until: at(g.validUntil),
     revoked_at: at(g.revokedAt),
     granted_by: g.grantedBy,
     reason: g.reason || null,
+    revoke_reason: g.revokeReason || null,
     scopes: g.scopes.map((s): GrantScope => ({
       axis_code: s.axis, scope_node_id: s.nodeId, inherit: s.inherit,
       exclude: s.exclude,
@@ -383,7 +387,36 @@ export async function memberships(): Promise<Membership[]> {
        exclude people who are already in. */
     member_ids: [],
     member_count: m.memberCount,
+    anchor_axis: m.anchorAxis || null,
   }))
+}
+
+function toAssignment(a: {
+  id: string; membershipId: string; membershipName: string; anchorAxis: string
+  identityId: string; username: string; scopeNodeId: string; scopeNodeName: string
+  exact: boolean; validUntil: bigint; reason: string; assignedAt: bigint; assignedBy: string
+}): MembershipAssignment {
+  const iso = (secs: bigint) => new Date(Number(secs) * 1000).toISOString()
+  return {
+    id: a.id, membership_id: a.membershipId, membership_name: a.membershipName,
+    anchor_axis: a.anchorAxis || null, identity_id: a.identityId, username: a.username,
+    place_id: a.scopeNodeId || null, place_name: a.scopeNodeName || null, exact: a.exact,
+    valid_until: a.validUntil > 0n ? iso(a.validUntil) : null,
+    reason: a.reason || null, assigned_at: iso(a.assignedAt), assigned_by: a.assignedBy,
+  }
+}
+
+/** One page of current assignments: everybody in a membership, or every
+    membership one person holds. A membership can hold thousands, so this is
+    paged rather than a roster on the membership itself. */
+export async function membershipAssignments(opts: {
+  membershipId?: Uuid; identityId?: Uuid; cursor?: string; pageSize?: number
+}): Promise<{ rows: MembershipAssignment[]; next: string }> {
+  const resp = await rpc.authzAdmin.listMembershipAssignments({
+    membershipId: opts.membershipId ?? '', identityId: opts.identityId ?? '',
+    pageToken: opts.cursor ?? '', pageSize: opts.pageSize ?? 50,
+  })
+  return { rows: resp.assignments.map(toAssignment), next: resp.nextPageToken }
 }
 
 export async function audit(opts: {
@@ -670,7 +703,7 @@ export async function nodeTypes(): Promise<ScopeNodeType[]> {
 function toNode(n: {
   id: string; axis: string; nodeType: string; parentId: string; slug: string
   name: string; externalRef: string; status: string; isAxisRoot: boolean
-  childCount: number
+  childCount: number; path?: string[]
 }): ScopeNode {
   return {
     id: n.id,
@@ -683,6 +716,7 @@ function toNode(n: {
     external_ref: n.externalRef || null,
     is_axis_root: n.isAxisRoot,
     child_count: n.childCount,
+    path: n.path ?? [],
     status: (n.status || 'active') as ScopeNode['status'],
     attributes: {},
   }
@@ -691,7 +725,7 @@ function toNode(n: {
 /** Children of a node, or the axis roots when parentId is null. Lazy by
     design: a production customer axis holds tens of thousands of nodes and
     must never be fetched whole. */
-export async function scopeChildren(axisCode: string, parentId: string | null): Promise<ScopeNode[]> {
+export async function scopeChildren(axisCode: string, parentId: string | null, archived = false): Promise<ScopeNode[]> {
   // With a parent, page to the end: one node's children are a bounded set and
   // the caller renders all of them, so stopping at the server's page size
   // would silently drop siblings from a tree level.
@@ -703,7 +737,7 @@ export async function scopeChildren(axisCode: string, parentId: string | null): 
   let pageToken = ''
   do {
     const resp = await rpc.scopeAdmin.listScopeNodes({
-      axis: axisCode, parentId: parentId ?? '', query: '', includeArchived: false, pageToken,
+      axis: axisCode, parentId: parentId ?? '', query: '', includeArchived: archived, pageToken,
     })
     out.push(...resp.nodes.map(toNode))
     pageToken = parentId === null ? '' : resp.nextPageToken
@@ -711,11 +745,13 @@ export async function scopeChildren(axisCode: string, parentId: string | null): 
   return out.filter((n) => (parentId === null ? n.parent_id === null : n.parent_id === parentId))
 }
 
-export async function scopeSearch(axisCode: string, q: string): Promise<ScopeNode[]> {
+export async function scopeSearch(axisCode: string, q: string, archived = false): Promise<ScopeNode[]> {
   const resp = await rpc.scopeAdmin.listScopeNodes({
-    axis: axisCode, parentId: '', query: q, includeArchived: false,
+    axis: axisCode, parentId: '', query: q, includeArchived: archived, pageSize: 50,
   })
-  return resp.nodes.map(toNode).slice(0, 50)
+  // Fifty, asked for rather than cut from the default 2000: every hit now
+  // carries its path, and nobody reads past the first screen of a search.
+  return resp.nodes.map(toNode)
 }
 
 export async function scopeNode(id: Uuid): Promise<ScopeNode | null> {
@@ -1153,7 +1189,7 @@ export async function createGrant(i: NewGrantInput): Promise<void> {
     roleId: i.role_id,
     selfScoped: i.self_scoped,
     validUntil: i.valid_until ? BigInt(Math.floor(new Date(i.valid_until).getTime() / 1000)) : BigInt(0),
-    reason: '',
+    reason: i.reason ?? '',
     scopes: i.scopes.map((sc) => ({
       $typeName: 'anubis.v1.GrantScope' as const,
       axis: sc.axis_code, nodeId: sc.scope_node_id, inherit: sc.inherit,
@@ -1162,40 +1198,75 @@ export async function createGrant(i: NewGrantInput): Promise<void> {
   })
 }
 
-export async function revokeGrant(id: Uuid): Promise<void> {
-  await rpc.authzAdmin.revokeGrant({ grantId: id, reason: 'console' })
+/* `reason` is why it is being taken away, and may be empty. It used to be the
+   constant 'console' — which the server wrote over the reason the access was
+   given (fixed in 0053), and which said where the revoke came from, a fact
+   the audit entry's actor and session already carry. */
+export async function revokeGrant(id: Uuid, reason = ''): Promise<void> {
+  await rpc.authzAdmin.revokeGrant({ grantId: id, reason: reason.trim() })
+}
+
+function entryProto(e: { role_id: string; scopes: GrantScope[] }) {
+  return {
+    $typeName: 'anubis.v1.MembershipEntry' as const,
+    id: '', roleId: e.role_id, roleName: '',
+    scopes: e.scopes.map((sc) => ({
+      $typeName: 'anubis.v1.GrantScope' as const,
+      axis: sc.axis_code, nodeId: sc.scope_node_id, inherit: sc.inherit,
+      exclude: sc.exclude, nodeName: '',
+    })),
+  }
 }
 
 export async function createMembership(i: {
   name: string; description: string
+  /** Set for a membership that applies where each member is assigned. */
+  anchor_axis?: string | null
   entries: { role_id: string; scopes: GrantScope[] }[]
-}): Promise<void> {
-  const resp = await rpc.authzAdmin.createMembership({ name: i.name, description: i.description })
+}): Promise<Uuid> {
+  const resp = await rpc.authzAdmin.createMembership({
+    name: i.name, description: i.description, anchorAxis: i.anchor_axis ?? '',
+  })
   const id = resp.membership?.id
   if (!id) throw new Error('no membership returned')
   if (i.entries.length > 0) {
-    await rpc.authzAdmin.setMembershipEntries({
-      membershipId: id,
-      entries: i.entries.map((e) => ({
-        $typeName: 'anubis.v1.MembershipEntry' as const,
-        id: '', roleId: e.role_id, roleName: '',
-        scopes: e.scopes.map((sc) => ({
-          $typeName: 'anubis.v1.GrantScope' as const,
-          axis: sc.axis_code, nodeId: sc.scope_node_id, inherit: sc.inherit,
-          exclude: sc.exclude, nodeName: '',
-        })),
-      })),
-    })
+    await rpc.authzAdmin.setMembershipEntries({ membershipId: id, entries: i.entries.map(entryProto) })
   }
+  return id
 }
 
-export async function assignMembership(identityId: Uuid, membershipId: Uuid): Promise<number> {
-  const resp = await rpc.authzAdmin.assignMembership({ membershipId, identityId })
-  return resp.grantsCreated
+/** Replaces what a membership gives. Unchanged entries keep their grants;
+    everybody in it gains what was added and loses what was taken out, in the
+    same transaction. Returns how many grants that touched. */
+export async function setMembershipEntries(membershipId: Uuid,
+  entries: { role_id: string; scopes: GrantScope[] }[]): Promise<number> {
+  const resp = await rpc.authzAdmin.setMembershipEntries({ membershipId, entries: entries.map(entryProto) })
+  return resp.grantsChanged
 }
 
-export async function unassignMembership(identityId: Uuid, membershipId: Uuid): Promise<number> {
-  const resp = await rpc.authzAdmin.unassignMembership({ membershipId, identityId })
+export async function assignMembership(i: {
+  identity_id: Uuid; membership_id: Uuid
+  /** Where-assigned memberships only: the place in its structure. */
+  place_id?: Uuid | null
+  exact?: boolean
+  valid_until?: string | null
+  reason?: string
+}): Promise<{ grants_created: number; assignment_id: string }> {
+  const resp = await rpc.authzAdmin.assignMembership({
+    membershipId: i.membership_id, identityId: i.identity_id,
+    scopeNodeId: i.place_id ?? '', exact: !!i.exact,
+    validUntil: i.valid_until ? BigInt(Math.floor(new Date(i.valid_until).getTime() / 1000)) : 0n,
+    reason: (i.reason ?? '').trim(),
+  })
+  return { grants_created: resp.grantsCreated, assignment_id: resp.assignmentId }
+}
+
+/** Ends ONE assignment. The same person keeps the membership at any other
+    place they hold it. */
+export async function removeAssignment(assignmentId: Uuid, reason = ''): Promise<number> {
+  const resp = await rpc.authzAdmin.unassignMembership({
+    membershipId: '', identityId: '', assignmentId, reason: reason.trim(),
+  })
   return resp.grantsRevoked
 }
 
@@ -1249,17 +1320,58 @@ export async function createAxis(i: NewAxisInput): Promise<void> {
       resolutionJson: JSON.stringify({ from: i.resolution_from, ...(i.resolution_key ? { key: i.resolution_key } : {}) }),
       uiSchemaJson: JSON.stringify({ picker: i.picker, icon: i.icon }),
     },
+    // In the same transaction: a structure without its top level cannot hold
+    // a single item, and the first "Add item" used to be what found out.
+    topLevel: {
+      $typeName: 'anubis.v1.ScopeNodeType',
+      code: levelCode(i.code, 'top', new Set()), axis: i.code,
+      displayName: i.top_level_name, parentTypes: [],
+    },
   })
 }
 
-export async function createNodeType(i: { axis_code: string; display_name: string; parent_types: string[] }): Promise<void> {
+export async function createNodeType(i: {
+  axis_code: string; display_name: string; parent_types: string[]
+  /** May sit inside another of its own kind — a department in a department. */
+  nests?: boolean
+  taken: ReadonlySet<string>
+}): Promise<string> {
+  const code = levelCode(i.axis_code, i.display_name, i.taken)
   await rpc.scopeAdmin.createScopeNodeType({
     type: {
       $typeName: 'anubis.v1.ScopeNodeType',
-      code: i.display_name.toLowerCase().trim().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, ''),
-      axis: i.axis_code, displayName: i.display_name, parentTypes: i.parent_types,
+      code, axis: i.axis_code, displayName: i.display_name.trim(),
+      parentTypes: i.nests ? [...i.parent_types, code] : i.parent_types,
     },
   })
+  return code
+}
+
+export async function updateNodeType(i: {
+  code: string; axis_code: string; display_name: string; parent_types: string[]
+}): Promise<void> {
+  await rpc.scopeAdmin.updateScopeNodeType({
+    type: {
+      $typeName: 'anubis.v1.ScopeNodeType',
+      code: i.code, axis: i.axis_code, displayName: i.display_name.trim(), parentTypes: i.parent_types,
+    },
+  })
+}
+
+export async function renameScopeNode(id: Uuid, name: string): Promise<void> {
+  await rpc.scopeAdmin.renameScopeNode({ nodeId: id, name: name.trim() })
+}
+
+export async function moveScopeNode(id: Uuid, newParentId: Uuid): Promise<void> {
+  await rpc.scopeAdmin.moveScopeNode({ nodeId: id, newParentId })
+}
+
+export async function archiveScopeNode(id: Uuid): Promise<void> {
+  await rpc.scopeAdmin.archiveScopeNode({ nodeId: id })
+}
+
+export async function restoreScopeNode(id: Uuid): Promise<void> {
+  await rpc.scopeAdmin.restoreScopeNode({ nodeId: id })
 }
 
 /* Sync sources: the scope feed machinery. */
