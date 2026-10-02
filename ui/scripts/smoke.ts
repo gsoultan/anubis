@@ -192,12 +192,24 @@ try {
   for (const [w, h] of WIDTHS) {
     await page.setViewport({ width: w, height: h })
     await visit(page, '/scope', errors)
-    const found = [
-      (await press('main .mantine-SegmentedControl-label', 'Levels')) || 'no Levels pane to open',
-      (await press('main .scope-row button + button', '')) || 'no item in the tree to inspect',
-    ].filter((x): x is string => typeof x === 'string')
+    const found: string[] = []
+    // The first structure is whichever sorts first, and on a fresh database
+    // that one is empty. Walk the tabs to one that holds an item rather than
+    // fail on — or quietly skip — whatever happened to be in front.
+    const tabs = await page.$$eval('main .axis-tab', (els) => els.length)
+    let item = false
+    for (let i = 0; i < tabs && !item; i++) {
+      await page.evaluate((i) => (document.querySelectorAll('main .axis-tab')[i] as HTMLElement | undefined)?.click(), i)
+      await settle(page)
+      item = await press('main .scope-row button + button', '')
+    }
+    if (tabs === 0) found.push('no structure to open')
+    if (!(await press('main .mantine-SegmentedControl-label', 'Levels'))) found.push('no Levels pane to open')
     await settle(page)
-    report(`${w}px /scope levels + item`, [...found, ...(await page.evaluate(measureScreen)), ...errors])
+    // An installation with no items anywhere is legitimate; say that the
+    // inspector went unmeasured instead of reporting a pass that measured it.
+    if (!item) console.log(`note  ${w}px /scope: no structure holds an item — the item inspector was not measured`)
+    report(`${w}px /scope levels${item ? ' + item' : ''}`, [...found, ...(await page.evaluate(measureScreen)), ...errors])
 
     await visit(page, '/memberships', errors)
     // No membership is not a failure here: a fresh database has none.
