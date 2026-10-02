@@ -240,6 +240,86 @@ func TestScopeAncestorsRefuseAnotherTenantsNode(t *testing.T) {
 	}
 }
 
+// Rename, restore and archive name a node by id, and the node ids of every
+// tenant share one table. Each must find the node inside the caller's tenant
+// or not at all.
+func TestScopeNodeEditsRefuseAnotherTenantsNode(t *testing.T) {
+	requireServer(t)
+	db, ctx, token := isolationFixture(t)
+	n := plantNeighbour(t, ctx, db)
+	scope := anubisv1connect.NewScopeAdminServiceClient(http.DefaultClient, baseURL)
+	state := func(id string) (name, status string) {
+		t.Helper()
+		if err := db.QueryRowContext(ctx, `SELECT name, status FROM scope_nodes WHERE id = $1`, id).
+			Scan(&name, &status); err != nil {
+			t.Fatalf("read node: %v", err)
+		}
+		return name, status
+	}
+	before, _ := state(n.childNode)
+
+	if _, err := scope.RenameScopeNode(ctx, operatorBearer(connect.NewRequest(
+		&anubisv1.RenameScopeNodeRequest{NodeId: n.childNode, Name: "renamed by a neighbour"}), token)); err == nil {
+		t.Fatal("renamed another tenant's node")
+	}
+	if name, _ := state(n.childNode); name != before {
+		t.Fatalf("refused, yet the node is now called %q", name)
+	}
+	if _, err := scope.ArchiveScopeNode(ctx, operatorBearer(connect.NewRequest(
+		&anubisv1.ArchiveScopeNodeRequest{NodeId: n.childNode}), token)); err == nil {
+		t.Fatal("archived another tenant's node")
+	}
+	if _, err := db.ExecContext(ctx, `UPDATE scope_nodes SET status = 'archived' WHERE id = $1`, n.childNode); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := scope.RestoreScopeNode(ctx, operatorBearer(connect.NewRequest(
+		&anubisv1.RestoreScopeNodeRequest{NodeId: n.childNode}), token)); err == nil {
+		t.Fatal("restored another tenant's node")
+	}
+	if _, status := state(n.childNode); status != "archived" {
+		t.Fatalf("refused, yet the node is now %s", status)
+	}
+
+	// Positive control: the same three calls on a node of the operator's own,
+	// each undone. A check that refuses everything passes everything above.
+	var own string
+	if err := db.QueryRowContext(ctx,
+		`SELECT id FROM scope_nodes WHERE tenant_id = $1 AND parent_id IS NOT NULL
+		    AND status = 'active' ORDER BY created_at LIMIT 1`,
+		ownTenant(t, ctx, db)).Scan(&own); err != nil {
+		t.Fatalf("own tenant has no child scope node to check against: %v", err)
+	}
+	name, _ := state(own)
+	t.Cleanup(func() {
+		if _, err := db.ExecContext(context.Background(),
+			`UPDATE scope_nodes SET name = $2, status = 'active' WHERE id = $1`, own, name); err != nil {
+			t.Errorf("own node not put back: %v", err)
+		}
+	})
+	if _, err := scope.RenameScopeNode(ctx, operatorBearer(connect.NewRequest(
+		&anubisv1.RenameScopeNodeRequest{NodeId: own, Name: name + " (e2e)"}), token)); err != nil {
+		t.Fatalf("own node: rename refused: %v", err)
+	}
+	if got, _ := state(own); got != name+" (e2e)" {
+		t.Fatalf("own node: rename accepted but the name is %q", got)
+	}
+	if _, err := scope.ArchiveScopeNode(ctx, operatorBearer(connect.NewRequest(
+		&anubisv1.ArchiveScopeNodeRequest{NodeId: own}), token)); err != nil {
+		t.Fatalf("own node: archive refused: %v", err)
+	}
+	if _, err := scope.RenameScopeNode(ctx, operatorBearer(connect.NewRequest(
+		&anubisv1.RenameScopeNodeRequest{NodeId: own, Name: name}), token)); err == nil {
+		t.Fatal("own node: renamed while archived — a restore hidden inside a rename")
+	}
+	if _, err := scope.RestoreScopeNode(ctx, operatorBearer(connect.NewRequest(
+		&anubisv1.RestoreScopeNodeRequest{NodeId: own}), token)); err != nil {
+		t.Fatalf("own node: restore refused: %v", err)
+	}
+	if _, status := state(own); status != "active" {
+		t.Fatalf("own node: restore accepted but the node is %s", status)
+	}
+}
+
 // ListCredentials took the identity id straight from the request. The
 // credentials table carries tenant_id and the query even SELECTs it — it just
 // never filtered on it, so the answer was another tenant's inventory of how
@@ -332,4 +412,159 @@ func isolationFixture(t *testing.T) (*sql.DB, context.Context, string) {
 	// last — a deferred Close would shut it before the delete could run.
 	t.Cleanup(func() { _ = db.Close() })
 	return db, context.Background(), platformLogin(t)
+}
+
+/*
+Membership writes took the membership id straight from the request.
+
+AssignMembership, UnassignMembership, ResyncMembership and SetMembershipEntries
+each asked the guard whether the caller may administer memberships, then threw
+the principal away — the tell this file's neighbour describes. The foreign keys
+only checked that a membership and a person agreed with EACH OTHER, so an
+operator of one tenant could put a second tenant's person into that tenant's
+membership and hand them its roles.
+
+Root cause, in one sentence: the tenant never reached the membership lookup,
+so any membership id was taken on trust.
+*/
+func TestMembershipWritesRefuseAnotherTenantsMembership(t *testing.T) {
+	requireServer(t)
+	db, ctx, token := isolationFixture(t)
+	n := plantNeighbour(t, ctx, db)
+
+	// Theirs: a membership giving their role, with their person already in
+	// it — something for every call below to change, and for the list to leak.
+	suffix := time.Now().UnixNano()
+	var theirs string
+	if err := db.QueryRowContext(ctx,
+		`INSERT INTO memberships (tenant_id, name) VALUES ($1, $2) RETURNING id`,
+		n.tenantID, fmt.Sprintf("neighbour-membership-%d", suffix)).Scan(&theirs); err != nil {
+		t.Fatalf("plant membership: %v", err)
+	}
+	// Registered after plantNeighbour's cleanup, so it runs first: their
+	// grants and memberships hold their roles and people in place.
+	t.Cleanup(func() {
+		bg := context.Background()
+		for _, stmt := range []string{
+			`DELETE FROM grant_scopes WHERE tenant_id = $1`,
+			`DELETE FROM grants WHERE tenant_id = $1`,
+			`DELETE FROM memberships WHERE tenant_id = $1`,
+		} {
+			if _, err := db.ExecContext(bg, stmt, n.tenantID); err != nil {
+				t.Errorf("planted membership rows not removed: %v", err)
+			}
+		}
+	})
+	if _, err := db.ExecContext(ctx,
+		`INSERT INTO membership_entries (membership_id, tenant_id, role_id) VALUES ($1, $2, $3)`,
+		theirs, n.tenantID, n.roleID); err != nil {
+		t.Fatalf("plant membership entry: %v", err)
+	}
+	if _, err := db.ExecContext(ctx,
+		`INSERT INTO membership_members (membership_id, identity_id, tenant_id, assigned_by)
+		 VALUES ($1, $2, $3, $2)`, theirs, n.identityID, n.tenantID); err != nil {
+		t.Fatalf("plant membership member: %v", err)
+	}
+	// And a second person of theirs who is NOT in it yet: adding them is a
+	// write that creates something, which is what makes the hole visible —
+	// adding somebody already in a membership changes nothing either way.
+	var newcomer string
+	if err := db.QueryRowContext(ctx,
+		`INSERT INTO identities (tenant_id, realm_id, username)
+		 SELECT tenant_id, realm_id, $2 FROM identities WHERE id = $1 RETURNING id`,
+		n.identityID, fmt.Sprintf("neighbour-newcomer-%d", suffix)).Scan(&newcomer); err != nil {
+		t.Fatalf("plant a second person: %v", err)
+	}
+	count := func(query string) int {
+		t.Helper()
+		var c int
+		if err := db.QueryRowContext(ctx, query, theirs).Scan(&c); err != nil {
+			t.Fatalf("count: %v", err)
+		}
+		return c
+	}
+	grantsOf := `SELECT count(*) FROM grants WHERE via_membership_id = $1`
+
+	authz := anubisv1connect.NewAuthzAdminServiceClient(http.DefaultClient, baseURL)
+	if _, err := authz.AssignMembership(ctx, operatorBearer(connect.NewRequest(&anubisv1.AssignMembershipRequest{
+		MembershipId: theirs, IdentityId: newcomer,
+	}), token)); err == nil {
+		t.Fatalf("added another tenant's person to that tenant's membership (%d grants now)", count(grantsOf))
+	}
+	if got := count(grantsOf); got != 0 {
+		t.Fatalf("refused, yet %d grants were written through another tenant's membership", got)
+	}
+	if _, err := authz.ResyncMembership(ctx, operatorBearer(connect.NewRequest(&anubisv1.ResyncMembershipRequest{
+		MembershipId: theirs,
+	}), token)); err == nil {
+		t.Fatal("resynced another tenant's membership")
+	}
+	if got := count(grantsOf); got != 0 {
+		t.Fatalf("resync was refused, yet it wrote %d grants", got)
+	}
+	if _, err := authz.SetMembershipEntries(ctx, operatorBearer(connect.NewRequest(&anubisv1.SetMembershipEntriesRequest{
+		MembershipId: theirs,
+	}), token)); err == nil {
+		t.Fatal("replaced the contents of another tenant's membership")
+	}
+	if got := count(`SELECT count(*) FROM membership_entries WHERE membership_id = $1 AND retired_at IS NULL`); got != 1 {
+		t.Fatalf("another tenant's membership now has %d roles, want its 1 untouched", got)
+	}
+	if _, err := authz.UnassignMembership(ctx, operatorBearer(connect.NewRequest(&anubisv1.UnassignMembershipRequest{
+		MembershipId: theirs, IdentityId: n.identityID,
+	}), token)); err == nil {
+		t.Fatal("removed a person from another tenant's membership")
+	}
+	if got := count(`SELECT count(*) FROM membership_members WHERE membership_id = $1 AND removed_at IS NULL`); got != 1 {
+		t.Fatalf("another tenant's membership now has %d members, want its 1 untouched", got)
+	}
+	list, err := authz.ListMembershipAssignments(ctx, operatorBearer(connect.NewRequest(&anubisv1.ListMembershipAssignmentsRequest{
+		MembershipId: theirs,
+	}), token))
+	if err == nil {
+		for _, a := range list.Msg.GetAssignments() {
+			t.Fatalf("read another tenant's membership roster: %s (%s)", a.GetUsername(), a.GetIdentityId())
+		}
+	}
+
+	// Positive control: the operator's own tenant, through the same calls. A
+	// check that refuses everything would pass every assertion above.
+	own := ownTenant(t, ctx, db)
+	var person string
+	if err := db.QueryRowContext(ctx,
+		`SELECT id FROM identities WHERE tenant_id = $1 ORDER BY created_at LIMIT 1`, own).Scan(&person); err != nil {
+		t.Fatalf("own tenant has nobody to add: %v", err)
+	}
+	created, err := authz.CreateMembership(ctx, operatorBearer(connect.NewRequest(&anubisv1.CreateMembershipRequest{
+		Name: fmt.Sprintf("own-membership-%d", suffix),
+	}), token))
+	if err != nil {
+		t.Fatalf("own tenant: create membership: %v", err)
+	}
+	mine := created.Msg.GetMembership().GetId()
+	t.Cleanup(func() {
+		if _, err := db.ExecContext(context.Background(), `DELETE FROM memberships WHERE id = $1`, mine); err != nil {
+			t.Errorf("own membership not removed: %v", err)
+		}
+	})
+	assigned, err := authz.AssignMembership(ctx, operatorBearer(connect.NewRequest(&anubisv1.AssignMembershipRequest{
+		MembershipId: mine, IdentityId: person,
+	}), token))
+	if err != nil {
+		t.Fatalf("own tenant: assign refused: %v", err)
+	}
+	if assigned.Msg.GetAssignmentId() == "" {
+		t.Fatal("own tenant: assign created no assignment")
+	}
+	roster, err := authz.ListMembershipAssignments(ctx, operatorBearer(connect.NewRequest(&anubisv1.ListMembershipAssignmentsRequest{
+		MembershipId: mine,
+	}), token))
+	if err != nil || len(roster.Msg.GetAssignments()) != 1 {
+		t.Fatalf("own tenant: roster = %d (%v), want the 1 person just added", len(roster.Msg.GetAssignments()), err)
+	}
+	if _, err := authz.UnassignMembership(ctx, operatorBearer(connect.NewRequest(&anubisv1.UnassignMembershipRequest{
+		AssignmentId: assigned.Msg.GetAssignmentId(), Reason: "e2e",
+	}), token)); err != nil {
+		t.Fatalf("own tenant: removing the assignment refused: %v", err)
+	}
 }

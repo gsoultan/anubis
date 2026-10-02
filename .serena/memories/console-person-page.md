@@ -78,3 +78,23 @@ the shell's CSP sets `base-uri 'none'` (`internal/api/http/console_assets.go`).
 It was found because a width check "passed" on that page — a blank page has
 nothing to overflow. A check that asserts something is absent must first
 assert that the page rendered at all, and must load it by URL, not by click.
+
+## Rebuilt around access (2026-09-28)
+
+With the Access screen gone this page is the only place a person's access is
+read and changed ([[console-give-access]]). Header: avatar, status, IAL,
+email · population · category; actions **Test access** (→
+`/playground?subject=`), **Give access**, ⋯. Then banners for what is wrong
+with the account (disabled → Re-enable; no usable credential → Set up
+sign-in) BEFORE what it can do — none of the access matters otherwise. Main
+column: `AccessList` grouped *given directly* / *through <membership>*, revoke
+and leave-membership behind `ConfirmModal`. Rail: Profile facts, Sign-in
+(credentials, token epoch, encrypted attributes), Lifecycle. The four metric
+tiles went: every number they showed is now said where it is acted on.
+
+The inline grant panel went too — the form is `GiveAccessSheet`, still opened
+by `?give=true` (URL state, as above). A drawer over a PAGE is not the
+drawer-over-a-drawer this page was built to escape.
+
+Disabling now asks first, and says what it does: it revokes every session
+and bumps the token epoch (`identity_admin_interactor.go`), grants are kept.

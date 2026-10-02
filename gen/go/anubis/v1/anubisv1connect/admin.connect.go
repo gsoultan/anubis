@@ -111,6 +111,9 @@ const (
 	// ScopeAdminServiceCreateScopeNodeTypeProcedure is the fully-qualified name of the
 	// ScopeAdminService's CreateScopeNodeType RPC.
 	ScopeAdminServiceCreateScopeNodeTypeProcedure = "/anubis.v1.ScopeAdminService/CreateScopeNodeType"
+	// ScopeAdminServiceUpdateScopeNodeTypeProcedure is the fully-qualified name of the
+	// ScopeAdminService's UpdateScopeNodeType RPC.
+	ScopeAdminServiceUpdateScopeNodeTypeProcedure = "/anubis.v1.ScopeAdminService/UpdateScopeNodeType"
 	// ScopeAdminServiceListScopeNodesProcedure is the fully-qualified name of the ScopeAdminService's
 	// ListScopeNodes RPC.
 	ScopeAdminServiceListScopeNodesProcedure = "/anubis.v1.ScopeAdminService/ListScopeNodes"
@@ -135,6 +138,12 @@ const (
 	// ScopeAdminServiceArchiveScopeNodeProcedure is the fully-qualified name of the ScopeAdminService's
 	// ArchiveScopeNode RPC.
 	ScopeAdminServiceArchiveScopeNodeProcedure = "/anubis.v1.ScopeAdminService/ArchiveScopeNode"
+	// ScopeAdminServiceRestoreScopeNodeProcedure is the fully-qualified name of the ScopeAdminService's
+	// RestoreScopeNode RPC.
+	ScopeAdminServiceRestoreScopeNodeProcedure = "/anubis.v1.ScopeAdminService/RestoreScopeNode"
+	// ScopeAdminServiceRenameScopeNodeProcedure is the fully-qualified name of the ScopeAdminService's
+	// RenameScopeNode RPC.
+	ScopeAdminServiceRenameScopeNodeProcedure = "/anubis.v1.ScopeAdminService/RenameScopeNode"
 	// ScopeAdminServiceUpsertScopeNodesProcedure is the fully-qualified name of the ScopeAdminService's
 	// UpsertScopeNodes RPC.
 	ScopeAdminServiceUpsertScopeNodesProcedure = "/anubis.v1.ScopeAdminService/UpsertScopeNodes"
@@ -201,6 +210,9 @@ const (
 	// AuthzAdminServiceResyncMembershipProcedure is the fully-qualified name of the AuthzAdminService's
 	// ResyncMembership RPC.
 	AuthzAdminServiceResyncMembershipProcedure = "/anubis.v1.AuthzAdminService/ResyncMembership"
+	// AuthzAdminServiceListMembershipAssignmentsProcedure is the fully-qualified name of the
+	// AuthzAdminService's ListMembershipAssignments RPC.
+	AuthzAdminServiceListMembershipAssignmentsProcedure = "/anubis.v1.AuthzAdminService/ListMembershipAssignments"
 	// AuthzAdminServiceApplyManifestProcedure is the fully-qualified name of the AuthzAdminService's
 	// ApplyManifest RPC.
 	AuthzAdminServiceApplyManifestProcedure = "/anubis.v1.AuthzAdminService/ApplyManifest"
@@ -870,6 +882,10 @@ type ScopeAdminServiceClient interface {
 	StrictDryRun(context.Context, *connect.Request[v1.StrictDryRunRequest]) (*connect.Response[v1.StrictDryRunResponse], error)
 	ListScopeNodeTypes(context.Context, *connect.Request[v1.ListScopeNodeTypesRequest]) (*connect.Response[v1.ListScopeNodeTypesResponse], error)
 	CreateScopeNodeType(context.Context, *connect.Request[v1.CreateScopeNodeTypeRequest]) (*connect.Response[v1.CreateScopeNodeTypeResponse], error)
+	// Renames a level and replaces what it may sit under. Code and structure
+	// are fixed. The database refuses a second top level, a parent that is not
+	// a level of the same structure, and removing a rule items rely on.
+	UpdateScopeNodeType(context.Context, *connect.Request[v1.UpdateScopeNodeTypeRequest]) (*connect.Response[v1.UpdateScopeNodeTypeResponse], error)
 	ListScopeNodes(context.Context, *connect.Request[v1.ListScopeNodesRequest]) (*connect.Response[v1.ListScopeNodesResponse], error)
 	// GetScopeNode fetches one node. Without it the console would have to pull
 	// an entire axis to display a single selected value.
@@ -885,6 +901,11 @@ type ScopeAdminServiceClient interface {
 	EnsureAxisRoot(context.Context, *connect.Request[v1.EnsureAxisRootRequest]) (*connect.Response[v1.EnsureAxisRootResponse], error)
 	MoveScopeNode(context.Context, *connect.Request[v1.MoveScopeNodeRequest]) (*connect.Response[v1.MoveScopeNodeResponse], error)
 	ArchiveScopeNode(context.Context, *connect.Request[v1.ArchiveScopeNodeRequest]) (*connect.Response[v1.ArchiveScopeNodeResponse], error)
+	// Puts an archived node back in the pickers. Its grants never stopped
+	// deciding, so nobody's access changes.
+	RestoreScopeNode(context.Context, *connect.Request[v1.RestoreScopeNodeRequest]) (*connect.Response[v1.RestoreScopeNodeResponse], error)
+	// Renames an active node. An archived one is restored first.
+	RenameScopeNode(context.Context, *connect.Request[v1.RenameScopeNodeRequest]) (*connect.Response[v1.RenameScopeNodeResponse], error)
 	// Bulk reconcile keyed on external_ref: add/rename/move/archive, manual
 	// nodes untouched. dry=true computes the same report with zero writes.
 	UpsertScopeNodes(context.Context, *connect.Request[v1.UpsertScopeNodesRequest]) (*connect.Response[v1.UpsertScopeNodesResponse], error)
@@ -951,6 +972,12 @@ func NewScopeAdminServiceClient(httpClient connect.HTTPClient, baseURL string, o
 			connect.WithSchema(scopeAdminServiceMethods.ByName("CreateScopeNodeType")),
 			connect.WithClientOptions(opts...),
 		),
+		updateScopeNodeType: connect.NewClient[v1.UpdateScopeNodeTypeRequest, v1.UpdateScopeNodeTypeResponse](
+			httpClient,
+			baseURL+ScopeAdminServiceUpdateScopeNodeTypeProcedure,
+			connect.WithSchema(scopeAdminServiceMethods.ByName("UpdateScopeNodeType")),
+			connect.WithClientOptions(opts...),
+		),
 		listScopeNodes: connect.NewClient[v1.ListScopeNodesRequest, v1.ListScopeNodesResponse](
 			httpClient,
 			baseURL+ScopeAdminServiceListScopeNodesProcedure,
@@ -997,6 +1024,18 @@ func NewScopeAdminServiceClient(httpClient connect.HTTPClient, baseURL string, o
 			httpClient,
 			baseURL+ScopeAdminServiceArchiveScopeNodeProcedure,
 			connect.WithSchema(scopeAdminServiceMethods.ByName("ArchiveScopeNode")),
+			connect.WithClientOptions(opts...),
+		),
+		restoreScopeNode: connect.NewClient[v1.RestoreScopeNodeRequest, v1.RestoreScopeNodeResponse](
+			httpClient,
+			baseURL+ScopeAdminServiceRestoreScopeNodeProcedure,
+			connect.WithSchema(scopeAdminServiceMethods.ByName("RestoreScopeNode")),
+			connect.WithClientOptions(opts...),
+		),
+		renameScopeNode: connect.NewClient[v1.RenameScopeNodeRequest, v1.RenameScopeNodeResponse](
+			httpClient,
+			baseURL+ScopeAdminServiceRenameScopeNodeProcedure,
+			connect.WithSchema(scopeAdminServiceMethods.ByName("RenameScopeNode")),
 			connect.WithClientOptions(opts...),
 		),
 		upsertScopeNodes: connect.NewClient[v1.UpsertScopeNodesRequest, v1.UpsertScopeNodesResponse](
@@ -1052,6 +1091,7 @@ type scopeAdminServiceClient struct {
 	strictDryRun        *connect.Client[v1.StrictDryRunRequest, v1.StrictDryRunResponse]
 	listScopeNodeTypes  *connect.Client[v1.ListScopeNodeTypesRequest, v1.ListScopeNodeTypesResponse]
 	createScopeNodeType *connect.Client[v1.CreateScopeNodeTypeRequest, v1.CreateScopeNodeTypeResponse]
+	updateScopeNodeType *connect.Client[v1.UpdateScopeNodeTypeRequest, v1.UpdateScopeNodeTypeResponse]
 	listScopeNodes      *connect.Client[v1.ListScopeNodesRequest, v1.ListScopeNodesResponse]
 	getScopeNode        *connect.Client[v1.GetScopeNodeRequest, v1.GetScopeNodeResponse]
 	getScopeNodes       *connect.Client[v1.GetScopeNodesRequest, v1.GetScopeNodesResponse]
@@ -1060,6 +1100,8 @@ type scopeAdminServiceClient struct {
 	ensureAxisRoot      *connect.Client[v1.EnsureAxisRootRequest, v1.EnsureAxisRootResponse]
 	moveScopeNode       *connect.Client[v1.MoveScopeNodeRequest, v1.MoveScopeNodeResponse]
 	archiveScopeNode    *connect.Client[v1.ArchiveScopeNodeRequest, v1.ArchiveScopeNodeResponse]
+	restoreScopeNode    *connect.Client[v1.RestoreScopeNodeRequest, v1.RestoreScopeNodeResponse]
+	renameScopeNode     *connect.Client[v1.RenameScopeNodeRequest, v1.RenameScopeNodeResponse]
 	upsertScopeNodes    *connect.Client[v1.UpsertScopeNodesRequest, v1.UpsertScopeNodesResponse]
 	listSyncSources     *connect.Client[v1.ListSyncSourcesRequest, v1.ListSyncSourcesResponse]
 	createSyncSource    *connect.Client[v1.CreateSyncSourceRequest, v1.CreateSyncSourceResponse]
@@ -1097,6 +1139,11 @@ func (c *scopeAdminServiceClient) ListScopeNodeTypes(ctx context.Context, req *c
 // CreateScopeNodeType calls anubis.v1.ScopeAdminService.CreateScopeNodeType.
 func (c *scopeAdminServiceClient) CreateScopeNodeType(ctx context.Context, req *connect.Request[v1.CreateScopeNodeTypeRequest]) (*connect.Response[v1.CreateScopeNodeTypeResponse], error) {
 	return c.createScopeNodeType.CallUnary(ctx, req)
+}
+
+// UpdateScopeNodeType calls anubis.v1.ScopeAdminService.UpdateScopeNodeType.
+func (c *scopeAdminServiceClient) UpdateScopeNodeType(ctx context.Context, req *connect.Request[v1.UpdateScopeNodeTypeRequest]) (*connect.Response[v1.UpdateScopeNodeTypeResponse], error) {
+	return c.updateScopeNodeType.CallUnary(ctx, req)
 }
 
 // ListScopeNodes calls anubis.v1.ScopeAdminService.ListScopeNodes.
@@ -1137,6 +1184,16 @@ func (c *scopeAdminServiceClient) MoveScopeNode(ctx context.Context, req *connec
 // ArchiveScopeNode calls anubis.v1.ScopeAdminService.ArchiveScopeNode.
 func (c *scopeAdminServiceClient) ArchiveScopeNode(ctx context.Context, req *connect.Request[v1.ArchiveScopeNodeRequest]) (*connect.Response[v1.ArchiveScopeNodeResponse], error) {
 	return c.archiveScopeNode.CallUnary(ctx, req)
+}
+
+// RestoreScopeNode calls anubis.v1.ScopeAdminService.RestoreScopeNode.
+func (c *scopeAdminServiceClient) RestoreScopeNode(ctx context.Context, req *connect.Request[v1.RestoreScopeNodeRequest]) (*connect.Response[v1.RestoreScopeNodeResponse], error) {
+	return c.restoreScopeNode.CallUnary(ctx, req)
+}
+
+// RenameScopeNode calls anubis.v1.ScopeAdminService.RenameScopeNode.
+func (c *scopeAdminServiceClient) RenameScopeNode(ctx context.Context, req *connect.Request[v1.RenameScopeNodeRequest]) (*connect.Response[v1.RenameScopeNodeResponse], error) {
+	return c.renameScopeNode.CallUnary(ctx, req)
 }
 
 // UpsertScopeNodes calls anubis.v1.ScopeAdminService.UpsertScopeNodes.
@@ -1184,6 +1241,10 @@ type ScopeAdminServiceHandler interface {
 	StrictDryRun(context.Context, *connect.Request[v1.StrictDryRunRequest]) (*connect.Response[v1.StrictDryRunResponse], error)
 	ListScopeNodeTypes(context.Context, *connect.Request[v1.ListScopeNodeTypesRequest]) (*connect.Response[v1.ListScopeNodeTypesResponse], error)
 	CreateScopeNodeType(context.Context, *connect.Request[v1.CreateScopeNodeTypeRequest]) (*connect.Response[v1.CreateScopeNodeTypeResponse], error)
+	// Renames a level and replaces what it may sit under. Code and structure
+	// are fixed. The database refuses a second top level, a parent that is not
+	// a level of the same structure, and removing a rule items rely on.
+	UpdateScopeNodeType(context.Context, *connect.Request[v1.UpdateScopeNodeTypeRequest]) (*connect.Response[v1.UpdateScopeNodeTypeResponse], error)
 	ListScopeNodes(context.Context, *connect.Request[v1.ListScopeNodesRequest]) (*connect.Response[v1.ListScopeNodesResponse], error)
 	// GetScopeNode fetches one node. Without it the console would have to pull
 	// an entire axis to display a single selected value.
@@ -1199,6 +1260,11 @@ type ScopeAdminServiceHandler interface {
 	EnsureAxisRoot(context.Context, *connect.Request[v1.EnsureAxisRootRequest]) (*connect.Response[v1.EnsureAxisRootResponse], error)
 	MoveScopeNode(context.Context, *connect.Request[v1.MoveScopeNodeRequest]) (*connect.Response[v1.MoveScopeNodeResponse], error)
 	ArchiveScopeNode(context.Context, *connect.Request[v1.ArchiveScopeNodeRequest]) (*connect.Response[v1.ArchiveScopeNodeResponse], error)
+	// Puts an archived node back in the pickers. Its grants never stopped
+	// deciding, so nobody's access changes.
+	RestoreScopeNode(context.Context, *connect.Request[v1.RestoreScopeNodeRequest]) (*connect.Response[v1.RestoreScopeNodeResponse], error)
+	// Renames an active node. An archived one is restored first.
+	RenameScopeNode(context.Context, *connect.Request[v1.RenameScopeNodeRequest]) (*connect.Response[v1.RenameScopeNodeResponse], error)
 	// Bulk reconcile keyed on external_ref: add/rename/move/archive, manual
 	// nodes untouched. dry=true computes the same report with zero writes.
 	UpsertScopeNodes(context.Context, *connect.Request[v1.UpsertScopeNodesRequest]) (*connect.Response[v1.UpsertScopeNodesResponse], error)
@@ -1261,6 +1327,12 @@ func NewScopeAdminServiceHandler(svc ScopeAdminServiceHandler, opts ...connect.H
 		connect.WithSchema(scopeAdminServiceMethods.ByName("CreateScopeNodeType")),
 		connect.WithHandlerOptions(opts...),
 	)
+	scopeAdminServiceUpdateScopeNodeTypeHandler := connect.NewUnaryHandler(
+		ScopeAdminServiceUpdateScopeNodeTypeProcedure,
+		svc.UpdateScopeNodeType,
+		connect.WithSchema(scopeAdminServiceMethods.ByName("UpdateScopeNodeType")),
+		connect.WithHandlerOptions(opts...),
+	)
 	scopeAdminServiceListScopeNodesHandler := connect.NewUnaryHandler(
 		ScopeAdminServiceListScopeNodesProcedure,
 		svc.ListScopeNodes,
@@ -1307,6 +1379,18 @@ func NewScopeAdminServiceHandler(svc ScopeAdminServiceHandler, opts ...connect.H
 		ScopeAdminServiceArchiveScopeNodeProcedure,
 		svc.ArchiveScopeNode,
 		connect.WithSchema(scopeAdminServiceMethods.ByName("ArchiveScopeNode")),
+		connect.WithHandlerOptions(opts...),
+	)
+	scopeAdminServiceRestoreScopeNodeHandler := connect.NewUnaryHandler(
+		ScopeAdminServiceRestoreScopeNodeProcedure,
+		svc.RestoreScopeNode,
+		connect.WithSchema(scopeAdminServiceMethods.ByName("RestoreScopeNode")),
+		connect.WithHandlerOptions(opts...),
+	)
+	scopeAdminServiceRenameScopeNodeHandler := connect.NewUnaryHandler(
+		ScopeAdminServiceRenameScopeNodeProcedure,
+		svc.RenameScopeNode,
+		connect.WithSchema(scopeAdminServiceMethods.ByName("RenameScopeNode")),
 		connect.WithHandlerOptions(opts...),
 	)
 	scopeAdminServiceUpsertScopeNodesHandler := connect.NewUnaryHandler(
@@ -1365,6 +1449,8 @@ func NewScopeAdminServiceHandler(svc ScopeAdminServiceHandler, opts ...connect.H
 			scopeAdminServiceListScopeNodeTypesHandler.ServeHTTP(w, r)
 		case ScopeAdminServiceCreateScopeNodeTypeProcedure:
 			scopeAdminServiceCreateScopeNodeTypeHandler.ServeHTTP(w, r)
+		case ScopeAdminServiceUpdateScopeNodeTypeProcedure:
+			scopeAdminServiceUpdateScopeNodeTypeHandler.ServeHTTP(w, r)
 		case ScopeAdminServiceListScopeNodesProcedure:
 			scopeAdminServiceListScopeNodesHandler.ServeHTTP(w, r)
 		case ScopeAdminServiceGetScopeNodeProcedure:
@@ -1381,6 +1467,10 @@ func NewScopeAdminServiceHandler(svc ScopeAdminServiceHandler, opts ...connect.H
 			scopeAdminServiceMoveScopeNodeHandler.ServeHTTP(w, r)
 		case ScopeAdminServiceArchiveScopeNodeProcedure:
 			scopeAdminServiceArchiveScopeNodeHandler.ServeHTTP(w, r)
+		case ScopeAdminServiceRestoreScopeNodeProcedure:
+			scopeAdminServiceRestoreScopeNodeHandler.ServeHTTP(w, r)
+		case ScopeAdminServiceRenameScopeNodeProcedure:
+			scopeAdminServiceRenameScopeNodeHandler.ServeHTTP(w, r)
 		case ScopeAdminServiceUpsertScopeNodesProcedure:
 			scopeAdminServiceUpsertScopeNodesHandler.ServeHTTP(w, r)
 		case ScopeAdminServiceListSyncSourcesProcedure:
@@ -1428,6 +1518,10 @@ func (UnimplementedScopeAdminServiceHandler) CreateScopeNodeType(context.Context
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.ScopeAdminService.CreateScopeNodeType is not implemented"))
 }
 
+func (UnimplementedScopeAdminServiceHandler) UpdateScopeNodeType(context.Context, *connect.Request[v1.UpdateScopeNodeTypeRequest]) (*connect.Response[v1.UpdateScopeNodeTypeResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.ScopeAdminService.UpdateScopeNodeType is not implemented"))
+}
+
 func (UnimplementedScopeAdminServiceHandler) ListScopeNodes(context.Context, *connect.Request[v1.ListScopeNodesRequest]) (*connect.Response[v1.ListScopeNodesResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.ScopeAdminService.ListScopeNodes is not implemented"))
 }
@@ -1458,6 +1552,14 @@ func (UnimplementedScopeAdminServiceHandler) MoveScopeNode(context.Context, *con
 
 func (UnimplementedScopeAdminServiceHandler) ArchiveScopeNode(context.Context, *connect.Request[v1.ArchiveScopeNodeRequest]) (*connect.Response[v1.ArchiveScopeNodeResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.ScopeAdminService.ArchiveScopeNode is not implemented"))
+}
+
+func (UnimplementedScopeAdminServiceHandler) RestoreScopeNode(context.Context, *connect.Request[v1.RestoreScopeNodeRequest]) (*connect.Response[v1.RestoreScopeNodeResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.ScopeAdminService.RestoreScopeNode is not implemented"))
+}
+
+func (UnimplementedScopeAdminServiceHandler) RenameScopeNode(context.Context, *connect.Request[v1.RenameScopeNodeRequest]) (*connect.Response[v1.RenameScopeNodeResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.ScopeAdminService.RenameScopeNode is not implemented"))
 }
 
 func (UnimplementedScopeAdminServiceHandler) UpsertScopeNodes(context.Context, *connect.Request[v1.UpsertScopeNodesRequest]) (*connect.Response[v1.UpsertScopeNodesResponse], error) {
@@ -1508,6 +1610,7 @@ type AuthzAdminServiceClient interface {
 	AssignMembership(context.Context, *connect.Request[v1.AssignMembershipRequest]) (*connect.Response[v1.AssignMembershipResponse], error)
 	UnassignMembership(context.Context, *connect.Request[v1.UnassignMembershipRequest]) (*connect.Response[v1.UnassignMembershipResponse], error)
 	ResyncMembership(context.Context, *connect.Request[v1.ResyncMembershipRequest]) (*connect.Response[v1.ResyncMembershipResponse], error)
+	ListMembershipAssignments(context.Context, *connect.Request[v1.ListMembershipAssignmentsRequest]) (*connect.Response[v1.ListMembershipAssignmentsResponse], error)
 	// Registers an application's permission/role/route catalog. Validates,
 	// diffs, applies. Removed permissions are deprecated, never deleted.
 	ApplyManifest(context.Context, *connect.Request[v1.ApplyManifestRequest]) (*connect.Response[v1.ApplyManifestResponse], error)
@@ -1623,6 +1726,12 @@ func NewAuthzAdminServiceClient(httpClient connect.HTTPClient, baseURL string, o
 			connect.WithSchema(authzAdminServiceMethods.ByName("ResyncMembership")),
 			connect.WithClientOptions(opts...),
 		),
+		listMembershipAssignments: connect.NewClient[v1.ListMembershipAssignmentsRequest, v1.ListMembershipAssignmentsResponse](
+			httpClient,
+			baseURL+AuthzAdminServiceListMembershipAssignmentsProcedure,
+			connect.WithSchema(authzAdminServiceMethods.ByName("ListMembershipAssignments")),
+			connect.WithClientOptions(opts...),
+		),
 		applyManifest: connect.NewClient[v1.ApplyManifestRequest, v1.ApplyManifestResponse](
 			httpClient,
 			baseURL+AuthzAdminServiceApplyManifestProcedure,
@@ -1670,28 +1779,29 @@ func NewAuthzAdminServiceClient(httpClient connect.HTTPClient, baseURL string, o
 
 // authzAdminServiceClient implements AuthzAdminServiceClient.
 type authzAdminServiceClient struct {
-	listRoles            *connect.Client[v1.ListRolesRequest, v1.ListRolesResponse]
-	createRole           *connect.Client[v1.CreateRoleRequest, v1.CreateRoleResponse]
-	updateRole           *connect.Client[v1.UpdateRoleRequest, v1.UpdateRoleResponse]
-	getRoleEffective     *connect.Client[v1.GetRoleEffectiveRequest, v1.GetRoleEffectiveResponse]
-	listPermissions      *connect.Client[v1.ListPermissionsRequest, v1.ListPermissionsResponse]
-	listGrants           *connect.Client[v1.ListGrantsRequest, v1.ListGrantsResponse]
-	searchGrants         *connect.Client[v1.SearchGrantsRequest, v1.SearchGrantsResponse]
-	createGrant          *connect.Client[v1.CreateGrantRequest, v1.CreateGrantResponse]
-	revokeGrant          *connect.Client[v1.RevokeGrantRequest, v1.RevokeGrantResponse]
-	listMemberships      *connect.Client[v1.ListMembershipsRequest, v1.ListMembershipsResponse]
-	createMembership     *connect.Client[v1.CreateMembershipRequest, v1.CreateMembershipResponse]
-	setMembershipEntries *connect.Client[v1.SetMembershipEntriesRequest, v1.SetMembershipEntriesResponse]
-	assignMembership     *connect.Client[v1.AssignMembershipRequest, v1.AssignMembershipResponse]
-	unassignMembership   *connect.Client[v1.UnassignMembershipRequest, v1.UnassignMembershipResponse]
-	resyncMembership     *connect.Client[v1.ResyncMembershipRequest, v1.ResyncMembershipResponse]
-	applyManifest        *connect.Client[v1.ApplyManifestRequest, v1.ApplyManifestResponse]
-	listCatalogSources   *connect.Client[v1.ListCatalogSourcesRequest, v1.ListCatalogSourcesResponse]
-	createCatalogSource  *connect.Client[v1.CreateCatalogSourceRequest, v1.CreateCatalogSourceResponse]
-	updateCatalogSource  *connect.Client[v1.UpdateCatalogSourceRequest, v1.UpdateCatalogSourceResponse]
-	deleteCatalogSource  *connect.Client[v1.DeleteCatalogSourceRequest, v1.DeleteCatalogSourceResponse]
-	runCatalogSource     *connect.Client[v1.RunCatalogSourceRequest, v1.RunCatalogSourceResponse]
-	listCatalogRuns      *connect.Client[v1.ListCatalogRunsRequest, v1.ListCatalogRunsResponse]
+	listRoles                 *connect.Client[v1.ListRolesRequest, v1.ListRolesResponse]
+	createRole                *connect.Client[v1.CreateRoleRequest, v1.CreateRoleResponse]
+	updateRole                *connect.Client[v1.UpdateRoleRequest, v1.UpdateRoleResponse]
+	getRoleEffective          *connect.Client[v1.GetRoleEffectiveRequest, v1.GetRoleEffectiveResponse]
+	listPermissions           *connect.Client[v1.ListPermissionsRequest, v1.ListPermissionsResponse]
+	listGrants                *connect.Client[v1.ListGrantsRequest, v1.ListGrantsResponse]
+	searchGrants              *connect.Client[v1.SearchGrantsRequest, v1.SearchGrantsResponse]
+	createGrant               *connect.Client[v1.CreateGrantRequest, v1.CreateGrantResponse]
+	revokeGrant               *connect.Client[v1.RevokeGrantRequest, v1.RevokeGrantResponse]
+	listMemberships           *connect.Client[v1.ListMembershipsRequest, v1.ListMembershipsResponse]
+	createMembership          *connect.Client[v1.CreateMembershipRequest, v1.CreateMembershipResponse]
+	setMembershipEntries      *connect.Client[v1.SetMembershipEntriesRequest, v1.SetMembershipEntriesResponse]
+	assignMembership          *connect.Client[v1.AssignMembershipRequest, v1.AssignMembershipResponse]
+	unassignMembership        *connect.Client[v1.UnassignMembershipRequest, v1.UnassignMembershipResponse]
+	resyncMembership          *connect.Client[v1.ResyncMembershipRequest, v1.ResyncMembershipResponse]
+	listMembershipAssignments *connect.Client[v1.ListMembershipAssignmentsRequest, v1.ListMembershipAssignmentsResponse]
+	applyManifest             *connect.Client[v1.ApplyManifestRequest, v1.ApplyManifestResponse]
+	listCatalogSources        *connect.Client[v1.ListCatalogSourcesRequest, v1.ListCatalogSourcesResponse]
+	createCatalogSource       *connect.Client[v1.CreateCatalogSourceRequest, v1.CreateCatalogSourceResponse]
+	updateCatalogSource       *connect.Client[v1.UpdateCatalogSourceRequest, v1.UpdateCatalogSourceResponse]
+	deleteCatalogSource       *connect.Client[v1.DeleteCatalogSourceRequest, v1.DeleteCatalogSourceResponse]
+	runCatalogSource          *connect.Client[v1.RunCatalogSourceRequest, v1.RunCatalogSourceResponse]
+	listCatalogRuns           *connect.Client[v1.ListCatalogRunsRequest, v1.ListCatalogRunsResponse]
 }
 
 // ListRoles calls anubis.v1.AuthzAdminService.ListRoles.
@@ -1769,6 +1879,11 @@ func (c *authzAdminServiceClient) ResyncMembership(ctx context.Context, req *con
 	return c.resyncMembership.CallUnary(ctx, req)
 }
 
+// ListMembershipAssignments calls anubis.v1.AuthzAdminService.ListMembershipAssignments.
+func (c *authzAdminServiceClient) ListMembershipAssignments(ctx context.Context, req *connect.Request[v1.ListMembershipAssignmentsRequest]) (*connect.Response[v1.ListMembershipAssignmentsResponse], error) {
+	return c.listMembershipAssignments.CallUnary(ctx, req)
+}
+
 // ApplyManifest calls anubis.v1.AuthzAdminService.ApplyManifest.
 func (c *authzAdminServiceClient) ApplyManifest(ctx context.Context, req *connect.Request[v1.ApplyManifestRequest]) (*connect.Response[v1.ApplyManifestResponse], error) {
 	return c.applyManifest.CallUnary(ctx, req)
@@ -1824,6 +1939,7 @@ type AuthzAdminServiceHandler interface {
 	AssignMembership(context.Context, *connect.Request[v1.AssignMembershipRequest]) (*connect.Response[v1.AssignMembershipResponse], error)
 	UnassignMembership(context.Context, *connect.Request[v1.UnassignMembershipRequest]) (*connect.Response[v1.UnassignMembershipResponse], error)
 	ResyncMembership(context.Context, *connect.Request[v1.ResyncMembershipRequest]) (*connect.Response[v1.ResyncMembershipResponse], error)
+	ListMembershipAssignments(context.Context, *connect.Request[v1.ListMembershipAssignmentsRequest]) (*connect.Response[v1.ListMembershipAssignmentsResponse], error)
 	// Registers an application's permission/role/route catalog. Validates,
 	// diffs, applies. Removed permissions are deprecated, never deleted.
 	ApplyManifest(context.Context, *connect.Request[v1.ApplyManifestRequest]) (*connect.Response[v1.ApplyManifestResponse], error)
@@ -1935,6 +2051,12 @@ func NewAuthzAdminServiceHandler(svc AuthzAdminServiceHandler, opts ...connect.H
 		connect.WithSchema(authzAdminServiceMethods.ByName("ResyncMembership")),
 		connect.WithHandlerOptions(opts...),
 	)
+	authzAdminServiceListMembershipAssignmentsHandler := connect.NewUnaryHandler(
+		AuthzAdminServiceListMembershipAssignmentsProcedure,
+		svc.ListMembershipAssignments,
+		connect.WithSchema(authzAdminServiceMethods.ByName("ListMembershipAssignments")),
+		connect.WithHandlerOptions(opts...),
+	)
 	authzAdminServiceApplyManifestHandler := connect.NewUnaryHandler(
 		AuthzAdminServiceApplyManifestProcedure,
 		svc.ApplyManifest,
@@ -2009,6 +2131,8 @@ func NewAuthzAdminServiceHandler(svc AuthzAdminServiceHandler, opts ...connect.H
 			authzAdminServiceUnassignMembershipHandler.ServeHTTP(w, r)
 		case AuthzAdminServiceResyncMembershipProcedure:
 			authzAdminServiceResyncMembershipHandler.ServeHTTP(w, r)
+		case AuthzAdminServiceListMembershipAssignmentsProcedure:
+			authzAdminServiceListMembershipAssignmentsHandler.ServeHTTP(w, r)
 		case AuthzAdminServiceApplyManifestProcedure:
 			authzAdminServiceApplyManifestHandler.ServeHTTP(w, r)
 		case AuthzAdminServiceListCatalogSourcesProcedure:
@@ -2090,6 +2214,10 @@ func (UnimplementedAuthzAdminServiceHandler) UnassignMembership(context.Context,
 
 func (UnimplementedAuthzAdminServiceHandler) ResyncMembership(context.Context, *connect.Request[v1.ResyncMembershipRequest]) (*connect.Response[v1.ResyncMembershipResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.AuthzAdminService.ResyncMembership is not implemented"))
+}
+
+func (UnimplementedAuthzAdminServiceHandler) ListMembershipAssignments(context.Context, *connect.Request[v1.ListMembershipAssignmentsRequest]) (*connect.Response[v1.ListMembershipAssignmentsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.AuthzAdminService.ListMembershipAssignments is not implemented"))
 }
 
 func (UnimplementedAuthzAdminServiceHandler) ApplyManifest(context.Context, *connect.Request[v1.ApplyManifestRequest]) (*connect.Response[v1.ApplyManifestResponse], error) {

@@ -20,6 +20,9 @@ type ScopeNodeRecord struct {
 	// draws its expand affordance from it, so zero must mean "no children",
 	// never "nobody counted".
 	ChildCount int
+	// Path names the items between the top of the structure and this one,
+	// top first. Filled for search hits only, where a bare name is ambiguous.
+	Path []string
 }
 
 // DefaultScopeNodePage / MaxScopeNodePage bound one page of a node listing.

@@ -257,6 +257,8 @@ func parseMemberships(spec schema.SheetSpec, idx schema.HeaderIndex, t Table, is
 			Realm:    idx.Value(cells, schema.ColRealm),
 			Username: idx.Value(cells, schema.ColUsername),
 			Name:     idx.Value(cells, schema.ColMembership),
+			PlaceRef: idx.Value(cells, schema.ColScopeRef),
+			Reason:   idx.Value(cells, schema.ColReason),
 		}
 		bad := false
 		for _, c := range []struct{ key, val string }{
@@ -265,6 +267,25 @@ func parseMemberships(spec schema.SheetSpec, idx schema.HeaderIndex, t Table, is
 			if c.val == "" {
 				issues = append(issues, required(spec.Name, line, c.key))
 				bad = true
+			}
+		}
+		if raw := idx.Value(cells, schema.ColScopeInherit); raw != "" {
+			v, err := parseBool(raw)
+			if err != nil {
+				issues = append(issues, RowIssue{Sheet: spec.Name, Row: line,
+					Column: schema.ColScopeInherit, Message: "must be true or false"})
+				bad = true
+			}
+			m.Exact = !v
+		}
+		if raw := idx.Value(cells, schema.ColValidUntil); raw != "" {
+			until, err := parseDate(raw)
+			if err != nil {
+				issues = append(issues, RowIssue{Sheet: spec.Name, Row: line,
+					Column: schema.ColValidUntil, Message: "must be a date as YYYY-MM-DD"})
+				bad = true
+			} else {
+				m.ValidUntil = &until
 			}
 		}
 		if bad {

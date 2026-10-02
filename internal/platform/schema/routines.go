@@ -262,75 +262,145 @@ BEGIN
     END LOOP;
 END;
 `),
-		storm.Function("membership_assign", "p_identity uuid, p_membership uuid, p_by uuid", "integer").Body(`
+		// One grant from one assignment and one entry — the only place a
+		// membership becomes access, so assign and resync cannot drift apart
+		// (0054). The entry's places are copied; the assignment's place, when
+		// the membership applies where assigned, is added as one more include
+		// on its own axis. The end date and the note are the assignment's.
+		storm.Function("membership_materialize", "p_member uuid, p_entry uuid", "uuid").Body(`
 DECLARE
-    v_tenant uuid;
-    v_n int := 0;
-    e record;
+    m membership_members%ROWTYPE;
+    e membership_entries%ROWTYPE;
     v_grant uuid;
 BEGIN
-    SELECT tenant_id INTO v_tenant FROM memberships WHERE id = p_membership;
-    IF v_tenant IS NULL THEN RAISE EXCEPTION 'unknown membership %', p_membership; END IF;
+    SELECT * INTO m FROM membership_members WHERE id = p_member;
+    SELECT * INTO e FROM membership_entries WHERE id = p_entry;
+    -- realm-guard and role-live fire HERE, per row: a person one of the roles
+    -- cannot serve aborts the whole assignment, never half of it.
+    INSERT INTO grants (tenant_id, identity_id, role_id, granted_by, reason, valid_until,
+                        via_membership_id, via_entry_id, via_member_id)
+    VALUES (m.tenant_id, m.identity_id, e.role_id, m.assigned_by, m.reason, m.valid_until,
+            m.membership_id, e.id, m.id)
+    RETURNING id INTO v_grant;
 
-    INSERT INTO membership_members (membership_id, identity_id, tenant_id, assigned_by)
-    VALUES (p_membership, p_identity, v_tenant, p_by)
-    ON CONFLICT DO NOTHING;
-    IF NOT FOUND THEN RETURN 0; END IF;   -- already a member: no duplicate fan-out
-
-    FOR e IN SELECT id, role_id FROM membership_entries WHERE membership_id = p_membership LOOP
-        -- realm-guard trigger fires HERE, per row: wrong population aborts all
-        INSERT INTO grants (tenant_id, identity_id, role_id, granted_by,
-                            via_membership_id, via_entry_id)
-        VALUES (v_tenant, p_identity, e.role_id, p_by, p_membership, e.id)
-        RETURNING id INTO v_grant;
-
+    INSERT INTO grant_scopes (grant_id, tenant_id, axis_code, scope_node_id, inherit, mode)
+    SELECT v_grant, s.tenant_id, s.axis_code, s.scope_node_id, s.inherit, s.mode
+      FROM membership_entry_scopes s WHERE s.entry_id = e.id;
+    IF m.scope_node_id IS NOT NULL THEN
         INSERT INTO grant_scopes (grant_id, tenant_id, axis_code, scope_node_id, inherit, mode)
-        SELECT v_grant, tenant_id, axis_code, scope_node_id, inherit, mode
-          FROM membership_entry_scopes WHERE entry_id = e.id;
-        v_n := v_n + 1;
-    END LOOP;
-    RETURN v_n;
+        VALUES (v_grant, m.tenant_id, m.axis_code, m.scope_node_id, m.inherit, 'include');
+    END IF;
+    RETURN v_grant;
 END;
 `),
+		// Assigning returns the new assignment, or NULL when the same person
+		// already holds the membership at the same place — repeating an
+		// assignment creates nothing. A lapsed one (its end date passed) is
+		// closed and replaced, or re-adding somebody would silently do nothing.
+		storm.Function("membership_assign", "p_identity uuid, p_membership uuid, p_by uuid, p_node uuid, p_inherit boolean, p_valid_until timestamp with time zone, p_reason text", "uuid").Body(`
+DECLARE
+    v_tenant uuid;
+    v_anchor text;
+    v_member uuid;
+    e record;
+BEGIN
+    SELECT tenant_id, anchor_axis INTO v_tenant, v_anchor FROM memberships WHERE id = p_membership;
+    IF v_tenant IS NULL THEN RAISE EXCEPTION 'unknown membership %', p_membership; END IF;
+    IF v_anchor IS NULL AND p_node IS NOT NULL THEN
+        RAISE EXCEPTION 'this membership gives every member the same places; an assignment names no place of its own'
+              USING ERRCODE = 'check_violation';
+    END IF;
+    IF v_anchor IS NOT NULL AND p_node IS NULL THEN
+        RAISE EXCEPTION 'this membership applies where each member is assigned: choose a place in "%"', v_anchor
+              USING ERRCODE = 'check_violation';
+    END IF;
+    IF p_valid_until IS NOT NULL AND p_valid_until <= now() THEN
+        RAISE EXCEPTION 'an assignment cannot end before it starts (%)', p_valid_until
+              USING ERRCODE = 'check_violation';
+    END IF;
+
+    UPDATE membership_members SET removed_at = now(), removed_by = p_by
+     WHERE membership_id = p_membership AND identity_id = p_identity AND removed_at IS NULL
+       AND scope_node_id IS NOT DISTINCT FROM p_node
+       AND valid_until IS NOT NULL AND valid_until <= now();
+    IF EXISTS (SELECT 1 FROM membership_members
+                WHERE membership_id = p_membership AND identity_id = p_identity
+                  AND removed_at IS NULL AND scope_node_id IS NOT DISTINCT FROM p_node) THEN
+        RETURN NULL;
+    END IF;
+
+    INSERT INTO membership_members (membership_id, identity_id, tenant_id, assigned_by,
+                                    axis_code, scope_node_id, inherit, valid_until, reason)
+    VALUES (p_membership, p_identity, v_tenant, p_by,
+            CASE WHEN p_node IS NULL THEN NULL ELSE v_anchor END, p_node,
+            COALESCE(p_inherit, true), p_valid_until, NULLIF(btrim(p_reason), ''))
+    RETURNING id INTO v_member;
+
+    FOR e IN SELECT id FROM membership_entries
+              WHERE membership_id = p_membership AND retired_at IS NULL LOOP
+        PERFORM membership_materialize(v_member, e.id);
+    END LOOP;
+    RETURN v_member;
+END;
+`),
+		// Everything a membership should have given, given; everything it no
+		// longer gives, taken back. Runs after its roles change: grants from a
+		// retired entry are revoked, and every current member gets any entry
+		// they are missing — at their own assignment's place.
 		storm.Function("membership_resync", "p_membership uuid", "integer").Body(`
 DECLARE
-    v_tenant uuid; m record; e record; v_grant uuid; v_n int := 0;
+    m record; e record; v_n int := 0;
 BEGIN
-    SELECT tenant_id INTO v_tenant FROM memberships WHERE id = p_membership;
-    UPDATE grants g SET revoked_at = now()
+    UPDATE grants g SET revoked_at = now(),
+                        revoke_reason = COALESCE(g.revoke_reason, 'the membership no longer gives this role')
      WHERE g.via_membership_id = p_membership AND g.revoked_at IS NULL
-       AND NOT EXISTS (SELECT 1 FROM membership_entries me WHERE me.id = g.via_entry_id);
+       AND EXISTS (SELECT 1 FROM membership_entries me
+                    WHERE me.id = g.via_entry_id AND me.retired_at IS NOT NULL);
     GET DIAGNOSTICS v_n = ROW_COUNT;
 
-    FOR m IN SELECT identity_id FROM membership_members WHERE membership_id = p_membership LOOP
-        FOR e IN SELECT id, role_id FROM membership_entries me
-                  WHERE me.membership_id = p_membership
+    FOR m IN SELECT id FROM membership_members
+              WHERE membership_id = p_membership AND removed_at IS NULL
+                AND (valid_until IS NULL OR valid_until > now()) LOOP
+        FOR e IN SELECT me.id FROM membership_entries me
+                  WHERE me.membership_id = p_membership AND me.retired_at IS NULL
                     AND NOT EXISTS (SELECT 1 FROM grants g
-                                     WHERE g.via_entry_id = me.id
-                                       AND g.identity_id = m.identity_id
+                                     WHERE g.via_entry_id = me.id AND g.via_member_id = m.id
                                        AND g.revoked_at IS NULL) LOOP
-            INSERT INTO grants (tenant_id, identity_id, role_id, granted_by,
-                                via_membership_id, via_entry_id)
-            VALUES (v_tenant, m.identity_id, e.role_id, m.identity_id, p_membership, e.id)
-            RETURNING id INTO v_grant;
-            INSERT INTO grant_scopes (grant_id, tenant_id, axis_code, scope_node_id, inherit, mode)
-            SELECT v_grant, tenant_id, axis_code, scope_node_id, inherit, mode
-              FROM membership_entry_scopes WHERE entry_id = e.id;
+            PERFORM membership_materialize(m.id, e.id);
             v_n := v_n + 1;
         END LOOP;
     END LOOP;
     RETURN v_n;
 END;
 `),
-		storm.Function("membership_unassign", "p_identity uuid, p_membership uuid", "integer").Body(`
+		// Leaving one assignment revokes exactly the grants it gave: the same
+		// person may hold the same membership somewhere else.
+		storm.Function("membership_leave", "p_member uuid, p_by uuid, p_reason text", "integer").Body(`
 DECLARE v_n int;
 BEGIN
-    UPDATE grants SET revoked_at = now()
+    UPDATE grants SET revoked_at = now(),
+                      revoke_reason = COALESCE(NULLIF(btrim(p_reason), ''), 'left the membership')
+     WHERE via_member_id = p_member AND revoked_at IS NULL;
+    GET DIAGNOSTICS v_n = ROW_COUNT;
+    UPDATE membership_members SET removed_at = now(), removed_by = p_by
+     WHERE id = p_member AND removed_at IS NULL;
+    RETURN v_n;
+END;
+`),
+		// Out of the membership altogether, at every place. The grant update
+		// matches on the membership rather than the assignment, so a derived
+		// grant from before assignments had ids cannot outlive the person
+		// leaving.
+		storm.Function("membership_unassign", "p_identity uuid, p_membership uuid, p_by uuid, p_reason text", "integer").Body(`
+DECLARE v_n int;
+BEGIN
+    UPDATE grants SET revoked_at = now(),
+                      revoke_reason = COALESCE(NULLIF(btrim(p_reason), ''), 'left the membership')
      WHERE identity_id = p_identity AND via_membership_id = p_membership
        AND revoked_at IS NULL;
     GET DIAGNOSTICS v_n = ROW_COUNT;
-    DELETE FROM membership_members
-     WHERE membership_id = p_membership AND identity_id = p_identity;
+    UPDATE membership_members SET removed_at = now(), removed_by = p_by
+     WHERE membership_id = p_membership AND identity_id = p_identity AND removed_at IS NULL;
     RETURN v_n;
 END;
 `),
@@ -409,6 +479,7 @@ END;
 DECLARE
     v_id uuid;
     v_type text;
+    v_name text;
 BEGIN
     SELECT id INTO v_id FROM scope_nodes
      WHERE tenant_id = p_tenant AND axis_code = p_axis AND is_axis_root;
@@ -416,15 +487,17 @@ BEGIN
 
     -- The root type is the one with NO legal parents. Picking alphabetically
     -- silently produced roots typed 'department' on the org axis.
-    SELECT code INTO v_type FROM scope_node_types
+    SELECT code, display_name INTO v_type, v_name FROM scope_node_types
      WHERE axis_code = p_axis AND cardinality(parent_types) = 0
      ORDER BY code LIMIT 1;
     IF v_type IS NULL THEN
         RAISE EXCEPTION 'axis % has no root node type (none with empty parent_types)', p_axis;
     END IF;
 
+    -- Named after its level ("All partners"), not after the axis code: the
+    -- name is what every picker prints, and 'All cost_center' is not a name.
     INSERT INTO scope_nodes (tenant_id, axis_code, node_type, slug, name, is_axis_root)
-         VALUES (p_tenant, p_axis, v_type, '_root', 'All ' || p_axis, true)
+         VALUES (p_tenant, p_axis, v_type, '_root', v_name, true)
       RETURNING id INTO v_id;
 
     INSERT INTO scope_closure (ancestor_id, descendant_id, depth)
@@ -778,6 +851,55 @@ BEGIN
     RETURN NEW;
 END;
 `),
+		// A membership that applies where each member is assigned takes its
+		// place on the anchor axis from the assignment. A role inside it naming
+		// a place on that same axis would be a second answer to one question,
+		// and the two would be AND'ed into something nobody chose (0054).
+		storm.Function("trg_membership_entry_anchor", "", "trigger").Body(`
+BEGIN
+    IF EXISTS (SELECT 1 FROM membership_entries e
+                 JOIN memberships m ON m.id = e.membership_id
+                WHERE e.id = NEW.entry_id AND m.anchor_axis = NEW.axis_code) THEN
+        RAISE EXCEPTION
+          'this membership applies where each member is assigned in "%", so its roles may not name places there themselves',
+          NEW.axis_code
+          USING ERRCODE = 'check_violation';
+    END IF;
+    RETURN NEW;
+END;
+`),
+		// Where a membership applies is decided once, when it is created.
+		// Changing it would silently reinterpret the access of everybody
+		// already in it.
+		storm.Function("trg_membership_anchor_fixed", "", "trigger").Body(`
+BEGIN
+    RAISE EXCEPTION
+      'where a membership applies is fixed when it is created (it applies %, not %)',
+      COALESCE('where assigned in "' || OLD.anchor_axis || '"', 'the same for everyone'),
+      COALESCE('where assigned in "' || NEW.anchor_axis || '"', 'the same for everyone')
+      USING ERRCODE = 'check_violation';
+END;
+`),
+		// An assignment's place agrees with its membership: none for one that
+		// is the same for everyone, exactly one on the anchor axis for one that
+		// applies where assigned. membership_assign says the same thing first,
+		// in words; this is the floor under a write that does not go through it.
+		storm.Function("trg_membership_member_place", "", "trigger").Body(`
+DECLARE
+    v_anchor text;
+BEGIN
+    SELECT anchor_axis INTO v_anchor FROM memberships WHERE id = NEW.membership_id;
+    IF v_anchor IS NULL AND NEW.scope_node_id IS NOT NULL THEN
+        RAISE EXCEPTION 'this membership gives every member the same places; an assignment names no place of its own'
+              USING ERRCODE = 'check_violation';
+    END IF;
+    IF v_anchor IS NOT NULL AND (NEW.scope_node_id IS NULL OR NEW.axis_code IS DISTINCT FROM v_anchor) THEN
+        RAISE EXCEPTION 'this membership applies where each member is assigned: choose a place in "%"', v_anchor
+              USING ERRCODE = 'check_violation';
+    END IF;
+    RETURN NEW;
+END;
+`),
 		storm.Function("trg_scope_node_type_guard", "", "trigger").Body(`
 DECLARE
     v_parent_type text;
@@ -797,6 +919,78 @@ BEGIN
           USING ERRCODE = 'check_violation';
     END IF;
     RETURN NEW;
+END;
+`),
+		storm.Function("trg_scope_node_type_rules", "", "trigger").Body(`
+DECLARE
+    v_bad text;
+BEGIN
+    -- Levels are shared by every tenant, so these rules are about the
+    -- structure's shape. No message names a count or a tenant.
+    IF TG_OP = 'DELETE' THEN
+        SELECT t.code INTO v_bad FROM scope_node_types t
+         WHERE t.axis_code = OLD.axis_code AND OLD.code = ANY (t.parent_types)
+         LIMIT 1;
+        IF v_bad IS NOT NULL THEN
+            RAISE EXCEPTION '"%" is still what "%" sits under', OLD.display_name,
+                  (SELECT display_name FROM scope_node_types WHERE code = v_bad)
+                  USING ERRCODE = 'check_violation';
+        END IF;
+        RETURN NULL;
+    END IF;
+
+    IF TG_OP = 'UPDATE' AND (NEW.code <> OLD.code OR NEW.axis_code <> OLD.axis_code) THEN
+        RAISE EXCEPTION 'a level keeps its code and its structure; add a new level instead'
+              USING ERRCODE = 'check_violation';
+    END IF;
+
+    -- A level sits under levels of its own structure, or under itself.
+    SELECT p INTO v_bad FROM unnest(NEW.parent_types) AS p
+     WHERE p <> NEW.code
+       AND NOT EXISTS (SELECT 1 FROM scope_node_types t
+                        WHERE t.code = p AND t.axis_code = NEW.axis_code)
+     LIMIT 1;
+    IF v_bad IS NOT NULL THEN
+        RAISE EXCEPTION '"%" is not a level of structure "%"', v_bad, NEW.axis_code
+              USING ERRCODE = 'check_violation';
+    END IF;
+
+    -- One top level: scope_ensure_root builds every tenant's top item from
+    -- it, and with two it would have to guess.
+    IF cardinality(NEW.parent_types) = 0 AND EXISTS (
+         SELECT 1 FROM scope_node_types t
+          WHERE t.axis_code = NEW.axis_code AND t.code <> NEW.code
+            AND cardinality(t.parent_types) = 0) THEN
+        RAISE EXCEPTION 'this structure already has a top level; "%" has to sit under something', NEW.display_name
+              USING ERRCODE = 'check_violation';
+    END IF;
+
+    IF TG_OP = 'INSERT' THEN RETURN NULL; END IF;
+
+    IF cardinality(OLD.parent_types) = 0 AND cardinality(NEW.parent_types) > 0 THEN
+        RAISE EXCEPTION '"%" is the top of its structure and sits under nothing', NEW.display_name
+              USING ERRCODE = 'check_violation';
+    END IF;
+    IF cardinality(OLD.parent_types) > 0 AND cardinality(NEW.parent_types) = 0 THEN
+        RAISE EXCEPTION '"%" has to sit under something; only the top level sits under nothing', NEW.display_name
+              USING ERRCODE = 'check_violation';
+    END IF;
+
+    -- A rule items already rely on stays. Archived items count: restoring one
+    -- does not re-run the placement guard.
+    SELECT p INTO v_bad FROM unnest(OLD.parent_types) AS p
+     WHERE NOT (p = ANY (NEW.parent_types))
+       AND EXISTS (SELECT 1 FROM scope_nodes n
+                     JOIN scope_nodes up ON up.id = n.parent_id
+                    WHERE n.axis_code = NEW.axis_code AND n.node_type = NEW.code
+                      AND up.node_type = p)
+     LIMIT 1;
+    IF v_bad IS NOT NULL THEN
+        RAISE EXCEPTION 'some "%" items already sit under a "%"; move them before removing that rule',
+              NEW.display_name, COALESCE((SELECT display_name FROM scope_node_types WHERE code = v_bad), v_bad)
+              USING ERRCODE = 'check_violation';
+    END IF;
+    RETURN NULL;
 END;
 `),
 		storm.Function("trg_seed_auth_pages", "", "trigger").Body(`
@@ -842,6 +1036,9 @@ END;
 		storm.Trigger("bump_identities_ins", "identities", `CREATE TRIGGER bump_identities_ins AFTER INSERT ON identities REFERENCING NEW TABLE AS newtab FOR EACH STATEMENT EXECUTE FUNCTION trg_bump_catalog_identities_stmt()`),
 		storm.Trigger("bump_identities_state", "identities", `CREATE TRIGGER bump_identities_state AFTER UPDATE ON identities REFERENCING OLD TABLE AS oldtab NEW TABLE AS newtab FOR EACH STATEMENT EXECUTE FUNCTION trg_bump_catalog_identities_stmt()`),
 		storm.Trigger("membership_entry_scopes_exclusion_guard", "membership_entry_scopes", `CREATE CONSTRAINT TRIGGER membership_entry_scopes_exclusion_guard AFTER INSERT OR UPDATE ON membership_entry_scopes DEFERRABLE INITIALLY DEFERRED FOR EACH ROW WHEN ((new.mode = 'exclude'::text)) EXECUTE FUNCTION trg_entry_exclusion_needs_include()`),
+		storm.Trigger("membership_entry_scopes_anchor_guard", "membership_entry_scopes", `CREATE CONSTRAINT TRIGGER membership_entry_scopes_anchor_guard AFTER INSERT OR UPDATE ON membership_entry_scopes DEFERRABLE INITIALLY IMMEDIATE FOR EACH ROW EXECUTE FUNCTION trg_membership_entry_anchor()`),
+		storm.Trigger("membership_members_place_guard", "membership_members", `CREATE CONSTRAINT TRIGGER membership_members_place_guard AFTER INSERT OR UPDATE OF membership_id, axis_code, scope_node_id ON membership_members DEFERRABLE INITIALLY IMMEDIATE FOR EACH ROW EXECUTE FUNCTION trg_membership_member_place()`),
+		storm.Trigger("memberships_anchor_fixed", "memberships", `CREATE TRIGGER memberships_anchor_fixed BEFORE UPDATE OF anchor_axis ON memberships FOR EACH ROW WHEN ((old.anchor_axis IS DISTINCT FROM new.anchor_axis)) EXECUTE FUNCTION trg_membership_anchor_fixed()`),
 		storm.Trigger("permissions_bump_del", "permissions", `CREATE TRIGGER permissions_bump_del AFTER DELETE ON permissions REFERENCING OLD TABLE AS oldtab FOR EACH STATEMENT EXECUTE FUNCTION trg_bump_catalog_stmt()`),
 		storm.Trigger("permissions_bump_ins", "permissions", `CREATE TRIGGER permissions_bump_ins AFTER INSERT ON permissions REFERENCING NEW TABLE AS newtab FOR EACH STATEMENT EXECUTE FUNCTION trg_bump_catalog_stmt()`),
 		storm.Trigger("permissions_bump_upd", "permissions", `CREATE TRIGGER permissions_bump_upd AFTER UPDATE ON permissions REFERENCING NEW TABLE AS newtab FOR EACH STATEMENT EXECUTE FUNCTION trg_bump_catalog_stmt()`),
@@ -860,6 +1057,7 @@ END;
 		storm.Trigger("scope_nodes_bump_del", "scope_nodes", `CREATE TRIGGER scope_nodes_bump_del AFTER DELETE ON scope_nodes REFERENCING OLD TABLE AS oldtab FOR EACH STATEMENT EXECUTE FUNCTION trg_bump_catalog_stmt()`),
 		storm.Trigger("scope_nodes_bump_ins", "scope_nodes", `CREATE TRIGGER scope_nodes_bump_ins AFTER INSERT ON scope_nodes REFERENCING NEW TABLE AS newtab FOR EACH STATEMENT EXECUTE FUNCTION trg_bump_catalog_stmt()`),
 		storm.Trigger("scope_nodes_bump_upd", "scope_nodes", `CREATE TRIGGER scope_nodes_bump_upd AFTER UPDATE ON scope_nodes REFERENCING NEW TABLE AS newtab FOR EACH STATEMENT EXECUTE FUNCTION trg_bump_catalog_stmt()`),
+		storm.Trigger("scope_node_types_rules", "scope_node_types", `CREATE CONSTRAINT TRIGGER scope_node_types_rules AFTER INSERT OR DELETE OR UPDATE ON scope_node_types DEFERRABLE INITIALLY IMMEDIATE FOR EACH ROW EXECUTE FUNCTION trg_scope_node_type_rules()`),
 		storm.Trigger("scope_nodes_type_guard", "scope_nodes", `CREATE CONSTRAINT TRIGGER scope_nodes_type_guard AFTER INSERT OR UPDATE OF parent_id, node_type ON scope_nodes DEFERRABLE INITIALLY IMMEDIATE FOR EACH ROW EXECUTE FUNCTION trg_scope_node_type_guard()`),
 		storm.Trigger("bump_sessions_revoked", "sessions", `CREATE TRIGGER bump_sessions_revoked AFTER UPDATE ON sessions REFERENCING OLD TABLE AS oldtab NEW TABLE AS newtab FOR EACH STATEMENT EXECUTE FUNCTION trg_bump_catalog_sessions_stmt()`),
 		storm.Trigger("seed_auth_pages", "tenants", `CREATE TRIGGER seed_auth_pages AFTER INSERT ON tenants REFERENCING NEW TABLE AS newtab FOR EACH STATEMENT EXECUTE FUNCTION trg_seed_auth_pages()`),

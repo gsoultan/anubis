@@ -90,9 +90,10 @@ func (f *fakeAccess) ListGrants(_ context.Context, _, identityID string, _ bool)
 
 // fakeAccessWriter records the access the import hands out.
 type fakeAccessWriter struct {
-	grants   []grant.GrantCreate
-	assigned [][2]string // membershipID, identityID
-	grantErr error
+	grants      []grant.GrantCreate
+	assigned    [][2]string // membershipID, identityID
+	assignments []membership.MembershipAssignmentInput
+	grantErr    error
 }
 
 func (f *fakeAccessWriter) CreateGrant(_ context.Context, in grant.GrantCreate) (string, error) {
@@ -103,9 +104,10 @@ func (f *fakeAccessWriter) CreateGrant(_ context.Context, in grant.GrantCreate) 
 	return "grant-id", nil
 }
 
-func (f *fakeAccessWriter) AssignMembership(_ context.Context, membershipID, identityID string) (int, error) {
-	f.assigned = append(f.assigned, [2]string{membershipID, identityID})
-	return 1, nil
+func (f *fakeAccessWriter) AssignMembership(_ context.Context, in membership.MembershipAssignmentInput) (membership.MembershipAssignOutcome, error) {
+	f.assigned = append(f.assigned, [2]string{in.MembershipID, in.IdentityID})
+	f.assignments = append(f.assignments, in)
+	return membership.MembershipAssignOutcome{AssignmentID: "a-" + in.IdentityID, GrantsCreated: 1}, nil
 }
 
 // fakeScope resolves scope node references.

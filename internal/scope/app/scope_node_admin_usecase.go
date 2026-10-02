@@ -9,6 +9,9 @@ import (
 type ScopeNodeAdminUsecase interface {
 	ListScopeNodeTypes(ctx context.Context, axis string) ([]scopedomain.ScopeNodeTypeRecord, error)
 	CreateScopeNodeType(ctx context.Context, t scopedomain.ScopeNodeTypeRecord) error
+	// UpdateScopeNodeType renames a level and replaces what it may sit under,
+	// keyed on code and axis; both are fixed once the level exists.
+	UpdateScopeNodeType(ctx context.Context, t scopedomain.ScopeNodeTypeRecord) error
 	// ListScopeNodes returns one keyset page plus the token to resume after
 	// it, empty on the last page. See scopedomain.ScopeNodeFilter.
 	ListScopeNodes(ctx context.Context, f scopedomain.ScopeNodeFilter) ([]scopedomain.ScopeNodeRecord, string, error)
@@ -21,6 +24,10 @@ type ScopeNodeAdminUsecase interface {
 	EnsureAxisRoot(ctx context.Context, axis string) (string, error)
 	MoveScopeNode(ctx context.Context, nodeID, newParentID string) error
 	ArchiveScopeNode(ctx context.Context, nodeID string) error
+	// RestoreScopeNode puts an archived node back in the pickers.
+	RestoreScopeNode(ctx context.Context, nodeID string) error
+	// RenameScopeNode renames an active node; restore an archived one first.
+	RenameScopeNode(ctx context.Context, nodeID, name string) error
 	// UpsertScopeNodes bulk-reconciles keyed on external_ref (parents first).
 	UpsertScopeNodes(ctx context.Context, axis, defaultNodeType string, rows []SyncRowInput, dry bool) (reportJSON string, err error)
 }

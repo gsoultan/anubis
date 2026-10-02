@@ -13,9 +13,12 @@ export const qk = {
   nodeTypes: () => ['node-types'] as const,
 
   scope: () => ['scope'] as const,
-  scopeChildren: (axis: string, parent: string | null) =>
-    [...qk.scope(), axis, 'children', parent ?? 'root'] as const,
-  scopeSearch: (axis: string, q: string) => [...qk.scope(), axis, 'search', q] as const,
+  /* `archived` adds a segment only when on, so every picker keeps sharing the
+     one cached listing and only the Structure page's "show archived" differs. */
+  scopeChildren: (axis: string, parent: string | null, archived = false) =>
+    [...qk.scope(), axis, 'children', parent ?? 'root', ...(archived ? ['archived'] : [])] as const,
+  scopeSearch: (axis: string, q: string, archived = false) =>
+    [...qk.scope(), axis, 'search', q, ...(archived ? ['archived'] : [])] as const,
   scopeNode: (id: string) => [...qk.scope(), 'node', id] as const,
   ancestorPath: (id: string) => [...qk.scope(), 'path', id] as const,
 
@@ -28,6 +31,10 @@ export const qk = {
   rolePermissions: (id: string) => ['roles', id, 'permissions'] as const,
   grants: (identityId?: string) => ['grants', identityId ?? 'all'] as const,
   memberships: () => ['memberships'] as const,
+  /** Under memberships(), so a write that invalidates memberships also
+      refreshes every roster and every person's list of them. */
+  membershipAssignments: (by: { membershipId?: string; identityId?: string }) =>
+    ['memberships', 'assignments', by.membershipId ?? '', by.identityId ?? ''] as const,
   syncSources: () => ['sync-sources'] as const,
   syncRuns: (sourceId: string) => ['sync-runs', sourceId] as const,
   catalogSources: () => ['catalog-sources'] as const,

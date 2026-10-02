@@ -8,8 +8,7 @@
    real ones. There is no sample data left in the console's data path.
 
    NO RPC EXISTS, and the seam says so instead of pretending:
-     createPermission (manifests own the catalog), deleteRole,
-     setNodeTypeParents
+     createPermission (manifests own the catalog), deleteRole
 
    Keep this ledger accurate. It is the first thing anyone reads to find out
    what the console actually talks to. */
@@ -63,9 +62,10 @@ export const api = {
 
   /** Children of a node, or axis roots when parentId is null. Lazy by design:
       a production customer axis holds ~20k nodes and must never be sent whole. */
-  scopeChildren: (axisCode: string, parentId: Uuid | null) => live.scopeChildren(axisCode, parentId),
+  scopeChildren: (axisCode: string, parentId: Uuid | null, archived = false) =>
+    live.scopeChildren(axisCode, parentId, archived),
 
-  scopeSearch: (axisCode: string, q: string) => live.scopeSearch(axisCode, q),
+  scopeSearch: (axisCode: string, q: string, archived = false) => live.scopeSearch(axisCode, q, archived),
 
   scopeNode: (id: Uuid) => live.scopeNode(id),
   scopeNodesByIds: (ids: Uuid[]) => live.scopeNodesByIds(ids),
@@ -108,19 +108,21 @@ export const api = {
     live.updateRole(i),
   createGrant: (i: NewGrantInput) => live.createGrant(i),
   memberships: () => live.memberships(),
-  createMembership: (i: { name: string; description: string
-    entries: { role_id: string; scopes: import('./types').GrantScope[] }[] }) =>
-    live.createMembership(i),
-  assignMembership: (identityId: Uuid, membershipId: Uuid) =>
-    live.assignMembership(identityId, membershipId),
-  unassignMembership: (identityId: Uuid, membershipId: Uuid) =>
-    live.unassignMembership(identityId, membershipId),
-  revokeGrant: (id: Uuid) => live.revokeGrant(id),
+  createMembership: (i: Parameters<typeof live.createMembership>[0]) => live.createMembership(i),
+  setMembershipEntries: (id: Uuid, entries: Parameters<typeof live.setMembershipEntries>[1]) =>
+    live.setMembershipEntries(id, entries),
+  assignMembership: (i: Parameters<typeof live.assignMembership>[0]) => live.assignMembership(i),
+  removeAssignment: (assignmentId: Uuid, reason?: string) => live.removeAssignment(assignmentId, reason),
+  membershipAssignments: (opts: Parameters<typeof live.membershipAssignments>[0]) =>
+    live.membershipAssignments(opts),
+  revokeGrant: (id: Uuid, reason?: string) => live.revokeGrant(id, reason),
   createScopeNode: (i: NewNodeInput) => live.createScopeNode(i),
-  createNodeType: (i: { axis_code: string; display_name: string; parent_types: string[] }) =>
-    live.createNodeType(i),
-  setNodeTypeParents: (_axis: string, _code: string, _parents: string[]): Promise<never> =>
-    Promise.reject(new Error('Node-type parents are set when the type is created.')),
+  createNodeType: (i: Parameters<typeof live.createNodeType>[0]) => live.createNodeType(i),
+  updateNodeType: (i: Parameters<typeof live.updateNodeType>[0]) => live.updateNodeType(i),
+  renameScopeNode: (id: Uuid, name: string) => live.renameScopeNode(id, name),
+  moveScopeNode: (id: Uuid, newParentId: Uuid) => live.moveScopeNode(id, newParentId),
+  archiveScopeNode: (id: Uuid) => live.archiveScopeNode(id),
+  restoreScopeNode: (id: Uuid) => live.restoreScopeNode(id),
   createAxis: (i: NewAxisInput) => live.createAxis(i),
   dashboard: () => live.dashboard(),
   audit: (opts?: { action?: string; result?: string; actorId?: string; cursor?: string; pageSize?: number }) => live.audit(opts),

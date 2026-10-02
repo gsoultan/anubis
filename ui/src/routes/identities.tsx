@@ -6,19 +6,23 @@ import {
 import {
   IconSearch, IconInfoCircle, IconDots, IconUserPlus, IconCirclePlus,
   IconUserOff, IconUserCheck, IconCopy, IconKey, IconLock, IconUser, IconX,
-  IconChevronRight,
+  IconTableImport, IconTestPipe,
 } from '@tabler/icons-react'
 import { notifications } from '@mantine/notifications'
 import { queryClient } from '@/lib/query/client'
 import { useCreate } from '@/stores/create'
 import { useState } from 'react'
 import { Page } from '@/components/shell/Page'
-import { DataTable, Cell, type Column } from '@/components/ui/DataTable'
+import { DataTable, type Column } from '@/components/ui/DataTable'
 import { AttributesModal } from '@/components/ui/AttributesModal'
 import { CredentialsModal } from '@/components/ui/CredentialsModal'
+import { ConfirmModal } from '@/components/ui/ConfirmModal'
+import { Initial } from '@/components/ui/Initial'
+import { notifyRejected } from '@/components/create/shell'
 import { api } from '@/lib/api/client'
 import * as live from '@/lib/api/live'
 import { realmKindColor } from '@/lib/realmKind'
+import { fmtDate, relDays } from '@/lib/access'
 import { qk } from '@/lib/query/keys'
 import { usePeopleList, useSession } from '@/stores/session'
 import type { Ial, Identity, IdentityStatus } from '@/lib/api/types'
@@ -26,41 +30,31 @@ import type { Ial, Identity, IdentityStatus } from '@/lib/api/types'
 export const Route = createFileRoute('/identities')({ component: Identities })
 
 const IAL_HINT: Record<Ial, string> = {
-  1: 'Self-asserted — email only, a self-registered applicant.',
-  2: 'Remotely verified, typically through a contract or employer.',
-  3: 'In-person verified with government ID on file.',
+  1: 'IAL1 · Self-asserted — email only, a self-registered applicant.',
+  2: 'IAL2 · Remotely verified, typically through a contract or employer.',
+  3: 'IAL3 · In-person verified with government ID on file.',
 }
-const IAL_COLOR: Record<Ial, string> = {
-  1: 'var(--warn)', 2: 'var(--info)', 3: 'var(--allow)',
-}
-
-/* The population's colour rides on a 6px dot in the population column, which
-   is where the population is named. It used to tint an avatar in the person
-   column instead — six columns away from its own label, and next to a letter
-   that was just the username's first character. */
 
 /* Active is what 99 rows in 100 are, so active is the quiet one. The pill is
-   spent on the exception, which is the only row anyone is scanning for. The
-   old screen did the reverse and painted a grey chip on every line. */
+   spent on the exception, which is the only row anyone is scanning for. */
 function Status({ status }: { status: IdentityStatus }) {
   if (status === 'active') {
     return (
       <span className="t-body inline-flex items-center gap-1.5" style={{ color: 'var(--ink-2)' }}>
         <span style={{ width: 6, height: 6, borderRadius: 99, background: 'var(--allow)', flexShrink: 0 }} />
-        active
+        Active
       </span>
     )
   }
   return (
-    <Tooltip label="authorize() gates on identity state, so this is denied regardless of grants." withArrow>
+    <Tooltip label="None of their access applies while the account is not active.">
       <span className="v-pill v-pill-deny" style={{ cursor: 'help' }}>{status}</span>
     </Tooltip>
   )
 }
 
-/* This used to be a banner pinned above the table on every visit — a lesson
-   you need once, charging rent forever. One click away, permanently, costs no
-   layout at all. */
+/* A lesson you need once, one click away, instead of a banner charging rent
+   above the table on every visit. */
 function SameNameNote() {
   return (
     <Popover width={330} position="bottom-start" withArrow shadow="xl">
@@ -71,15 +65,13 @@ function SameNameNote() {
           aria-label="Why the same name can appear more than once"
         >
           <IconInfoCircle size={13} />
-          <span style={{ borderBottom: '1px dotted var(--line-strong)' }}>
-            Why one name can appear several times
-          </span>
+          <span className="dotted">Why one name can appear several times</span>
         </UnstyledButton>
       </Popover.Target>
       <Popover.Dropdown p="sm">
         <div className="t-xs">
           <b style={{ color: 'var(--ink-2)' }}>alice</b> can exist once in every population.
-          Those are different people: linking them is explicit, and it never merges grants.
+          Those are different people: linking them is explicit, and it never merges access.
         </div>
       </Popover.Dropdown>
     </Popover>
@@ -91,46 +83,47 @@ function Identities() {
   const { openCreate } = useCreate()
   const navigate = useNavigate()
 
-  /** A row is a person, and a person has a page. */
+  /** A row is a person, and a person has a page — which is where access lives. */
   const openPerson = (i: Identity, give = false) =>
     void navigate({
       to: '/identities/$id', params: { id: i.id }, search: give ? { give: true } : {},
     })
 
-  async function toggleStatus(id: string, current: string) {
-    await api.setIdentityStatus(id, current === 'active' ? 'disabled' : 'active')
+  /* Rejects after saying why, so a confirmation dialog can stay open on
+     failure; one-click callers swallow the rejection they have already seen. */
+  async function setStatus(i: Identity, next: 'active' | 'disabled') {
+    try {
+      await api.setIdentityStatus(i.id, next)
+    } catch (e) {
+      notifyRejected(e)
+      throw e
+    }
     notifications.show({
-      color: current === 'active' ? 'orange' : 'teal',
-      title: current === 'active' ? 'Identity disabled' : 'Identity re-enabled',
-      message: current === 'active'
-        ? 'authorize() gates on identity state — every grant is dead until re-enabled.'
-        : 'Grants apply again immediately.',
+      color: next === 'disabled' ? 'orange' : 'teal',
+      title: next === 'disabled' ? `${i.username} disabled` : `${i.username} re-enabled`,
+      message: next === 'disabled'
+        ? 'Their sessions ended, and none of their access applies until re-enabled.'
+        : 'Their access applies again immediately.',
     })
     await queryClient.invalidateQueries({ queryKey: ['identities'] })
   }
   /* Held here rather than in a route param: these are the encrypted fields,
-     and an id in the URL is an id in someone's browser history. The person's
-     own page carries their id and is the better place for everything else —
-     but not for these two. */
+     and an id in the URL is an id in someone's browser history. */
   const [attrsFor, setAttrsFor] = useState<Identity | null>(null)
   const [credsFor, setCredsFor] = useState<Identity | null>(null)
+  const [disabling, setDisabling] = useState<Identity | null>(null)
   const { data: realms } = useQuery({ queryKey: qk.realms(), queryFn: api.realms })
-  /* Search and paging live in a store, not in this component: every row leads
-     off this screen now, and losing the search that found somebody the moment
-     you open them is not paging, it is starting again. */
+  /* Search and paging live in a store: every row leads off this screen, and
+     losing the search that found somebody the moment you open them is not
+     paging, it is starting again. */
   const { query: q, setQuery: setQ, trail, setTrail, resetPaging } = usePeopleList()
-  /* Keyset paging, and it is not optional here: a realm in this installation
-     holds fifty thousand people. The screen used to ask for all of them and
-     render whatever came back, which is a wrong answer dressed as a slow one.
-
-     A stack of cursors rather than a page number, because keyset paging can
-     step forward and back but cannot jump to page 40. */
+  /* Keyset paging, and it is not optional here: a population in this
+     installation holds fifty thousand people. A stack of cursors rather than
+     a page number, because keyset paging can step but cannot jump. */
   const cursor = trail[trail.length - 1] ?? ''
   const { data: page, isFetching } = useQuery({
     /* Under the 'identities' prefix on purpose: disabling somebody invalidates
-       ['identities'], and this list used to be keyed 'identities-page', which
-       that prefix does not match — so the row kept saying "active" until the
-       operator reloaded. */
+       ['identities'], and a key outside it kept saying "active" until a reload. */
     queryKey: ['identities', 'page', realmFilter, q, cursor],
     queryFn: () => live.identitiesPage(realmFilter ?? undefined, q || undefined, cursor, 50),
     placeholderData: (prev) => prev,
@@ -149,22 +142,17 @@ function Identities() {
   }
 
   /* Display names are not unique — this installation runs three populations
-     all called "Enrolment probe" — so the code rides along in the option or
-     the list is twelve identical rows. A dozen of these as wrapping chips was
-     the single messiest band on the page. */
+     all called "Enrolment probe" — so the code rides along in the option. */
   const realmOptions = [
     { value: '', label: 'All populations' },
     ...(realms ?? []).map((r) => ({ value: r.id, label: `${r.display_name} · ${r.code}` })),
   ]
 
-  /* The code exists to tell two populations apart. It earns its line when it
-     does that job — another population answers to the same display name — or
-     when it says something the name does not. "Internal" over "internal", or
-     "Partners" over "partner", is the same word twice on every row. */
+  /* The code earns its place in the column when it tells two populations
+     apart, or says something the name does not. "Internal" over "internal"
+     is the same word twice on every row. */
   const ambiguous = new Set(
-    (realms ?? [])
-      .map((r) => r.display_name)
-      .filter((n, idx, all) => all.indexOf(n) !== idx),
+    (realms ?? []).map((r) => r.display_name).filter((n, idx, all) => all.indexOf(n) !== idx),
   )
   function populationCode(code: string, name: string): string | undefined {
     if (ambiguous.has(name)) return code
@@ -173,32 +161,34 @@ function Identities() {
     return a.startsWith(b) || b.startsWith(a) ? undefined : code
   }
 
+  /* Every column has a width, so slack on a wide display is shared out
+     instead of pooling in one gap. The person column is the widest because it
+     is the only one that differs on every row. */
   const columns: Column<Identity>[] = [
-    /* An explicit width even though this column flexes: without one it is the
-       only column the browser can grow, so every spare pixel on a wide display
-       pooled into a single gap between the email and the next column. */
-    { key: 'person', header: 'Person', width: 380, render: (i) => {
-        const r = realmOf(i.realm_id)
+    { key: 'person', header: 'Person', width: 360, render: (i) => {
         /* Code AND realm: a category code is unique inside a realm, not
-           across the tenant, so "supplier" in Partners and "supplier" in
-           Public are two different categories with two different names. */
+           across the tenant. */
         const c = categories?.find((x) => x.code === i.category && x.realm_id === i.realm_id)
         const sub = [i.email, c?.display_name ?? i.category].filter(Boolean).join(' · ')
-        /* No avatar here. It drew a first initial next to the username it was
-           the first initial of, tinted by the population named in the very
-           next column — both facts already on the row, costing 34px of the
-           widest column and 19px of row height. The person's own page still
-           opens with one, where it anchors a record instead of repeating a
-           neighbour. */
+        /* A neutral avatar. Tinted by population it repeated the column
+           beside it; neutral, it only gives the eye a row to land on. */
         return (
-          <Cell top={i.username}
-            bottom={sub || <span style={{ opacity: 0.5 }}>no email</span>} />
+          <div className="flex min-w-0 items-center gap-2.5">
+            <Initial name={i.username} colour="var(--ink-3)" size={26} />
+            <div className="flex min-w-0 items-baseline gap-2">
+              <span className="row-title t-body truncate" style={{ fontWeight: 560, flex: '0 1 auto' }}>
+                {i.username}
+              </span>
+              <span className="t-xs truncate" style={{ flex: '1 1 auto' }}>
+                {sub || <span style={{ opacity: 0.6 }}>no email</span>}
+              </span>
+            </div>
+          </div>
         )
       } },
-    /* The population repeats down the whole column — one tenant's list is
-       mostly one population — so it is set quiet. Weight belongs on what
-       differs between rows, not on the value they share. */
-    { key: 'population', header: 'Population', width: 200, render: (i) => {
+    /* The population repeats down the column — one tenant's list is mostly
+       one population — so it is set quiet. */
+    { key: 'population', header: 'Population', width: 190, render: (i) => {
         const r = realmOf(i.realm_id)
         if (!r) return <span className="t-xs">—</span>
         const code = populationCode(r.code, r.display_name)
@@ -206,93 +196,98 @@ function Identities() {
           <span className="flex min-w-0 items-center gap-2">
             <span style={{ width: 6, height: 6, borderRadius: 99, flexShrink: 0,
               background: realmKindColor(r.kind) }} />
-            <span className="t-body truncate" style={{ color: 'var(--ink-2)' }}>
-              {r.display_name}
-            </span>
+            <span className="t-body truncate" style={{ color: 'var(--ink-2)' }}>{r.display_name}</span>
             {code && <span className="t-xs truncate">{code}</span>}
           </span>
         )
       } },
-    { key: 'ial', header: 'Assurance', width: 120, render: (i) => (
-        <Tooltip label={IAL_HINT[i.assurance_level]} withArrow>
-          <span className="chip" style={{ color: IAL_COLOR[i.assurance_level], cursor: 'help' }}>
-            IAL{i.assurance_level}
-          </span>
+    { key: 'status', header: 'Status', width: 120, render: (i) => <Status status={i.status} /> },
+    /* Neutral: an assurance level is a fact about how someone was verified,
+       not a verdict. Painting IAL1 amber put a warning on every applicant. */
+    { key: 'ial', header: 'Assurance', width: 100, render: (i) => (
+        <Tooltip label={IAL_HINT[i.assurance_level]}>
+          <span className="chip" style={{ cursor: 'help' }}>IAL{i.assurance_level}</span>
         </Tooltip>
       ) },
-    { key: 'status', header: 'Status', width: 130, render: (i) => <Status status={i.status} /> },
-    { key: 'seen', header: 'Last sign-in', width: 150,
+    { key: 'seen', header: 'Last sign-in', width: 140,
       headerHint: 'An account nobody has ever used is the one worth asking about.',
       render: (i) =>
         i.last_login_at
-          ? <span className="tnum t-body">{i.last_login_at.slice(0, 10)}</span>
-          : <span className="t-xs" style={{ opacity: 0.6 }}>never</span> },
-    /* "no statutory limit" is true of nearly every employee, so spelling it
-       out put a sentence on every row to say nothing. The dash says the same
-       and the header hint explains it once. */
-    { key: 'retention', header: 'Retention', width: 140,
+          ? (
+            <Tooltip label={fmtDate(i.last_login_at)}>
+              <span className="t-body tnum" style={{ color: 'var(--ink-2)' }}>{relDays(i.last_login_at)}</span>
+            </Tooltip>
+          )
+          : <span className="t-xs">Never</span> },
+    /* A dash, explained once in the header, rather than "no statutory limit"
+       spelled out on nearly every employee's row. */
+    { key: 'retention', header: 'Retention', width: 120,
       headerHint: 'When the population sets a statutory retention limit, the deadline shows here. A dash means no limit.',
       render: (i) =>
         i.retention_until
-          ? <span className="tnum t-body">{i.retention_until.slice(0, 10)}</span>
-          : <span className="t-xs" style={{ opacity: 0.45 }}>—</span> },
-    { key: 'actions', header: '', width: 74, render: (i) => (
-        /* The row itself navigates now, so the menu has to keep its clicks to
-           itself or every pick would also leave the page behind it. */
-        <div className="flex items-center justify-end gap-0.5">
-          <div onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
-          <Menu position="bottom-end" width={230} shadow="xl">
+          ? <span className="t-body tnum">{fmtDate(i.retention_until)}</span>
+          : <span className="t-xs" style={{ opacity: 0.55 }}>—</span> },
+    { key: 'actions', header: '', width: 84, render: (i) => (
+        /* The row navigates, so the controls keep their clicks to themselves
+           or every pick would also leave the page behind it. */
+        <div className="flex items-center justify-end gap-0.5"
+          onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+          {/* The one thing people come to this list to do, one click from
+              every row — shown on hover so fifty rows do not each carry it. */}
+          <Tooltip label="Give access" openDelay={200}>
+            <ActionIcon className="hover-reveal" variant="subtle" color="gray"
+              aria-label={`Give ${i.username} access`} onClick={() => openPerson(i, true)}>
+              <IconCirclePlus size={16} />
+            </ActionIcon>
+          </Tooltip>
+          <Menu position="bottom-end" width={230}>
             <Menu.Target>
               <ActionIcon variant="subtle" color="gray" aria-label={`Actions for ${i.username}`}>
                 <IconDots size={15} />
               </ActionIcon>
             </Menu.Target>
             <Menu.Dropdown>
-              <Menu.Item leftSection={<IconUser size={14} />}
-                onClick={() => openPerson(i)}>
-                Open their page
+              <Menu.Item leftSection={<IconUser size={14} />} onClick={() => openPerson(i)}>
+                Open
               </Menu.Item>
-              <Menu.Item leftSection={<IconCirclePlus size={14} />}
-                onClick={() => openPerson(i, true)}>
+              <Menu.Item leftSection={<IconCirclePlus size={14} />} onClick={() => openPerson(i, true)}>
                 Give access…
+              </Menu.Item>
+              <Menu.Item leftSection={<IconTestPipe size={14} />}
+                onClick={() => void navigate({ to: '/playground', search: { subject: i.id } })}>
+                Test access
+              </Menu.Item>
+              <Menu.Divider />
+              <Menu.Item leftSection={<IconKey size={14} />} onClick={() => setCredsFor(i)}>
+                Sign-in methods…
+              </Menu.Item>
+              <Menu.Item leftSection={<IconLock size={14} />} onClick={() => setAttrsFor(i)}>
+                Encrypted attributes…
               </Menu.Item>
               <Menu.Item leftSection={<IconCopy size={14} />}
                 onClick={() => { void navigator.clipboard.writeText(i.id) }}>
                 Copy ID
               </Menu.Item>
-              <Menu.Item leftSection={<IconKey size={14} />}
-                onClick={() => setCredsFor(i)}>
-                Credentials…
-              </Menu.Item>
-              <Menu.Item leftSection={<IconLock size={14} />}
-                onClick={() => setAttrsFor(i)}>
-                Encrypted attributes
-              </Menu.Item>
               <Menu.Divider />
               {i.status === 'active' ? (
-                <Menu.Item color="red" leftSection={<IconUserOff size={14} />}
-                  onClick={() => void toggleStatus(i.id, i.status)}>
-                  Disable — kills all access now
+                <Menu.Item color="deny" leftSection={<IconUserOff size={14} />}
+                  onClick={() => setDisabling(i)}>
+                  Disable…
                 </Menu.Item>
               ) : (
-                <Menu.Item color="teal" leftSection={<IconUserCheck size={14} />}
-                  onClick={() => void toggleStatus(i.id, i.status)}>
+                <Menu.Item leftSection={<IconUserCheck size={14} />}
+                  onClick={() => void setStatus(i, 'active').catch(() => {})}>
                   Re-enable
                 </Menu.Item>
               )}
             </Menu.Dropdown>
           </Menu>
-          </div>
-          {/* The affordance for the row click. Hidden until the row is hovered
-              or focused, so fifty rows do not each carry a permanent arrow. */}
-          <IconChevronRight className="row-go" size={14} aria-hidden />
         </div>
       ) },
   ]
 
-  /* Filters sit on the table they filter. They used to live in the page
-     header, a hand's width from the global ⌘K box — two grey search fields
-     side by side, only one of which searched this screen. */
+  /* Filters sit on the table they filter, not in the page header a hand's
+     width from the global ⌘K box. */
   const toolbar = (
     <>
       <TextInput
@@ -302,6 +297,7 @@ function Identities() {
         leftSection={<IconSearch size={14} />}
         value={q}
         onChange={(e) => setQ(e.currentTarget.value)}
+        aria-label="Search people"
       />
       <Select
         size="xs"
@@ -312,6 +308,7 @@ function Identities() {
         value={realmFilter ?? ''}
         onChange={(v) => { setRealmFilter(v || null); resetPaging() }}
         comboboxProps={{ width: 280, position: 'bottom-start' }}
+        aria-label="Population"
         renderOption={({ option }) => {
           const r = realms?.find((x) => x.id === option.value)
           return (
@@ -332,14 +329,13 @@ function Identities() {
         </Button>
       )}
       <span className="t-xs tnum ml-auto">
-        {isFetching ? 'loading…' : `${rows?.length ?? 0} shown`}
+        {isFetching ? 'Loading…' : `${rows?.length ?? 0} shown`}
       </span>
     </>
   )
 
-  /* Rendered whether or not there is a next page: the count used to appear
-     only when paging controls did, so a list that fit on one page reported
-     its size nowhere at all. */
+  /* Rendered whether or not there is a next page, so a list that fits on one
+     page still reports its size somewhere. */
   const footer = (
     <>
       <span className="t-xs tnum">
@@ -360,18 +356,24 @@ function Identities() {
       title="People"
       description={
         <>
-          Everyone who can sign in — employees, supplier contacts, applicants. Each belongs
-          to one population, and a username only has to be unique inside it.
+          Everyone who can sign in — employees, supplier contacts, applicants. Open a person to see
+          what they can do, and to give or take away access.
           <br />
           <SameNameNote />
         </>
       }
       wide
       actions={
-        <Button size="xs" leftSection={<IconUserPlus size={14} />}
-          onClick={() => openCreate('identity')}>
-          Add person
-        </Button>
+        <>
+          <Button size="xs" variant="default" leftSection={<IconTableImport size={14} />}
+            onClick={() => void navigate({ to: '/import' })}>
+            Import
+          </Button>
+          <Button size="xs" leftSection={<IconUserPlus size={14} />}
+            onClick={() => openCreate('identity')}>
+            Add person
+          </Button>
+        </>
       }
     >
       <DataTable
@@ -397,6 +399,15 @@ function Identities() {
         label={attrsFor?.username ?? ''} onClose={() => setAttrsFor(null)} />
       <CredentialsModal id={credsFor?.id ?? null}
         label={credsFor?.username ?? ''} onClose={() => setCredsFor(null)} />
+      <ConfirmModal opened={!!disabling} onClose={() => setDisabling(null)}
+        title={`Disable ${disabling?.username ?? ''}?`} confirmLabel="Disable"
+        onConfirm={() => (disabling ? setStatus(disabling, 'disabled') : Promise.resolve())}>
+        <p>
+          Every session they have ends now and the tokens already issued to them stop working. They
+          cannot sign in, and none of their access applies while disabled.
+        </p>
+        <p className="t-xs">Their grants are kept: re-enabling gives their access back without re-granting anything.</p>
+      </ConfirmModal>
     </Page>
   )
 }

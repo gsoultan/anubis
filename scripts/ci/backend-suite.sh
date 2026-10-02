@@ -96,7 +96,11 @@ done
 
 # -count=1: these suites hit a live server and database — external state the
 # test cache cannot see, so a cached "ok" would be a lie.
-go test -count=1 -tags integration ./test/integration/
+#
+# The whole tree, not the top folder: auditchain, scopesync and the other
+# subpackages ran nowhere until this said "/...", and a suite that never runs
+# passes every change.
+go test -count=1 -tags integration ./test/integration/...
 go test -count=1 -tags integration ./test/e2e/
 
 # The console, in a real browser, against this server and the data the suites

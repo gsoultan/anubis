@@ -91,8 +91,9 @@ func Workbook() []SheetSpec {
 			},
 		},
 		{
-			Name:    SheetMemberships,
-			Purpose: "One row per person added to a membership. This sheet only ever adds; removing access stays a console action.",
+			Name: SheetMemberships,
+			Purpose: "One row per person added to a membership, at one place when the membership applies where each " +
+				"member is assigned. This sheet only ever adds; removing access stays a console action.",
 			Columns: []ColumnSpec{
 				{Key: ColRealm, Required: true, Width: 16, Example: "staff",
 					Help: "Realm of the person joining."},
@@ -100,6 +101,16 @@ func Workbook() []SheetSpec {
 					Help: "The person joining. They must be on the People sheet or already exist."},
 				{Key: ColMembership, Required: true, Width: 26, Example: "support-team",
 					Help: "Name of the membership to add them to. It must already exist."},
+				{Key: ColScopeRef, Width: 20, Example: "",
+					Help: "External reference of the place, for a membership that applies where each member is " +
+						"assigned: required there, and left blank for one that gives everyone the same places. " +
+						"The place is looked up in the membership's own structure."},
+				{Key: ColScopeInherit, Width: 15, Allowed: boolValues, Example: "",
+					Help: "Whether the assignment also covers everything beneath that place. Blank means true."},
+				{Key: ColValidUntil, Width: 18, Example: "",
+					Help: "Date the assignment and everything it gives expire, as YYYY-MM-DD. Blank means it does not expire."},
+				{Key: ColReason, Width: 28, Example: "",
+					Help: "Kept on the assignment and on each grant it gives. Optional."},
 			},
 		},
 	}

@@ -21,8 +21,8 @@ func (s *Repository) ListGrants(ctx context.Context, tenantID, identityID string
 			ID: r.ID, IdentityID: r.IdentityID, RoleID: r.RoleID,
 			RoleName: r.RoleName, SelfScoped: r.SelfScoped,
 			ValidFrom: r.ValidFrom, ValidUntil: r.ValidUntil.Ptr(), RevokedAt: r.RevokedAt.Ptr(),
-			GrantedBy: r.GrantedBy, ViaMembershipID: r.ViaMembershipID.V,
-			Reason: r.Reason.V,
+			GrantedBy: r.GrantedBy, ViaMembershipID: r.ViaMembershipID.V, ViaAssignmentID: r.ViaMemberID.V,
+			Reason: r.Reason.V, RevokeReason: r.RevokeReason.V,
 		})
 	}
 	return out, nil
@@ -81,8 +81,8 @@ func (s *Repository) RevokeGrant(ctx context.Context, tenantID, id, reason strin
 	return nil
 }
 
-// SearchGrants backs the Access screen: filters narrow first, keyset paging
-// carries the rest. Ordered by (created_at, id) so the cursor stays stable
+// SearchGrants backs a person's access and a role's holders: filters narrow
+// first, keyset paging carries the rest. Ordered by (created_at, id) so the cursor stays stable
 // when two grants share a timestamp — which they do, in bulk imports.
 func (s *Repository) SearchGrants(ctx context.Context, tenantID string, q grant.GrantSearch) ([]grant.GrantHit, error) {
 	size := q.PageSize
@@ -106,8 +106,8 @@ func (s *Repository) SearchGrants(ctx context.Context, tenantID string, q grant.
 				ID: r.ID, IdentityID: r.IdentityID, RoleID: r.RoleID,
 				RoleName: r.RoleName, SelfScoped: r.SelfScoped,
 				ValidFrom: r.ValidFrom, ValidUntil: r.ValidUntil.Ptr(), RevokedAt: r.RevokedAt.Ptr(),
-				GrantedBy: r.GrantedBy, ViaMembershipID: r.ViaMembershipID.V,
-				Reason: r.Reason.V,
+				GrantedBy: r.GrantedBy, ViaMembershipID: r.ViaMembershipID.V, ViaAssignmentID: r.ViaMemberID.V,
+				Reason: r.Reason.V, RevokeReason: r.RevokeReason.V,
 			},
 		})
 	}

@@ -1,6 +1,7 @@
 package authzpg
 
 import (
+	"bytes"
 	"context"
 	"time"
 
@@ -10,9 +11,28 @@ import (
 	"github.com/gsoultan/anubis/internal/shared/apperr"
 )
 
+// decisionTargets is what a decision is asked about, as the object authorize()
+// expects.
+//
+// A caller with no targets marshals a nil map, which is the JSON literal null
+// — and authorize() iterates its targets with jsonb_each_text, which refuses
+// anything but an object. The statement only gets that far for a subject
+// holding a place-limited grant, so it passed for everybody who held none.
+// "Nothing" is {} however the caller spelled it, and this is the boundary all
+// three decision calls share.
+//
+// Here and not in database.OrEmptyJSON: that helper also writes audit details,
+// whose stored bytes must stay the bytes that were hashed.
+func decisionTargets(targets []byte) []byte {
+	if len(targets) == 0 || string(bytes.TrimSpace(targets)) == "null" {
+		return []byte("{}")
+	}
+	return targets
+}
+
 func (s *Repository) Authorize(ctx context.Context, identityID, tenantID, permission string, targets []byte) (bool, error) {
 	row, ok, err := authzrquery.Authorize.One(ctx, s.rex(ctx),
-		identityID, tenantID, permission, database.OrEmptyJSON(targets))
+		identityID, tenantID, permission, decisionTargets(targets))
 	if err != nil {
 		return false, database.MapErr(err)
 	}
@@ -26,7 +46,7 @@ func (s *Repository) Authorize(ctx context.Context, identityID, tenantID, permis
 
 func (s *Repository) AuthorizeExplain(ctx context.Context, identityID, tenantID, permission string, targets []byte) (string, error) {
 	row, ok, err := authzrquery.AuthorizeExplain.One(ctx, s.rex(ctx),
-		identityID, tenantID, permission, database.OrEmptyJSON(targets))
+		identityID, tenantID, permission, decisionTargets(targets))
 	if err != nil {
 		return "", database.MapErr(err)
 	}
@@ -39,7 +59,7 @@ func (s *Repository) AuthorizeExplain(ctx context.Context, identityID, tenantID,
 func (s *Repository) AuthorizeStrictSim(ctx context.Context, identityID, tenantID, permission string, targets []byte, strictAxis string) (bool, error) {
 	row, ok, err := authzrquery.AuthorizeStrictSim.One(ctx, s.rex(ctx),
 		identityID, tenantID, database.OptStr(permission),
-		database.OrEmptyJSON(targets), strictAxis)
+		decisionTargets(targets), strictAxis)
 	if err != nil {
 		return false, database.MapErr(err)
 	}

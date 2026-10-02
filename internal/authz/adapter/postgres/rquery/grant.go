@@ -19,7 +19,11 @@ type GrantRow struct {
 	RevokedAt       runtime.Null[time.Time]
 	GrantedBy       string
 	Reason          runtime.Null[string]
+	RevokeReason    runtime.Null[string]
 	ViaMembershipID runtime.Null[string]
+	// ViaMemberID is the assignment that gave it (0054), so one place a
+	// person holds a membership at can be told from another.
+	ViaMemberID runtime.Null[string]
 }
 
 // ListGrantsByIdentity lists an identity's grants, optionally with revoked
@@ -28,8 +32,9 @@ var ListGrantsByIdentity = storm.SQL[GrantRow](`
 SELECT g.id::text AS id, g.identity_id::text AS identity_id,
        g.role_id::text AS role_id, r.name AS role_name, g.self_scoped,
        g.valid_from, g.valid_until, g.revoked_at,
-       g.granted_by::text AS granted_by, g.reason,
-       g.via_membership_id::text AS via_membership_id
+       g.granted_by::text AS granted_by, g.reason, g.revoke_reason,
+       g.via_membership_id::text AS via_membership_id,
+       g.via_member_id::text AS via_member_id
 FROM grants g
 JOIN roles r ON r.id = g.role_id
 WHERE g.identity_id = $1 AND g.tenant_id = $2
@@ -94,17 +99,19 @@ type RevokedGrantRow struct {
 }
 
 // RevokeGrant stamps revoked_at once; an already-revoked grant is not found.
-// $3 reason (” keeps the original).
+// $3 is why it is being taken away; an empty string records none. It goes to
+// revoke_reason and never touches `reason`: that column is why the access
+// was given, and a revoke that wrote over it erased the only copy (0053).
 var RevokeGrant = storm.SQL[RevokedGrantRow](`
 UPDATE grants
 SET revoked_at = now(),
-    reason = CASE WHEN $3 = '' THEN reason ELSE $3 END
+    revoke_reason = nullif($3, '')
 WHERE id = $1 AND tenant_id = $2 AND revoked_at IS NULL
 RETURNING id::text AS id, identity_id::text AS identity_id,
           role_id::text AS role_id`)
 
-// SearchGrantRow is a grant hit on the Access screen: the grant, its role
-// name, and the holder's username.
+// SearchGrantRow is one grant hit: the grant, its role name, and the holder's
+// username.
 type SearchGrantRow struct {
 	ID              string
 	IdentityID      string
@@ -117,11 +124,13 @@ type SearchGrantRow struct {
 	RevokedAt       runtime.Null[time.Time]
 	GrantedBy       string
 	Reason          runtime.Null[string]
+	RevokeReason    runtime.Null[string]
 	ViaMembershipID runtime.Null[string]
+	ViaMemberID     runtime.Null[string]
 	CreatedAt       time.Time
 }
 
-// SearchGrants backs the Access screen.
+// SearchGrants backs a person's access and a role's holders in the console.
 //
 // There is deliberately no "list every grant": a tenant here holds 150k of
 // them, and a screen that asked for all of them would be answering a question
@@ -134,8 +143,9 @@ var SearchGrants = storm.SQL[SearchGrantRow](`
 SELECT g.id::text AS id, g.identity_id::text AS identity_id, i.username,
        g.role_id::text AS role_id, r.name AS role_name,
        g.self_scoped, g.valid_from, g.valid_until, g.revoked_at,
-       g.granted_by::text AS granted_by, g.reason,
-       g.via_membership_id::text AS via_membership_id, g.created_at
+       g.granted_by::text AS granted_by, g.reason, g.revoke_reason,
+       g.via_membership_id::text AS via_membership_id,
+       g.via_member_id::text AS via_member_id, g.created_at
   FROM grants g
   JOIN roles r      ON r.id = g.role_id
   JOIN identities i ON i.id = g.identity_id

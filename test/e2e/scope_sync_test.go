@@ -14,6 +14,7 @@ import (
 
 	_ "github.com/go-sql-driver/mysql"
 	"testing"
+	"time"
 
 	"connectrpc.com/connect"
 
@@ -431,4 +432,61 @@ func seedMySQL(t *testing.T, dsn string) string {
 		}
 	}
 	return table
+}
+
+// A structure and its top level are one step. Before, the console created the
+// structure alone and promised a top level the server never made, so the first
+// "Add item" failed with "axis has no root node type". Half of one — a
+// structure that exists without its top level — must never be left behind.
+func TestCreateStructureWithItsTopLevel(t *testing.T) {
+	requireServer(t)
+	db, ctx, token := isolationFixture(t)
+	sc := scopeClient()
+	sfx := fmt.Sprintf("%d", time.Now().UnixNano()%1_000_000_000)
+	axis, clash := "e2e_top_"+sfx, "e2e_clash_"+sfx
+	t.Cleanup(func() {
+		bg := context.Background()
+		for _, stmt := range []string{
+			`DELETE FROM scope_nodes WHERE axis_code = ANY($1)`,
+			`DELETE FROM scope_node_types WHERE axis_code = ANY($1)`,
+			`DELETE FROM scope_axes WHERE code = ANY($1)`,
+		} {
+			if _, err := db.ExecContext(bg, stmt, []string{axis, clash}); err != nil {
+				t.Errorf("cleanup: %v", err)
+			}
+		}
+	})
+	newAxis := func(code, top string) error {
+		_, err := sc.CreateScopeAxis(ctx, operatorBearer(connect.NewRequest(&anubisv1.CreateScopeAxisRequest{
+			Axis:     &anubisv1.ScopeAxis{Code: code, DisplayName: code, DefaultEffect: "unconstrained"},
+			TopLevel: &anubisv1.ScopeNodeType{Code: top, DisplayName: "All of " + code},
+		}), token))
+		return err
+	}
+	if err := newAxis(axis, axis+"_top"); err != nil {
+		t.Fatalf("create a structure with its top level: %v", err)
+	}
+	// The top level is usable at once: the structure can make its top item.
+	if _, err := sc.EnsureAxisRoot(ctx, operatorBearer(connect.NewRequest(
+		&anubisv1.EnsureAxisRootRequest{Axis: axis}), token)); err != nil {
+		t.Fatalf("new structure cannot make its top item: %v", err)
+	}
+	// A second structure whose top level clashes with the first's code fails —
+	// and takes the structure with it.
+	if err := newAxis(clash, axis+"_top"); err == nil {
+		t.Fatal("a top level code already taken was accepted")
+	}
+	var left int
+	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM scope_axes WHERE code = $1`, clash).Scan(&left); err != nil {
+		t.Fatal(err)
+	}
+	if left != 0 {
+		t.Fatal("the structure was created without its top level")
+	}
+	// And a second top level for the same structure is refused.
+	if _, err := sc.CreateScopeNodeType(ctx, operatorBearer(connect.NewRequest(&anubisv1.CreateScopeNodeTypeRequest{
+		Type: &anubisv1.ScopeNodeType{Code: axis + "_top2", Axis: axis, DisplayName: "Another top"},
+	}), token)); err == nil {
+		t.Fatal("a structure was given a second top level")
+	}
 }

@@ -1,7 +1,8 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import { ActionIcon, Button, Loader, Menu, Popover, SegmentedControl, TextInput, Tooltip, UnstyledButton } from '@mantine/core'
-import { IconDots, IconInfoCircle, IconPencil, IconSearch, IconShieldLock, IconShieldPlus, IconLicense } from '@tabler/icons-react'
+import { IconDots, IconInfoCircle, IconPencil, IconSearch, IconShieldLock, IconShieldPlus, IconLicense, IconUsers } from '@tabler/icons-react'
+import { RoleHolders } from '@/components/access/RoleHolders'
 import { useState } from 'react'
 import { useCreate } from '@/stores/create'
 import { Page } from '@/components/shell/Page'
@@ -53,6 +54,7 @@ function Roles() {
   const { data: perms } = useQuery({ queryKey: qk.permissions(), queryFn: api.permissions })
   const [q, setQ] = useState('')
   const [risk, setRisk] = useState('all')
+  const [holdersOf, setHoldersOf] = useState<Role | null>(null)
   const needle = q.trim().toLowerCase()
   const shownRoles = (roles ?? []).filter((r) =>
     !needle || r.name.toLowerCase().includes(needle) || r.description.toLowerCase().includes(needle))
@@ -109,6 +111,10 @@ function Roles() {
             </ActionIcon>
           </Menu.Target>
           <Menu.Dropdown>
+            <Menu.Item leftSection={<IconUsers size={14} />} onClick={() => setHoldersOf(r)}>
+              People with this role
+            </Menu.Item>
+            <Menu.Divider />
             {r.is_system ? (
               <Menu.Item disabled leftSection={<IconPencil size={14} />}>
                 Declared in an application manifest — edit the manifest, not the console
@@ -204,6 +210,7 @@ function Roles() {
               hint: 'Try another search or risk level.' }} />
         </div>
       </div>
+      <RoleHolders role={holdersOf} onClose={() => setHoldersOf(null)} />
     </Page>
   )
 }

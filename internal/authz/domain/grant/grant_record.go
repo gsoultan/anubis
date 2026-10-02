@@ -13,5 +13,12 @@ type GrantRecord struct {
 	RevokedAt       *time.Time
 	GrantedBy       string
 	ViaMembershipID string
-	Reason          string
+	// ViaAssignmentID is the membership assignment that gave this grant —
+	// one person can hold a membership at several places.
+	ViaAssignmentID string
+	// Reason is why the access was given; a revoke never writes it.
+	Reason string
+	// RevokeReason is why it was taken away — empty while live, or when the
+	// revoke gave none.
+	RevokeReason string
 }

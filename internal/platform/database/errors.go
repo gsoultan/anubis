@@ -31,3 +31,26 @@ func MapErr(err error) error {
 	}
 	return apperr.ErrInternal.Wrap(err)
 }
+
+// MapErrSaying is MapErr for statements whose refusals are sentences this
+// schema wrote: a guard trigger or function that RAISEs. The sentence travels
+// as the "reason" detail, because "check constraint violated" tells an
+// operator that something is wrong and nothing about what.
+//
+// Opt-in per call site, not the default. MapErr's promise is that no driver
+// text reaches a caller, and a raised message is only safe to show when it
+// names nothing outside the caller's own tenant — which is a property of each
+// guard, read before its call site switches to this. A violation of a declared
+// constraint (ConstraintName set) is never included: PostgreSQL writes that
+// message, and its detail carries the row.
+func MapErrSaying(err error) error {
+	mapped := MapErr(err)
+	var pgErr *pgconn.PgError
+	if !errors.As(err, &pgErr) || pgErr.ConstraintName != "" {
+		return mapped
+	}
+	if pgErr.Code != "23514" && pgErr.Code != "P0001" {
+		return mapped
+	}
+	return apperr.AsError(mapped).With("reason", pgErr.Message)
+}

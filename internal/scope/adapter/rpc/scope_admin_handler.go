@@ -48,7 +48,7 @@ func nodeProto(n scopedomain.ScopeNodeRecord) *anubisv1.ScopeNode {
 		Id: n.ID, Axis: n.Axis, NodeType: n.NodeType, ParentId: n.ParentID,
 		Slug: n.Slug, Name: n.Name, ExternalRef: n.ExternalRef,
 		Status: n.Status, IsAxisRoot: n.IsAxisRoot,
-		ChildCount: int32(n.ChildCount),
+		ChildCount: int32(n.ChildCount), Path: n.Path,
 	}
 }
 
@@ -78,7 +78,11 @@ func (h *ScopeAdminHandler) ListScopeAxes(ctx context.Context, _ *connect.Reques
 
 func (h *ScopeAdminHandler) CreateScopeAxis(ctx context.Context, req *connect.Request[anubisv1.CreateScopeAxisRequest]) (*connect.Response[anubisv1.CreateScopeAxisResponse], error) {
 	out, err := h.f.Do(ctx, "admin.scope.axis_create", func(ctx context.Context) (any, error) {
-		return h.svc.CreateScopeAxis(ctx, axisRecord(req.Msg.Axis))
+		var top *scopedomain.ScopeNodeTypeRecord
+		if t := req.Msg.GetTopLevel(); t != nil {
+			top = &scopedomain.ScopeNodeTypeRecord{Code: t.Code, DisplayName: t.DisplayName}
+		}
+		return h.svc.CreateScopeAxis(ctx, axisRecord(req.Msg.Axis), top)
 	})
 	if err != nil {
 		return nil, apiconnect.Err(ctx, err)
@@ -142,6 +146,21 @@ func (h *ScopeAdminHandler) CreateScopeNodeType(ctx context.Context, req *connec
 		return nil, apiconnect.Err(ctx, err)
 	}
 	return connect.NewResponse(&anubisv1.CreateScopeNodeTypeResponse{Type: req.Msg.Type}), nil
+}
+
+func (h *ScopeAdminHandler) UpdateScopeNodeType(ctx context.Context, req *connect.Request[anubisv1.UpdateScopeNodeTypeRequest]) (*connect.Response[anubisv1.UpdateScopeNodeTypeResponse], error) {
+	t := req.Msg.GetType()
+	if t == nil {
+		return nil, apiconnect.Err(ctx, apperr.ErrInvalidArgument.With("type", "required"))
+	}
+	if _, err := h.f.Do(ctx, "admin.scope.node_type_update", func(ctx context.Context) (any, error) {
+		return nil, h.svc.UpdateScopeNodeType(ctx, scopedomain.ScopeNodeTypeRecord{
+			Code: t.Code, Axis: t.Axis, DisplayName: t.DisplayName, ParentTypes: t.ParentTypes,
+		})
+	}); err != nil {
+		return nil, apiconnect.Err(ctx, err)
+	}
+	return connect.NewResponse(&anubisv1.UpdateScopeNodeTypeResponse{Type: t}), nil
 }
 
 func (h *ScopeAdminHandler) ListScopeNodes(ctx context.Context, req *connect.Request[anubisv1.ListScopeNodesRequest]) (*connect.Response[anubisv1.ListScopeNodesResponse], error) {
@@ -211,6 +230,24 @@ func (h *ScopeAdminHandler) ArchiveScopeNode(ctx context.Context, req *connect.R
 		return nil, apiconnect.Err(ctx, err)
 	}
 	return connect.NewResponse(&anubisv1.ArchiveScopeNodeResponse{}), nil
+}
+
+func (h *ScopeAdminHandler) RestoreScopeNode(ctx context.Context, req *connect.Request[anubisv1.RestoreScopeNodeRequest]) (*connect.Response[anubisv1.RestoreScopeNodeResponse], error) {
+	if _, err := h.f.Do(ctx, "admin.scope.node_restore", func(ctx context.Context) (any, error) {
+		return nil, h.svc.RestoreScopeNode(ctx, req.Msg.NodeId)
+	}); err != nil {
+		return nil, apiconnect.Err(ctx, err)
+	}
+	return connect.NewResponse(&anubisv1.RestoreScopeNodeResponse{}), nil
+}
+
+func (h *ScopeAdminHandler) RenameScopeNode(ctx context.Context, req *connect.Request[anubisv1.RenameScopeNodeRequest]) (*connect.Response[anubisv1.RenameScopeNodeResponse], error) {
+	if _, err := h.f.Do(ctx, "admin.scope.node_rename", func(ctx context.Context) (any, error) {
+		return nil, h.svc.RenameScopeNode(ctx, req.Msg.NodeId, req.Msg.Name)
+	}); err != nil {
+		return nil, apiconnect.Err(ctx, err)
+	}
+	return connect.NewResponse(&anubisv1.RenameScopeNodeResponse{}), nil
 }
 
 func (h *ScopeAdminHandler) UpsertScopeNodes(ctx context.Context, req *connect.Request[anubisv1.UpsertScopeNodesRequest]) (*connect.Response[anubisv1.UpsertScopeNodesResponse], error) {

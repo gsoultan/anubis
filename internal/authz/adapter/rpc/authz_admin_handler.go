@@ -195,7 +195,7 @@ func (h *AuthzAdminHandler) ListGrants(ctx context.Context, req *connect.Request
 				Id: g.ID, IdentityId: g.IdentityID, RoleId: g.RoleID,
 				RoleName: g.RoleName, SelfScoped: g.SelfScoped,
 				ValidFrom: g.ValidFrom.Unix(), GrantedBy: g.GrantedBy,
-				ViaMembershipId: g.ViaMembershipID, Reason: g.Reason,
+				ViaMembershipId: g.ViaMembershipID, ViaAssignmentId: g.ViaAssignmentID, Reason: g.Reason, RevokeReason: g.RevokeReason,
 				Scopes: grantScopeProtos(scopes, g.ID),
 			}
 			if g.ValidUntil != nil {
@@ -254,7 +254,7 @@ func (h *AuthzAdminHandler) ListMemberships(ctx context.Context, _ *connect.Requ
 		for _, m := range ms {
 			pm := &anubisv1.Membership{
 				Id: m.ID, Name: m.Name, Description: m.Description,
-				MemberCount: int32(m.MemberCount),
+				MemberCount: int32(m.MemberCount), AnchorAxis: m.AnchorAxis,
 			}
 			for _, e := range entries {
 				if e.MembershipID != m.ID {
@@ -277,14 +277,16 @@ func (h *AuthzAdminHandler) ListMemberships(ctx context.Context, _ *connect.Requ
 
 func (h *AuthzAdminHandler) CreateMembership(ctx context.Context, req *connect.Request[anubisv1.CreateMembershipRequest]) (*connect.Response[anubisv1.CreateMembershipResponse], error) {
 	out, err := h.f.Do(ctx, "admin.membership.create", func(ctx context.Context) (any, error) {
-		return h.svc.CreateMembership(ctx, req.Msg.Name, req.Msg.Description)
+		return h.svc.CreateMembership(ctx, req.Msg.Name, req.Msg.Description, req.Msg.AnchorAxis)
 	})
 	if err != nil {
 		return nil, apiconnect.Err(ctx, err)
 	}
 	m := out.(*membership.MembershipRecord)
 	return connect.NewResponse(&anubisv1.CreateMembershipResponse{
-		Membership: &anubisv1.Membership{Id: m.ID, Name: m.Name, Description: m.Description},
+		Membership: &anubisv1.Membership{
+			Id: m.ID, Name: m.Name, Description: m.Description, AnchorAxis: m.AnchorAxis,
+		},
 	}), nil
 }
 
@@ -308,17 +310,32 @@ func (h *AuthzAdminHandler) SetMembershipEntries(ctx context.Context, req *conne
 
 func (h *AuthzAdminHandler) AssignMembership(ctx context.Context, req *connect.Request[anubisv1.AssignMembershipRequest]) (*connect.Response[anubisv1.AssignMembershipResponse], error) {
 	out, err := h.f.Do(ctx, "admin.membership.assign", func(ctx context.Context) (any, error) {
-		return h.svc.AssignMembership(ctx, req.Msg.MembershipId, req.Msg.IdentityId)
+		in := membership.MembershipAssignmentInput{
+			MembershipID: req.Msg.MembershipId, IdentityID: req.Msg.IdentityId,
+			NodeID: req.Msg.ScopeNodeId, Exact: req.Msg.Exact, Reason: req.Msg.Reason,
+		}
+		if req.Msg.ValidUntil > 0 {
+			t := time.Unix(req.Msg.ValidUntil, 0)
+			in.ValidUntil = &t
+		}
+		return h.svc.AssignMembership(ctx, in)
 	})
 	if err != nil {
 		return nil, apiconnect.Err(ctx, err)
 	}
-	return connect.NewResponse(&anubisv1.AssignMembershipResponse{GrantsCreated: int32(out.(int))}), nil
+	res := out.(membership.MembershipAssignOutcome)
+	return connect.NewResponse(&anubisv1.AssignMembershipResponse{
+		GrantsCreated: int32(res.GrantsCreated), AssignmentId: res.AssignmentID,
+	}), nil
 }
 
 func (h *AuthzAdminHandler) UnassignMembership(ctx context.Context, req *connect.Request[anubisv1.UnassignMembershipRequest]) (*connect.Response[anubisv1.UnassignMembershipResponse], error) {
 	out, err := h.f.Do(ctx, "admin.membership.unassign", func(ctx context.Context) (any, error) {
-		return h.svc.UnassignMembership(ctx, req.Msg.MembershipId, req.Msg.IdentityId)
+		// One assignment when named; otherwise the person at every place.
+		if req.Msg.AssignmentId != "" {
+			return h.svc.RemoveMembershipAssignment(ctx, req.Msg.AssignmentId, req.Msg.Reason)
+		}
+		return h.svc.UnassignMembership(ctx, req.Msg.MembershipId, req.Msg.IdentityId, req.Msg.Reason)
 	})
 	if err != nil {
 		return nil, apiconnect.Err(ctx, err)
@@ -334,6 +351,36 @@ func (h *AuthzAdminHandler) ResyncMembership(ctx context.Context, req *connect.R
 		return nil, apiconnect.Err(ctx, err)
 	}
 	return connect.NewResponse(&anubisv1.ResyncMembershipResponse{GrantsChanged: int32(out.(int))}), nil
+}
+
+func (h *AuthzAdminHandler) ListMembershipAssignments(ctx context.Context, req *connect.Request[anubisv1.ListMembershipAssignmentsRequest]) (*connect.Response[anubisv1.ListMembershipAssignmentsResponse], error) {
+	out, err := h.f.Do(ctx, "admin.membership.assignments", func(ctx context.Context) (any, error) {
+		page, next, err := h.svc.ListMembershipAssignments(ctx, membership.MembershipAssignmentFilter{
+			MembershipID: req.Msg.MembershipId, IdentityID: req.Msg.IdentityId,
+			Cursor: req.Msg.PageToken, PageSize: int(req.Msg.PageSize),
+		})
+		if err != nil {
+			return nil, err
+		}
+		resp := &anubisv1.ListMembershipAssignmentsResponse{NextPageToken: next}
+		for _, a := range page {
+			pa := &anubisv1.MembershipAssignment{
+				Id: a.ID, MembershipId: a.MembershipID, MembershipName: a.MembershipName,
+				AnchorAxis: a.AnchorAxis, IdentityId: a.IdentityID, Username: a.Username,
+				ScopeNodeId: a.NodeID, ScopeNodeName: a.NodeName, Exact: a.Exact,
+				Reason: a.Reason, AssignedAt: a.AssignedAt.Unix(), AssignedBy: a.AssignedBy,
+			}
+			if a.ValidUntil != nil {
+				pa.ValidUntil = a.ValidUntil.Unix()
+			}
+			resp.Assignments = append(resp.Assignments, pa)
+		}
+		return resp, nil
+	})
+	if err != nil {
+		return nil, apiconnect.Err(ctx, err)
+	}
+	return connect.NewResponse(out.(*anubisv1.ListMembershipAssignmentsResponse)), nil
 }
 
 func (h *AuthzAdminHandler) ApplyManifest(ctx context.Context, req *connect.Request[anubisv1.ApplyManifestRequest]) (*connect.Response[anubisv1.ApplyManifestResponse], error) {
@@ -371,7 +418,7 @@ func (h *AuthzAdminHandler) SearchGrants(ctx context.Context, req *connect.Reque
 				Id: g.ID, IdentityId: g.IdentityID, RoleId: g.RoleID,
 				RoleName: g.RoleName, SelfScoped: g.SelfScoped,
 				ValidFrom: g.ValidFrom.Unix(), GrantedBy: g.GrantedBy,
-				ViaMembershipId: g.ViaMembershipID, Reason: g.Reason,
+				ViaMembershipId: g.ViaMembershipID, ViaAssignmentId: g.ViaAssignmentID, Reason: g.Reason, RevokeReason: g.RevokeReason,
 				Scopes: grantScopeProtos(scopes, g.ID),
 			}
 			if g.ValidUntil != nil {

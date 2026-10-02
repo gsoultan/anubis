@@ -228,6 +228,122 @@ func TestStormFull_GrantFamily(t *testing.T) {
 	}
 }
 
+// TestStormFull_RevokeKeepsWhyAccessWasGiven pins migration 0053.
+//
+// Root cause: revoking wrote its reason into grants.reason — the only place
+// the reason the access was GIVEN for was kept — so every revoke with a reason
+// erased it. Both must survive, each in its own column, through both read
+// paths (they select the columns separately).
+//
+// It builds its own fixtures inside a rolled-back transaction, unlike the
+// grant family above: that one reads an existing grant, and a freshly
+// bootstrapped database — the one CI runs this suite against — has none, so it
+// skips there. A skipped assertion would pass the fix and the bug alike.
+func TestStormFull_RevokeKeepsWhyAccessWasGiven(t *testing.T) {
+	skipWithoutDB(t)
+	ctx := context.Background()
+	tenant := firstTenant(ctx, t)
+	repo := sliceRepo()
+
+	var identity string
+	if err := pool.QueryRow(ctx, `
+		SELECT i.id::text FROM identities i JOIN realms r ON r.id = i.realm_id
+		 WHERE i.tenant_id = $1 AND r.kind = 'internal'
+		 ORDER BY i.created_at LIMIT 1`, tenant).Scan(&identity); err != nil {
+		t.Fatalf("no internal identity in the first tenant — bootstrap creates one: %v", err)
+	}
+
+	err := repo.WithinTx(ctx, func(ctx context.Context) error {
+		// allowed_realm_kinds defaults to internal, which is who holds it.
+		roleID, err := repo.CreateRole(ctx, tenant, authzdomain.RoleRecord{
+			Name: "revoke-keeps-reason", Description: "fixture",
+		}, "")
+		if err != nil {
+			return err
+		}
+		given, err := repo.CreateGrant(ctx, grant.GrantCreate{
+			TenantID: tenant, IdentityID: identity, RoleID: roleID,
+			GrantedBy: identity, Reason: "INC-1042 month-end close",
+		})
+		if err != nil {
+			return err
+		}
+		if err := repo.RevokeGrant(ctx, tenant, given, "offboarded"); err != nil {
+			return err
+		}
+
+		history, err := repo.ListGrants(ctx, tenant, identity, true)
+		if err != nil {
+			return err
+		}
+		hits, err := repo.SearchGrants(ctx, tenant, grant.GrantSearch{
+			IdentityID: identity, RoleID: roleID, IncludeRevoked: true,
+		})
+		if err != nil {
+			return err
+		}
+		seen := 0
+		check := func(via string, g grant.GrantRecord) {
+			if g.ID != given {
+				return
+			}
+			seen++
+			if g.RevokedAt == nil {
+				t.Fatalf("%s: revoked grant has no revoked_at", via)
+			}
+			if g.Reason != "INC-1042 month-end close" {
+				t.Fatalf("%s: revoking overwrote why the access was given: reason %q, want %q",
+					via, g.Reason, "INC-1042 month-end close")
+			}
+			if g.RevokeReason != "offboarded" {
+				t.Fatalf("%s: revoke reason %q, want %q", via, g.RevokeReason, "offboarded")
+			}
+		}
+		for _, g := range history {
+			check("ListGrants", g)
+		}
+		for _, h := range hits {
+			check("SearchGrants", h.Grant)
+		}
+		if seen != 2 {
+			t.Fatalf("revoked grant found %d times across ListGrants and SearchGrants, want 2", seen)
+		}
+
+		// A revoke with no reason records none, and still keeps the grant's own.
+		quiet, err := repo.CreateGrant(ctx, grant.GrantCreate{
+			TenantID: tenant, IdentityID: identity, RoleID: roleID,
+			GrantedBy: identity, Reason: "kept when revoked silently",
+		})
+		if err != nil {
+			return err
+		}
+		if err := repo.RevokeGrant(ctx, tenant, quiet, ""); err != nil {
+			return err
+		}
+		history, err = repo.ListGrants(ctx, tenant, identity, true)
+		if err != nil {
+			return err
+		}
+		found := false
+		for _, g := range history {
+			if g.ID != quiet {
+				continue
+			}
+			found = true
+			if g.Reason != "kept when revoked silently" || g.RevokeReason != "" {
+				t.Fatalf("silent revoke: reason %q, revoke reason %q", g.Reason, g.RevokeReason)
+			}
+		}
+		if !found {
+			t.Fatal("silently revoked grant missing from its history")
+		}
+		return errRollback
+	})
+	if !errors.Is(err, errRollback) {
+		t.Fatalf("WithinTx: %v", err)
+	}
+}
+
 func TestStormFull_MembershipFamily(t *testing.T) {
 	skipWithoutDB(t)
 	ctx := context.Background()
@@ -242,7 +358,7 @@ func TestStormFull_MembershipFamily(t *testing.T) {
 	}
 
 	err := repo.WithinTx(ctx, func(ctx context.Context) error {
-		mid, err := repo.CreateMembership(ctx, tenant, "storm-full-membership", "probe")
+		mid, err := repo.CreateMembership(ctx, tenant, "storm-full-membership", "probe", "")
 		if err != nil {
 			return err
 		}
@@ -283,19 +399,22 @@ func TestStormFull_MembershipFamily(t *testing.T) {
 			return err
 		}
 
-		created, err := repo.AssignMembership(ctx, identity, mid, identity)
+		out, err := repo.AssignMembership(ctx, membership.MembershipAssignmentInput{
+			MembershipID: mid, IdentityID: identity,
+		}, identity)
 		if err != nil {
 			return err
 		}
-		if created < 1 {
-			t.Fatalf("AssignMembership materialized %d grants, want at least 1", created)
+		created := out.GrantsCreated
+		if created < 1 || out.AssignmentID == "" {
+			t.Fatalf("AssignMembership = %+v, want an assignment and at least 1 grant", out)
 		}
 		changed, err := repo.ResyncMembership(ctx, mid)
 		if err != nil {
 			return err
 		}
 		_ = changed // resync of a fresh assignment may touch nothing
-		revoked, err := repo.UnassignMembership(ctx, identity, mid)
+		revoked, err := repo.UnassignMembership(ctx, identity, mid, identity, "probe")
 		if err != nil {
 			return err
 		}

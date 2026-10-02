@@ -59,7 +59,7 @@ function StartHere() {
     { n: 1, title: 'Add a person', hint: 'An employee, a supplier contact, or an applicant.',
       action: <Button size="xs" variant="light" leftSection={<IconUserPlus size={13} />}
         onClick={() => openCreate('identity')}>Add person</Button> },
-    { n: 2, title: 'Give them access', hint: 'A grant ties a person to a role, limited to a scope.',
+    { n: 2, title: 'Give them access', hint: 'A role, and the places it applies — or a membership that bundles several.',
       action: <Button size="xs" variant="light" leftSection={<IconCirclePlus size={13} />}
         onClick={() => openCreate('grant')}>Give access</Button> },
     { n: 3, title: 'Check it works', hint: 'Ask “can they do X?” and see exactly why yes or no.',
@@ -174,7 +174,9 @@ function Overview() {
           <Stat label="Identities" value={total.toLocaleString()} to="/identities"
             icon={<IconUsers size={11} />}
             sub={`${data.identities_by_realm.length} populations`} />
-          <Stat label="Grants" value={data.grants_total.toLocaleString()} to="/grants"
+          {/* A count, not a door: grants are read per person now, and there
+              is no list of 150,000 of them worth opening. */}
+          <Stat label="Grants" value={data.grants_total.toLocaleString()}
             icon={<IconAffiliate size={11} />} sub="in force" />
           <Stat label="Scope nodes" value={data.scope_nodes_total.toLocaleString()} to="/scope"
             icon={<IconSitemap size={11} />} sub="active" />

@@ -65,7 +65,12 @@ SELECT
        n.node_type, n.slug, n.name, n.external_ref,
        (SELECT count(*) FROM scope_nodes c
          WHERE c.parent_id = n.id
-           AND ($6::boolean OR c.status = 'active'))::int AS child_count
+           AND ($6::boolean OR c.status = 'active'))::int AS child_count,
+       CASE WHEN $4::text IS NULL THEN '{}'::text[] ELSE
+         COALESCE((SELECT array_agg(a.name ORDER BY c.depth DESC)
+                     FROM scope_closure c JOIN scope_nodes a ON a.id = c.ancestor_id
+                    WHERE c.descendant_id = n.id AND c.depth > 0 AND NOT a.is_axis_root),
+                  '{}'::text[]) END AS path
 FROM scope_nodes n
 WHERE n.tenant_id = $1
   AND n.axis_code = $2
@@ -83,7 +88,8 @@ SELECT
        n.parent_id::text AS parent_id, n.is_axis_root, n.status, n.axis_code,
        n.node_type, n.slug, n.name, n.external_ref,
        (SELECT count(*) FROM scope_nodes c
-         WHERE c.parent_id = n.id AND c.status = 'active')::int AS child_count
+         WHERE c.parent_id = n.id AND c.status = 'active')::int AS child_count,
+       '{}'::text[] AS path
 FROM scope_nodes n
 WHERE n.id = $1 AND n.tenant_id = $2`)
 	storm.RegisterStatement(`
@@ -92,7 +98,8 @@ SELECT
        n.parent_id::text AS parent_id, n.is_axis_root, n.status, n.axis_code,
        n.node_type, n.slug, n.name, n.external_ref,
        (SELECT count(*) FROM scope_nodes c
-         WHERE c.parent_id = n.id AND c.status = 'active')::int AS child_count
+         WHERE c.parent_id = n.id AND c.status = 'active')::int AS child_count,
+       '{}'::text[] AS path
 FROM scope_nodes n
 WHERE n.tenant_id = $1 AND n.axis_code = $2 AND n.external_ref = $3`)
 	storm.RegisterStatement(`
@@ -101,7 +108,8 @@ SELECT
        n.parent_id::text AS parent_id, n.is_axis_root, n.status, n.axis_code,
        n.node_type, n.slug, n.name, n.external_ref,
        (SELECT count(*) FROM scope_nodes c
-         WHERE c.parent_id = n.id AND c.status = 'active')::int AS child_count
+         WHERE c.parent_id = n.id AND c.status = 'active')::int AS child_count,
+       '{}'::text[] AS path
 FROM scope_nodes n
 WHERE n.tenant_id = $1 AND n.id = ANY($2::uuid[])`)
 	storm.RegisterStatement(`
@@ -133,8 +141,14 @@ SET display_name = $2, default_effect = $3, status = $4,
     sort_order = $5, ui_schema = $6::jsonb
 WHERE code = $1`)
 	storm.RegisterStatement(`
+UPDATE scope_node_types SET display_name = $3, parent_types = $4::text[]
+WHERE code = $1 AND axis_code = $2`)
+	storm.RegisterStatement(`
 UPDATE scope_nodes SET name = $3, status = 'active', updated_at = now()
 WHERE id = $1 AND tenant_id = $2`)
+	storm.RegisterStatement(`
+UPDATE scope_nodes SET status = 'active', updated_at = now()
+WHERE id = $1 AND tenant_id = $2 AND status = 'archived'`)
 	storm.RegisterStatement(`
 UPDATE scope_nodes SET status = 'archived', updated_at = now()
 WHERE id = $1 AND tenant_id = $2 AND NOT is_axis_root`)
@@ -167,6 +181,7 @@ WHERE id = $1`)
 }
 
 func scanNodeRow(rv [][]byte, r *scopermquery.NodeRow, sl *runtime.Slab) error {
+	var decErr error
 	r.ID = sl.Str(rv[0])
 	r.TenantID = sl.Str(rv[1])
 	r.ParentID = runtime.NullText(rv[2], sl)
@@ -178,6 +193,10 @@ func scanNodeRow(rv [][]byte, r *scopermquery.NodeRow, sl *runtime.Slab) error {
 	r.Name = sl.Str(rv[8])
 	r.ExternalRef = runtime.NullText(rv[9], sl)
 	r.ChildCount = runtime.Int4(rv[10])
+	r.Path, decErr = runtime.TextArray(rv[11], sl)
+	if decErr != nil {
+		return decErr
+	}
 	return nil
 }
 

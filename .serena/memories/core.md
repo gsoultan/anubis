@@ -30,6 +30,14 @@ references". New topics live in their own file from 2026-09-11 on:
 - [[console-person-page]] — why a record you can act on is a page, the
   trailing-underscore route, the query-key prefix rule, and why it was blank
   on refresh (relative asset URLs; the build now refuses them).
+- [[console-give-access]] — the one grant sheet, why "where" has no
+  default, required structures silently kill self-scoped and "everywhere"
+  grants, the Access screen that became a redirect, and why a revoke has
+  its own `revoke_reason` column (0053) instead of writing over `reason`.
+- [[memberships-where-assigned]] — the two kinds of membership, assignments
+  as rows with a place and an end date, and the four things that were wrong.
+- [[structure-levels]] — the level rules 0055 holds, why codes are global,
+  guard messages as `reason`, and why `OrEmptyJSON` must not change.
 - [[console-create-drawers]] — every create drawer's submit button was inert,
   where the grant form lives now, and why render must never read `form.state`.
 - [[login-doors]] — the two login doors (RPC and hosted page), the one

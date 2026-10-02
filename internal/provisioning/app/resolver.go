@@ -30,7 +30,7 @@ type resolver struct {
 	identities  map[string]string
 	roles       map[string]string
 	nodes       map[string]string
-	memberships map[string]string
+	memberships map[string]membershipRef
 	loadedMems  bool
 
 	// held is the roles each person already holds, cached per identity:
@@ -142,23 +142,24 @@ func (r *resolver) nodeID(ctx context.Context, axis, ref string) (string, bool, 
 	return node.ID, true, nil
 }
 
-// membershipID matches on name, case-insensitively. Memberships have no
+// membership matches on name, case-insensitively. Memberships have no
 // by-name lookup of their own, so the whole list is fetched once — there
-// are tens of them, not thousands.
-func (r *resolver) membershipID(ctx context.Context, name string) (string, bool, error) {
+// are tens of them, not thousands. The anchor axis rides along: it decides
+// whether a row must name a place, and which structure to look it up in.
+func (r *resolver) membership(ctx context.Context, name string) (membershipRef, bool, error) {
 	if !r.loadedMems {
 		ms, err := r.access.ListMemberships(ctx, r.tenantID)
 		if err != nil {
-			return "", false, err
+			return membershipRef{}, false, err
 		}
-		r.memberships = make(map[string]string, len(ms))
+		r.memberships = make(map[string]membershipRef, len(ms))
 		for _, m := range ms {
-			r.memberships[strings.ToLower(m.Name)] = m.ID
+			r.memberships[strings.ToLower(m.Name)] = membershipRef{id: m.ID, anchorAxis: m.AnchorAxis}
 		}
 		r.loadedMems = true
 	}
-	id, ok := r.memberships[strings.ToLower(name)]
-	return id, ok, nil
+	m, ok := r.memberships[strings.ToLower(name)]
+	return m, ok, nil
 }
 
 // heldRoles is the set of roles this person already holds under a live

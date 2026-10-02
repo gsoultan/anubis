@@ -146,6 +146,10 @@ jobs:
         working-directory: ui
       - run: bun run build
         working-directory: ui
+      # The rules the give-access sheet applies before the server does
+      # (required structures, exceptions, end dates), held to authorize().
+      - run: bun run test
+        working-directory: ui
 
   release-build:
     name: release build (snapshot)

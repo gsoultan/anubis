@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useQuery, useMutation } from '@tanstack/react-query'
-import { Badge, Button, Modal, MultiSelect, Popover, SegmentedControl, Select, TextInput, Tooltip } from '@mantine/core'
+import { Badge, Button, Modal, SegmentedControl, Select, Switch, Tooltip } from '@mantine/core'
 import { IconPlus, IconFlask, IconAlertTriangle, IconSitemapFilled, IconRefresh, IconPlugConnected, IconClock } from '@tabler/icons-react'
 import { queryClient } from '@/lib/query/client'
 import { notifyCreated, notifyRejected } from '@/components/create/shell'
@@ -9,6 +9,8 @@ import { useCreate } from '@/stores/create'
 import { useState } from 'react'
 import { Page } from '@/components/shell/Page'
 import { ScopeTree } from '@/components/scope/ScopeTree'
+import { Levels } from '@/components/scope/Levels'
+import { ItemInspector } from '@/components/scope/ItemInspector'
 import { SYNC_INTERVALS } from '@/lib/syncIntervals'
 import { AxisIcon } from '@/components/scope/AxisIcon'
 import { qk } from '@/lib/query/keys'
@@ -53,99 +55,6 @@ function everyLabel(secs: number): string {
   if (secs % 86400 === 0) return secs === 86400 ? 'day' : `${secs / 86400} days`
   if (secs % 3600 === 0) return secs === 3600 ? 'hour' : `${secs / 3600} hours`
   return `${Math.round(secs / 60)} minutes`
-}
-
-/* The level rules, visible and editable. "Departments can sit under offices
-   or divisions" is data — this panel is where an operator adds a Division
-   level between existing ones, without a deploy. The same rules drive the
-   contextual add-button and are enforced by a schema trigger (0014). */
-function ItemKinds({ axisCode }: { axisCode: string }) {
-  const { data: types } = useQuery({ queryKey: qk.nodeTypes(), queryFn: api.nodeTypes })
-  const mine = (types ?? []).filter((t) => t.axis_code === axisCode)
-  const [name, setName] = useState('')
-  const [parents, setParents] = useState<string[]>([])
-  const [busy, setBusy] = useState(false)
-
-  const save = async (code: string, next: string[]) => {
-    try {
-      await api.setNodeTypeParents(axisCode, code, next)
-      await queryClient.invalidateQueries({ queryKey: qk.nodeTypes() })
-      notifyCreated('Level rules updated', `“${code}” placement changed — pickers follow immediately.`)
-    } catch (e) { notifyRejected(e) }
-  }
-  const add = async () => {
-    setBusy(true)
-    try {
-      await api.createNodeType({ axis_code: axisCode, display_name: name, parent_types: parents })
-      notifyCreated('Kind added', `“${name}” can now be created under: ${parents.join(', ')}.`)
-      await queryClient.invalidateQueries({ queryKey: qk.nodeTypes() })
-      setName(''); setParents([])
-    } catch (e) { notifyRejected(e) }
-    setBusy(false)
-  }
-
-  return (
-    <div className="p-4">
-      <div className="mb-1 flex items-baseline justify-between">
-        <div className="t-label">Item kinds</div>
-        <div className="t-xs">what may sit under what</div>
-      </div>
-      <div className="t-xs mb-3">
-        Levels are rules, not code — add “Division” between offices and departments and
-        every picker follows. The database rejects illegal placements outright.
-      </div>
-      <div className="flex flex-col gap-1.5">
-        {/* Name over parents, not beside them. Side by side the select was
-            pinned at 220px and the level's own name was what gave way —
-            "Department" and "Departments" both rendered as "Depart…", which
-            is the one thing this panel exists to tell apart. */}
-        {mine.map((t) => (
-          <div key={t.code} className="panel-inset px-2.5 py-2">
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex min-w-0 items-baseline gap-2">
-                <span className="t-body truncate" style={{ fontWeight: 530 }}>{t.display_name}</span>
-                <span className="chip">{t.code}</span>
-              </div>
-              {t.parent_types.length === 0 && (
-                <Tooltip label="The root of this structure — nothing sits above it.">
-                  <span className="chip chip-accent">root</span>
-                </Tooltip>
-              )}
-            </div>
-            {t.parent_types.length > 0 && (
-              <MultiSelect
-                size="xs" mt={6} value={t.parent_types}
-                aria-label={`Legal parents of ${t.display_name}`}
-                data={mine.filter((x) => x.code !== t.code).map((x) => ({ value: x.code, label: x.display_name }))}
-                onChange={(v) => void save(t.code, v)}
-                comboboxProps={{ withinPortal: true }}
-              />
-            )}
-          </div>
-        ))}
-      </div>
-      <Popover width={300} position="bottom-start">
-        <Popover.Target>
-          <Button size="xs" variant="light" mt={10} leftSection={<IconPlus size={13} />}>
-            Add kind
-          </Button>
-        </Popover.Target>
-        <Popover.Dropdown p="sm">
-          <div className="flex flex-col gap-2.5">
-            <TextInput size="xs" label="Name" placeholder="Division"
-              value={name} onChange={(e) => setName(e.currentTarget.value)} />
-            <MultiSelect size="xs" label="May sit under" placeholder="Pick parents"
-              data={mine.map((x) => ({ value: x.code, label: x.display_name }))}
-              value={parents} onChange={setParents} />
-            <Button size="xs" loading={busy} disabled={name.trim().length < 2 || parents.length === 0}
-              onClick={() => void add()}>
-              Add kind
-            </Button>
-          </div>
-        </Popover.Dropdown>
-      </Popover>
-    </div>
-  )
 }
 
 /* Where the tree meets its source of truth. Preview is the default action —
@@ -330,6 +239,7 @@ function Scope() {
   const { openCreate } = useCreate()
   const [selected, setSelected] = useState<ScopeNode | null>(null)
   const [pane, setPane] = useState<Pane>('settings')
+  const [showArchived, setShowArchived] = useState(false)
   const { data: axes } = useQuery({ queryKey: qk.axes(), queryFn: api.axes })
   const { data: nodeTypes } = useQuery({ queryKey: qk.nodeTypes(), queryFn: api.nodeTypes })
   // ?axis= makes a structure deep-linkable (docs, and the screenshot harness)
@@ -399,14 +309,17 @@ function Scope() {
           <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_400px]">
             <div className="panel overflow-clip">
               <div className="panel-head">
-                <span className="t-label">{axis.display_name} tree</span>
-                <span className="t-xs">children load on expand</span>
+                <span className="t-label">{axis.display_name}</span>
+                {/* Off by default: archived items are history. On, to find
+                    one and restore it — there was no other way to reach it. */}
+                <Switch size="xs" label="Show archived" labelPosition="left"
+                  checked={showArchived} onChange={(e) => setShowArchived(e.currentTarget.checked)} />
               </div>
               {/* A minimum as well as a maximum. Autosize shrinks to content,
                   so an axis holding one root collapsed the primary surface to
                   a single row beside a 400px rail. */}
               <div className="p-3" style={{ minHeight: 380 }}>
-                <ScopeTree axis={axis.code} selectedId={selected?.id ?? null}
+                <ScopeTree axis={axis.code} selectedId={selected?.id ?? null} archived={showArchived}
                   onSelect={setSelected} height="calc(100vh - 272px)" />
               </div>
             </div>
@@ -418,49 +331,9 @@ function Scope() {
                 the thing it describes is clicked is not a detail pane. */}
             <div className="sticky top-0 flex flex-col gap-4">
               {selected ? (
-                <div className="panel rise p-4">
-                  <div className="t-label mb-2.5">Selected item</div>
-                  <div className="t-h1">{selected.name}</div>
-                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                    <span className="chip">{selected.node_type}</span>
-                    {selected.is_axis_root && (
-                      <span className="chip chip-accent">axis root</span>
-                    )}
-                    <span className="chip">{selected.child_count ?? 0} children</span>
-                  </div>
-                  <div className="mt-2.5">
-                    <span className="chip" style={{ maxWidth: '100%' }}>
-                      <span className="truncate">{selected.id}</span>
-                    </span>
-                  </div>
-                  {(() => {
-                    /* Contextual verb: the schema knows what may live under
-                       this node, so the button should say it. "Add department"
-                       teaches the hierarchy; "Add child node" teaches nothing. */
-                    const legal = (nodeTypes ?? []).filter((t) =>
-                      t.axis_code === axis.code && t.parent_types.includes(selected.node_type))
-                    if (legal.length === 0) return (
-                      <div className="t-xs mt-3">Nothing can be added under a {selected.node_type}.</div>
-                    )
-                    const label = legal.length === 1
-                      ? `Add ${legal[0]!.display_name.toLowerCase()}`
-                      : 'Add item'
-                    return (
-                      <Button size="xs" variant="light" mt={12} fullWidth
-                        leftSection={<IconPlus size={13} />}
-                        onClick={() => openCreate('node', { axisCode: axis.code, parentId: selected.id })}>
-                        {label} under “{selected.name}”
-                      </Button>
-                    )
-                  })()}
-                  {selected.is_axis_root && (
-                    <div className="t-xs mt-3" style={{ borderTop: '1px solid var(--line-soft)', paddingTop: 10 }}>
-                      Granting here means <b style={{ color: 'var(--ink-2)' }}>deliberately unrestricted</b> on
-                      this axis — distinct from a grant that is merely silent about it, which matters the
-                      moment the axis is flipped to strict.
-                    </div>
-                  )}
-                </div>
+                <ItemInspector key={selected.id} node={selected}
+                  levels={(nodeTypes ?? []).filter((t) => t.axis_code === axis.code)}
+                  onChanged={setSelected} />
               ) : (
                 <div className="panel flex flex-col items-center justify-center px-4 py-8 text-center">
                   <div className="mb-2.5 flex items-center justify-center rounded-full"
@@ -525,7 +398,7 @@ function Scope() {
                   </div>
                 )}
 
-                {pane === 'levels' && <ItemKinds axisCode={axis.code} />}
+                {pane === 'levels' && <Levels axisCode={axis.code} axisName={axis.display_name} />}
                 {pane === 'source' && <SyncCard axisCode={axis.code} />}
               </div>
             </div>

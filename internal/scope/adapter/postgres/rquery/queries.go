@@ -22,11 +22,11 @@ func Queries() []storm.RawDecl {
 	return []storm.RawDecl{
 		// node.go
 		ListScopeNodes, GetScopeNode, GetScopeNodeByRef, ScopeNodesByIDs,
-		ScopeAncestors, ArchiveScopeNode, RenameScopeNode,
+		ScopeAncestors, ArchiveScopeNode, RestoreScopeNode, RenameScopeNode,
 		// tree.go
 		EnsureAxisRoot, AddScopeNode, MoveScopeNode, ScopeSyncApply,
 		// axis.go
-		UpdateScopeAxis,
+		UpdateScopeAxis, UpdateScopeNodeType,
 		// sync.go
 		UpdateSyncSource, CreateSyncSource, SetSyncSchedule,
 		RecordSyncFailure, ScheduleNextSyncSource, ListSyncRuns,

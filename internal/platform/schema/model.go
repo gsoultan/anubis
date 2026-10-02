@@ -443,6 +443,16 @@ func (m *GrantScope) Schema(t *storm.Table) {
 // ViaMembership and ViaEntry are set when the grant was fanned out from a
 // membership rather than given directly. They are what lets unassigning a
 // membership find exactly the grants it created and leave direct ones alone.
+//
+// Reason is why the access was given; RevokeReason why it was taken away.
+// They were one column, and revoking with a reason overwrote the first — the
+// only place the note an operator wrote when granting was kept (0053).
+//
+// ViaMember is the ASSIGNMENT a derived grant came from (0054). One person can
+// hold one membership at several places, and leaving one of them must revoke
+// that place's grants and no other's. NO ACTION rather than RESTRICT: deleting
+// a person cascades through both tables, and NO ACTION is checked after the
+// cascade has removed the grants too.
 type Grant struct {
 	CreatedAt     time.Time
 	ValidFrom     time.Time
@@ -454,9 +464,11 @@ type Grant struct {
 	RoleID        [16]byte
 	GrantedBy     [16]byte
 	Reason        *string
+	RevokeReason  *string
 	SelfScoped    bool
 	ViaMembership *Membership
 	ViaEntry      *MembershipEntry
+	ViaMember     *MembershipMember
 }
 
 func (m *Grant) Schema(t *storm.Table) {
@@ -475,6 +487,10 @@ func (m *Grant) Schema(t *storm.Table) {
 	t.Col(&m.ViaEntry).ConstraintName("grants_via_entry_id_fkey")
 	t.Col(&m.ViaEntry).OnDelete(storm.Restrict)
 	t.Col(&m.ViaEntry).NoIndex()
+	t.Col(&m.ViaMember).ConstraintName("grants_via_member_id_fkey")
+	t.Col(&m.ViaMember).OnDelete(storm.NoAction)
+	t.Col(&m.ViaMember).NoIndex()
+	t.Index(&m.ViaMember).Where("(via_member_id IS NOT NULL) AND (revoked_at IS NULL)").Named("grants_via_member")
 	t.UniqueNamed("grants_id_tenant_id_key", &m.ID, &m.Tenant)
 	t.CheckNamed("grants_check", "(valid_until IS NULL) OR (valid_until > valid_from)")
 	t.Index(&m.ValidUntil).Where("(revoked_at IS NULL) AND (valid_until IS NOT NULL)").Named("grants_expiring")
@@ -576,7 +592,15 @@ func (m *IdentityLink) Schema(t *storm.Table) {
 
 // MembershipEntry is one role inside a membership — the template a Grant is
 // fanned out from.
+//
+// An entry is never deleted once written, only retired (0054). Grants fanned
+// out from it point back at it, and those grants are history that outlives
+// being revoked — so deleting an entry was refused by the foreign key the
+// moment anybody had ever held the membership, which froze its contents for
+// good. Changing a membership now retires the entries that went and adds the
+// ones that came; entries that did not change keep their id and their grants.
 type MembershipEntry struct {
+	RetiredAt    *time.Time
 	ID           [16]byte
 	MembershipID [16]byte
 	TenantID     [16]byte
@@ -622,26 +646,60 @@ func (m *MembershipEntryScope) Schema(t *storm.Table) {
 	t.ForeignKey(&m.ScopeNodeID, &m.TenantID, &m.AxisCode).References(&ref1, &ref1.ID, &ref1.Tenant, &ref1.AxisCode).Named("membership_entry_scopes_scope_node_id_tenant_id_axis_code_fkey").OnDelete(storm.Restrict).NoIndex()
 }
 
-// MembershipMember is one identity's assignment to a membership.
+// MembershipMember is one assignment of a person to a membership (0054).
 //
-// assigned_by and assigned_at are kept because removing somebody from a
-// membership revokes real grants, and "who put them in and when" is the
+// It used to be keyed (membership, person): somebody was in a membership or
+// not, and got exactly the places the membership named. A membership that
+// applies WHERE ASSIGNED needs the place on the assignment instead — Andi in
+// the Marketing Council for Organization A, and not for Organization B — and
+// the same person may then hold the same membership at several places, so an
+// assignment has its own id.
+//
+// axis_code/scope_node_id are the place, NULL for a membership that gives
+// everyone the same places. inherit false means exactly that place. The end
+// date and the note travel onto every grant the assignment materialises.
+//
+// Leaving stamps removed_at rather than deleting: the grants it gave point
+// back at it, and "who put them in, when, and who took them out" is the
 // question asked afterwards.
 type MembershipMember struct {
 	AssignedAt   time.Time
+	ValidUntil   *time.Time
+	RemovedAt    *time.Time
+	ID           [16]byte
 	MembershipID [16]byte
 	IdentityID   [16]byte
 	TenantID     [16]byte
 	AssignedBy   [16]byte
+	RemovedBy    *[16]byte
+	ScopeNodeID  *[16]byte
+	AxisCode     *string
+	Inherit      bool
+	Reason       *string
 }
 
 func (m *MembershipMember) Schema(t *storm.Table) {
 	var ref0 Identity
 	var ref1 Membership
-	t.PrimaryKey(&m.MembershipID, &m.IdentityID)
+	var ref2 ScopeNode
+	t.PrimaryKey(&m.ID)
+	t.Col(&m.ID).Default("uuidv7()")
 	t.Col(&m.AssignedAt).Default("now()")
+	t.Col(&m.Inherit).Default("true")
+	t.CheckNamed("membership_members_place_check", "(axis_code IS NULL) = (scope_node_id IS NULL)")
+	t.CheckNamed("membership_members_removal_check", "(removed_at IS NULL) = (removed_by IS NULL)")
+	// One live assignment per person, per place — the everywhere kind has no
+	// place, so it gets an index of its own rather than a NULL that a unique
+	// index would treat as distinct from every other NULL.
+	t.Index(&m.MembershipID, &m.IdentityID).Unique().Where("(removed_at IS NULL) AND (scope_node_id IS NULL)").Named("membership_members_live_everywhere")
+	t.Index(&m.MembershipID, &m.IdentityID, &m.ScopeNodeID).Unique().Where("(removed_at IS NULL) AND (scope_node_id IS NOT NULL)").Named("membership_members_live_placed")
+	t.Index(&m.IdentityID).Where("removed_at IS NULL").Named("membership_members_identity_live")
 	t.ForeignKey(&m.IdentityID, &m.TenantID).References(&ref0, &ref0.ID, &ref0.Tenant).Named("membership_members_identity_id_tenant_id_fkey").OnDelete(storm.Cascade).NoIndex()
 	t.ForeignKey(&m.MembershipID, &m.TenantID).References(&ref1, &ref1.ID, &ref1.Tenant).Named("membership_members_membership_id_tenant_id_fkey").OnDelete(storm.Cascade)
+	// The place is in this tenant and on the axis it claims: the same
+	// composite key grant_scopes uses, so a cross-tenant place is not merely
+	// checked, it is unrepresentable.
+	t.ForeignKey(&m.ScopeNodeID, &m.TenantID, &m.AxisCode).References(&ref2, &ref2.ID, &ref2.Tenant, &ref2.AxisCode).Named("membership_members_scope_node_id_tenant_id_axis_code_fkey").OnDelete(storm.Restrict).NoIndex()
 }
 
 // Membership is a named, reusable bundle of role-and-scope assignments.
@@ -650,10 +708,17 @@ func (m *MembershipMember) Schema(t *storm.Table) {
 // a layer the decision path has to consult: authorize() reads grants and knows
 // nothing about memberships. That is why a membership can be changed and
 // re-synced without the gate learning a second way to be granted.
+//
+// AnchorAxis says where its roles apply (0054). NULL: the same places for
+// everyone, named on its entries. Set: WHERE EACH MEMBER IS ASSIGNED, a place
+// on that axis chosen per assignment — the entries may then not name places on
+// it themselves. Fixed at creation: changing it would silently reinterpret the
+// access of everyone already in it.
 type Membership struct {
 	CreatedAt   time.Time
 	ID          [16]byte
 	Tenant      Tenant
+	AnchorAxis  *ScopeAx
 	Name        string
 	Description string
 }
@@ -664,6 +729,10 @@ func (m *Membership) Schema(t *storm.Table) {
 	t.Col(&m.ID).Default("uuidv7()")
 	t.Col(&m.Tenant).ConstraintName("memberships_tenant_id_fkey")
 	t.Col(&m.Tenant).OnDelete(storm.Cascade)
+	t.Col(&m.AnchorAxis).Named("anchor_axis")
+	t.Col(&m.AnchorAxis).ConstraintName("memberships_anchor_axis_fkey")
+	t.Col(&m.AnchorAxis).OnDelete(storm.Restrict)
+	t.Col(&m.AnchorAxis).NoIndex()
 	t.Col(&m.Description).Default("''::text")
 	t.UniqueNamed("memberships_id_tenant_id_key", &m.ID, &m.Tenant)
 	t.UniqueNamed("memberships_tenant_id_name_key", &m.Tenant, &m.Name)
