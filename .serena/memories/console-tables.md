@@ -113,3 +113,13 @@ action" answers from those 100 alone — an investigation can find nothing and
 be told so. This is the client-side-filter-of-a-server-page rule above,
 broken. The server already takes actor_id, action, from/to and page_token;
 it has no result filter. Not fixed yet.
+
+## People, 2026-09-28
+
+A neutral 26px initials avatar leads the person cell (neutral on purpose —
+tinted, it repeated the Population column). Assurance is a neutral chip:
+painting IAL1 amber put a warning on every applicant. Last sign-in reads
+relative ("3 days ago", exact date on hover). The row-end chevron went; a
+hover/focus-revealed **Give access** icon replaced it (`.hover-reveal`,
+always shown on `hover: none` devices), beside the ⋯ menu. Disable asks
+first. `.row-go` is still the affordance in `RoleHolders`.

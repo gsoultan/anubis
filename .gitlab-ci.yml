@@ -58,7 +58,7 @@ console:
   stage: test
   image: oven/bun:1.4.0
   script:
-    - cd ui && bun install --frozen-lockfile && bun run build
+    - cd ui && bun install --frozen-lockfile && bun run build && bun run test
 
 image:
   stage: package

@@ -54,3 +54,14 @@ Rule: render reads through `useStore(form.store, selector)` or a
 A scripted `fill` (one input event carrying the whole value) and real typing
 behave differently here: the validity flip that rescued the Subscribe reads
 only happens keystroke by keystroke. Verify forms by typing.
+
+## GrantFields is gone (2026-09-28)
+
+The grant form moved to `components/access/` — `useGrantDraft` (state,
+validation, write), `GiveAccessSheet` (layout), `PlacePicker` (where), with
+the pure rules in `lib/access.ts`. `CreateGrant` is now the same sheet asking
+Who first ([[console-give-access]]). `CreateMembership` uses `PlacePicker`
+too, so choosing places reads the same in both. `CreateShell` gained `size`
+(the sheet is `min(680px, 100vw)`) and `status` — a sentence at the start of
+the footer saying why the button is off. Its body is an `@container`, so
+forms inside it lay out by the drawer's width, not the window's.
