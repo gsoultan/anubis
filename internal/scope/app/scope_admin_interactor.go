@@ -91,10 +91,11 @@ func (u *scopeAdminInteractor) emitSync(ctx context.Context, tenantID string,
 }
 
 func (u *scopeAdminInteractor) ListScopeAxes(ctx context.Context) ([]scopedomain.ScopeAxisRecord, error) {
-	if _, err := u.guard.Require(ctx, "anubis:identity:read"); err != nil {
+	p, err := u.guard.Require(ctx, "anubis:identity:read")
+	if err != nil {
 		return nil, err
 	}
-	return u.axes.ListScopeAxes(ctx)
+	return u.axes.ListScopeAxes(ctx, p.TenantID)
 }
 
 func (u *scopeAdminInteractor) CreateScopeAxis(ctx context.Context, a scopedomain.ScopeAxisRecord, top *scopedomain.ScopeNodeTypeRecord) (*scopedomain.ScopeAxisRecord, error) {
@@ -114,13 +115,13 @@ func (u *scopeAdminInteractor) CreateScopeAxis(ctx context.Context, a scopedomai
 	// One transaction: a structure that exists without its top level cannot
 	// hold a single item, and the console would have to notice and repair it.
 	if err := u.tx.WithinTx(ctx, func(ctx context.Context) error {
-		if err := u.axes.CreateScopeAxis(ctx, a); err != nil {
+		if err := u.axes.CreateScopeAxis(ctx, p.TenantID, a); err != nil {
 			return err
 		}
 		if top == nil {
 			return nil
 		}
-		return u.nodes.CreateScopeNodeType(ctx, *top)
+		return u.nodes.CreateScopeNodeType(ctx, p.TenantID, *top)
 	}); err != nil {
 		return nil, err
 	}
@@ -128,7 +129,7 @@ func (u *scopeAdminInteractor) CreateScopeAxis(ctx context.Context, a scopedomai
 	if top != nil {
 		u.emit(ctx, p, "scope.node_type_create", "", map[string]string{"axis": a.Code, "node_type": top.Code})
 	}
-	return u.axes.ScopeAxis(ctx, a.Code)
+	return u.axes.ScopeAxis(ctx, p.TenantID, a.Code)
 }
 
 // maxLevelName bounds a level's display name; it labels pickers and rows.
@@ -160,11 +161,13 @@ func (u *scopeAdminInteractor) UpdateScopeAxis(ctx context.Context, a scopedomai
 	if err != nil {
 		return nil, err
 	}
-	if err := u.axes.UpdateScopeAxis(ctx, a); err != nil {
+	// The caller's tenant's structure, and only theirs: strictness used to be
+	// one switch every tenant's decisions read (0056).
+	if err := u.axes.UpdateScopeAxis(ctx, p.TenantID, a); err != nil {
 		return nil, err
 	}
 	u.emit(ctx, p, "scope.axis_update", "", map[string]string{"axis": a.Code, "effect": a.DefaultEffect, "status": a.Status})
-	return u.axes.ScopeAxis(ctx, a.Code)
+	return u.axes.ScopeAxis(ctx, p.TenantID, a.Code)
 }
 
 // StrictDryRun: replay recent allow decisions against a hypothetically-strict
@@ -213,10 +216,11 @@ func (u *scopeAdminInteractor) StrictDryRun(ctx context.Context, axis string, sa
 }
 
 func (u *scopeAdminInteractor) ListScopeNodeTypes(ctx context.Context, axis string) ([]scopedomain.ScopeNodeTypeRecord, error) {
-	if _, err := u.guard.Require(ctx, "anubis:identity:read"); err != nil {
+	p, err := u.guard.Require(ctx, "anubis:identity:read")
+	if err != nil {
 		return nil, err
 	}
-	return u.nodes.ListScopeNodeTypes(ctx, axis)
+	return u.nodes.ListScopeNodeTypes(ctx, p.TenantID, axis)
 }
 
 func (u *scopeAdminInteractor) CreateScopeNodeType(ctx context.Context, t scopedomain.ScopeNodeTypeRecord) error {
@@ -227,19 +231,17 @@ func (u *scopeAdminInteractor) CreateScopeNodeType(ctx context.Context, t scoped
 	if err := validLevel(t); err != nil {
 		return err
 	}
-	if _, err := u.axes.ScopeAxis(ctx, t.Axis); err != nil {
+	if _, err := u.axes.ScopeAxis(ctx, p.TenantID, t.Axis); err != nil {
 		return apperr.ErrInvalidArgument.With("axis", "no such structure")
 	}
-	if err := u.nodes.CreateScopeNodeType(ctx, t); err != nil {
+	if err := u.nodes.CreateScopeNodeType(ctx, p.TenantID, t); err != nil {
 		return err
 	}
 	u.emit(ctx, p, "scope.node_type_create", "", map[string]string{"axis": t.Axis, "node_type": t.Code})
 	return nil
 }
 
-// UpdateScopeNodeType edits a level. Levels belong to the installation, not a
-// tenant — the same as creating one, which is why the same permission guards
-// both.
+// UpdateScopeNodeType edits one of the caller's tenant's levels (0056).
 func (u *scopeAdminInteractor) UpdateScopeNodeType(ctx context.Context, t scopedomain.ScopeNodeTypeRecord) error {
 	p, err := u.guard.Require(ctx, "anubis:scope:admin")
 	if err != nil {
@@ -249,7 +251,7 @@ func (u *scopeAdminInteractor) UpdateScopeNodeType(ctx context.Context, t scoped
 		return err
 	}
 	t.DisplayName = strings.TrimSpace(t.DisplayName)
-	if err := u.nodes.UpdateScopeNodeType(ctx, t); err != nil {
+	if err := u.nodes.UpdateScopeNodeType(ctx, p.TenantID, t); err != nil {
 		return err
 	}
 	u.emit(ctx, p, "scope.node_type_update", "", map[string]string{

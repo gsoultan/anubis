@@ -3,11 +3,11 @@ import type { ScopeNodeType } from '@/lib/api/types'
 /* The rules about a structure's levels that the console applies before the
    server does. Plain functions, so ui/test can hold them to their word. */
 
-/** A level's code. The code is the table's key across EVERY structure, so
-    "Division" in two structures cannot both be `division` — the second one
+/** A level's code. The code is unique across every structure of a tenant,
+    so "Division" in two of them cannot both be `division` — the second one
     used to fail with a conflict nobody could explain. Prefixed with the
-    structure, and made unique against every level there is. Nobody reads it:
-    pickers and rows show the level's name. */
+    structure, and made unique against every level the tenant has. Nobody
+    reads it: pickers and rows show the level's name. */
 export function levelCode(axis: string, name: string, taken: ReadonlySet<string>): string {
   const slug = name.toLowerCase().trim().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') || 'level'
   const base = `${axis}_${slug}`.slice(0, 31).replace(/_+$/, '')

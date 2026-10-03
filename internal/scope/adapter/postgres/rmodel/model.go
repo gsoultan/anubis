@@ -20,9 +20,11 @@ import (
 )
 
 // ScopeAxis is public.scope_axes: one dimension a grant can be scoped along.
+// A tenant's own (0056): the code is unique within the tenant.
 type ScopeAxis struct {
 	CreatedAt     time.Time
 	SortOrder     int32
+	TenantID      [16]byte
 	Code          string
 	DisplayName   string
 	DefaultEffect string
@@ -35,7 +37,7 @@ type ScopeAxis struct {
 
 func (m *ScopeAxis) Schema(t *storm.Table) {
 	t.Name("scope_axes")
-	t.PrimaryKey(&m.Code)
+	t.PrimaryKey(&m.TenantID, &m.Code)
 	t.Col(&m.CreatedAt).Default("now()")
 	t.Col(&m.SortOrder).Default("100")
 	t.Col(&m.DefaultEffect).Default("'unconstrained'::text")
@@ -52,6 +54,7 @@ func (m *ScopeAxis) Schema(t *storm.Table) {
 // ScopeNodeType is public.scope_node_types: what kinds of node an axis has,
 // and which types may parent which.
 type ScopeNodeType struct {
+	TenantID    [16]byte
 	Code        string
 	AxisCode    string
 	DisplayName string
@@ -62,12 +65,12 @@ func (m *ScopeNodeType) Schema(t *storm.Table) {
 	var axis ScopeAxis
 
 	t.Name("scope_node_types")
-	t.PrimaryKey(&m.Code)
+	t.PrimaryKey(&m.TenantID, &m.Code)
 	t.Col(&m.ParentTypes).Default("'{}'::text[]")
-	t.UniqueNamed("scope_node_types_code_axis_code_key", &m.Code, &m.AxisCode)
+	t.UniqueNamed("scope_node_types_tenant_id_code_axis_code_key", &m.TenantID, &m.Code, &m.AxisCode)
 	t.CheckNamed("scope_node_types_code_check", "code ~ '^[a-z][a-z0-9_]{1,30}$'::text")
-	t.ForeignKey(&m.AxisCode).References(&axis, &axis.Code).
-		Named("scope_node_types_axis_code_fkey").OnDelete(storm.Restrict).NoIndex()
+	t.ForeignKey(&m.TenantID, &m.AxisCode).References(&axis, &axis.TenantID, &axis.Code).
+		Named("scope_node_types_tenant_id_axis_code_fkey").OnDelete(storm.Restrict)
 }
 
 // ScopeNode is public.scope_nodes: one place in one axis's tree.
@@ -122,8 +125,8 @@ func (m *ScopeNode) Schema(t *storm.Table) {
 	t.Index(&m.ParentID, &m.Slug).Unique().
 		Where("parent_id IS NOT NULL").Named("scope_nodes_sibling_slug")
 
-	t.ForeignKey(&m.NodeType, &m.AxisCode).References(&nt, &nt.Code, &nt.AxisCode).
-		Named("scope_nodes_node_type_axis_code_fkey").OnDelete(storm.Restrict).NoIndex()
+	t.ForeignKey(&m.TenantID, &m.NodeType, &m.AxisCode).References(&nt, &nt.TenantID, &nt.Code, &nt.AxisCode).
+		Named("scope_nodes_tenant_id_node_type_axis_code_fkey").OnDelete(storm.Restrict).NoIndex()
 	// Self-referential and three columns wide: the parent must be the same
 	// tenant and the same axis, or a tree could be grafted across either.
 	t.ForeignKey(&m.ParentID, &m.TenantID, &m.AxisCode).
@@ -174,8 +177,8 @@ func (m *ScopeSyncSource) Schema(t *storm.Table) {
 	t.Index(&m.NextRunAt).
 		Where("(status = 'active'::text) AND (next_run_at IS NOT NULL)").
 		Named("scope_sync_sources_due")
-	t.ForeignKey(&m.AxisCode).References(&axis, &axis.Code).
-		Named("scope_sync_sources_axis_code_fkey").OnDelete(storm.Cascade).NoIndex()
+	t.ForeignKey(&m.TenantID, &m.AxisCode).References(&axis, &axis.TenantID, &axis.Code).
+		Named("scope_sync_sources_tenant_id_axis_code_fkey").OnDelete(storm.Cascade).NoIndex()
 }
 
 // ScopeSyncRun is public.scope_sync_runs: what one sync attempt did.

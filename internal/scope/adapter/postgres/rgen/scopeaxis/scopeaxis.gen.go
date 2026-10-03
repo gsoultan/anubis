@@ -22,6 +22,7 @@ var (
 type Row struct {
 	CreatedAt     time.Time
 	SortOrder     int32
+	TenantID      [16]byte
 	Code          string
 	DisplayName   string
 	DefaultEffect string
@@ -66,7 +67,7 @@ const (
 	opNotExists runtime.Op = 27
 )
 
-const nCols = 8
+const nCols = 9
 
 // Query is a value type: composing one allocates nothing. Predicates
 // are a postfix token stream, so disjunction and negation are
@@ -76,15 +77,17 @@ type Query struct {
 	nt   uint8
 	top  uint8 // top-level conjuncts, ANDed at compile time
 
-	strs             [6]string
-	nums             [6]int64
-	tims             [4]time.Time
-	jsns             [2]runtime.JSON
-	ns, nn, ntm, njs uint8
+	strs                 [6]string
+	nums                 [6]int64
+	raws                 [4][16]byte
+	tims                 [4]time.Time
+	jsns                 [2]runtime.JSON
+	ns, nn, nr, ntm, njs uint8
 
-	anyStr     [3][]string
-	anyI32     [3][]int32
-	nas, nai32 uint8
+	anyRaw          [3][][16]byte
+	anyStr          [3][]string
+	anyI32          [3][]int32
+	nar, nas, nai32 uint8
 
 	// Order terms live in their own buffer and are appended to the stream
 	// after the predicate tree. Sharing one buffer would let a Where after
@@ -194,27 +197,34 @@ func (q *Query) cursor(col uint32, r Row) {
 		q.nums[q.nn] = int64(r.SortOrder)
 		q.nn++
 	case 2:
+		if int(q.nr) >= len(q.raws) {
+			q.over = true
+			return
+		}
+		q.raws[q.nr] = r.TenantID
+		q.nr++
+	case 3:
 		if int(q.ns) >= len(q.strs) {
 			q.over = true
 			return
 		}
 		q.strs[q.ns] = r.Code
 		q.ns++
-	case 3:
+	case 4:
 		if int(q.ns) >= len(q.strs) {
 			q.over = true
 			return
 		}
 		q.strs[q.ns] = r.DisplayName
 		q.ns++
-	case 4:
+	case 5:
 		if int(q.ns) >= len(q.strs) {
 			q.over = true
 			return
 		}
 		q.strs[q.ns] = r.DefaultEffect
 		q.ns++
-	case 5:
+	case 6:
 		if int(q.ns) >= len(q.strs) {
 			q.over = true
 			return
@@ -370,8 +380,10 @@ type Pred struct {
 	op     runtime.Op
 	num    int64
 	str    string
+	raw    [16]byte
 	tim    time.Time
 	jsn    runtime.JSON
+	anyRaw [][16]byte
 	anyStr []string
 	anyI32 []int32
 }
@@ -381,12 +393,13 @@ type Pred struct {
 var (
 	CreatedAt     = TimeCol{0}
 	SortOrder     = Int32Col{1}
-	Code          = TextCol{2}
-	DisplayName   = TextCol{3}
-	DefaultEffect = TextCol{4}
-	Status        = TextCol{5}
-	Resolution    = JSONCol{6}
-	UiSchema      = JSONCol{7}
+	TenantID      = UUIDCol{2}
+	Code          = TextCol{3}
+	DisplayName   = TextCol{4}
+	DefaultEffect = TextCol{5}
+	Status        = TextCol{6}
+	Resolution    = JSONCol{7}
+	UiSchema      = JSONCol{8}
 )
 
 // TimeCol addresses a timestamptz column.
@@ -432,6 +445,27 @@ func (h Int32Col) In(v ...int32) Pred { return Pred{col: h.c, op: opIn, anyI32: 
 // comparison NULL for every row and the result empty —
 // PostgreSQL's rule for NOT IN, not storm's.
 func (h Int32Col) NotIn(v ...int32) Pred { return Pred{col: h.c, op: opNotIn, anyI32: v} }
+
+// UUIDCol addresses a uuid column.
+type UUIDCol struct{ c uint8 }
+
+func (h UUIDCol) Asc() Sort  { return Sort(runtime.MakeOrder(runtime.Asc, uint32(h.c))) }
+func (h UUIDCol) Desc() Sort { return Sort(runtime.MakeOrder(runtime.Desc, uint32(h.c))) }
+func (h UUIDCol) AscNullsFirst() Sort {
+	return Sort(runtime.MakeOrder(runtime.AscNullsFirst, uint32(h.c)))
+}
+func (h UUIDCol) DescNullsLast() Sort {
+	return Sort(runtime.MakeOrder(runtime.DescNullsLast, uint32(h.c)))
+}
+
+func (h UUIDCol) Eq(v [16]byte) Pred    { return Pred{col: h.c, op: opEq, raw: v} }
+func (h UUIDCol) NotEq(v [16]byte) Pred { return Pred{col: h.c, op: opNotEq, raw: v} }
+func (h UUIDCol) In(v ...[16]byte) Pred { return Pred{col: h.c, op: opIn, anyRaw: v} }
+
+// NotIn is `<> ALL($1)`. A NULL anywhere in v makes the
+// comparison NULL for every row and the result empty —
+// PostgreSQL's rule for NOT IN, not storm's.
+func (h UUIDCol) NotIn(v ...[16]byte) Pred { return Pred{col: h.c, op: opNotIn, anyRaw: v} }
 
 // TextCol addresses a text column.
 type TextCol struct{ c uint8 }
@@ -629,12 +663,12 @@ func (q *Query) leaf(p Pred) {
 			q.anyI32[q.nai32] = p.anyI32
 			q.nai32++
 		case 2:
-			if int(q.nas) >= 3 {
+			if int(q.nar) >= 3 {
 				q.over = true
 				return
 			}
-			q.anyStr[q.nas] = p.anyStr
-			q.nas++
+			q.anyRaw[q.nar] = p.anyRaw
+			q.nar++
 		case 3:
 			if int(q.nas) >= 3 {
 				q.over = true
@@ -670,6 +704,13 @@ func (q *Query) leaf(p Pred) {
 			}
 			q.anyStr[q.nas] = p.anyStr
 			q.nas++
+		case 8:
+			if int(q.nas) >= 3 {
+				q.over = true
+				return
+			}
+			q.anyStr[q.nas] = p.anyStr
+			q.nas++
 		}
 		q.push(runtime.MakeLeaf(uint32(p.op), uint32(p.col)))
 		return
@@ -694,12 +735,12 @@ func (q *Query) leaf(p Pred) {
 		q.nums[q.nn] = p.num
 		q.nn++
 	case 2:
-		if int(q.ns) >= 6 {
+		if int(q.nr) >= 4 {
 			q.over = true
 			return
 		}
-		q.strs[q.ns] = p.str
-		q.ns++
+		q.raws[q.nr] = p.raw
+		q.nr++
 	case 3:
 		if int(q.ns) >= 6 {
 			q.over = true
@@ -722,13 +763,20 @@ func (q *Query) leaf(p Pred) {
 		q.strs[q.ns] = p.str
 		q.ns++
 	case 6:
+		if int(q.ns) >= 6 {
+			q.over = true
+			return
+		}
+		q.strs[q.ns] = p.str
+		q.ns++
+	case 7:
 		if int(q.njs) >= 2 {
 			q.over = true
 			return
 		}
 		q.jsns[q.njs] = p.jsn
 		q.njs++
-	case 7:
+	case 8:
 		if int(q.njs) >= 2 {
 			q.over = true
 			return
@@ -754,6 +802,10 @@ func (q Query) SortOrderLt(v int32) Query                  { return q.Where(Sort
 func (q Query) SortOrderLte(v int32) Query                 { return q.Where(SortOrder.Lte(v)) }
 func (q Query) SortOrderIn(v ...int32) Query               { return q.Where(SortOrder.In(v...)) }
 func (q Query) SortOrderNotIn(v ...int32) Query            { return q.Where(SortOrder.NotIn(v...)) }
+func (q Query) TenantIDEq(v [16]byte) Query                { return q.Where(TenantID.Eq(v)) }
+func (q Query) TenantIDNotEq(v [16]byte) Query             { return q.Where(TenantID.NotEq(v)) }
+func (q Query) TenantIDIn(v ...[16]byte) Query             { return q.Where(TenantID.In(v...)) }
+func (q Query) TenantIDNotIn(v ...[16]byte) Query          { return q.Where(TenantID.NotIn(v...)) }
 func (q Query) CodeEq(v string) Query                      { return q.Where(Code.Eq(v)) }
 func (q Query) CodeNotEq(v string) Query                   { return q.Where(Code.NotEq(v)) }
 func (q Query) CodeGt(v string) Query                      { return q.Where(Code.Gt(v)) }
@@ -807,7 +859,7 @@ func (q Query) UiSchemaContainedBy(v runtime.JSON) Query   { return q.Where(UiSc
 func (q Query) UiSchemaHasAnyKey(v ...string) Query        { return q.Where(UiSchema.HasAnyKey(v...)) }
 func (q Query) UiSchemaHasAllKeys(v ...string) Query       { return q.Where(UiSchema.HasAllKeys(v...)) }
 
-const selectPrefix = `SELECT "created_at", "sort_order", "code", "display_name", "default_effect", "status", "resolution", "ui_schema" FROM "scope_axes"`
+const selectPrefix = `SELECT "created_at", "sort_order", "tenant_id", "code", "display_name", "default_effect", "status", "resolution", "ui_schema" FROM "scope_axes"`
 const countPrefix = `SELECT count(*) FROM "scope_axes"`
 const existsPrefix = `SELECT 1 FROM "scope_axes"`
 const existsSuffix = ` LIMIT 1`
@@ -856,6 +908,12 @@ var orderTable = [nCols][4]string{
 		"\"sort_order\" ASC NULLS FIRST",
 		"\"sort_order\" DESC NULLS LAST",
 	},
+	{ // tenant_id
+		"\"tenant_id\"",
+		"\"tenant_id\" DESC",
+		"\"tenant_id\" ASC NULLS FIRST",
+		"\"tenant_id\" DESC NULLS LAST",
+	},
 	{ // code
 		"\"code\"",
 		"\"code\" DESC",
@@ -899,6 +957,7 @@ var orderTable = [nCols][4]string{
 var identTable = [nCols]string{
 	"\"created_at\"",
 	"\"sort_order\"",
+	"\"tenant_id\"",
 	"\"code\"",
 	"\"display_name\"",
 	"\"default_effect\"",
@@ -937,7 +996,7 @@ func orderOf(dir, col uint32) string {
 
 // fragTable is every predicate this table can produce, lowered at build
 // time. Runtime splices; it never formats.
-var fragTable = [8][28]runtime.Frag{
+var fragTable = [9][28]runtime.Frag{
 	{ // created_at
 		{}, // opNone
 		{A: "\"created_at\" = $", B: ""},
@@ -986,6 +1045,36 @@ var fragTable = [8][28]runtime.Frag{
 		{},
 		{A: "\"sort_order\" = ANY($", B: ")"},
 		{A: "\"sort_order\" <> ALL($", B: ")"},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{},
+	},
+	{ // tenant_id
+		{}, // opNone
+		{A: "\"tenant_id\" = $", B: ""},
+		{A: "\"tenant_id\" <> $", B: ""},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{A: "\"tenant_id\" = ANY($", B: ")"},
+		{A: "\"tenant_id\" <> ALL($", B: ")"},
 		{},
 		{},
 		{},
@@ -1195,8 +1284,9 @@ func fragOf(op, col uint32) runtime.Frag {
 // It is never empty. A read without ORDER BY has no defined order, so
 // paging one is a bug waiting for a plan change to expose it — and the
 // primary key is the cheapest total order available.
-var defaultOrder = [1]runtime.Tok{
-	runtime.MakeOrder(runtime.Asc, 2), // code
+var defaultOrder = [2]runtime.Tok{
+	runtime.MakeOrder(runtime.Asc, 2), // tenant_id
+	runtime.MakeOrder(runtime.Asc, 3), // code
 }
 
 var (
@@ -1335,12 +1425,13 @@ func Scan(rv [][]byte, r *Row, sl *runtime.Slab) error { return scan(rv, r, sl) 
 func scan(rv [][]byte, r *Row, sl *runtime.Slab) error {
 	r.CreatedAt = runtime.Timestamptz(rv[0])
 	r.SortOrder = runtime.Int4(rv[1])
-	r.Code = sl.Str(rv[2])
-	r.DisplayName = sl.Str(rv[3])
-	r.DefaultEffect = sl.Str(rv[4])
-	r.Status = sl.Str(rv[5])
-	r.Resolution = runtime.JSON(runtime.JSONB(rv[6], sl))
-	r.UiSchema = runtime.JSON(runtime.JSONB(rv[7], sl))
+	copy(r.TenantID[:], rv[2])
+	r.Code = sl.Str(rv[3])
+	r.DisplayName = sl.Str(rv[4])
+	r.DefaultEffect = sl.Str(rv[5])
+	r.Status = sl.Str(rv[6])
+	r.Resolution = runtime.JSON(runtime.JSONB(rv[7], sl))
+	r.UiSchema = runtime.JSON(runtime.JSONB(rv[8], sl))
 	return nil
 }
 
@@ -1348,8 +1439,10 @@ type binder struct {
 	vals   []any
 	strs   [6]string
 	nums   [6]int64
+	raws   [4][16]byte
 	tims   [4]time.Time
 	jsns   [2]runtime.JSON
+	anyRaw [3][][16]byte
 	anyStr [3][]string
 	anyI32 [3][]int32
 	limit  int64
@@ -1376,6 +1469,9 @@ func putBinder(b *binder) {
 	for i := range b.strs {
 		b.strs[i] = ""
 	}
+	for i := range b.anyRaw {
+		b.anyRaw[i] = nil
+	}
 	for i := range b.anyStr {
 		b.anyStr[i] = nil
 	}
@@ -1390,7 +1486,7 @@ func putBinder(b *binder) {
 // Count and Exists stop here: their statements carry no LIMIT or OFFSET.
 func (q Query) bindPreds(b *binder) []any {
 	v := b.vals[:0]
-	var ns, nn, ntm, njs, nas, nai32 uint8
+	var ns, nn, nr, ntm, njs, nar, nas, nai32 uint8
 	for i := uint8(0); i < q.nt; i++ {
 		t := q.toks[i]
 		// KLeaf binds a predicate's value; KCol binds a keyset cursor's.
@@ -1411,9 +1507,9 @@ func (q Query) bindPreds(b *binder) []any {
 				v = append(v, &b.anyI32[nai32])
 				nai32++
 			case 2:
-				b.anyStr[nas] = q.anyStr[nas]
-				v = append(v, &b.anyStr[nas])
-				nas++
+				b.anyRaw[nar] = q.anyRaw[nar]
+				v = append(v, &b.anyRaw[nar])
+				nar++
 			case 3:
 				b.anyStr[nas] = q.anyStr[nas]
 				v = append(v, &b.anyStr[nas])
@@ -1434,6 +1530,10 @@ func (q Query) bindPreds(b *binder) []any {
 				b.anyStr[nas] = q.anyStr[nas]
 				v = append(v, &b.anyStr[nas])
 				nas++
+			case 8:
+				b.anyStr[nas] = q.anyStr[nas]
+				v = append(v, &b.anyStr[nas])
+				nas++
 			}
 			continue
 		}
@@ -1447,9 +1547,9 @@ func (q Query) bindPreds(b *binder) []any {
 			v = append(v, &b.nums[nn])
 			nn++
 		case 2:
-			b.strs[ns] = q.strs[ns]
-			v = append(v, &b.strs[ns])
-			ns++
+			b.raws[nr] = q.raws[nr]
+			v = append(v, &b.raws[nr])
+			nr++
 		case 3:
 			b.strs[ns] = q.strs[ns]
 			v = append(v, &b.strs[ns])
@@ -1463,10 +1563,14 @@ func (q Query) bindPreds(b *binder) []any {
 			v = append(v, &b.strs[ns])
 			ns++
 		case 6:
+			b.strs[ns] = q.strs[ns]
+			v = append(v, &b.strs[ns])
+			ns++
+		case 7:
 			b.jsns[njs] = q.jsns[njs]
 			v = append(v, &b.jsns[njs])
 			njs++
-		case 7:
+		case 8:
 			b.jsns[njs] = q.jsns[njs]
 			v = append(v, &b.jsns[njs])
 			njs++
@@ -1607,7 +1711,7 @@ func (q Query) Prepare(b *Binder) (string, []any) {
 
 // insertSQL does not vary: the column list is fixed by the table, so
 // the placeholders are known at build time and nothing is spliced.
-const insertSQL = `INSERT INTO "scope_axes" ("created_at", "sort_order", "code", "display_name", "default_effect", "status", "resolution", "ui_schema") VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING "created_at", "sort_order", "code", "display_name", "default_effect", "status", "resolution", "ui_schema"`
+const insertSQL = `INSERT INTO "scope_axes" ("created_at", "sort_order", "tenant_id", "code", "display_name", "default_effect", "status", "resolution", "ui_schema") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING "created_at", "sort_order", "tenant_id", "code", "display_name", "default_effect", "status", "resolution", "ui_schema"`
 
 const updatePrefix = `UPDATE "scope_axes" SET `
 const deletePrefix = `DELETE FROM "scope_axes"`
@@ -1651,8 +1755,9 @@ var exprFrags = [nUpdatable]runtime.Frag{
 }
 
 // pkFrags addresses one row.
-var pkFrags = [1]runtime.Frag{
-	{A: "\"code\" = $", B: ""}, // code
+var pkFrags = [2]runtime.Frag{
+	{A: "\"tenant_id\" = $", B: ""}, // tenant_id
+	{A: "\"code\" = $", B: ""},      // code
 }
 
 // Insert bits. A masked INSERT names only the columns the caller
@@ -1661,20 +1766,22 @@ var pkFrags = [1]runtime.Frag{
 const (
 	iCreatedAt     uint64 = 1 << 0
 	iSortOrder     uint64 = 1 << 1
-	iCode          uint64 = 1 << 2
-	iDisplayName   uint64 = 1 << 3
-	iDefaultEffect uint64 = 1 << 4
-	iStatus        uint64 = 1 << 5
-	iResolution    uint64 = 1 << 6
-	iUiSchema      uint64 = 1 << 7
+	iTenantID      uint64 = 1 << 2
+	iCode          uint64 = 1 << 3
+	iDisplayName   uint64 = 1 << 4
+	iDefaultEffect uint64 = 1 << 5
+	iStatus        uint64 = 1 << 6
+	iResolution    uint64 = 1 << 7
+	iUiSchema      uint64 = 1 << 8
 )
 
-const nInsertable = 8
+const nInsertable = 9
 
 // insCols is the quoted column name for each insert bit.
 var insCols = [nInsertable]string{
 	"\"created_at\"",
 	"\"sort_order\"",
+	"\"tenant_id\"",
 	"\"code\"",
 	"\"display_name\"",
 	"\"default_effect\"",
@@ -1689,7 +1796,7 @@ var insParts = runtime.InsertParts{Open: " (", Sep: ", ", Mid: ") VALUES (", Clo
 var insPlaceholder = runtime.Placeholder{}
 
 const insPrefix = "INSERT INTO \"scope_axes\""
-const insReturning = " RETURNING \"created_at\", \"sort_order\", \"code\", \"display_name\", \"default_effect\", \"status\", \"resolution\", \"ui_schema\""
+const insReturning = " RETURNING \"created_at\", \"sort_order\", \"tenant_id\", \"code\", \"display_name\", \"default_effect\", \"status\", \"resolution\", \"ui_schema\""
 
 var insCache = runtime.NewMaskCache()
 
@@ -1708,7 +1815,7 @@ var updOpCache = runtime.NewMaskCache()
 // part of it. Without it m.Row() would hold what the row held BEFORE
 // the statement, so a caller reading back the counter it just
 // incremented would get the old number and never know.
-const updReturning = " RETURNING \"created_at\", \"sort_order\", \"code\", \"display_name\", \"default_effect\", \"status\", \"resolution\", \"ui_schema\""
+const updReturning = " RETURNING \"created_at\", \"sort_order\", \"tenant_id\", \"code\", \"display_name\", \"default_effect\", \"status\", \"resolution\", \"ui_schema\""
 
 // Masks reports how many distinct UPDATE shapes have compiled.
 func Masks() int { return updCache.Masks() }
@@ -1731,9 +1838,10 @@ func Mutate(r Row) Mut { return Mut{row: r} }
 // Only assigned columns are written, so the fields left zero here are
 // never referenced — the staged row is an address, not a value. It
 // pairs with the server-side setters: one statement, no prior read.
-func MutateKey(code string) Mut {
+func MutateKey(tenantID [16]byte, code string) Mut {
 	return Mut{row: Row{
-		Code: code,
+		TenantID: tenantID,
+		Code:     code,
 	}}
 }
 
@@ -1854,6 +1962,11 @@ func (n *Ins) SetSortOrder(v int32) {
 	n.set |= iSortOrder
 }
 
+func (n *Ins) SetTenantID(v [16]byte) {
+	n.row.TenantID = v
+	n.set |= iTenantID
+}
+
 func (n *Ins) SetCode(v string) {
 	n.row.Code = v
 	n.set |= iCode
@@ -1924,7 +2037,7 @@ func upsertTail(conflict uint8, mask uint64) string {
 // together, and without it the insert fails at run time — on the first
 // row that collides, which a test inserting distinct rows never sees.
 var conflictSpecs = []string{
-	" ON CONFLICT (\"code\")",
+	" ON CONFLICT (\"tenant_id\", \"code\")",
 }
 
 // assignable is the columns target i may overwrite, given the mask.
@@ -1938,31 +2051,31 @@ func assignable(i uint8, mask uint64) []string {
 		if mask&(1<<1) != 0 {
 			set = append(set, "sort_order")
 		}
-		if mask&(1<<3) != 0 {
+		if mask&(1<<4) != 0 {
 			set = append(set, "display_name")
 		}
-		if mask&(1<<4) != 0 {
+		if mask&(1<<5) != 0 {
 			set = append(set, "default_effect")
 		}
-		if mask&(1<<5) != 0 {
+		if mask&(1<<6) != 0 {
 			set = append(set, "status")
 		}
-		if mask&(1<<6) != 0 {
+		if mask&(1<<7) != 0 {
 			set = append(set, "resolution")
 		}
-		if mask&(1<<7) != 0 {
+		if mask&(1<<8) != 0 {
 			set = append(set, "ui_schema")
 		}
 	}
 	return set
 }
 
-// OnConflictCode upserts on the unique index over (code).
+// OnConflictTenantIDCode upserts on the unique index over (tenant_id, code).
 //
 // The row that already exists keeps every column this insert did
 // not assign. Follow with DoNothing() to leave it untouched
 // entirely.
-func (n *Ins) OnConflictCode() *Ins {
+func (n *Ins) OnConflictTenantIDCode() *Ins {
 	n.conflict = 2
 	return n
 }
@@ -1973,7 +2086,7 @@ func (n *Ins) OnConflictCode() *Ins {
 // On its own it names no index, so ANY unique violation is the no-op:
 //
 //	n.DoNothing()                  // ON CONFLICT DO NOTHING
-//	n.OnConflictCode().DoNothing()  // only on that one index
+//	n.OnConflictTenantIDCode().DoNothing()  // only on that one index
 //
 // Insert then returns runtime.ErrNoRows when nothing was written,
 // because DO NOTHING suppresses the RETURNING row: there is no row to
@@ -2056,16 +2169,18 @@ func (n *Ins) Insert(ctx context.Context, ex runtime.Executor) (Row, error) {
 		case 1:
 			args = append(args, n.row.SortOrder)
 		case 2:
-			args = append(args, n.row.Code)
+			args = append(args, n.row.TenantID)
 		case 3:
-			args = append(args, n.row.DisplayName)
+			args = append(args, n.row.Code)
 		case 4:
-			args = append(args, n.row.DefaultEffect)
+			args = append(args, n.row.DisplayName)
 		case 5:
-			args = append(args, n.row.Status)
+			args = append(args, n.row.DefaultEffect)
 		case 6:
-			args = append(args, n.row.Resolution)
+			args = append(args, n.row.Status)
 		case 7:
+			args = append(args, n.row.Resolution)
+		case 8:
 			args = append(args, n.row.UiSchema)
 		}
 	}
@@ -2104,9 +2219,10 @@ func Inserts() int { return insCache.Masks() }
 // not treat a zero as 'unset': that guess is why other ORMs cannot insert
 // a false, a 0 or an empty string into a column with a default.
 func Insert(ctx context.Context, ex runtime.Executor, r *Row) error {
-	args := make([]any, 0, 8)
+	args := make([]any, 0, 9)
 	args = append(args, r.CreatedAt)
 	args = append(args, r.SortOrder)
+	args = append(args, r.TenantID)
 	args = append(args, r.Code)
 	args = append(args, r.DisplayName)
 	args = append(args, r.DefaultEffect)
@@ -2141,6 +2257,7 @@ func Insert(ctx context.Context, ex runtime.Executor, r *Row) error {
 var copyCols = []string{
 	"created_at",
 	"sort_order",
+	"tenant_id",
 	"code",
 	"display_name",
 	"default_effect",
@@ -2153,7 +2270,7 @@ var copyCols = []string{
 type rowSource struct {
 	rows []Row
 	i    int
-	buf  [8]any
+	buf  [9]any
 }
 
 func (s *rowSource) Next() bool {
@@ -2173,12 +2290,13 @@ func (s *rowSource) Values() []any {
 	r := &s.rows[s.i-1]
 	s.buf[0] = &r.CreatedAt
 	s.buf[1] = &r.SortOrder
-	s.buf[2] = &r.Code
-	s.buf[3] = &r.DisplayName
-	s.buf[4] = &r.DefaultEffect
-	s.buf[5] = &r.Status
-	s.buf[6] = &r.Resolution
-	s.buf[7] = &r.UiSchema
+	s.buf[2] = &r.TenantID
+	s.buf[3] = &r.Code
+	s.buf[4] = &r.DisplayName
+	s.buf[5] = &r.DefaultEffect
+	s.buf[6] = &r.Status
+	s.buf[7] = &r.Resolution
+	s.buf[8] = &r.UiSchema
 	return s.buf[:]
 }
 
@@ -2217,10 +2335,12 @@ func InsertOp(r Row) runtime.BatchOp {
 	mask |= 1 << 5
 	mask |= 1 << 6
 	mask |= 1 << 7
+	mask |= 1 << 8
 	st := stmtForInsertNoReturn(mask, 0)
-	args := make([]any, 0, 8)
+	args := make([]any, 0, 9)
 	args = append(args, r.CreatedAt)
 	args = append(args, r.SortOrder)
+	args = append(args, r.TenantID)
 	args = append(args, r.Code)
 	args = append(args, r.DisplayName)
 	args = append(args, r.DefaultEffect)
@@ -2265,16 +2385,18 @@ func (n *Ins) Op() (runtime.BatchOp, error) {
 		case 1:
 			args = append(args, n.row.SortOrder)
 		case 2:
-			args = append(args, n.row.Code)
+			args = append(args, n.row.TenantID)
 		case 3:
-			args = append(args, n.row.DisplayName)
+			args = append(args, n.row.Code)
 		case 4:
-			args = append(args, n.row.DefaultEffect)
+			args = append(args, n.row.DisplayName)
 		case 5:
-			args = append(args, n.row.Status)
+			args = append(args, n.row.DefaultEffect)
 		case 6:
-			args = append(args, n.row.Resolution)
+			args = append(args, n.row.Status)
 		case 7:
+			args = append(args, n.row.Resolution)
+		case 8:
 			args = append(args, n.row.UiSchema)
 		}
 	}
@@ -2338,13 +2460,14 @@ func (m *Mut) UpdateOp() (runtime.BatchOp, bool) {
 			args = append(args, m.row.UiSchema)
 		}
 	}
+	args = append(args, m.row.TenantID)
 	args = append(args, m.row.Code)
 	return runtime.BatchOp{SQL: st.SQL, Args: args}, true
 }
 
 // DeleteOp is a delete as a queueable statement.
-func DeleteOp(code string) runtime.BatchOp {
-	return runtime.BatchOp{SQL: deleteSQL, Args: []any{code}}
+func DeleteOp(tenantID [16]byte, code string) runtime.BatchOp {
+	return runtime.BatchOp{SQL: deleteSQL, Args: []any{tenantID, code}}
 }
 
 // Table is the table these statements write, so a Unit can order a mixed
@@ -2378,7 +2501,7 @@ func stmtForKey(k runtime.MaskKey, ret bool) *runtime.Stmt {
 			set = append(set, setFrags[i])
 		}
 	}
-	where := make([]runtime.Frag, 0, 2)
+	where := make([]runtime.Frag, 0, 3)
 	where = append(where, pkFrags[:]...)
 	// Only an expression needs reading back. A plain UPDATE already
 	// knows every value it wrote, so it pays no RETURNING.
@@ -2434,6 +2557,7 @@ func (m *Mut) Update(ctx context.Context, ex runtime.Executor) error {
 			args = append(args, m.row.UiSchema)
 		}
 	}
+	args = append(args, m.row.TenantID)
 	args = append(args, m.row.Code)
 	if m.expr != 0 {
 		return m.updateReturning(ctx, ex, st, args)
@@ -2488,8 +2612,8 @@ var deleteSQL = runtime.SpliceSections(deletePrefix, []runtime.Section{
 // Delete removes one row by primary key. A row that was already gone is
 // runtime.ErrNoRow, not success: a caller deleting something that is not
 // there usually has a bug, and swallowing it hides the bug.
-func Delete(ctx context.Context, ex runtime.Executor, code string) error {
-	n, err := ex.Exec(ctx, deleteSQL, []any{code})
+func Delete(ctx context.Context, ex runtime.Executor, tenantID [16]byte, code string) error {
+	n, err := ex.Exec(ctx, deleteSQL, []any{tenantID, code})
 	if err != nil {
 		return err
 	}

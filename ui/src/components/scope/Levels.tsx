@@ -146,8 +146,8 @@ export function Levels({ axisCode, axisName }: { axisCode: string; axisName: str
       <div className="t-label mb-1">Levels</div>
       <div className="t-xs mb-3">
         The kinds of item this structure has, and what sits under what. The database refuses
-        an item placed anywhere else. Levels belong to the structure, so every tenant that
-        uses it shares them.
+        an item placed anywhere else. They are this tenant's own: another tenant's
+        structures, and their levels, are separate.
       </div>
 
       {!isLoading && !hasTop && <AddTop axisCode={axisCode} axisName={axisName} />}

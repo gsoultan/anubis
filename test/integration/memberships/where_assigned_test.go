@@ -51,14 +51,14 @@ func buildOrgWorld(t *testing.T, ctx context.Context, q database.Querier) orgWor
 			t.Fatalf("fixture %s: %v", what, err)
 		}
 	}
-	_, err := q.Exec(ctx, `INSERT INTO scope_axes (code, display_name, resolution)
-		VALUES ($1, 'Organisation (membership test)', '{"from":"context","key":"org_id"}')`, w.axis)
+	_, err := q.Exec(ctx, `INSERT INTO scope_axes (tenant_id, code, display_name, resolution)
+		VALUES ($2, $1, 'Organisation (membership test)', '{"from":"context","key":"org_id"}')`, w.axis, w.tenant)
 	must("axis", err)
 	top, org, unit := w.axis+"_top", w.axis+"_org", w.axis+"_unit"
-	_, err = q.Exec(ctx, `INSERT INTO scope_node_types (code, axis_code, display_name, parent_types) VALUES
-		($1, $4, 'Top', '{}'),
-		($2, $4, 'Organisation', ARRAY[$1::text, $2::text]),
-		($3, $4, 'Unit', ARRAY[$2::text, $3::text])`, top, org, unit, w.axis)
+	_, err = q.Exec(ctx, `INSERT INTO scope_node_types (tenant_id, code, axis_code, display_name, parent_types) VALUES
+		($5, $1, $4, 'Top', '{}'),
+		($5, $2, $4, 'Organisation', ARRAY[$1::text, $2::text]),
+		($5, $3, $4, 'Unit', ARRAY[$2::text, $3::text])`, top, org, unit, w.axis, w.tenant)
 	must("levels", err)
 	var root string
 	must("root", q.QueryRow(ctx, `SELECT scope_ensure_root($1, $2)::text`, w.tenant, w.axis).Scan(&root))
@@ -381,11 +381,11 @@ func TestMembershipPlaceRules(t *testing.T) {
 		// the trigger is the floor under writes that skip membership_assign.
 		// The second structure is built here, so this cannot pass on nothing.
 		other := w.axis + "_x"
-		if _, err := q.Exec(ctx, `INSERT INTO scope_axes (code, display_name) VALUES ($1, 'Other (membership test)')`, other); err != nil {
+		if _, err := q.Exec(ctx, `INSERT INTO scope_axes (tenant_id, code, display_name) VALUES ($2, $1, 'Other (membership test)')`, other, w.tenant); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := q.Exec(ctx, `INSERT INTO scope_node_types (code, axis_code, display_name, parent_types)
-			VALUES ($1, $2, 'Top', '{}')`, other+"_top", other); err != nil {
+		if _, err := q.Exec(ctx, `INSERT INTO scope_node_types (tenant_id, code, axis_code, display_name, parent_types)
+			VALUES ($3, $1, $2, 'Top', '{}')`, other+"_top", other, w.tenant); err != nil {
 			t.Fatal(err)
 		}
 		var elsewhere string

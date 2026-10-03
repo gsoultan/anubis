@@ -145,7 +145,8 @@ SELECT EXISTS (
        AND NOT EXISTS (SELECT 1 FROM axis_eval ae
                         WHERE ae.grant_id = cd.id AND NOT ae.satisfied)
        AND NOT EXISTS (SELECT 1 FROM scope_axes a
-                        WHERE ((a.default_effect = 'deny' AND a.status = 'active')
+                        WHERE a.tenant_id = $2
+                          AND ((a.default_effect = 'deny' AND a.status = 'active')
                                OR a.code = $5)
                           AND NOT EXISTS (SELECT 1 FROM grant_scopes gs2
                                            WHERE gs2.grant_id = cd.id

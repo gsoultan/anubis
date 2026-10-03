@@ -20,6 +20,7 @@ var (
 // Row is what a full read returns: the model struct with relations
 // replaced by their scalar foreign keys and *T rewritten to Null[T].
 type Row struct {
+	TenantID    [16]byte
 	Code        string
 	AxisCode    string
 	DisplayName string
@@ -62,7 +63,7 @@ const (
 	opNotExists runtime.Op = 27
 )
 
-const nCols = 4
+const nCols = 5
 
 // Query is a value type: composing one allocates nothing. Predicates
 // are a postfix token stream, so disjunction and negation are
@@ -72,11 +73,13 @@ type Query struct {
 	nt   uint8
 	top  uint8 // top-level conjuncts, ANDed at compile time
 
-	strs [6]string
-	ns   uint8
+	strs   [6]string
+	raws   [4][16]byte
+	ns, nr uint8
 
-	anyStr [3][]string
-	nas    uint8
+	anyRaw   [3][][16]byte
+	anyStr   [3][]string
+	nar, nas uint8
 
 	// Order terms live in their own buffer and are appended to the stream
 	// after the predicate tree. Sharing one buffer would let a Where after
@@ -172,20 +175,27 @@ func (q Query) After(r Row) Query {
 func (q *Query) cursor(col uint32, r Row) {
 	switch col {
 	case 0:
+		if int(q.nr) >= len(q.raws) {
+			q.over = true
+			return
+		}
+		q.raws[q.nr] = r.TenantID
+		q.nr++
+	case 1:
 		if int(q.ns) >= len(q.strs) {
 			q.over = true
 			return
 		}
 		q.strs[q.ns] = r.Code
 		q.ns++
-	case 1:
+	case 2:
 		if int(q.ns) >= len(q.strs) {
 			q.over = true
 			return
 		}
 		q.strs[q.ns] = r.AxisCode
 		q.ns++
-	case 2:
+	case 3:
 		if int(q.ns) >= len(q.strs) {
 			q.over = true
 			return
@@ -341,17 +351,41 @@ type Pred struct {
 	op     runtime.Op
 	num    int64
 	str    string
+	raw    [16]byte
+	anyRaw [][16]byte
 	anyStr []string
 }
 
 // Typed column handles. The type of the handle is what makes
 // Age.Like(...) fail to compile.
 var (
-	Code        = TextCol{0}
-	AxisCode    = TextCol{1}
-	DisplayName = TextCol{2}
-	ParentTypes = TextArrayCol{3}
+	TenantID    = UUIDCol{0}
+	Code        = TextCol{1}
+	AxisCode    = TextCol{2}
+	DisplayName = TextCol{3}
+	ParentTypes = TextArrayCol{4}
 )
+
+// UUIDCol addresses a uuid column.
+type UUIDCol struct{ c uint8 }
+
+func (h UUIDCol) Asc() Sort  { return Sort(runtime.MakeOrder(runtime.Asc, uint32(h.c))) }
+func (h UUIDCol) Desc() Sort { return Sort(runtime.MakeOrder(runtime.Desc, uint32(h.c))) }
+func (h UUIDCol) AscNullsFirst() Sort {
+	return Sort(runtime.MakeOrder(runtime.AscNullsFirst, uint32(h.c)))
+}
+func (h UUIDCol) DescNullsLast() Sort {
+	return Sort(runtime.MakeOrder(runtime.DescNullsLast, uint32(h.c)))
+}
+
+func (h UUIDCol) Eq(v [16]byte) Pred    { return Pred{col: h.c, op: opEq, raw: v} }
+func (h UUIDCol) NotEq(v [16]byte) Pred { return Pred{col: h.c, op: opNotEq, raw: v} }
+func (h UUIDCol) In(v ...[16]byte) Pred { return Pred{col: h.c, op: opIn, anyRaw: v} }
+
+// NotIn is `<> ALL($1)`. A NULL anywhere in v makes the
+// comparison NULL for every row and the result empty —
+// PostgreSQL's rule for NOT IN, not storm's.
+func (h UUIDCol) NotIn(v ...[16]byte) Pred { return Pred{col: h.c, op: opNotIn, anyRaw: v} }
 
 // TextCol addresses a text column.
 type TextCol struct{ c uint8 }
@@ -552,12 +586,12 @@ func (q *Query) leaf(p Pred) {
 	if p.op == opIn || p.op == opNotIn || p.op == opArrayContains || p.op == opArrayContainedBy || p.op == opArrayOverlaps || p.op == opHasAnyKey || p.op == opHasAllKeys {
 		switch p.col {
 		case 0:
-			if int(q.nas) >= 3 {
+			if int(q.nar) >= 3 {
 				q.over = true
 				return
 			}
-			q.anyStr[q.nas] = p.anyStr
-			q.nas++
+			q.anyRaw[q.nar] = p.anyRaw
+			q.nar++
 		case 1:
 			if int(q.nas) >= 3 {
 				q.over = true
@@ -579,6 +613,13 @@ func (q *Query) leaf(p Pred) {
 			}
 			q.anyStr[q.nas] = p.anyStr
 			q.nas++
+		case 4:
+			if int(q.nas) >= 3 {
+				q.over = true
+				return
+			}
+			q.anyStr[q.nas] = p.anyStr
+			q.nas++
 		}
 		q.push(runtime.MakeLeaf(uint32(p.op), uint32(p.col)))
 		return
@@ -589,12 +630,12 @@ func (q *Query) leaf(p Pred) {
 	}
 	switch p.col {
 	case 0:
-		if int(q.ns) >= 6 {
+		if int(q.nr) >= 4 {
 			q.over = true
 			return
 		}
-		q.strs[q.ns] = p.str
-		q.ns++
+		q.raws[q.nr] = p.raw
+		q.nr++
 	case 1:
 		if int(q.ns) >= 6 {
 			q.over = true
@@ -609,11 +650,22 @@ func (q *Query) leaf(p Pred) {
 		}
 		q.strs[q.ns] = p.str
 		q.ns++
+	case 3:
+		if int(q.ns) >= 6 {
+			q.over = true
+			return
+		}
+		q.strs[q.ns] = p.str
+		q.ns++
 	}
 	q.push(runtime.MakeLeaf(uint32(p.op), uint32(p.col)))
 }
 
 // Chained predicate sugar. Identical to Where(Col.Op(v)).
+func (q Query) TenantIDEq(v [16]byte) Query           { return q.Where(TenantID.Eq(v)) }
+func (q Query) TenantIDNotEq(v [16]byte) Query        { return q.Where(TenantID.NotEq(v)) }
+func (q Query) TenantIDIn(v ...[16]byte) Query        { return q.Where(TenantID.In(v...)) }
+func (q Query) TenantIDNotIn(v ...[16]byte) Query     { return q.Where(TenantID.NotIn(v...)) }
 func (q Query) CodeEq(v string) Query                 { return q.Where(Code.Eq(v)) }
 func (q Query) CodeNotEq(v string) Query              { return q.Where(Code.NotEq(v)) }
 func (q Query) CodeGt(v string) Query                 { return q.Where(Code.Gt(v)) }
@@ -653,7 +705,7 @@ func (q Query) ParentTypesContainedBy(v ...string) Query {
 }
 func (q Query) ParentTypesOverlaps(v ...string) Query { return q.Where(ParentTypes.Overlaps(v...)) }
 
-const selectPrefix = `SELECT "code", "axis_code", "display_name", "parent_types" FROM "scope_node_types"`
+const selectPrefix = `SELECT "tenant_id", "code", "axis_code", "display_name", "parent_types" FROM "scope_node_types"`
 const countPrefix = `SELECT count(*) FROM "scope_node_types"`
 const existsPrefix = `SELECT 1 FROM "scope_node_types"`
 const existsSuffix = ` LIMIT 1`
@@ -690,6 +742,12 @@ var lockCaches = func() [7][2]*runtime.TreeCache {
 // time. ORDER BY is chosen per query, so it cannot be a constant — but it
 // still must not be built from strings at run time.
 var orderTable = [nCols][4]string{
+	{ // tenant_id
+		"\"tenant_id\"",
+		"\"tenant_id\" DESC",
+		"\"tenant_id\" ASC NULLS FIRST",
+		"\"tenant_id\" DESC NULLS LAST",
+	},
 	{ // code
 		"\"code\"",
 		"\"code\" DESC",
@@ -719,6 +777,7 @@ var orderTable = [nCols][4]string{
 // identTable is each column's bare quoted name, for the left side of a
 // row comparison.
 var identTable = [nCols]string{
+	"\"tenant_id\"",
 	"\"code\"",
 	"\"axis_code\"",
 	"\"display_name\"",
@@ -755,7 +814,37 @@ func orderOf(dir, col uint32) string {
 
 // fragTable is every predicate this table can produce, lowered at build
 // time. Runtime splices; it never formats.
-var fragTable = [4][28]runtime.Frag{
+var fragTable = [5][28]runtime.Frag{
+	{ // tenant_id
+		{}, // opNone
+		{A: "\"tenant_id\" = $", B: ""},
+		{A: "\"tenant_id\" <> $", B: ""},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{A: "\"tenant_id\" = ANY($", B: ")"},
+		{A: "\"tenant_id\" <> ALL($", B: ")"},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{},
+	},
 	{ // code
 		{}, // opNone
 		{A: "\"code\" = $", B: ""},
@@ -893,8 +982,9 @@ func fragOf(op, col uint32) runtime.Frag {
 // It is never empty. A read without ORDER BY has no defined order, so
 // paging one is a bug waiting for a plan change to expose it — and the
 // primary key is the cheapest total order available.
-var defaultOrder = [1]runtime.Tok{
-	runtime.MakeOrder(runtime.Asc, 0), // code
+var defaultOrder = [2]runtime.Tok{
+	runtime.MakeOrder(runtime.Asc, 0), // tenant_id
+	runtime.MakeOrder(runtime.Asc, 1), // code
 }
 
 var (
@@ -1032,10 +1122,11 @@ func Scan(rv [][]byte, r *Row, sl *runtime.Slab) error { return scan(rv, r, sl) 
 // plausible zero, and a row scanner is the last place that can tell.
 func scan(rv [][]byte, r *Row, sl *runtime.Slab) error {
 	var decErr error
-	r.Code = sl.Str(rv[0])
-	r.AxisCode = sl.Str(rv[1])
-	r.DisplayName = sl.Str(rv[2])
-	r.ParentTypes, decErr = runtime.TextArray(rv[3], sl)
+	copy(r.TenantID[:], rv[0])
+	r.Code = sl.Str(rv[1])
+	r.AxisCode = sl.Str(rv[2])
+	r.DisplayName = sl.Str(rv[3])
+	r.ParentTypes, decErr = runtime.TextArray(rv[4], sl)
 	if decErr != nil {
 		return decErr
 	}
@@ -1045,6 +1136,8 @@ func scan(rv [][]byte, r *Row, sl *runtime.Slab) error {
 type binder struct {
 	vals   []any
 	strs   [6]string
+	raws   [4][16]byte
+	anyRaw [3][][16]byte
 	anyStr [3][]string
 	limit  int64
 	offset int64
@@ -1070,6 +1163,9 @@ func putBinder(b *binder) {
 	for i := range b.strs {
 		b.strs[i] = ""
 	}
+	for i := range b.anyRaw {
+		b.anyRaw[i] = nil
+	}
 	for i := range b.anyStr {
 		b.anyStr[i] = nil
 	}
@@ -1081,7 +1177,7 @@ func putBinder(b *binder) {
 // Count and Exists stop here: their statements carry no LIMIT or OFFSET.
 func (q Query) bindPreds(b *binder) []any {
 	v := b.vals[:0]
-	var ns, nas uint8
+	var ns, nr, nar, nas uint8
 	for i := uint8(0); i < q.nt; i++ {
 		t := q.toks[i]
 		// KLeaf binds a predicate's value; KCol binds a keyset cursor's.
@@ -1098,9 +1194,9 @@ func (q Query) bindPreds(b *binder) []any {
 		case opIn, opNotIn, opArrayContains, opArrayContainedBy, opArrayOverlaps, opHasAnyKey, opHasAllKeys:
 			switch t.Col() {
 			case 0:
-				b.anyStr[nas] = q.anyStr[nas]
-				v = append(v, &b.anyStr[nas])
-				nas++
+				b.anyRaw[nar] = q.anyRaw[nar]
+				v = append(v, &b.anyRaw[nar])
+				nar++
 			case 1:
 				b.anyStr[nas] = q.anyStr[nas]
 				v = append(v, &b.anyStr[nas])
@@ -1113,19 +1209,27 @@ func (q Query) bindPreds(b *binder) []any {
 				b.anyStr[nas] = q.anyStr[nas]
 				v = append(v, &b.anyStr[nas])
 				nas++
+			case 4:
+				b.anyStr[nas] = q.anyStr[nas]
+				v = append(v, &b.anyStr[nas])
+				nas++
 			}
 			continue
 		}
 		switch t.Col() {
 		case 0:
-			b.strs[ns] = q.strs[ns]
-			v = append(v, &b.strs[ns])
-			ns++
+			b.raws[nr] = q.raws[nr]
+			v = append(v, &b.raws[nr])
+			nr++
 		case 1:
 			b.strs[ns] = q.strs[ns]
 			v = append(v, &b.strs[ns])
 			ns++
 		case 2:
+			b.strs[ns] = q.strs[ns]
+			v = append(v, &b.strs[ns])
+			ns++
+		case 3:
 			b.strs[ns] = q.strs[ns]
 			v = append(v, &b.strs[ns])
 			ns++
@@ -1266,7 +1370,7 @@ func (q Query) Prepare(b *Binder) (string, []any) {
 
 // insertSQL does not vary: the column list is fixed by the table, so
 // the placeholders are known at build time and nothing is spliced.
-const insertSQL = `INSERT INTO "scope_node_types" ("code", "axis_code", "display_name", "parent_types") VALUES ($1, $2, $3, $4) RETURNING "code", "axis_code", "display_name", "parent_types"`
+const insertSQL = `INSERT INTO "scope_node_types" ("tenant_id", "code", "axis_code", "display_name", "parent_types") VALUES ($1, $2, $3, $4, $5) RETURNING "tenant_id", "code", "axis_code", "display_name", "parent_types"`
 
 const updatePrefix = `UPDATE "scope_node_types" SET `
 const deletePrefix = `DELETE FROM "scope_node_types"`
@@ -1298,24 +1402,27 @@ var exprFrags = [nUpdatable]runtime.Frag{
 }
 
 // pkFrags addresses one row.
-var pkFrags = [1]runtime.Frag{
-	{A: "\"code\" = $", B: ""}, // code
+var pkFrags = [2]runtime.Frag{
+	{A: "\"tenant_id\" = $", B: ""}, // tenant_id
+	{A: "\"code\" = $", B: ""},      // code
 }
 
 // Insert bits. A masked INSERT names only the columns the caller
 // assigned, so every other column takes its database default — which is
 // the only way a DEFAULT gen_random_uuid() can ever fire.
 const (
-	iCode        uint64 = 1 << 0
-	iAxisCode    uint64 = 1 << 1
-	iDisplayName uint64 = 1 << 2
-	iParentTypes uint64 = 1 << 3
+	iTenantID    uint64 = 1 << 0
+	iCode        uint64 = 1 << 1
+	iAxisCode    uint64 = 1 << 2
+	iDisplayName uint64 = 1 << 3
+	iParentTypes uint64 = 1 << 4
 )
 
-const nInsertable = 4
+const nInsertable = 5
 
 // insCols is the quoted column name for each insert bit.
 var insCols = [nInsertable]string{
+	"\"tenant_id\"",
 	"\"code\"",
 	"\"axis_code\"",
 	"\"display_name\"",
@@ -1328,7 +1435,7 @@ var insParts = runtime.InsertParts{Open: " (", Sep: ", ", Mid: ") VALUES (", Clo
 var insPlaceholder = runtime.Placeholder{}
 
 const insPrefix = "INSERT INTO \"scope_node_types\""
-const insReturning = " RETURNING \"code\", \"axis_code\", \"display_name\", \"parent_types\""
+const insReturning = " RETURNING \"tenant_id\", \"code\", \"axis_code\", \"display_name\", \"parent_types\""
 
 var insCache = runtime.NewMaskCache()
 
@@ -1347,7 +1454,7 @@ var updOpCache = runtime.NewMaskCache()
 // part of it. Without it m.Row() would hold what the row held BEFORE
 // the statement, so a caller reading back the counter it just
 // incremented would get the old number and never know.
-const updReturning = " RETURNING \"code\", \"axis_code\", \"display_name\", \"parent_types\""
+const updReturning = " RETURNING \"tenant_id\", \"code\", \"axis_code\", \"display_name\", \"parent_types\""
 
 // Masks reports how many distinct UPDATE shapes have compiled.
 func Masks() int { return updCache.Masks() }
@@ -1370,9 +1477,10 @@ func Mutate(r Row) Mut { return Mut{row: r} }
 // Only assigned columns are written, so the fields left zero here are
 // never referenced — the staged row is an address, not a value. It
 // pairs with the server-side setters: one statement, no prior read.
-func MutateKey(code string) Mut {
+func MutateKey(tenantID [16]byte, code string) Mut {
 	return Mut{row: Row{
-		Code: code,
+		TenantID: tenantID,
+		Code:     code,
 	}}
 }
 
@@ -1438,6 +1546,11 @@ func Create() Ins { return Ins{} }
 // Assigned reports the mask, which is also the statement key.
 func (n Ins) Assigned() uint64 { return n.set }
 
+func (n *Ins) SetTenantID(v [16]byte) {
+	n.row.TenantID = v
+	n.set |= iTenantID
+}
+
 func (n *Ins) SetCode(v string) {
 	n.row.Code = v
 	n.set |= iCode
@@ -1498,8 +1611,8 @@ func upsertTail(conflict uint8, mask uint64) string {
 // together, and without it the insert fails at run time — on the first
 // row that collides, which a test inserting distinct rows never sees.
 var conflictSpecs = []string{
-	" ON CONFLICT (\"code\")",
-	" ON CONFLICT (\"code\", \"axis_code\")",
+	" ON CONFLICT (\"tenant_id\", \"code\")",
+	" ON CONFLICT (\"tenant_id\", \"code\", \"axis_code\")",
 }
 
 // assignable is the columns target i may overwrite, given the mask.
@@ -1507,42 +1620,42 @@ func assignable(i uint8, mask uint64) []string {
 	set := make([]string, 0, 3)
 	switch i {
 	case 0:
-		if mask&(1<<1) != 0 {
+		if mask&(1<<2) != 0 {
 			set = append(set, "axis_code")
 		}
-		if mask&(1<<2) != 0 {
+		if mask&(1<<3) != 0 {
 			set = append(set, "display_name")
 		}
-		if mask&(1<<3) != 0 {
+		if mask&(1<<4) != 0 {
 			set = append(set, "parent_types")
 		}
 	case 1:
-		if mask&(1<<2) != 0 {
+		if mask&(1<<3) != 0 {
 			set = append(set, "display_name")
 		}
-		if mask&(1<<3) != 0 {
+		if mask&(1<<4) != 0 {
 			set = append(set, "parent_types")
 		}
 	}
 	return set
 }
 
-// OnConflictCode upserts on the unique index over (code).
+// OnConflictTenantIDCode upserts on the unique index over (tenant_id, code).
 //
 // The row that already exists keeps every column this insert did
 // not assign. Follow with DoNothing() to leave it untouched
 // entirely.
-func (n *Ins) OnConflictCode() *Ins {
+func (n *Ins) OnConflictTenantIDCode() *Ins {
 	n.conflict = 2
 	return n
 }
 
-// OnConflictCodeAxisCode upserts on the unique index over (code, axis_code).
+// OnConflictTenantIDCodeAxisCode upserts on the unique index over (tenant_id, code, axis_code).
 //
 // The row that already exists keeps every column this insert did
 // not assign. Follow with DoNothing() to leave it untouched
 // entirely.
-func (n *Ins) OnConflictCodeAxisCode() *Ins {
+func (n *Ins) OnConflictTenantIDCodeAxisCode() *Ins {
 	n.conflict = 4
 	return n
 }
@@ -1553,7 +1666,7 @@ func (n *Ins) OnConflictCodeAxisCode() *Ins {
 // On its own it names no index, so ANY unique violation is the no-op:
 //
 //	n.DoNothing()                  // ON CONFLICT DO NOTHING
-//	n.OnConflictCode().DoNothing()  // only on that one index
+//	n.OnConflictTenantIDCode().DoNothing()  // only on that one index
 //
 // Insert then returns runtime.ErrNoRows when nothing was written,
 // because DO NOTHING suppresses the RETURNING row: there is no row to
@@ -1628,12 +1741,14 @@ func (n *Ins) Insert(ctx context.Context, ex runtime.Executor) (Row, error) {
 		}
 		switch i {
 		case 0:
-			args = append(args, n.row.Code)
+			args = append(args, n.row.TenantID)
 		case 1:
-			args = append(args, n.row.AxisCode)
+			args = append(args, n.row.Code)
 		case 2:
-			args = append(args, n.row.DisplayName)
+			args = append(args, n.row.AxisCode)
 		case 3:
+			args = append(args, n.row.DisplayName)
+		case 4:
 			args = append(args, n.row.ParentTypes)
 		}
 	}
@@ -1672,7 +1787,8 @@ func Inserts() int { return insCache.Masks() }
 // not treat a zero as 'unset': that guess is why other ORMs cannot insert
 // a false, a 0 or an empty string into a column with a default.
 func Insert(ctx context.Context, ex runtime.Executor, r *Row) error {
-	args := make([]any, 0, 4)
+	args := make([]any, 0, 5)
+	args = append(args, r.TenantID)
 	args = append(args, r.Code)
 	args = append(args, r.AxisCode)
 	args = append(args, r.DisplayName)
@@ -1703,6 +1819,7 @@ func Insert(ctx context.Context, ex runtime.Executor, r *Row) error {
 // supply every column and database defaults do not apply. Fill the row
 // yourself, or use Create() per row and give up the bulk path.
 var copyCols = []string{
+	"tenant_id",
 	"code",
 	"axis_code",
 	"display_name",
@@ -1713,7 +1830,7 @@ var copyCols = []string{
 type rowSource struct {
 	rows []Row
 	i    int
-	buf  [4]any
+	buf  [5]any
 }
 
 func (s *rowSource) Next() bool {
@@ -1731,10 +1848,11 @@ func (s *rowSource) Next() bool {
 // boxed values and cost 7 allocations per row.
 func (s *rowSource) Values() []any {
 	r := &s.rows[s.i-1]
-	s.buf[0] = &r.Code
-	s.buf[1] = &r.AxisCode
-	s.buf[2] = &r.DisplayName
-	s.buf[3] = &r.ParentTypes
+	s.buf[0] = &r.TenantID
+	s.buf[1] = &r.Code
+	s.buf[2] = &r.AxisCode
+	s.buf[3] = &r.DisplayName
+	s.buf[4] = &r.ParentTypes
 	return s.buf[:]
 }
 
@@ -1769,8 +1887,10 @@ func InsertOp(r Row) runtime.BatchOp {
 	mask |= 1 << 1
 	mask |= 1 << 2
 	mask |= 1 << 3
+	mask |= 1 << 4
 	st := stmtForInsertNoReturn(mask, 0)
-	args := make([]any, 0, 4)
+	args := make([]any, 0, 5)
+	args = append(args, r.TenantID)
 	args = append(args, r.Code)
 	args = append(args, r.AxisCode)
 	args = append(args, r.DisplayName)
@@ -1809,12 +1929,14 @@ func (n *Ins) Op() (runtime.BatchOp, error) {
 		}
 		switch i {
 		case 0:
-			args = append(args, n.row.Code)
+			args = append(args, n.row.TenantID)
 		case 1:
-			args = append(args, n.row.AxisCode)
+			args = append(args, n.row.Code)
 		case 2:
-			args = append(args, n.row.DisplayName)
+			args = append(args, n.row.AxisCode)
 		case 3:
+			args = append(args, n.row.DisplayName)
+		case 4:
 			args = append(args, n.row.ParentTypes)
 		}
 	}
@@ -1870,13 +1992,14 @@ func (m *Mut) UpdateOp() (runtime.BatchOp, bool) {
 			args = append(args, m.row.ParentTypes)
 		}
 	}
+	args = append(args, m.row.TenantID)
 	args = append(args, m.row.Code)
 	return runtime.BatchOp{SQL: st.SQL, Args: args}, true
 }
 
 // DeleteOp is a delete as a queueable statement.
-func DeleteOp(code string) runtime.BatchOp {
-	return runtime.BatchOp{SQL: deleteSQL, Args: []any{code}}
+func DeleteOp(tenantID [16]byte, code string) runtime.BatchOp {
+	return runtime.BatchOp{SQL: deleteSQL, Args: []any{tenantID, code}}
 }
 
 // Table is the table these statements write, so a Unit can order a mixed
@@ -1910,7 +2033,7 @@ func stmtForKey(k runtime.MaskKey, ret bool) *runtime.Stmt {
 			set = append(set, setFrags[i])
 		}
 	}
-	where := make([]runtime.Frag, 0, 2)
+	where := make([]runtime.Frag, 0, 3)
 	where = append(where, pkFrags[:]...)
 	// Only an expression needs reading back. A plain UPDATE already
 	// knows every value it wrote, so it pays no RETURNING.
@@ -1958,6 +2081,7 @@ func (m *Mut) Update(ctx context.Context, ex runtime.Executor) error {
 			args = append(args, m.row.ParentTypes)
 		}
 	}
+	args = append(args, m.row.TenantID)
 	args = append(args, m.row.Code)
 	if m.expr != 0 {
 		return m.updateReturning(ctx, ex, st, args)
@@ -2012,8 +2136,8 @@ var deleteSQL = runtime.SpliceSections(deletePrefix, []runtime.Section{
 // Delete removes one row by primary key. A row that was already gone is
 // runtime.ErrNoRow, not success: a caller deleting something that is not
 // there usually has a bug, and swallowing it hides the bug.
-func Delete(ctx context.Context, ex runtime.Executor, code string) error {
-	n, err := ex.Exec(ctx, deleteSQL, []any{code})
+func Delete(ctx context.Context, ex runtime.Executor, tenantID [16]byte, code string) error {
+	n, err := ex.Exec(ctx, deleteSQL, []any{tenantID, code})
 	if err != nil {
 		return err
 	}

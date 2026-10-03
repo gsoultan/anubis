@@ -65,7 +65,10 @@ type neighbour struct {
 	roleName   string
 	childNode  string
 	rootName   string
-	credLabel  string
+	// axis is the neighbour's own structure (0056): structures are a
+	// tenant's, so the fixture plants one rather than borrowing a level.
+	axis      string
+	credLabel string
 }
 
 func plantNeighbour(t *testing.T, ctx context.Context, db *sql.DB) neighbour {
@@ -90,7 +93,7 @@ func plantNeighbour(t *testing.T, ctx context.Context, db *sql.DB) neighbour {
 	t.Cleanup(func() {
 		bg := context.Background()
 		for _, tbl := range []string{
-			"scope_nodes", "credentials", "identities",
+			"scope_nodes", "scope_node_types", "scope_axes", "credentials", "identities",
 			"permissions", "applications", "roles", "realms",
 		} {
 			if _, err := db.ExecContext(bg,
@@ -154,24 +157,24 @@ func plantNeighbour(t *testing.T, ctx context.Context, db *sql.DB) neighbour {
 		t.Fatalf("plant effective permission: %v", err)
 	}
 
-	// Two nodes on an existing axis, plus the closure rows the ancestor walk
-	// reads. The ROOT's name is the thing that must not come back.
-	// The node-type hierarchy is enforced by a check constraint, so the pair
-	// has to be legal: a root type that takes no parent, and a child type
-	// that names it. Picking the axis's first type for both is rejected with
-	// `a "org" may not sit under a "org"`.
-	var axis, rootType, childType string
-	if err := db.QueryRowContext(ctx,
-		`SELECT root.axis_code, root.code, child.code
-		   FROM scope_node_types root
-		   JOIN scope_node_types child
-		     ON child.axis_code = root.axis_code
-		    AND root.code = ANY (child.parent_types)
-		  WHERE cardinality(root.parent_types) = 0
-		  ORDER BY root.axis_code
-		  LIMIT 1`).Scan(&axis, &rootType, &childType); err != nil {
-		t.Fatalf("find a legal root/child node-type pair: %v", err)
+	// Two nodes on a structure of the neighbour's own, plus the closure rows
+	// the ancestor walk reads. The ROOT's name is the thing that must not come
+	// back. Structures and levels are a tenant's (0056), so the neighbour gets
+	// its own: a top level that takes no parent and a level that names it.
+	n.axis = "org"
+	rootType, childType := "nb_top", "nb_branch"
+	if _, err := db.ExecContext(ctx,
+		`INSERT INTO scope_axes (tenant_id, code, display_name) VALUES ($1, $2, 'Neighbour organisation')`,
+		n.tenantID, n.axis); err != nil {
+		t.Fatalf("plant structure: %v", err)
 	}
+	if _, err := db.ExecContext(ctx,
+		`INSERT INTO scope_node_types (tenant_id, code, axis_code, display_name, parent_types) VALUES
+		   ($1, $2, $4, 'Top', '{}'), ($1, $3, $4, 'Branch', ARRAY[$2])`,
+		n.tenantID, rootType, childType, n.axis); err != nil {
+		t.Fatalf("plant levels: %v", err)
+	}
+	axis := n.axis
 	var rootNode string
 	if err := db.QueryRowContext(ctx,
 		`INSERT INTO scope_nodes (tenant_id, axis_code, node_type, slug, name, is_axis_root)
@@ -237,6 +240,137 @@ func TestScopeAncestorsRefuseAnotherTenantsNode(t *testing.T) {
 	if len(own.Msg.GetAncestors()) == 0 {
 		t.Fatal("own tenant's node returned no ancestors — the filter is not " +
 			"scoping, it is matching nothing")
+	}
+}
+
+/*
+Structures were the installation's, and editing them was a tenant operator's.
+
+scope_axes held one row per structure for every tenant, and whether it was
+strict was one column that authorize() and the gate read for all of them. The
+permission to change it, anubis:scope:admin, belongs to the operator role that
+is meant to reach one tenant only — so an operator of one tenant could make a
+structure strict and deny every grant in every other tenant that did not name
+it, or rename and reshape the levels the others' items sat on.
+
+Root cause, in one sentence: a structure had no tenant, so no edit to it could
+be confined to one.
+*/
+func TestStructureEditsStayInTheirTenant(t *testing.T) {
+	requireServer(t)
+	db, ctx, token := isolationFixture(t)
+	n := plantNeighbour(t, ctx, db)
+	scope := anubisv1connect.NewScopeAdminServiceClient(http.DefaultClient, baseURL)
+
+	// The neighbour's person holds their permission with no place at all —
+	// exactly the grant a strict structure denies.
+	var perm string
+	if err := db.QueryRowContext(ctx,
+		`SELECT p.key FROM role_permissions_effective rpe JOIN permissions p ON p.id = rpe.permission_id
+		  WHERE rpe.role_id = $1 LIMIT 1`, n.roleID).Scan(&perm); err != nil {
+		t.Fatalf("neighbour permission: %v", err)
+	}
+	if _, err := db.ExecContext(ctx,
+		`INSERT INTO grants (tenant_id, identity_id, role_id, granted_by) VALUES ($1, $2, $3, $2)`,
+		n.tenantID, n.identityID, n.roleID); err != nil {
+		t.Fatalf("plant neighbour grant: %v", err)
+	}
+	t.Cleanup(func() {
+		if _, err := db.ExecContext(context.Background(), `DELETE FROM grants WHERE tenant_id = $1`, n.tenantID); err != nil {
+			t.Errorf("planted grant not removed: %v", err)
+		}
+	})
+	theirDecision := func() bool {
+		t.Helper()
+		var allow bool
+		if err := db.QueryRowContext(ctx, `SELECT authorize($1, $2, $3, '{}'::jsonb)`,
+			n.identityID, n.tenantID, perm).Scan(&allow); err != nil {
+			t.Fatalf("neighbour decision: %v", err)
+		}
+		return allow
+	}
+	if !theirDecision() {
+		t.Fatal("the neighbour's grant does not allow to begin with; nothing below would mean anything")
+	}
+
+	// The operator's own structure under the SAME code as the neighbour's.
+	own := ownTenant(t, ctx, db)
+	_, err := scope.CreateScopeAxis(ctx, operatorBearer(connect.NewRequest(&anubisv1.CreateScopeAxisRequest{
+		Axis:     &anubisv1.ScopeAxis{Code: n.axis, DisplayName: "Organisation", DefaultEffect: "unconstrained"},
+		TopLevel: &anubisv1.ScopeNodeType{Code: n.axis + "_top", DisplayName: "Group"},
+	}), token))
+	switch {
+	case err == nil:
+		// Made here, so removed here. One that already existed is put back
+		// as it was below instead.
+		t.Cleanup(func() {
+			bg := context.Background()
+			for _, stmt := range []string{
+				`DELETE FROM scope_node_types WHERE tenant_id = $1 AND axis_code = $2`,
+				`DELETE FROM scope_axes WHERE tenant_id = $1 AND code = $2`,
+			} {
+				if _, err := db.ExecContext(bg, stmt, own, n.axis); err != nil {
+					t.Errorf("own structure not removed: %v", err)
+				}
+			}
+		})
+	case connect.CodeOf(err) != connect.CodeAlreadyExists:
+		t.Fatalf("own structure: %v", err)
+	}
+	var ownEffect string
+	if err := db.QueryRowContext(ctx, `SELECT default_effect FROM scope_axes WHERE tenant_id = $1 AND code = $2`,
+		own, n.axis).Scan(&ownEffect); err != nil {
+		t.Fatalf("own structure is not the operator's tenant's: %v", err)
+	}
+	t.Cleanup(func() {
+		if _, err := db.ExecContext(context.Background(),
+			`UPDATE scope_axes SET default_effect = $3 WHERE tenant_id = $1 AND code = $2`, own, n.axis, ownEffect); err != nil {
+			t.Errorf("own structure not put back: %v", err)
+		}
+	})
+
+	// Make it strict.
+	if _, err := scope.UpdateScopeAxis(ctx, operatorBearer(connect.NewRequest(&anubisv1.UpdateScopeAxisRequest{
+		Axis: &anubisv1.ScopeAxis{Code: n.axis, DisplayName: "Organisation", DefaultEffect: "deny", Status: "active"},
+	}), token)); err != nil {
+		t.Fatalf("make own structure strict: %v", err)
+	}
+	var mineNow, theirsNow string
+	if err := db.QueryRowContext(ctx,
+		`SELECT (SELECT default_effect FROM scope_axes WHERE tenant_id = $1 AND code = $3),
+		        (SELECT default_effect FROM scope_axes WHERE tenant_id = $2 AND code = $3)`,
+		own, n.tenantID, n.axis).Scan(&mineNow, &theirsNow); err != nil {
+		t.Fatal(err)
+	}
+	if mineNow != "deny" {
+		t.Fatalf("the operator's own structure is %q after being made strict — the edit went nowhere", mineNow)
+	}
+	if theirsNow != "unconstrained" {
+		t.Fatalf("the neighbour's structure became %q: one tenant's edit changed another's", theirsNow)
+	}
+	if !theirDecision() {
+		t.Fatal("one tenant made its structure strict and the neighbour's grant stopped allowing")
+	}
+
+	// Their structure is not listed, and their levels cannot be edited.
+	list, lerr := scope.ListScopeAxes(ctx, operatorBearer(connect.NewRequest(&anubisv1.ListScopeAxesRequest{}), token))
+	if lerr != nil {
+		t.Fatalf("list structures: %v", lerr)
+	}
+	for _, a := range list.Msg.GetAxes() {
+		if a.GetDisplayName() == "Neighbour organisation" {
+			t.Fatal("the operator was shown another tenant's structure")
+		}
+	}
+	if _, err := scope.UpdateScopeNodeType(ctx, operatorBearer(connect.NewRequest(&anubisv1.UpdateScopeNodeTypeRequest{
+		Type: &anubisv1.ScopeNodeType{Code: "nb_branch", Axis: n.axis, DisplayName: "Renamed by a neighbour", ParentTypes: []string{"nb_top"}},
+	}), token)); err == nil {
+		t.Fatal("renamed another tenant's level")
+	}
+	var levelName string
+	if err := db.QueryRowContext(ctx, `SELECT display_name FROM scope_node_types WHERE tenant_id = $1 AND code = 'nb_branch'`,
+		n.tenantID).Scan(&levelName); err != nil || levelName != "Branch" {
+		t.Fatalf("the neighbour's level is now %q (%v)", levelName, err)
 	}
 }
 

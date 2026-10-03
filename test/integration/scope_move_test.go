@@ -161,12 +161,12 @@ func setupMoveFixture(ctx context.Context, t *testing.T) (tenant, axis string) {
 			t.Fatalf("fixture %q: %v", sql, err)
 		}
 	}
-	exec(`INSERT INTO scope_axes (code, display_name) VALUES ($1,'Move Test')
-	      ON CONFLICT (code) DO NOTHING`, axis)
-	exec(`INSERT INTO scope_node_types (code, axis_code, display_name, parent_types)
-	      VALUES ('mv_root',$1,'Root','{}') ON CONFLICT (code) DO NOTHING`, axis)
-	exec(`INSERT INTO scope_node_types (code, axis_code, display_name, parent_types)
-	      VALUES ('mv_node',$1,'Node','{mv_root,mv_node}') ON CONFLICT (code) DO NOTHING`, axis)
+	exec(`INSERT INTO scope_axes (tenant_id, code, display_name) VALUES ($1,$2,'Move Test')
+	      ON CONFLICT (tenant_id, code) DO NOTHING`, tenant, axis)
+	exec(`INSERT INTO scope_node_types (tenant_id, code, axis_code, display_name, parent_types)
+	      VALUES ($1,'mv_root',$2,'Root','{}') ON CONFLICT (tenant_id, code) DO NOTHING`, tenant, axis)
+	exec(`INSERT INTO scope_node_types (tenant_id, code, axis_code, display_name, parent_types)
+	      VALUES ($1,'mv_node',$2,'Node','{mv_root,mv_node}') ON CONFLICT (tenant_id, code) DO NOTHING`, tenant, axis)
 
 	var root string
 	if err := pool.QueryRow(ctx, `SELECT scope_ensure_root($1,$2)`, tenant, axis).Scan(&root); err != nil {
