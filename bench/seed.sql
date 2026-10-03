@@ -33,14 +33,19 @@ SELECT r.tenant_id, r.id, v.code, v.dn, v.so
     ('public','applicant','Applicant',10), ('public','customer','Customer',20)
   ) v(realm,code,dn,so) ON r.code = v.realm;
 
-INSERT INTO scope_axes (code, display_name, default_effect, sort_order, resolution) VALUES
-  ('org','Organisation','unconstrained',10,'{"from":"token"}'),
-  ('partner','Partner Organisation','unconstrained',15,'{"from":"token"}'),
-  ('product','Product Line','unconstrained',20,'{"from":"context","key":"product_id"}'),
-  ('customer','Customer','unconstrained',30,'{"from":"context","key":"customer_id"}');
+-- Structures and their levels are each tenant's own (0056). Both tenants get
+-- the same set, which is what a v0.5 database became after that migration.
+INSERT INTO scope_axes (tenant_id, code, display_name, default_effect, sort_order, resolution)
+SELECT t.id, v.* FROM tenants t CROSS JOIN (VALUES
+  ('org','Organisation','unconstrained',10,'{"from":"token"}'::jsonb),
+  ('partner','Partner Organisation','unconstrained',15,'{"from":"token"}'::jsonb),
+  ('product','Product Line','unconstrained',20,'{"from":"context","key":"product_id"}'::jsonb),
+  ('customer','Customer','unconstrained',30,'{"from":"context","key":"customer_id"}'::jsonb)
+) AS v(code, display_name, default_effect, sort_order, resolution);
 
-INSERT INTO scope_node_types (code, axis_code, display_name, parent_types) VALUES
-  ('org','org','Organisation','{}'),
+INSERT INTO scope_node_types (tenant_id, code, axis_code, display_name, parent_types)
+SELECT t.id, v.* FROM tenants t CROSS JOIN (VALUES
+  ('org','org','Organisation','{}'::text[]),
   ('partner_root','partner','All Partners','{}'),
   ('partner_org','partner','Partner Company','{partner_root}'),
   ('office','org','Work Office','{org}'),
@@ -54,11 +59,12 @@ INSERT INTO scope_node_types (code, axis_code, display_name, parent_types) VALUE
   ('accounts','customer','Accounts','{}'),
   ('segment','customer','Segment','{accounts}'),
   ('industry','customer','Industry','{segment}'),
-  ('account','customer','Account','{industry}');
+  ('account','customer','Account','{industry}')
+) AS v(code, axis_code, display_name, parent_types);
 
 -- Roots
 SELECT scope_ensure_root(t.id, a.code)
-  FROM tenants t CROSS JOIN scope_axes a;
+  FROM tenants t JOIN scope_axes a ON a.tenant_id = t.id;
 
 -- ── ORG AXIS: 20 offices x 10 departments x 5 teams ────────────────────
 INSERT INTO scope_nodes (tenant_id, axis_code, node_type, parent_id, slug, name)

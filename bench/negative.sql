@@ -1,7 +1,7 @@
 -- These MUST all fail. If any succeeds, the schema does not enforce what the
 -- design claims and the guarantee is only as good as application code.
 \set ON_ERROR_STOP off
-\echo '--- 1. grant_scope pointing at ANOTHER TENANT''s node (cross-tenant leak) ---'
+\warn '--- 1. grant_scope pointing at ANOTHER TENANT''s node (cross-tenant leak) ---'
 INSERT INTO grant_scopes (grant_id, tenant_id, axis_code, scope_node_id)
 SELECT g.id, g.tenant_id, 'org', n.id
   FROM grants g, scope_nodes n
@@ -9,39 +9,39 @@ SELECT g.id, g.tenant_id, 'org', n.id
    AND n.axis_code='org' AND g.tenant_id=(SELECT id FROM tenants WHERE slug='impack')
  LIMIT 1;
 
-\echo '--- 2. grant_scope claiming axis=product but pointing at an ORG node ---'
+\warn '--- 2. grant_scope claiming axis=product but pointing at an ORG node ---'
 INSERT INTO grant_scopes (grant_id, tenant_id, axis_code, scope_node_id)
 SELECT g.id, g.tenant_id, 'product', n.id
   FROM grants g, scope_nodes n
  WHERE n.tenant_id=g.tenant_id AND n.axis_code='org' AND n.node_type='department'
  LIMIT 1;
 
-\echo '--- 3. scope_node parented ACROSS AXES (product under an office) ---'
+\warn '--- 3. scope_node parented ACROSS AXES (product under an office) ---'
 INSERT INTO scope_nodes (tenant_id, axis_code, node_type, parent_id, slug, name)
 SELECT n.tenant_id, 'product', 'sku', n.id, 'illegal-sku', 'Illegal'
   FROM scope_nodes n WHERE n.node_type='office' LIMIT 1;
 
-\echo '--- 4. node_type belonging to a different axis ---'
+\warn '--- 4. node_type belonging to a different axis ---'
 INSERT INTO scope_nodes (tenant_id, axis_code, node_type, parent_id, slug, name)
 SELECT n.tenant_id, 'org', 'sku', n.id, 'illegal-2', 'Illegal'
   FROM scope_nodes n WHERE n.node_type='department' LIMIT 1;
 
-\echo '--- 4b. team directly under an office (level skipped, same axis) ---'
+\warn '--- 4b. team directly under an office (level skipped, same axis) ---'
 INSERT INTO scope_nodes (tenant_id, axis_code, node_type, parent_id, slug, name)
 SELECT n.tenant_id,'org','team', n.id,'illegal-team','Illegal Team'
   FROM scope_nodes n WHERE n.node_type='office' LIMIT 1;
 
-\echo '--- 5. permission app_slug drifting from its application ---'
+\warn '--- 5. permission app_slug drifting from its application ---'
 UPDATE permissions SET app_slug='forged' WHERE key LIKE 'app-1:%';
 
-\echo '--- 6. two axis roots for the same (tenant, axis) ---'
+\warn '--- 6. two axis roots for the same (tenant, axis) ---'
 INSERT INTO scope_nodes (tenant_id, axis_code, node_type, slug, name, is_axis_root)
 SELECT id, 'org', 'org', '_root2', 'Second root', true FROM tenants WHERE slug='impack';
 
-\echo '--- 6b. deleting a role people still hold ---'
+\warn '--- 6b. deleting a role people still hold ---'
 DELETE FROM roles WHERE id = (SELECT role_id FROM grants WHERE revoked_at IS NULL LIMIT 1);
 
-\echo '--- 7. cycle in the scope tree ---'
+\warn '--- 7. cycle in the scope tree ---'
 SELECT scope_move_node(
   (SELECT id FROM scope_nodes WHERE node_type='office' LIMIT 1),
   (SELECT c.descendant_id FROM scope_closure c
@@ -53,21 +53,26 @@ SELECT scope_move_node(
 --    from identities, with no path between them: a tenant's user becoming an
 --    operator has to be UNSTORABLE, not merely refused by application code.
 -- ---------------------------------------------------------------------------
-\echo '--- 8. a tenant identity given operator authority ---'
+\warn '--- 8. a tenant identity given operator authority ---'
 INSERT INTO platform_assignments (operator_id, tenant_id, role)
 SELECT i.id, i.tenant_id, 'owner' FROM identities i LIMIT 1;
 
-\echo '--- 8b. an operator role outside the defined set ---'
+-- Cases 8b to 9 act on a platform user, and the seed makes none: each one
+-- inserted nothing, raised nothing, and read as a write the schema let
+-- through. One operator to be refused about.
+INSERT INTO platform_users (username, password_hash) VALUES ('bench-operator', 'x') ON CONFLICT DO NOTHING;
+
+\warn '--- 8b. an operator role outside the defined set ---'
 INSERT INTO platform_assignments (operator_id, tenant_id, role)
 SELECT u.id, NULL, 'root' FROM platform_users u LIMIT 1;
 
-\echo '--- 8c. two live installation owners for one operator ---'
+\warn '--- 8c. two live installation owners for one operator ---'
 INSERT INTO platform_assignments (operator_id, tenant_id, role)
 SELECT u.id, NULL, 'owner' FROM platform_users u LIMIT 1;
 INSERT INTO platform_assignments (operator_id, tenant_id, role)
 SELECT u.id, NULL, 'owner' FROM platform_users u LIMIT 1;
 
-\echo '--- 8d. duplicate platform username, different case ---'
+\warn '--- 8d. duplicate platform username, different case ---'
 INSERT INTO platform_users (username, password_hash)
 SELECT upper(u.username), 'x' FROM platform_users u LIMIT 1;
 
@@ -76,23 +81,23 @@ SELECT upper(u.username), 'x' FROM platform_users u LIMIT 1;
 --    user is not an identity, so nothing that keys on identity_id may ever
 --    reference one — the FK makes it unstorable, and this proves it stays so.
 -- ---------------------------------------------------------------------------
-\echo '--- 9. a grant issued to a platform user ---'
+\warn '--- 9. a grant issued to a platform user ---'
 INSERT INTO grants (tenant_id, identity_id, role_id, granted_by, reason)
 SELECT t.id, u.id, r.id, u.id, 'should be impossible'
   FROM tenants t, platform_users u, roles r
  WHERE r.tenant_id = t.id
  LIMIT 1;
 
-\echo '--- 10. an api_key credential on a PERSON (must FAIL — keys are the tenant''s, 0030) ---'
+\warn '--- 10. an api_key credential on a PERSON (must FAIL — keys are the tenant''s, 0030) ---'
 INSERT INTO credentials (identity_id, tenant_id, kind, secret, lookup_key)
 SELECT i.id, i.tenant_id, 'api_key', 'deadbeef', 'anb_live_negtest'
   FROM identities i LIMIT 1;
 
-\echo '--- 11. plaintext in identities.attributes (must FAIL — ADR-0013, 0034) ---'
+\warn '--- 11. plaintext in identities.attributes (must FAIL — ADR-0013, 0034) ---'
 UPDATE identities SET attributes = '{"date_of_birth":"1985-03-02"}'::jsonb
  WHERE id = (SELECT id FROM identities LIMIT 1);
 
-\echo '--- 12. granting a RETIRED role (must FAIL — 0044; existing grants keep working) ---'
+\warn '--- 12. granting a RETIRED role (must FAIL — 0044; existing grants keep working) ---'
 BEGIN;
 UPDATE roles SET deprecated_at = now()
  WHERE id = (SELECT role_id FROM grants WHERE revoked_at IS NULL LIMIT 1);
@@ -108,7 +113,7 @@ ROLLBACK;
 --     and on a strict axis the precise defeat of what strict exists to force.
 --     The guard is DEFERRED, so both of these fail at COMMIT, not at INSERT.
 -- ---------------------------------------------------------------------------
-\echo '--- 13. an exclusion on an axis the grant does not include ---'
+\warn '--- 13. an exclusion on an axis the grant does not include ---'
 BEGIN;
 INSERT INTO grant_scopes (grant_id, tenant_id, axis_code, scope_node_id, mode)
 SELECT g.id, g.tenant_id, n.axis_code, n.id, 'exclude'
@@ -123,7 +128,7 @@ COMMIT;
 -- it, committed cleanly, and printed nothing -- a negative test that passes by
 -- doing nothing is indistinguishable from a guard that works. The failing
 -- COMMIT rolls the fixture back with it.
-\echo '--- 13b. a membership entry that only excludes ---'
+\warn '--- 13b. a membership entry that only excludes ---'
 BEGIN;
 WITH pick AS (
   -- one row that already satisfies every join below, so no step can quietly
@@ -147,7 +152,7 @@ INSERT INTO membership_entry_scopes (entry_id, tenant_id, axis_code, scope_node_
 SELECT e.id, e.tenant_id, pick.axis_code, pick.node_id, 'exclude' FROM e, pick;
 COMMIT;
 
-\echo '--- 13c. a mode that is neither include nor exclude ---'
+\warn '--- 13c. a mode that is neither include nor exclude ---'
 INSERT INTO grant_scopes (grant_id, tenant_id, axis_code, scope_node_id, mode)
 SELECT gs.grant_id, gs.tenant_id, gs.axis_code, gs.scope_node_id, 'maybe'
   FROM grant_scopes gs LIMIT 1;

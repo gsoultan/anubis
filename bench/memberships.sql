@@ -26,12 +26,19 @@ SELECT i.id AS identity_id, i.tenant_id, (SELECT id FROM m) AS membership_id,
          WHERE c.ancestor_id=(SELECT id FROM office) LIMIT 1) AS team
 FROM i;
 
-SELECT '  assign fan-out: '||membership_assign(identity_id, membership_id, identity_id)||' grant(s)' FROM ms;
+-- 0054: an assignment has a place (none here: the entry names it), a reach,
+-- an end date and a note, and returns the assignment rather than a count. The
+-- count is a second statement: one cannot see the grants its own function
+-- call inserted.
+SELECT membership_assign(identity_id, membership_id, identity_id, NULL, true, NULL, 'bench') AS assignment
+  FROM ms \gset
+SELECT '  assign fan-out: '||count(*)||' grant(s)'
+  FROM grants WHERE via_member_id = :'assignment' AND revoked_at IS NULL;
 
 SELECT '  member sees team via membership -> '||
   authorize(identity_id, tenant_id, perm, jsonb_build_object('org', team))||' (want t)' FROM ms;
 
-SELECT '  unassign revoked: '||membership_unassign(identity_id, membership_id)||' grant(s)' FROM ms;
+SELECT '  unassign revoked: '||membership_unassign(identity_id, membership_id, identity_id, 'bench')||' grant(s)' FROM ms;
 SELECT '  after unassign -> '||
   authorize(identity_id, tenant_id, perm, jsonb_build_object('org', team))||' (want f)' FROM ms;
 
@@ -41,7 +48,7 @@ SELECT membership_assign(
   (SELECT i.id FROM identities i JOIN realms r ON r.id=i.realm_id
     WHERE r.code='public' LIMIT 1),
   (SELECT membership_id FROM ms),
-  (SELECT identity_id FROM ms));
+  (SELECT identity_id FROM ms), NULL, true, NULL, 'bench');
 \set ON_ERROR_STOP on
 
 DELETE FROM identities WHERE username='member_probe';

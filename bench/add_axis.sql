@@ -12,14 +12,19 @@ SELECT g.identity_id, g.tenant_id, p.key perm,
   JOIN permissions p ON p.id=rpe.permission_id LIMIT 2000;
 
 \echo '=== STEP 1: register the axis (3 INSERTs, zero DDL) ==='
-INSERT INTO scope_axes (code, display_name, default_effect, sort_order, resolution, ui_schema)
-VALUES ('cost_center','Cost Centre','unconstrained',40,
+-- A structure is the tenant's own (0056): impack's, the tenant the ERP feeds.
+INSERT INTO scope_axes (tenant_id, code, display_name, default_effect, sort_order, resolution, ui_schema)
+SELECT id, 'cost_center','Cost Centre','unconstrained',40,
         '{"from":"context","key":"cost_center_id"}',
-        '{"picker":"tree","searchable":true,"icon":"wallet"}');
-INSERT INTO scope_node_types (code, axis_code, display_name, parent_types) VALUES
-  ('cc_root','cost_center','All Cost Centres','{}'),
+        '{"picker":"tree","searchable":true,"icon":"wallet"}'
+  FROM tenants WHERE slug='impack';
+INSERT INTO scope_node_types (tenant_id, code, axis_code, display_name, parent_types)
+SELECT t.id, v.* FROM tenants t CROSS JOIN (VALUES
+  ('cc_root','cost_center','All Cost Centres','{}'::text[]),
   ('cc_division','cost_center','Division','{cc_root}'),
-  ('cc_center','cost_center','Cost Centre','{cc_division}');
+  ('cc_center','cost_center','Cost Centre','{cc_division}')
+) AS v(code, axis_code, display_name, parent_types)
+ WHERE t.slug='impack';
 SELECT scope_ensure_root(id,'cost_center') IS NOT NULL AS root_created
   FROM tenants WHERE slug='impack';
 
