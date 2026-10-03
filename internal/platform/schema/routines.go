@@ -73,7 +73,8 @@ SELECT EXISTS (
        AND NOT EXISTS (SELECT 1 FROM axis_eval ae
                         WHERE ae.grant_id = cd.id AND NOT ae.satisfied)
        AND NOT EXISTS (SELECT 1 FROM scope_axes a
-                        WHERE a.default_effect = 'deny' AND a.status = 'active'
+                        WHERE a.tenant_id = p_tenant
+                          AND a.default_effect = 'deny' AND a.status = 'active'
                           AND NOT EXISTS (SELECT 1 FROM grant_scopes gs2
                                            WHERE gs2.grant_id = cd.id
                                              AND gs2.axis_code = a.code))
@@ -142,7 +143,7 @@ axis_eval AS (
 ),
 strict_axes AS (
     SELECT code, sort_order FROM scope_axes
-     WHERE default_effect = 'deny' AND status = 'active'
+     WHERE tenant_id = p_tenant AND default_effect = 'deny' AND status = 'active'
 ),
 per_grant AS (
     SELECT cd.id, cd.self_scoped, cd.role_name, cd.via_role_name,
@@ -229,7 +230,7 @@ SELECT jsonb_build_object(
     'failing_axis', CASE WHEN (SELECT allow FROM verdict) THEN NULL ELSE
         (SELECT ae.axis_code
            FROM axis_eval ae
-           JOIN scope_axes a ON a.code = ae.axis_code
+           JOIN scope_axes a ON a.tenant_id = p_tenant AND a.code = ae.axis_code
           WHERE NOT ae.satisfied
           ORDER BY a.sort_order, ae.axis_code
           LIMIT 1) END
@@ -488,7 +489,7 @@ BEGIN
     -- The root type is the one with NO legal parents. Picking alphabetically
     -- silently produced roots typed 'department' on the org axis.
     SELECT code, display_name INTO v_type, v_name FROM scope_node_types
-     WHERE axis_code = p_axis AND cardinality(parent_types) = 0
+     WHERE tenant_id = p_tenant AND axis_code = p_axis AND cardinality(parent_types) = 0
      ORDER BY code LIMIT 1;
     IF v_type IS NULL THEN
         RAISE EXCEPTION 'axis % has no root node type (none with empty parent_types)', p_axis;
@@ -677,15 +678,6 @@ BEGIN
         PERFORM bump_catalog_version(v_tenant);
     END IF;
     RETURN NULL;   -- AFTER trigger
-END;
-`),
-		storm.Function("trg_bump_catalog_all_tenants", "", "trigger").Body(`
-DECLARE r record;
-BEGIN
-    FOR r IN SELECT id FROM tenants LOOP
-        PERFORM bump_catalog_version(r.id);
-    END LOOP;
-    RETURN NULL;
 END;
 `),
 		storm.Function("trg_bump_catalog_applications_stmt", "", "trigger").Body(`
@@ -910,7 +902,7 @@ BEGIN
 
     SELECT node_type INTO v_parent_type FROM scope_nodes WHERE id = NEW.parent_id;
     SELECT parent_types INTO v_legal FROM scope_node_types
-     WHERE code = NEW.node_type AND axis_code = NEW.axis_code;
+     WHERE tenant_id = NEW.tenant_id AND code = NEW.node_type AND axis_code = NEW.axis_code;
 
     IF NOT (v_parent_type = ANY (v_legal)) THEN
         RAISE EXCEPTION
@@ -925,21 +917,24 @@ END;
 DECLARE
     v_bad text;
 BEGIN
-    -- Levels are shared by every tenant, so these rules are about the
-    -- structure's shape. No message names a count or a tenant.
+    -- Every lookup stays inside the level's own tenant (0056): levels are a
+    -- tenant's, and so are the items that rely on them.
     IF TG_OP = 'DELETE' THEN
         SELECT t.code INTO v_bad FROM scope_node_types t
-         WHERE t.axis_code = OLD.axis_code AND OLD.code = ANY (t.parent_types)
+         WHERE t.tenant_id = OLD.tenant_id AND t.axis_code = OLD.axis_code
+           AND OLD.code = ANY (t.parent_types)
          LIMIT 1;
         IF v_bad IS NOT NULL THEN
             RAISE EXCEPTION '"%" is still what "%" sits under', OLD.display_name,
-                  (SELECT display_name FROM scope_node_types WHERE code = v_bad)
+                  (SELECT display_name FROM scope_node_types
+                    WHERE tenant_id = OLD.tenant_id AND code = v_bad)
                   USING ERRCODE = 'check_violation';
         END IF;
         RETURN NULL;
     END IF;
 
-    IF TG_OP = 'UPDATE' AND (NEW.code <> OLD.code OR NEW.axis_code <> OLD.axis_code) THEN
+    IF TG_OP = 'UPDATE' AND (NEW.code <> OLD.code OR NEW.axis_code <> OLD.axis_code
+                             OR NEW.tenant_id <> OLD.tenant_id) THEN
         RAISE EXCEPTION 'a level keeps its code and its structure; add a new level instead'
               USING ERRCODE = 'check_violation';
     END IF;
@@ -948,18 +943,20 @@ BEGIN
     SELECT p INTO v_bad FROM unnest(NEW.parent_types) AS p
      WHERE p <> NEW.code
        AND NOT EXISTS (SELECT 1 FROM scope_node_types t
-                        WHERE t.code = p AND t.axis_code = NEW.axis_code)
+                        WHERE t.tenant_id = NEW.tenant_id AND t.code = p
+                          AND t.axis_code = NEW.axis_code)
      LIMIT 1;
     IF v_bad IS NOT NULL THEN
         RAISE EXCEPTION '"%" is not a level of structure "%"', v_bad, NEW.axis_code
               USING ERRCODE = 'check_violation';
     END IF;
 
-    -- One top level: scope_ensure_root builds every tenant's top item from
-    -- it, and with two it would have to guess.
+    -- One top level: scope_ensure_root builds the tenant's top item from it,
+    -- and with two it would have to guess.
     IF cardinality(NEW.parent_types) = 0 AND EXISTS (
          SELECT 1 FROM scope_node_types t
-          WHERE t.axis_code = NEW.axis_code AND t.code <> NEW.code
+          WHERE t.tenant_id = NEW.tenant_id AND t.axis_code = NEW.axis_code
+            AND t.code <> NEW.code
             AND cardinality(t.parent_types) = 0) THEN
         RAISE EXCEPTION 'this structure already has a top level; "%" has to sit under something', NEW.display_name
               USING ERRCODE = 'check_violation';
@@ -982,12 +979,14 @@ BEGIN
      WHERE NOT (p = ANY (NEW.parent_types))
        AND EXISTS (SELECT 1 FROM scope_nodes n
                      JOIN scope_nodes up ON up.id = n.parent_id
-                    WHERE n.axis_code = NEW.axis_code AND n.node_type = NEW.code
+                    WHERE n.tenant_id = NEW.tenant_id AND n.axis_code = NEW.axis_code
+                      AND n.node_type = NEW.code
                       AND up.node_type = p)
      LIMIT 1;
     IF v_bad IS NOT NULL THEN
         RAISE EXCEPTION 'some "%" items already sit under a "%"; move them before removing that rule',
-              NEW.display_name, COALESCE((SELECT display_name FROM scope_node_types WHERE code = v_bad), v_bad)
+              NEW.display_name, COALESCE((SELECT display_name FROM scope_node_types
+                                           WHERE tenant_id = NEW.tenant_id AND code = v_bad), v_bad)
               USING ERRCODE = 'check_violation';
     END IF;
     RETURN NULL;
@@ -1053,7 +1052,9 @@ END;
 		storm.Trigger("route_policies_bump_del", "route_policies", `CREATE TRIGGER route_policies_bump_del AFTER DELETE ON route_policies REFERENCING OLD TABLE AS oldtab FOR EACH STATEMENT EXECUTE FUNCTION trg_bump_catalog_stmt()`),
 		storm.Trigger("route_policies_bump_ins", "route_policies", `CREATE TRIGGER route_policies_bump_ins AFTER INSERT ON route_policies REFERENCING NEW TABLE AS newtab FOR EACH STATEMENT EXECUTE FUNCTION trg_bump_catalog_stmt()`),
 		storm.Trigger("route_policies_bump_upd", "route_policies", `CREATE TRIGGER route_policies_bump_upd AFTER UPDATE ON route_policies REFERENCING NEW TABLE AS newtab FOR EACH STATEMENT EXECUTE FUNCTION trg_bump_catalog_stmt()`),
-		storm.Trigger("bump_scope_axes", "scope_axes", `CREATE TRIGGER bump_scope_axes AFTER INSERT OR DELETE OR UPDATE ON scope_axes FOR EACH STATEMENT EXECUTE FUNCTION trg_bump_catalog_all_tenants()`),
+		storm.Trigger("scope_axes_bump_del", "scope_axes", `CREATE TRIGGER scope_axes_bump_del AFTER DELETE ON scope_axes REFERENCING OLD TABLE AS oldtab FOR EACH STATEMENT EXECUTE FUNCTION trg_bump_catalog_stmt()`),
+		storm.Trigger("scope_axes_bump_ins", "scope_axes", `CREATE TRIGGER scope_axes_bump_ins AFTER INSERT ON scope_axes REFERENCING NEW TABLE AS newtab FOR EACH STATEMENT EXECUTE FUNCTION trg_bump_catalog_stmt()`),
+		storm.Trigger("scope_axes_bump_upd", "scope_axes", `CREATE TRIGGER scope_axes_bump_upd AFTER UPDATE ON scope_axes REFERENCING NEW TABLE AS newtab FOR EACH STATEMENT EXECUTE FUNCTION trg_bump_catalog_stmt()`),
 		storm.Trigger("scope_nodes_bump_del", "scope_nodes", `CREATE TRIGGER scope_nodes_bump_del AFTER DELETE ON scope_nodes REFERENCING OLD TABLE AS oldtab FOR EACH STATEMENT EXECUTE FUNCTION trg_bump_catalog_stmt()`),
 		storm.Trigger("scope_nodes_bump_ins", "scope_nodes", `CREATE TRIGGER scope_nodes_bump_ins AFTER INSERT ON scope_nodes REFERENCING NEW TABLE AS newtab FOR EACH STATEMENT EXECUTE FUNCTION trg_bump_catalog_stmt()`),
 		storm.Trigger("scope_nodes_bump_upd", "scope_nodes", `CREATE TRIGGER scope_nodes_bump_upd AFTER UPDATE ON scope_nodes REFERENCING NEW TABLE AS newtab FOR EACH STATEMENT EXECUTE FUNCTION trg_bump_catalog_stmt()`),

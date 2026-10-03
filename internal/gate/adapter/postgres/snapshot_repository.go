@@ -57,7 +57,9 @@ func (s *Repository) LoadSnapshot(ctx context.Context, tenantID, tenantSlug stri
 		d.Version = v.Version
 	}
 
-	axes, err := gaterquery.SnapshotAxes.Query(ctx, ex)
+	// This tenant's structures only (0056). Read for every tenant, one
+	// tenant's strict structure denied grants in all the others.
+	axes, err := gaterquery.SnapshotAxes.Query(ctx, ex, tenantID)
 	if err != nil {
 		return nil, database.MapErr(err)
 	}

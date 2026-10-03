@@ -410,19 +410,17 @@ type GrantScope struct {
 	TenantID    [16]byte
 	ScopeNodeID [16]byte
 	Inherit     bool
-	AxisCode    ScopeAx
+	AxisCode    string
 	Mode        string
 }
 
 func (m *GrantScope) Schema(t *storm.Table) {
 	var ref0 Grant
 	var ref1 ScopeNode
+	var axis ScopeAx
 	t.PrimaryKey(&m.GrantID, &m.AxisCode, &m.ScopeNodeID)
 	t.Col(&m.Inherit).Default("true")
-	t.Col(&m.AxisCode).Named("axis_code")
-	t.Col(&m.AxisCode).ConstraintName("grant_scopes_axis_code_fkey")
-	t.Col(&m.AxisCode).OnDelete(storm.Restrict)
-	t.Col(&m.AxisCode).NoIndex()
+	t.ForeignKey(&m.TenantID, &m.AxisCode).References(&axis, &axis.Tenant, &axis.Code).Named("grant_scopes_tenant_id_axis_code_fkey").OnDelete(storm.Restrict).NoIndex()
 	t.Col(&m.Mode).Default("'include'::text")
 	t.CheckNamed("grant_scopes_mode_check", "mode = ANY (ARRAY['include'::text, 'exclude'::text])")
 	t.Index(&m.ScopeNodeID, &m.AxisCode).Named("grant_scopes_node")
@@ -627,19 +625,17 @@ type MembershipEntryScope struct {
 	TenantID    [16]byte
 	ScopeNodeID [16]byte
 	Inherit     bool
-	AxisCode    ScopeAx
+	AxisCode    string
 	Mode        string
 }
 
 func (m *MembershipEntryScope) Schema(t *storm.Table) {
 	var ref0 MembershipEntry
 	var ref1 ScopeNode
+	var axis ScopeAx
 	t.PrimaryKey(&m.EntryID, &m.AxisCode, &m.ScopeNodeID)
 	t.Col(&m.Inherit).Default("true")
-	t.Col(&m.AxisCode).Named("axis_code")
-	t.Col(&m.AxisCode).ConstraintName("membership_entry_scopes_axis_code_fkey")
-	t.Col(&m.AxisCode).OnDelete(storm.Restrict)
-	t.Col(&m.AxisCode).NoIndex()
+	t.ForeignKey(&m.TenantID, &m.AxisCode).References(&axis, &axis.Tenant, &axis.Code).Named("membership_entry_scopes_tenant_id_axis_code_fkey").OnDelete(storm.Restrict).NoIndex()
 	t.Col(&m.Mode).Default("'include'::text")
 	t.CheckNamed("membership_entry_scopes_mode_check", "mode = ANY (ARRAY['include'::text, 'exclude'::text])")
 	t.ForeignKey(&m.EntryID, &m.TenantID).References(&ref0, &ref0.ID, &ref0.TenantID).Named("membership_entry_scopes_entry_id_tenant_id_fkey").OnDelete(storm.Cascade)
@@ -718,21 +714,20 @@ type Membership struct {
 	CreatedAt   time.Time
 	ID          [16]byte
 	Tenant      Tenant
-	AnchorAxis  *ScopeAx
+	AnchorAxis  *string
 	Name        string
 	Description string
 }
 
 func (m *Membership) Schema(t *storm.Table) {
+	var axis ScopeAx
 	t.PrimaryKey(&m.ID)
 	t.Col(&m.CreatedAt).Default("now()")
 	t.Col(&m.ID).Default("uuidv7()")
 	t.Col(&m.Tenant).ConstraintName("memberships_tenant_id_fkey")
 	t.Col(&m.Tenant).OnDelete(storm.Cascade)
 	t.Col(&m.AnchorAxis).Named("anchor_axis")
-	t.Col(&m.AnchorAxis).ConstraintName("memberships_anchor_axis_fkey")
-	t.Col(&m.AnchorAxis).OnDelete(storm.Restrict)
-	t.Col(&m.AnchorAxis).NoIndex()
+	t.ForeignKey(&m.Tenant, &m.AnchorAxis).References(&axis, &axis.Tenant, &axis.Code).Named("memberships_tenant_id_anchor_axis_fkey").OnDelete(storm.Restrict).NoIndex()
 	t.Col(&m.Description).Default("''::text")
 	t.UniqueNamed("memberships_id_tenant_id_key", &m.ID, &m.Tenant)
 	t.UniqueNamed("memberships_tenant_id_name_key", &m.Tenant, &m.Name)
@@ -1277,9 +1272,15 @@ func (m *SchemaMigration) Schema(t *storm.Table) {
 
 // ScopeAx is public.scope_axes. The scopermodel package documents this table's
 // invariants; this declaration is the DDL half of the same thing.
+//
+// A structure belongs to ONE tenant (0056). It used to be the installation's,
+// read by every tenant's decisions — so an operator assigned to one tenant
+// could make a structure strict and deny access in all of them. The code is
+// unique within its tenant; two tenants may each have an "org".
 type ScopeAx struct {
 	CreatedAt     time.Time
 	SortOrder     int32
+	Tenant        Tenant
 	Code          string
 	DisplayName   string
 	DefaultEffect string
@@ -1289,7 +1290,10 @@ type ScopeAx struct {
 }
 
 func (m *ScopeAx) Schema(t *storm.Table) {
-	t.PrimaryKey(&m.Code)
+	t.PrimaryKey(&m.Tenant, &m.Code)
+	t.Col(&m.Tenant).ConstraintName("scope_axes_tenant_id_fkey")
+	t.Col(&m.Tenant).OnDelete(storm.Cascade)
+	t.Col(&m.Tenant).NoIndex()
 	t.Col(&m.CreatedAt).Default("now()")
 	t.Col(&m.SortOrder).Default("100")
 	t.Col(&m.DefaultEffect).Default("'unconstrained'::text")
@@ -1331,22 +1335,24 @@ func (m *ScopeClosure) Schema(t *storm.Table) {
 
 // ScopeNodeType is public.scope_node_types. The scopermodel package documents this table's
 // invariants; this declaration is the DDL half of the same thing.
+//
+// A level belongs to its structure's tenant (0056); its code is unique within
+// that tenant, not across the installation.
 type ScopeNodeType struct {
+	TenantID    [16]byte
 	Code        string
-	AxisCode    ScopeAx
+	AxisCode    string
 	DisplayName string
 	ParentTypes []string
 }
 
 func (m *ScopeNodeType) Schema(t *storm.Table) {
-	t.PrimaryKey(&m.Code)
-	t.Col(&m.AxisCode).Named("axis_code")
-	t.Col(&m.AxisCode).ConstraintName("scope_node_types_axis_code_fkey")
-	t.Col(&m.AxisCode).OnDelete(storm.Restrict)
-	t.Col(&m.AxisCode).NoIndex()
+	var axis ScopeAx
+	t.PrimaryKey(&m.TenantID, &m.Code)
 	t.Col(&m.ParentTypes).Default("'{}'::text[]")
-	t.UniqueNamed("scope_node_types_code_axis_code_key", &m.Code, &m.AxisCode)
+	t.UniqueNamed("scope_node_types_tenant_id_code_axis_code_key", &m.TenantID, &m.Code, &m.AxisCode)
 	t.CheckNamed("scope_node_types_code_check", "code ~ '^[a-z][a-z0-9_]{1,30}$'::text")
+	t.ForeignKey(&m.TenantID, &m.AxisCode).References(&axis, &axis.Tenant, &axis.Code).Named("scope_node_types_tenant_id_axis_code_fkey").OnDelete(storm.Restrict)
 }
 
 // ScopeNode is public.scope_nodes. The scopermodel package documents this table's
@@ -1385,7 +1391,7 @@ func (m *ScopeNode) Schema(t *storm.Table) {
 	t.Index(&m.Tenant, &m.AxisCode).Unique().Where("is_axis_root").Named("scope_nodes_one_root")
 	t.Index(&m.Tenant, &m.AxisCode, &m.Name, &m.ID).Named("scope_nodes_paging")
 	t.Index(&m.ParentID, &m.Slug).Unique().Where("parent_id IS NOT NULL").Named("scope_nodes_sibling_slug")
-	t.ForeignKey(&m.NodeType, &m.AxisCode).References(&ref0, &ref0.Code, &ref0.AxisCode).Named("scope_nodes_node_type_axis_code_fkey").OnDelete(storm.Restrict).NoIndex()
+	t.ForeignKey(&m.Tenant, &m.NodeType, &m.AxisCode).References(&ref0, &ref0.TenantID, &ref0.Code, &ref0.AxisCode).Named("scope_nodes_tenant_id_node_type_axis_code_fkey").OnDelete(storm.Restrict).NoIndex()
 	t.ForeignKey(&m.ParentID, &m.Tenant, &m.AxisCode).References(&ref1, &ref1.ID, &ref1.Tenant, &ref1.AxisCode).Named("scope_nodes_parent_id_tenant_id_axis_code_fkey").OnDelete(storm.Restrict)
 }
 
@@ -1421,7 +1427,7 @@ type ScopeSyncSource struct {
 	LastRunAt       *time.Time
 	ID              [16]byte
 	Tenant          Tenant
-	AxisCode        ScopeAx
+	AxisCode        string
 	Kind            string
 	Status          string
 	Config          storm.JSON
@@ -1430,17 +1436,15 @@ type ScopeSyncSource struct {
 }
 
 func (m *ScopeSyncSource) Schema(t *storm.Table) {
+	var axis ScopeAx
 	t.PrimaryKey(&m.ID)
 	t.Col(&m.CreatedAt).Default("now()")
 	t.Col(&m.ID).Default("uuidv7()")
 	t.Col(&m.Tenant).ConstraintName("scope_sync_sources_tenant_id_fkey")
 	t.Col(&m.Tenant).OnDelete(storm.Cascade)
-	t.Col(&m.AxisCode).Named("axis_code")
-	t.Col(&m.AxisCode).ConstraintName("scope_sync_sources_axis_code_fkey")
-	t.Col(&m.AxisCode).OnDelete(storm.Cascade)
-	t.Col(&m.AxisCode).NoIndex()
 	t.Col(&m.Status).Default("'active'::text")
 	t.Col(&m.IntervalSeconds).Default("0")
+	t.ForeignKey(&m.Tenant, &m.AxisCode).References(&axis, &axis.Tenant, &axis.Code).Named("scope_sync_sources_tenant_id_axis_code_fkey").OnDelete(storm.Cascade).NoIndex()
 	t.UniqueNamed("scope_sync_sources_tenant_id_axis_code_key", &m.Tenant, &m.AxisCode)
 	t.CheckNamed("scope_sync_sources_interval_seconds_check", "(interval_seconds = 0) OR (interval_seconds >= 300)")
 	t.CheckNamed("scope_sync_sources_kind_check", "kind = ANY (ARRAY['http'::text, 'db_query'::text, 'db_table'::text])")

@@ -55,6 +55,10 @@ psql < bench/negative.sql >"$TMP/neg.log" 2>&1
 # by doing nothing looks identical to one that passes by being enforced.
 # 8c legitimately errors twice on a rerun, which is why this counts cases
 # with no error rather than errors.
+#
+# The case headers are \warn, not \echo: psql buffers stdout and not stderr,
+# so with headers on stdout an ERROR could land under the wrong case. The
+# list of "unguarded" cases changed from run to run on one database.
 unguarded=$(awk '/^--- /{if (c != "" && n == 0) print c; c=$0; n=0}
                  /^ERROR/{n++}
                  END{if (c != "" && n == 0) print c}' "$TMP/neg.log")

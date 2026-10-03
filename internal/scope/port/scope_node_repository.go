@@ -7,9 +7,10 @@ import (
 )
 
 type ScopeNodeRepository interface {
-	ListScopeNodeTypes(ctx context.Context, axis string) ([]scopedomain.ScopeNodeTypeRecord, error)
-	CreateScopeNodeType(ctx context.Context, t scopedomain.ScopeNodeTypeRecord) error
-	UpdateScopeNodeType(ctx context.Context, t scopedomain.ScopeNodeTypeRecord) error
+	// Levels are the tenant's own, like its structures (0056).
+	ListScopeNodeTypes(ctx context.Context, tenantID, axis string) ([]scopedomain.ScopeNodeTypeRecord, error)
+	CreateScopeNodeType(ctx context.Context, tenantID string, t scopedomain.ScopeNodeTypeRecord) error
+	UpdateScopeNodeType(ctx context.Context, tenantID string, t scopedomain.ScopeNodeTypeRecord) error
 	// ListScopeNodes returns ONE KEYSET PAGE, at most f.Limit rows. Callers
 	// that need the whole axis must page with ScopeNodeFilter.After until a
 	// short page comes back — see EachScopeNode.

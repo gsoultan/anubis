@@ -10,8 +10,13 @@ import (
 	scopedomain "github.com/gsoultan/anubis/internal/scope/domain"
 )
 
-func (s *Repository) ListScopeNodeTypes(ctx context.Context, axis string) ([]scopedomain.ScopeNodeTypeRecord, error) {
-	q := scopenodetype.New().Order(scopenodetype.AxisCode.Asc(), scopenodetype.Code.Asc())
+func (s *Repository) ListScopeNodeTypes(ctx context.Context, tenantID, axis string) ([]scopedomain.ScopeNodeTypeRecord, error) {
+	tid, err := database.ParseUUID(tenantID)
+	if err != nil {
+		return nil, database.MapErr(err)
+	}
+	q := scopenodetype.New().Where(scopenodetype.TenantID.Eq(tid)).
+		Order(scopenodetype.AxisCode.Asc(), scopenodetype.Code.Asc())
 	// An empty axis means every axis; the filter is omitted rather than
 	// compared against '', which would match nothing.
 	q = q.WhereIf(axis != "", scopenodetype.AxisCode.Eq(axis))
@@ -31,12 +36,12 @@ func (s *Repository) ListScopeNodeTypes(ctx context.Context, axis string) ([]sco
 
 // UpdateScopeNodeType renames a level and replaces what it may sit under.
 // Whether the new rules hold together is migration 0055's trigger to say.
-func (s *Repository) UpdateScopeNodeType(ctx context.Context, t scopedomain.ScopeNodeTypeRecord) error {
+func (s *Repository) UpdateScopeNodeType(ctx context.Context, tenantID string, t scopedomain.ScopeNodeTypeRecord) error {
 	parents := t.ParentTypes
 	if parents == nil {
 		parents = []string{} // NULL would trip the NOT NULL, not mean "top"
 	}
-	n, err := scopermquery.UpdateScopeNodeType.Exec(ctx, s.ex(ctx), t.Code, t.Axis, t.DisplayName, parents)
+	n, err := scopermquery.UpdateScopeNodeType.Exec(ctx, s.ex(ctx), t.Code, t.Axis, t.DisplayName, parents, tenantID)
 	if err != nil {
 		return database.MapErrSaying(err)
 	}
@@ -46,8 +51,13 @@ func (s *Repository) UpdateScopeNodeType(ctx context.Context, t scopedomain.Scop
 	return nil
 }
 
-func (s *Repository) CreateScopeNodeType(ctx context.Context, t scopedomain.ScopeNodeTypeRecord) error {
+func (s *Repository) CreateScopeNodeType(ctx context.Context, tenantID string, t scopedomain.ScopeNodeTypeRecord) error {
+	tid, err := database.ParseUUID(tenantID)
+	if err != nil {
+		return database.MapErr(err)
+	}
 	n := scopenodetype.Create()
+	n.SetTenantID(tid)
 	n.SetCode(t.Code)
 	n.SetAxisCode(t.Axis)
 	n.SetDisplayName(t.DisplayName)
@@ -56,7 +66,7 @@ func (s *Repository) CreateScopeNodeType(ctx context.Context, t scopedomain.Scop
 		// would write NULL over that, which the NOT NULL rejects.
 		n.SetParentTypes(t.ParentTypes)
 	}
-	_, err := n.Insert(ctx, s.ex(ctx))
+	_, err = n.Insert(ctx, s.ex(ctx))
 	return database.MapErrSaying(err)
 }
 

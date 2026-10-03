@@ -139,10 +139,10 @@ SELECT scope_sync_apply($1, $2::jsonb, $3)::text AS report`)
 UPDATE scope_axes
 SET display_name = $2, default_effect = $3, status = $4,
     sort_order = $5, ui_schema = $6::jsonb
-WHERE code = $1`)
+WHERE code = $1 AND tenant_id = $7`)
 	storm.RegisterStatement(`
 UPDATE scope_node_types SET display_name = $3, parent_types = $4::text[]
-WHERE code = $1 AND axis_code = $2`)
+WHERE code = $1 AND axis_code = $2 AND tenant_id = $5`)
 	storm.RegisterStatement(`
 UPDATE scope_nodes SET name = $3, status = 'active', updated_at = now()
 WHERE id = $1 AND tenant_id = $2`)

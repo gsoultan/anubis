@@ -45,7 +45,7 @@ func init() {
 	storm.RegisterScanner(scanSessionIDRow)
 	storm.RegisterStatement(`
 SELECT code, default_effect, status, sort_order FROM scope_axes
-WHERE status = 'active'`)
+WHERE tenant_id = $1 AND status = 'active'`)
 	storm.RegisterStatement(`
 SELECT g.id::text AS id, g.identity_id::text AS identity_id,
        g.role_id::text AS role_id, g.self_scoped, g.valid_from, g.valid_until

@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -173,12 +174,12 @@ func TestArchivedNodeStaysInSnapshotHierarchy(t *testing.T) {
 			t.Fatalf("fixture %q: %v", sql, err)
 		}
 	}
-	exec(`INSERT INTO scope_axes (code, display_name) VALUES ($1,'Archive Test')
-	      ON CONFLICT (code) DO NOTHING`, axis)
-	exec(`INSERT INTO scope_node_types (code, axis_code, display_name, parent_types)
-	      VALUES ('ar_root',$1,'Root','{}') ON CONFLICT (code) DO NOTHING`, axis)
-	exec(`INSERT INTO scope_node_types (code, axis_code, display_name, parent_types)
-	      VALUES ('ar_node',$1,'Node','{ar_root,ar_node}') ON CONFLICT (code) DO NOTHING`, axis)
+	exec(`INSERT INTO scope_axes (tenant_id, code, display_name) VALUES ($1,$2,'Archive Test')
+	      ON CONFLICT (tenant_id, code) DO NOTHING`, tenant, axis)
+	exec(`INSERT INTO scope_node_types (tenant_id, code, axis_code, display_name, parent_types)
+	      VALUES ($1,'ar_root',$2,'Root','{}') ON CONFLICT (tenant_id, code) DO NOTHING`, tenant, axis)
+	exec(`INSERT INTO scope_node_types (tenant_id, code, axis_code, display_name, parent_types)
+	      VALUES ($1,'ar_node',$2,'Node','{ar_root,ar_node}') ON CONFLICT (tenant_id, code) DO NOTHING`, tenant, axis)
 
 	var root string
 	if err := pool.QueryRow(ctx, `SELECT scope_ensure_root($1,$2)`, tenant, axis).Scan(&root); err != nil {
@@ -519,9 +520,11 @@ func TestCatalogVersionBumpsOnlyOnDecisionChanges(t *testing.T) {
 	}
 }
 
-// scope_axes has no tenant_id: default_effect='deny' makes an axis strict for
-// everyone at once, so every tenant has to be invalidated.
-func TestStrictAxisFlipInvalidatesEveryTenant(t *testing.T) {
+// A structure belongs to one tenant (0056), so making it strict changes that
+// tenant's decisions and must invalidate that tenant's snapshot — and nobody
+// else's. It used to bump every tenant, because it used to be every tenant's
+// structure; a flip in one tenant denying grants in another was the defect.
+func TestStrictAxisFlipInvalidatesItsOwnTenantOnly(t *testing.T) {
 	skipWithoutDB(t)
 	ctx := context.Background()
 
@@ -531,49 +534,43 @@ func TestStrictAxisFlipInvalidatesEveryTenant(t *testing.T) {
 	}
 	defer tx.Rollback(context.WithoutCancel(ctx)) //nolint:errcheck
 
-	before := map[string]int64{}
-	rows, err := tx.Query(ctx, `SELECT id FROM tenants`)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var ids []string
-	for rows.Next() {
+	// Two tenants, built here: a fresh database has one, and the assertion
+	// that the OTHER is untouched needs another to be untouched.
+	var mine, other string
+	for _, slug := range []string{"strict-mine", "strict-other"} {
 		var id string
-		if err := rows.Scan(&id); err != nil {
-			rows.Close()
+		if err := tx.QueryRow(ctx, `INSERT INTO tenants (slug, name) VALUES ($1 || '-' || $2::text, $1) RETURNING id`,
+			slug, strconv.FormatInt(time.Now().UnixNano(), 10)).Scan(&id); err != nil {
 			t.Fatal(err)
 		}
-		ids = append(ids, id)
+		if mine == "" {
+			mine = id
+		} else {
+			other = id
+		}
 	}
-	rows.Close()
-	if len(ids) < 1 {
-		t.Skip("no tenants")
-	}
-	for _, id := range ids {
+	version := func(id string) int64 {
+		t.Helper()
 		var v int64
 		if err := tx.QueryRow(ctx,
 			`SELECT COALESCE((SELECT version FROM catalog_version WHERE tenant_id=$1),0)`, id).Scan(&v); err != nil {
 			t.Fatal(err)
 		}
-		before[id] = v
+		return v
 	}
+	beforeMine, beforeOther := version(mine), version(other)
 
 	if _, err := tx.Exec(ctx,
-		`INSERT INTO scope_axes (code, display_name, default_effect)
-		 VALUES ('striktest','Strict Test','deny')`); err != nil {
+		`INSERT INTO scope_axes (tenant_id, code, display_name, default_effect)
+		 VALUES ($1, 'striktest', 'Strict Test', 'deny')`, mine); err != nil {
 		t.Fatal(err)
 	}
-
-	for _, id := range ids {
-		var v int64
-		if err := tx.QueryRow(ctx,
-			`SELECT COALESCE((SELECT version FROM catalog_version WHERE tenant_id=$1),0)`, id).Scan(&v); err != nil {
-			t.Fatal(err)
-		}
-		if v == before[id] {
-			t.Errorf("tenant %s was not invalidated by a strict-axis insert; its grants "+
-				"would keep passing an axis they do not address", id)
-		}
+	if version(mine) == beforeMine {
+		t.Error("the tenant was not invalidated by its own strict structure; its grants " +
+			"would keep passing a structure they do not address")
+	}
+	if version(other) != beforeOther {
+		t.Error("another tenant was invalidated by a structure that is not its own")
 	}
 }
 

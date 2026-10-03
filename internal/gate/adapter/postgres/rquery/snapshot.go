@@ -7,7 +7,8 @@ import (
 	"github.com/gsoultan/storm/runtime"
 )
 
-// AxisRow is one scope axis the gate evaluates against.
+// AxisRow is one scope axis the gate evaluates against — the snapshot's own
+// tenant's ($1), since a structure and its strictness are per tenant (0056).
 type AxisRow struct {
 	Code          string
 	DefaultEffect string
@@ -17,7 +18,7 @@ type AxisRow struct {
 
 var SnapshotAxes = storm.SQL[AxisRow](`
 SELECT code, default_effect, status, sort_order FROM scope_axes
-WHERE status = 'active'`)
+WHERE tenant_id = $1 AND status = 'active'`)
 
 // NodeRow is one scope node as a PARENT POINTER.
 type NodeRow struct {

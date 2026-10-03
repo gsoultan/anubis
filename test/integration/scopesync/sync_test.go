@@ -51,14 +51,14 @@ func TestMain(m *testing.M) {
 	// Its own axis, so nothing here touches a real one.
 	axis = fmt.Sprintf("zz%d", n%100_000_000)
 	if _, err := p.Exec(ctx,
-		`INSERT INTO scope_axes (code, display_name) VALUES ($1, 'probe')`, axis); err != nil {
+		`INSERT INTO scope_axes (tenant_id, code, display_name) VALUES ($2, $1, 'probe')`, axis, tenant); err != nil {
 		panic("create probe axis: " + err.Error())
 	}
 	code := m.Run()
 	_, _ = p.Exec(ctx, `DELETE FROM scope_sync_sources WHERE tenant_id = $1`, tenant)
 	_, _ = p.Exec(ctx, `DELETE FROM scope_nodes WHERE tenant_id = $1`, tenant)
+	_, _ = p.Exec(ctx, `DELETE FROM scope_axes WHERE tenant_id = $1`, tenant)
 	_, _ = p.Exec(ctx, `DELETE FROM tenants WHERE id = $1`, tenant)
-	_, _ = p.Exec(ctx, `DELETE FROM scope_axes WHERE code = $1`, axis)
 	p.Close()
 	os.Exit(code)
 }
@@ -100,11 +100,12 @@ func mkAxis(t *testing.T) string {
 	t.Helper()
 	code := fmt.Sprintf("zz%d", time.Now().UnixNano()%100_000_000)
 	if _, err := pool.Exec(context.Background(),
-		`INSERT INTO scope_axes (code, display_name) VALUES ($1, 'probe')`, code); err != nil {
+		`INSERT INTO scope_axes (tenant_id, code, display_name) VALUES ($2, $1, 'probe')`, code, tenant); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		if _, err := pool.Exec(context.Background(), `DELETE FROM scope_axes WHERE code = $1`, code); err != nil {
+		if _, err := pool.Exec(context.Background(),
+			`DELETE FROM scope_axes WHERE tenant_id = $1 AND code = $2`, tenant, code); err != nil {
 			t.Errorf("axis %v not removed: %v", code, err)
 		}
 	})

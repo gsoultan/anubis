@@ -15,6 +15,7 @@ func _assertScopeAxisShape(m m0.ScopeAxis) {
 	_ = shape{
 		m.CreatedAt,
 		m.SortOrder,
+		m.TenantID,
 		m.Code,
 		m.DisplayName,
 		m.DefaultEffect,
@@ -48,6 +49,7 @@ func _assertScopeNodeShape(m m0.ScopeNode) {
 func _assertScopeNodeTypeShape(m m0.ScopeNodeType) {
 	type shape m0.ScopeNodeType
 	_ = shape{
+		m.TenantID,
 		m.Code,
 		m.AxisCode,
 		m.DisplayName,

@@ -10,11 +10,24 @@ existing does not mean a release was ever meant to be installed.
 
 ## v0.5.0 — 2026-10-03
 
-Memberships can apply where each member is assigned, a structure's level
-rules are held by the database, and giving access moved onto a person's page.
-Three migrations, `0053`–`0055`, forward-only — **a v0.4.5 database upgrades
-with `applied: 3, drifted: 0`**. A minor bump: behaviour changes below.
+Each tenant owns its structures, memberships can apply where each member is
+assigned, a structure's level rules are held by the database, and giving
+access moved onto a person's page. Four migrations, `0053`–`0056`,
+forward-only — **a v0.4.5 database upgrades with `applied: 4, drifted: 0`**.
+A minor bump: behaviour changes below.
 
+- **Each tenant owns its structures** (`0056`) — a security fix. A structure
+  and its levels belonged to the installation, and whether a structure was
+  strict was one setting every tenant's decisions read; editing it was a
+  tenant operator's permission. An operator assigned to one tenant could make
+  a structure strict and every grant in every other tenant that did not name
+  it stopped allowing, or rename and reshape levels other tenants' items sat
+  on. Structures and levels now carry their tenant, codes are unique within a
+  tenant, and decisions, explanations, the strict dry run and the gate read
+  only the asking tenant's structures. Existing structures and levels are
+  copied into every tenant, so no decision changes on upgrade — 8,000 real
+  decisions and their explanations were compared before and after on a copy
+  of a 150,000-grant database.
 - **A membership can apply where each member is assigned.** A membership
   either gives every member the same places, as before, or names a structure
   and places each member in it when they are added (`0054`). A seat on the
@@ -59,8 +72,12 @@ with `applied: 3, drifted: 0`**. A minor bump: behaviour changes below.
   calling them directly must move to the new arguments.
 - A new structure's top item is named after its top level — "All Partners" —
   rather than `All <axis code>`. Existing items keep their names.
-- Levels and structures are still shared by every tenant on an installation,
-  and `anubis:scope:admin` in any tenant edits them for all.
+- **A tenant created after the upgrade starts with no structures.** Create
+  the ones it needs in its Structure screen, or with `CreateScopeAxis` and its
+  `top_level`. Existing tenants keep a copy of everything they had.
+- Scripts that write `scope_axes` or `scope_node_types` directly must set
+  `tenant_id`; references to a structure are now `(tenant_id, code)`. API
+  callers need no change: the tenant comes from the caller.
 
 New, all additive (`buf breaking` is clean): `ListMembershipAssignments`,
 `UpdateScopeNodeType`, `RenameScopeNode`, `RestoreScopeNode`;
@@ -71,7 +88,11 @@ sentence as the `reason` error detail.
 
 Internally, CI ran `./test/integration/` and nothing below it, so six
 integration packages ran nowhere; it runs the whole tree now, along with the
-console's unit tests.
+console's unit tests. The bench's negative suite attributed errors to the
+wrong case — its headers were buffered and its errors were not — so the list
+of "unguarded" writes changed from run to run; four of its cases also acted
+on a platform user the seed never made and passed by doing nothing. It now
+reports 20/20 the same way every time.
 
 ## v0.4.5 — 2026-09-28
 
