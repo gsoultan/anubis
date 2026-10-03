@@ -8,6 +8,71 @@ Pre-1.0, a minor bump carries deliberate behaviour changes and a patch does
 not. Releases are built and signed by tag and published by hand, so a tag
 existing does not mean a release was ever meant to be installed.
 
+## v0.5.0 — 2026-10-03
+
+Memberships can apply where each member is assigned, a structure's level
+rules are held by the database, and giving access moved onto a person's page.
+Three migrations, `0053`–`0055`, forward-only — **a v0.4.5 database upgrades
+with `applied: 3, drifted: 0`**. A minor bump: behaviour changes below.
+
+- **A membership can apply where each member is assigned.** A membership
+  either gives every member the same places, as before, or names a structure
+  and places each member in it when they are added (`0054`). A seat on the
+  Marketing Council in Company A then gives nothing in Company B, and a member
+  can be placed at any depth — a single work office. One person can hold the
+  same membership at several places, each with its own end date and note, and
+  leave one without losing the others. Which kind a membership is, is fixed
+  when it is created; every existing membership keeps the old behaviour.
+- **A membership's contents can change after people join.** Replacing its
+  roles used to be refused once anybody had ever held it; unchanged roles now
+  keep their members' grants, and the rest are added or taken back at once.
+- **Membership writes now check the tenant.** An operator of one tenant could
+  add another tenant's person to that tenant's membership, resync it or
+  replace its contents: the membership id was taken on trust.
+- **Revoking a grant keeps why it was given** (`0053`): the revoke reason has
+  its own column instead of overwriting the grant's.
+- **A structure's levels hold together** (`0055`). The database refuses a
+  second top level, a parent that is not a level of the same structure, giving
+  the top level a parent, and removing a rule items still rely on — archived
+  items included. A level may sit inside itself (a company owned by a
+  company). Existing rows are not re-checked; every rule applies to the next
+  write.
+- **Explain and the strict dry run answered with an internal error** for
+  anybody holding a place-limited grant when the request named no targets.
+- **The console.** Giving access is one sheet — what, where, how long, why,
+  then a review — and where is an explicit choice, never a default. A person's
+  access is read and changed on their page; the Access screen is gone and
+  `/grants` redirects to People. Memberships has a roster, editing, and adding
+  a member at a place. Structure edits levels for real (the old controls
+  called an endpoint that did not exist), and renames, moves, archives and
+  restores items, each saying what it does to access. A refused request shows
+  the reason the server gave.
+
+**Action required** for anything that calls the API or the database directly:
+
+- `AssignMembership` on a membership that applies where members are assigned
+  needs `scope_node_id`; without one it is refused. `UnassignMembership` by
+  person and membership removes every place they hold it; send
+  `assignment_id` to remove one.
+- `0054` replaces the SQL functions `membership_assign` and
+  `membership_unassign` with new signatures and drops the old ones. Scripts
+  calling them directly must move to the new arguments.
+- A new structure's top item is named after its top level — "All Partners" —
+  rather than `All <axis code>`. Existing items keep their names.
+- Levels and structures are still shared by every tenant on an installation,
+  and `anubis:scope:admin` in any tenant edits them for all.
+
+New, all additive (`buf breaking` is clean): `ListMembershipAssignments`,
+`UpdateScopeNodeType`, `RenameScopeNode`, `RestoreScopeNode`;
+`CreateScopeAxisRequest.top_level`, `Membership.anchor_axis`,
+`Grant.via_assignment_id`, `ScopeNode.path`; the Import workbook's Memberships
+sheet takes a place, reach, end date and note. A guard's refusal carries its
+sentence as the `reason` error detail.
+
+Internally, CI ran `./test/integration/` and nothing below it, so six
+integration packages ran nowhere; it runs the whole tree now, along with the
+console's unit tests.
+
 ## v0.4.5 — 2026-09-28
 
 A security fix for machine tokens, and the audit log gains an actor filter.
