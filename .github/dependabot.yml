@@ -23,6 +23,11 @@ updates:
     # floor as a side effect. Upgrade by hand; see #47 for how.
     ignore:
       - dependency-name: "github.com/gsoultan/storm"
+      # This repository's own verifier module, resolved by go.work. It is
+      # tagged with the server (v0.4.5), never as pkg/anubis/vX, so Dependabot
+      # asked the proxy for pkg/anubis@v0.4.5 every week and failed the whole
+      # gomod run on a revision that does not exist.
+      - dependency-name: "github.com/gsoultan/anubis/pkg/anubis"
 
   # The verifier SDK is a separate module that consumers compile into their
   # own binaries, so its dependencies travel further than this repository.
@@ -41,7 +46,10 @@ updates:
 
   # The console is compiled INTO the release binary, so its dependencies are
   # part of what ships rather than a build-time detail.
-  - package-ecosystem: npm
+  # bun, not npm: ui/ has a bun.lock and no package-lock.json, and the npm
+  # ecosystem refuses to touch it — every weekly run since the switch failed
+  # before reading a single dependency.
+  - package-ecosystem: bun
     directory: /ui
     schedule:
       interval: weekly
