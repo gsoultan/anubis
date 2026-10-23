@@ -205,4 +205,3 @@ func TestHoldsRoleInApp(t *testing.T) {
 		}
 	})
 }
-

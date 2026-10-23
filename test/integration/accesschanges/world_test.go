@@ -18,8 +18,8 @@ import (
 // permission, and a role that gives it.
 type world struct {
 	tenant, person, axis, perm, app, role, root string
-	node                                         map[string]string
-	orgType                                      string
+	node                                        map[string]string
+	orgType                                     string
 }
 
 func inRolledBackTx(t *testing.T, fn func(ctx context.Context, repo *authzpg.Repository, q database.Querier)) {
