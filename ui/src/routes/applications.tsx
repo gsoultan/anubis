@@ -1,4 +1,4 @@
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, Link } from '@tanstack/react-router'
 import type { CatalogFormat } from '@/lib/api/types'
 import { useQuery } from '@tanstack/react-query'
 import {
@@ -46,6 +46,26 @@ function SecretOnce({ secret, onDone }: { secret: string; onDone: () => void }) 
    The redirect lists are separate for a reason worth repeating where they are
    edited: a login callback is not a safe place to land after signing out, and
    an open redirect on the logout side is a phishing primitive. */
+/* Who may sign in at all, before any permission is asked about. An app for
+   the finance team should not hand a session to everyone in the company who
+   happens to have an account. */
+function SignInChoice({ value, onChange }: { value: SignIn; onChange: (v: SignIn) => void }) {
+  return (
+    <div>
+      <div className="t-body mb-1" style={{ fontWeight: 500 }}>Who may sign in</div>
+      <SegmentedControl fullWidth size="sm" value={value} onChange={(v) => onChange(v as SignIn)}
+        data={[{ value: 'anyone', label: 'Anyone with an account' }, { value: 'role_holders', label: 'Only people with a role in it' }]} />
+      <div className="t-xs mt-1">
+        {value === 'anyone'
+          ? 'Everyone in this organisation can sign in. What they can do inside is still decided by their roles.'
+          : 'Someone with no role in this app is turned away at sign-in, and so is a refresh once their last role ends.'}
+      </div>
+    </div>
+  )
+}
+
+type SignIn = live.AppRecord['sign_in']
+
 function EditDialog({ a, onDone }: { a: live.AppRecord; onDone: () => void }) {
   const [open, setOpen] = useState(false)
   const [name, setName] = useState(a.name)
@@ -53,10 +73,11 @@ function EditDialog({ a, onDone }: { a: live.AppRecord; onDone: () => void }) {
   const [redirects, setRedirects] = useState(a.redirect_uris.join('\n'))
   const [logouts, setLogouts] = useState(a.post_logout_redirect_uris.join('\n'))
   const [backchannel, setBackchannel] = useState(a.backchannel_logout_uri)
+  const [signIn, setSignIn] = useState(a.sign_in)
   const [busy, setBusy] = useState(false)
 
   function reset() {
-    setName(a.name); setStatus(a.status)
+    setName(a.name); setStatus(a.status); setSignIn(a.sign_in)
     setRedirects(a.redirect_uris.join('\n'))
     setLogouts(a.post_logout_redirect_uris.join('\n'))
     setBackchannel(a.backchannel_logout_uri)
@@ -68,7 +89,7 @@ function EditDialog({ a, onDone }: { a: live.AppRecord; onDone: () => void }) {
     setBusy(true)
     try {
       await live.updateApplication({
-        ...a, name, status,
+        ...a, name, status, sign_in: signIn,
         redirect_uris: lines(redirects),
         post_logout_redirect_uris: lines(logouts),
         backchannel_logout_uri: backchannel.trim(),
@@ -90,6 +111,7 @@ function EditDialog({ a, onDone }: { a: live.AppRecord; onDone: () => void }) {
           <TextInput label="Name" value={name} onChange={(e) => setName(e.currentTarget.value)} />
           <Select label="Status" value={status} onChange={(v) => setStatus(v ?? 'active')}
             data={[{ value: 'active', label: 'active' }, { value: 'disabled', label: 'disabled' }]} />
+          <SignInChoice value={signIn} onChange={setSignIn} />
           <Textarea
             label="Redirect URIs" autosize minRows={2} value={redirects}
             description="One per line. Exact match — where the authorization code is delivered."
@@ -223,6 +245,7 @@ function AddDialog({ onSecret }: { onSecret: (s: string) => void }) {
   const [kind, setKind] = useState<string | null>('spa')
   const [redirects, setRedirects] = useState('')
   const [postLogout, setPostLogout] = useState('')
+  const [signIn, setSignIn] = useState<SignIn>('anyone')
   const [busy, setBusy] = useState(false)
 
   const lines = (v: string) => v.split('\n').map((x) => x.trim()).filter(Boolean)
@@ -235,6 +258,7 @@ function AddDialog({ onSecret }: { onSecret: (s: string) => void }) {
         slug: slug.trim(), name: name.trim(), kind,
         redirectUris: lines(redirects),
         postLogoutRedirectUris: lines(postLogout),
+        signIn,
       })
       notifyCreated('Application created', `${name.trim()} can now own permissions.`)
       await queryClient.invalidateQueries({ queryKey: ['applications'] })
@@ -263,6 +287,7 @@ function AddDialog({ onSecret }: { onSecret: (s: string) => void }) {
           <Textarea label="Post-logout redirect URIs" autosize minRows={2}
             description="A separate allowlist: where a login lands is not where a logout should."
             value={postLogout} onChange={(e) => setPostLogout(e.currentTarget.value)} />
+          <SignInChoice value={signIn} onChange={setSignIn} />
           <Button loading={busy} disabled={!slug.trim() || !name.trim()} onClick={() => void submit()}>
             Create
           </Button>
@@ -411,10 +436,16 @@ function Applications() {
         ),
     },
     {
-      key: 'manifest', header: 'Manifest', width: 110, align: 'right',
-      render: (a) => a.manifest_version > 0
-        ? <span className="chip">v{a.manifest_version}</span>
-        : <span className="t-xs">none yet</span>,
+      key: 'signin', header: 'Who may sign in', width: 170,
+      render: (a) => <span className="t-body">{a.sign_in === 'role_holders' ? 'People with a role in it' : 'Anyone'}</span>,
+    },
+    {
+      key: 'manifest', header: 'Features', width: 120, align: 'right',
+      render: (a) => (
+        <Link to="/permissions" search={{ app: a.slug }} className="t-xs" style={{ color: 'var(--accent)' }}>
+          See features{a.manifest_version > 0 && <span className="chip ml-1">v{a.manifest_version}</span>}
+        </Link>
+      ),
     },
     {
       key: 'actions', header: '', width: 210, align: 'right',
@@ -437,7 +468,8 @@ function Applications() {
 
   return (
     <Page
-      title="Applications"
+      section="apps"
+      title="Apps"
       description="The relying parties on this tenant — the things its people sign in to. Every permission is namespaced by the application that defines it, so a permission cannot exist until its application does. Anubis's own console and service are not listed: they are infrastructure, not somewhere anybody signs in."
       actions={<AddDialog onSecret={setSecret} />}
       wide

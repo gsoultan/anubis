@@ -25,6 +25,7 @@ func Queries() []storm.RawDecl {
 		// authz.go
 		Authorize, AuthorizeExplain, GetPermissionByKey, RolesForIdentity,
 		EffectivePermissionsForIdentity, AuthorizeStrictSim, SampleAuthorizeDecisions,
+		HoldsRoleInApp,
 		// role.go
 		ListRoles, GetRole, CreateRole, UpdateRole,
 		ListRoleParents, DeleteRoleParents, InsertRoleParent,
@@ -35,6 +36,13 @@ func Queries() []storm.RawDecl {
 		// grant.go
 		ListGrantsByIdentity, ListGrantScopes, CreateGrant, InsertGrantScope,
 		RevokeGrant, SearchGrants, CountLiveGrants,
+		// grant_change.go
+		ChangeCandidates, AxisFacts, NodeFamily, GrantStates, InsertGrantChange,
+		DeleteScopesOfGrants, InsertScopesFromJSON, UpdateGrantLives, InsertChangeItems,
+		ChangeItems, GetGrantChangeForUpdate, MarkGrantChangeUndone, ListGrantChanges,
+		// insight.go
+		SummarizeAccess, ListFullLists, PlaceReachCover, PlaceReachMightExpect,
+		PlaceReachGroupEntries,
 		// membership.go
 		ListMemberships, GetMembership, CreateMembership,
 		ListMembershipEntries, ListMembershipEntryScopes,

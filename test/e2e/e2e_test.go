@@ -730,3 +730,67 @@ func clientTokenAudience(t *testing.T, token string) string {
 	}
 	return c.Aud[0]
 }
+
+// An app closed to role holders (0057) issues no token to a person with no
+// role in it, through Login or a refresh, and does once they hold one.
+func TestAppClosedToRoleHolders(t *testing.T) {
+	requireServer(t)
+	ctx := context.Background()
+	opToken := platformLogin(t)
+	slug := uniqueSlug("e2e-closed")
+	if _, err := pageClient().CreateApplication(ctx, operatorBearer(connect.NewRequest(&anubisv1.CreateApplicationRequest{
+		Application: &anubisv1.Application{Slug: slug, Name: "closed probe", Kind: "spa",
+			RedirectUris: []string{"https://example.test/cb"}, SignIn: "role_holders"},
+	}), opToken)); err != nil {
+		t.Fatalf("create application: %v", err)
+	}
+	username, password := newPerson(t, "closed")
+	_, err := authClient().Login(ctx, connect.NewRequest(&anubisv1.LoginRequest{
+		Tenant: tenant, Username: username, Password: password, ClientId: slug,
+	}))
+	if connect.CodeOf(err) != connect.CodePermissionDenied {
+		t.Fatalf("no role in the app: login = %v, want permission denied", err)
+	}
+
+	aza := anubisv1connect.NewAuthzAdminServiceClient(http.DefaultClient, baseURL)
+	if _, err := aza.ApplyManifest(ctx, operatorBearer(connect.NewRequest(&anubisv1.ApplyManifestRequest{
+		ApplicationSlug: slug,
+		ManifestJson: `{"permissions":[{"resource":"page","action":"read","module":"Pages"}],
+		                "roles":[{"name":"reader","permissions":["page:read"]}]}`,
+	}), opToken)); err != nil {
+		t.Fatalf("apply manifest: %v", err)
+	}
+	roles, err := aza.ListRoles(ctx, operatorBearer(connect.NewRequest(&anubisv1.ListRolesRequest{Query: slug + ".reader"}), opToken))
+	if err != nil || len(roles.Msg.Roles) != 1 {
+		t.Fatalf("list roles: %v", err)
+	}
+	signedIn := signIn(t, &anubisv1.LoginRequest{Tenant: tenant, Username: username, Password: password})
+	me, err := anubisv1connect.NewSessionServiceClient(http.DefaultClient, baseURL).GetMe(ctx,
+		bearer(connect.NewRequest(&anubisv1.GetMeRequest{}), signedIn.GetTokens().GetAccessToken()))
+	if err != nil {
+		t.Fatalf("me: %v", err)
+	}
+	grant, err := aza.CreateGrant(ctx, operatorBearer(connect.NewRequest(&anubisv1.CreateGrantRequest{
+		IdentityId: me.Msg.IdentityId, RoleId: roles.Msg.Roles[0].Id, Reason: "e2e closed app",
+	}), opToken))
+	if err != nil {
+		t.Fatalf("create grant: %v", err)
+	}
+	in := signIn(t, &anubisv1.LoginRequest{Tenant: tenant, Username: username, Password: password, ClientId: slug})
+	if got := audienceOf(t, in.GetTokens().GetAccessToken()); !slices.Equal(got, []string{slug}) {
+		t.Fatalf("with a role: token for %v, want [%s]", got, slug)
+	}
+
+	// Taking the role away ends the way in at the next refresh.
+	if _, err := aza.RevokeGrant(ctx, operatorBearer(connect.NewRequest(&anubisv1.RevokeGrantRequest{
+		GrantId: grant.Msg.Grant.Id, Reason: "e2e",
+	}), opToken)); err != nil {
+		t.Fatalf("revoke: %v", err)
+	}
+	_, err = authClient().Refresh(ctx, connect.NewRequest(&anubisv1.RefreshRequest{
+		RefreshToken: in.GetTokens().GetRefreshToken(),
+	}))
+	if connect.CodeOf(err) != connect.CodePermissionDenied {
+		t.Fatalf("refresh after the role was revoked = %v, want permission denied", err)
+	}
+}

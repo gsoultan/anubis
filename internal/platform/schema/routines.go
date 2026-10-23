@@ -892,6 +892,46 @@ BEGIN
     RETURN NEW;
 END;
 `),
+		// A group of companies stays a tree. Without this, moving a parent
+		// under its own subsidiary makes a loop, and "every company below"
+		// never finishes. The advisory lock serialises every change to the
+		// tree: two moves that are each fine alone (A under B, B under A) are
+		// a loop together, and only one of them may see the other's result.
+		// Six levels is a listed group, its subsidiaries and theirs, with room
+		// to spare; deeper is a modelling mistake, not a company.
+		storm.Function("trg_tenant_tree_guard", "", "trigger").Body(`
+DECLARE
+    v_at    uuid := NEW.parent_id;
+    v_depth int  := 1;
+BEGIN
+    IF NEW.parent_id IS NULL THEN RETURN NEW; END IF;
+    PERFORM pg_advisory_xact_lock(hashtext('anubis.tenants.tree'));
+    WHILE v_at IS NOT NULL LOOP
+        IF v_at = NEW.id THEN
+            RAISE EXCEPTION 'a company cannot sit under itself or under a company it owns'
+                  USING ERRCODE = 'check_violation';
+        END IF;
+        v_depth := v_depth + 1;
+        IF v_depth > 6 THEN
+            RAISE EXCEPTION 'companies nest at most 6 levels deep'
+                  USING ERRCODE = 'check_violation';
+        END IF;
+        SELECT parent_id INTO v_at FROM tenants WHERE id = v_at;
+    END LOOP;
+    -- The subtree that moves with NEW keeps its own depth below it.
+    IF v_depth + COALESCE((
+         WITH RECURSIVE below(id, d) AS (
+             SELECT id, 1 FROM tenants WHERE parent_id = NEW.id
+             UNION ALL
+             SELECT t.id, b.d + 1 FROM tenants t JOIN below b ON t.parent_id = b.id
+              WHERE b.d < 7)
+         SELECT max(d) FROM below), 0) > 6 THEN
+        RAISE EXCEPTION 'companies nest at most 6 levels deep'
+              USING ERRCODE = 'check_violation';
+    END IF;
+    RETURN NEW;
+END;
+`),
 		storm.Function("trg_scope_node_type_guard", "", "trigger").Body(`
 DECLARE
     v_parent_type text;
@@ -1061,6 +1101,7 @@ END;
 		storm.Trigger("scope_node_types_rules", "scope_node_types", `CREATE CONSTRAINT TRIGGER scope_node_types_rules AFTER INSERT OR DELETE OR UPDATE ON scope_node_types DEFERRABLE INITIALLY IMMEDIATE FOR EACH ROW EXECUTE FUNCTION trg_scope_node_type_rules()`),
 		storm.Trigger("scope_nodes_type_guard", "scope_nodes", `CREATE CONSTRAINT TRIGGER scope_nodes_type_guard AFTER INSERT OR UPDATE OF parent_id, node_type ON scope_nodes DEFERRABLE INITIALLY IMMEDIATE FOR EACH ROW EXECUTE FUNCTION trg_scope_node_type_guard()`),
 		storm.Trigger("bump_sessions_revoked", "sessions", `CREATE TRIGGER bump_sessions_revoked AFTER UPDATE ON sessions REFERENCING OLD TABLE AS oldtab NEW TABLE AS newtab FOR EACH STATEMENT EXECUTE FUNCTION trg_bump_catalog_sessions_stmt()`),
+		storm.Trigger("tenants_tree_guard", "tenants", `CREATE TRIGGER tenants_tree_guard BEFORE INSERT OR UPDATE OF parent_id ON tenants FOR EACH ROW EXECUTE FUNCTION trg_tenant_tree_guard()`),
 		storm.Trigger("seed_auth_pages", "tenants", `CREATE TRIGGER seed_auth_pages AFTER INSERT ON tenants REFERENCING NEW TABLE AS newtab FOR EACH STATEMENT EXECUTE FUNCTION trg_seed_auth_pages()`),
 	}
 }

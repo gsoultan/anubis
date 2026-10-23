@@ -111,3 +111,118 @@ export function initials(name: string): string {
   if (parts.length >= 2) return `${parts[0]!.charAt(0)}${parts[1]!.charAt(0)}`.toUpperCase()
   return name.charAt(0).toUpperCase()
 }
+
+/* ---------------------------------------------------------------------------
+   Everything, or only these (0057's console half)
+
+   Every kind of place on a grant is one of two things, and the console says
+   which: ∞ Everything, where no list is kept and a place added tomorrow is
+   covered the moment it exists; or ☰ Only these, a list that never changes
+   on its own. They look the same on the day access is given. They stop
+   looking the same the day something new is added.
+   --------------------------------------------------------------------------- */
+
+export type AxisReach =
+  /** No list kept: every place of this kind, new ones included. */
+  | { kind: 'all' }
+  /** A list: these places (each with or without what is inside), less any exceptions. */
+  | { kind: 'list'; include: GrantScope[]; exclude: GrantScope[] }
+  /** A required kind the grant names nothing in: the grant never applies. */
+  | { kind: 'none' }
+
+/** What a grant reaches on one kind of place. `rootId` is the top of that
+    kind: a pick of the top "and everything inside" is Everything written the
+    only way a required kind allows. */
+export function axisReach(scopes: GrantScope[], axis: ScopeAxis, rootId?: string): AxisReach {
+  const mine = scopes.filter((s) => s.axis_code === axis.code)
+  if (mine.length === 0) return axis.default_effect === 'deny' ? { kind: 'none' } : { kind: 'all' }
+  const include = mine.filter((s) => !s.exclude)
+  const exclude = mine.filter((s) => s.exclude)
+  if (exclude.length === 0 && include.length === 1 && include[0]!.inherit && include[0]!.scope_node_id === rootId)
+    return { kind: 'all' }
+  return { kind: 'list', include, exclude }
+}
+
+/** A place as the nudge needs it: where it sits, and how many it holds. */
+export type PlaceFacts = { id: string; name: string; parent_id: string | null; child_count: number; is_axis_root: boolean }
+
+/** Parents every one of whose children is in a hand-picked list. A list like
+    that reads as "all of them" today and will miss the next one, so the sheet
+    offers the version that grows. Only parents with two or more children:
+    picking the one child of something is a choice, not an accident. */
+export function fullParents(picked: NodeSel[], facts: (id: string) => PlaceFacts | undefined): PlaceFacts[] {
+  const byParent = new Map<string, Set<string>>()
+  for (const p of picked) {
+    if (p.exclude) continue
+    const f = facts(p.id)
+    if (!f?.parent_id) continue
+    byParent.set(f.parent_id, (byParent.get(f.parent_id) ?? new Set()).add(p.id))
+  }
+  const out: PlaceFacts[] = []
+  for (const [parentId, kids] of byParent) {
+    const parent = facts(parentId)
+    if (parent && parent.child_count >= 2 && kids.size >= parent.child_count) out.push(parent)
+  }
+  return out
+}
+
+/** Replaces every pick under `parent` with the parent "and everything inside":
+    the list that grows. Exceptions under it are kept. */
+export function growInto(picked: NodeSel[], parent: PlaceFacts, facts: (id: string) => PlaceFacts | undefined): NodeSel[] {
+  const kept = picked.filter((p) => p.exclude || facts(p.id)?.parent_id !== parent.id)
+  return [...kept.filter((p) => p.id !== parent.id), { id: parent.id, name: parent.name, inherit: true, exclude: false }]
+}
+
+/** One kind of place, read back in words. `noun` is the plural of the kind,
+    lower case: "workplaces". */
+export function reachWords(r: AxisReach, noun: string, name: (id: string) => string): string {
+  if (r.kind === 'all') return `every one of the ${noun}, including new ones`
+  if (r.kind === 'none') return `no ${noun} (so this access never applies)`
+  const names = r.include.map((s) => name(s.scope_node_id) + (s.inherit ? ' and everything inside' : ''))
+  const list = names.length <= 2 ? names.join(' or ') : `${names.slice(0, -1).join(', ')} or ${names[names.length - 1]}`
+  const except = r.exclude.length > 0 ? `, except ${r.exclude.map((s) => name(s.scope_node_id)).join(' and ')}` : ''
+  return `exactly ${r.include.length === 1 ? 'this one' : `these ${r.include.length}`}: ${list}${except}`
+}
+
+/** The role, of those given, whose permissions are exactly these — so
+    picking features reuses a role rather than minting a twin. */
+export function roleWithExactly<T extends { id: string }>(keys: string[], roles: T[], permsOf: (r: T) => string[] | undefined): T | undefined {
+  const want = [...new Set(keys)].sort().join('\n')
+  return roles.find((r) => {
+    const have = permsOf(r)
+    return have !== undefined && [...new Set(have)].sort().join('\n') === want
+  })
+}
+
+/** One feature of an app: a resource, and the actions on it. */
+export type Feature<P> = { resource: string; actions: P[] }
+/** A part of an app, as its manifest files it, with its features. */
+export type Module<P> = { module: string; features: Feature<P>[] }
+
+/** Permissions as people pick them: module, then feature, then action.
+    Permissions the manifest files under no module come last, as "Other". */
+export function groupFeatures<P extends { module: string; resource: string; action: string }>(perms: P[]): Module<P>[] {
+  const mods = new Map<string, Map<string, P[]>>()
+  for (const p of perms) {
+    const m = mods.get(p.module) ?? new Map<string, P[]>()
+    m.set(p.resource, [...(m.get(p.resource) ?? []), p])
+    mods.set(p.module, m)
+  }
+  return [...mods]
+    .sort(([a], [b]) => (a === '' ? 1 : b === '' ? -1 : a.localeCompare(b)))
+    .map(([module, res]) => ({
+      module,
+      features: [...res].sort(([a], [b]) => a.localeCompare(b))
+        .map(([resource, actions]) => ({ resource, actions: [...actions].sort((x, y) => x.action.localeCompare(y.action)) })),
+    }))
+}
+
+/** A name for a role made from picked features, short enough for a list:
+    "Invoices: invoice (read), customer (read, edit)". */
+export function featureRoleName<P extends { resource: string; action: string }>(app: string, picked: P[]): string {
+  const by = new Map<string, string[]>()
+  for (const p of picked) by.set(p.resource, [...(by.get(p.resource) ?? []), p.action])
+  const parts = [...by].sort(([a], [b]) => a.localeCompare(b)).map(([r, a]) => `${r} (${a.sort().join(', ')})`)
+  const name = `${app}: ${parts.join(', ')}`
+  return name.length <= 100 ? name : `${name.slice(0, 97)}…`
+}

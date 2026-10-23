@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import {
   ActionIcon, Button, Menu, Popover, Select, TextInput, Tooltip, UnstyledButton,
@@ -6,7 +6,7 @@ import {
 import {
   IconSearch, IconInfoCircle, IconDots, IconUserPlus, IconCirclePlus,
   IconUserOff, IconUserCheck, IconCopy, IconKey, IconLock, IconUser, IconX,
-  IconTableImport, IconTestPipe,
+  IconTableImport, IconTestPipe, IconStack2,
 } from '@tabler/icons-react'
 import { notifications } from '@mantine/notifications'
 import { queryClient } from '@/lib/query/client'
@@ -25,15 +25,9 @@ import { realmKindColor } from '@/lib/realmKind'
 import { fmtDate, relDays } from '@/lib/access'
 import { qk } from '@/lib/query/keys'
 import { usePeopleList, useSession } from '@/stores/session'
-import type { Ial, Identity, IdentityStatus } from '@/lib/api/types'
+import type { AccessSummary, Identity, IdentityStatus } from '@/lib/api/types'
 
 export const Route = createFileRoute('/identities')({ component: Identities })
-
-const IAL_HINT: Record<Ial, string> = {
-  1: 'IAL1 · Self-asserted — email only, a self-registered applicant.',
-  2: 'IAL2 · Remotely verified, typically through a contract or employer.',
-  3: 'IAL3 · In-person verified with government ID on file.',
-}
 
 /* Active is what 99 rows in 100 are, so active is the quiet one. The pill is
    spent on the exception, which is the only row anyone is scanning for. */
@@ -50,6 +44,30 @@ function Status({ status }: { status: IdentityStatus }) {
     <Tooltip label="None of their access applies while the account is not active.">
       <span className="v-pill v-pill-deny" style={{ cursor: 'help' }}>{status}</span>
     </Tooltip>
+  )
+}
+
+/* "Invoice approver, Report viewer +1 · Finance team" — roles first, because
+   a role says what; a group says why. An end date inside a month is the one
+   date worth showing on the list. */
+function CanDo({ s, loading }: { s: AccessSummary | undefined; loading: boolean }) {
+  if (!s) {
+    return <span className="t-xs" style={{ opacity: loading ? 0.4 : 0.7 }}>{loading ? '…' : 'Nothing yet'}</span>
+  }
+  const shown = s.roles.slice(0, 2)
+  const more = s.roles.length - shown.length
+  const soon = s.next_end && new Date(s.next_end).getTime() - Date.now() < 30 * 86400_000
+  return (
+    <span className="flex min-w-0 items-center gap-1.5">
+      <span className="t-body truncate" style={{ color: 'var(--ink-2)' }}>
+        {shown.join(', ')}
+        {more > 0 && <span className="t-xs"> +{more}</span>}
+        {s.group_names.length > 0 && (
+          <span className="t-xs"> · {s.group_names[0]}{s.group_names.length > 1 ? ` +${s.group_names.length - 1}` : ''}</span>
+        )}
+      </span>
+      {soon && <span className="chip" style={{ flexShrink: 0 }}>ends {relDays(s.next_end!)}</span>}
+    </span>
   )
 }
 
@@ -129,6 +147,13 @@ function Identities() {
     placeholderData: (prev) => prev,
   })
   const rows = page?.rows
+  const ids = (rows ?? []).map((r) => r.id)
+  const { data: summaries } = useQuery({
+    queryKey: ['identities', 'can-do', ids],
+    queryFn: async () => new Map((await api.summarizeAccess(ids)).map((x) => [x.identity_id, x])),
+    enabled: ids.length > 0,
+    placeholderData: (prev) => prev,
+  })
   const { data: categories } = useQuery({
     queryKey: qk.realmCategories(), queryFn: () => api.realmCategories(),
   })
@@ -202,13 +227,11 @@ function Identities() {
         )
       } },
     { key: 'status', header: 'Status', width: 120, render: (i) => <Status status={i.status} /> },
-    /* Neutral: an assurance level is a fact about how someone was verified,
-       not a verdict. Painting IAL1 amber put a warning on every applicant. */
-    { key: 'ial', header: 'Assurance', width: 100, render: (i) => (
-        <Tooltip label={IAL_HINT[i.assurance_level]}>
-          <span className="chip" style={{ cursor: 'help' }}>IAL{i.assurance_level}</span>
-        </Tooltip>
-      ) },
+    /* What they can do, in a line: the question every visit to this list is
+       really asking. One call for the page, never one per row. */
+    { key: 'can', header: 'Can do', width: 300,
+      headerHint: 'Roles given directly, then groups. Open the person for where each one applies.',
+      render: (i) => <CanDo s={summaries?.get(i.id)} loading={summaries === undefined} /> },
     { key: 'seen', header: 'Last sign-in', width: 140,
       headerHint: 'An account nobody has ever used is the one worth asking about.',
       render: (i) =>
@@ -219,14 +242,6 @@ function Identities() {
             </Tooltip>
           )
           : <span className="t-xs">Never</span> },
-    /* A dash, explained once in the header, rather than "no statutory limit"
-       spelled out on nearly every employee's row. */
-    { key: 'retention', header: 'Retention', width: 120,
-      headerHint: 'When the population sets a statutory retention limit, the deadline shows here. A dash means no limit.',
-      render: (i) =>
-        i.retention_until
-          ? <span className="t-body tnum">{fmtDate(i.retention_until)}</span>
-          : <span className="t-xs" style={{ opacity: 0.55 }}>—</span> },
     { key: 'actions', header: '', width: 84, render: (i) => (
         /* The row navigates, so the controls keep their clicks to themselves
            or every pick would also leave the page behind it. */
@@ -354,17 +369,27 @@ function Identities() {
   return (
     <Page
       title="People"
-      description={
+      description="Everyone who can sign in. Open a person to see and change what they can do."
+      help={
         <>
-          Everyone who can sign in — employees, supplier contacts, applicants. Open a person to see
-          what they can do, and to give or take away access.
-          <br />
+          <p>
+            Employees, supplier contacts and applicants all live here, one row per population.
+            Access is given on a person&apos;s page: pick what they can do, then where.
+          </p>
+          <p>
+            To change the same thing for many people at once, use{' '}
+            <Link to="/bulk">Change access in bulk</Link>. It is saved as one change you can undo.
+          </p>
           <SameNameNote />
         </>
       }
       wide
       actions={
         <>
+          <Button size="xs" variant="default" leftSection={<IconStack2 size={14} />}
+            onClick={() => void navigate({ to: '/bulk' })}>
+            Change in bulk
+          </Button>
           <Button size="xs" variant="default" leftSection={<IconTableImport size={14} />}
             onClick={() => void navigate({ to: '/import' })}>
             Import

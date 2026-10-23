@@ -1,10 +1,11 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
-import { Button, Menu, ActionIcon, TextInput, Tooltip } from '@mantine/core'
+import { Button, Menu, ActionIcon, Modal, Select, TextInput, Tooltip } from '@mantine/core'
 import {
   IconBuildingBank, IconDots, IconBrush, IconPlayerPause, IconPlayerPlay,
-  IconArrowRight, IconPlus,
+  IconArrowRight, IconArrowsMove, IconPlus,
 } from '@tabler/icons-react'
+import { descendants, treeOrder } from '@/lib/tree'
 import { useState } from 'react'
 import { Page } from '@/components/shell/Page'
 import { api } from '@/lib/api/client'
@@ -16,7 +17,7 @@ import type { Tenant } from '@/lib/api/types'
 
 export const Route = createFileRoute('/tenants')({ component: Tenants })
 
-function TenantCard({ t }: { t: Tenant }) {
+function TenantCard({ t, onAddInside, onMove }: { t: Tenant; onAddInside: () => void; onMove: () => void }) {
   const { setCurrentTenant } = useSession()
   const navigate = useNavigate()
   const { data: stats } = useQuery({
@@ -55,6 +56,13 @@ function TenantCard({ t }: { t: Tenant }) {
               </ActionIcon>
             </Menu.Target>
             <Menu.Dropdown>
+              <Menu.Item leftSection={<IconPlus size={14} />} onClick={onAddInside}>
+                Add a company inside
+              </Menu.Item>
+              <Menu.Item leftSection={<IconArrowsMove size={14} />} onClick={onMove}>
+                Move under another company
+              </Menu.Item>
+              <Menu.Divider />
               <Menu.Item leftSection={<IconBrush size={14} />}
                 onClick={() => void navigate({ to: '/signin-page', search: { tenant: t.id } })}>
                 Design sign-in page
@@ -101,9 +109,49 @@ function slugify(nameInput: string): string {
   return nameInput.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 63)
 }
 
+/* Moving a company: under any company that is not itself or inside it, or
+   to the top. Who runs the new parent runs it from then on; access given
+   inside the company does not change. */
+function MoveTenant({ t, tenants, onClose }: { t: Tenant; tenants: Tenant[]; onClose: () => void }) {
+  const below = descendants(tenants, (x) => x.id, (x) => x.parent_id ?? '', t.id)
+  const [to, setTo] = useState<string>(t.parent_id ?? '')
+  const [busy, setBusy] = useState(false)
+  const options = [{ value: '', label: 'Nothing: a company of its own at the top' },
+    ...treeOrder(tenants.filter((x) => x.id !== t.id && !below.has(x.id)), (x) => x.id, (x) => x.parent_id ?? '', (x) => x.name)
+      .map(({ item, depth }) => ({ value: item.id, label: `${'  '.repeat(depth)}${depth ? '└ ' : ''}${item.name}` }))]
+  const move = async () => {
+    setBusy(true)
+    try {
+      await api.moveTenant(t.id, to)
+      notifyCreated('Moved', to ? `${t.name} now sits under ${tenants.find((x) => x.id === to)?.name}.` : `${t.name} is now at the top.`)
+      await queryClient.invalidateQueries({ queryKey: qk.tenants() })
+      await queryClient.invalidateQueries({ queryKey: ['my-tenants'] })
+      onClose()
+    } catch (e) { notifyRejected(e) }
+    setBusy(false)
+  }
+  return (
+    <Modal opened onClose={onClose} title={`Move ${t.name}`} centered>
+      <div className="flex flex-col gap-3">
+        <Select label="Under" data={options} value={to} onChange={(v) => setTo(v ?? '')} searchable allowDeselect={false} />
+        <div className="t-xs">
+          Whoever runs the company above will run {t.name} too. People, places and access inside {t.name} stay as they are,
+          and nobody gets access across companies by this.
+        </div>
+        <div className="flex justify-end gap-2">
+          <Button variant="default" size="xs" onClick={onClose}>Cancel</Button>
+          <Button size="xs" loading={busy} disabled={to === (t.parent_id ?? '')} onClick={() => void move()}>Move</Button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
 function Tenants() {
   const { data: tenants } = useQuery({ queryKey: qk.tenants(), queryFn: api.tenants })
   const [name, setName] = useState('')
+  const [inside, setInside] = useState<Tenant | null>(null)
+  const [moving, setMoving] = useState<Tenant | null>(null)
   const [busy, setBusy] = useState(false)
   const slug = slugify(name)
   const ready = name.trim().length >= 2 && slug.length >= 2
@@ -112,23 +160,30 @@ function Tenants() {
     if (name.trim().length < 2) return
     setBusy(true)
     try {
-      const t = await api.createTenant({ name: name.trim() })
-      notifyCreated('Tenant created',
-        `${t.name} is live and empty — design its sign-in page, then add its first admin.`)
+      const t = await api.createTenant({ name: name.trim(), ...(inside ? { parentId: inside.id } : {}) })
+      notifyCreated('Company created', inside
+        ? `${t.name} sits under ${inside.name}. Whoever runs ${inside.name} runs it too.`
+        : `${t.name} is live and empty. Design its sign-in page, then add its first admin.`)
       await queryClient.invalidateQueries({ queryKey: qk.tenants() })
-      setName('')
+      setName(''); setInside(null)
     } catch (e) { notifyRejected(e) }
     setBusy(false)
   }
 
   return (
     <Page
-      title="Tenants"
-      description="Every organisation on this Anubis. Each is a sealed universe — people, structures and access in one tenant can never reference another; the schema makes it impossible, not just impolite."
+      title="Organisations"
+      description="Every company on this Anubis, with the companies each one owns. Whoever runs a company runs the ones inside it; people, places and access never cross from one company to another."
       actions={
         <>
           <div className="flex flex-col">
-            <TextInput w={240} placeholder="New tenant name…" value={name}
+            {inside && (
+              <span className="t-xs mb-1 flex items-center gap-1.5">
+                Inside <b>{inside.name}</b>
+                <button type="button" className="t-xs" style={{ color: 'var(--accent)' }} onClick={() => setInside(null)}>at the top instead</button>
+              </span>
+            )}
+            <TextInput w={240} placeholder={inside ? `New company in ${inside.name}…` : 'New company name…'} value={name}
               onChange={(e) => setName(e.currentTarget.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') void add() }} />
             {/* The slug is derived once and never editable: it appears in
@@ -144,16 +199,23 @@ function Tenants() {
             <div>
               <Button size="xs" leftSection={<IconPlus size={13} />} loading={busy}
                 disabled={!ready} onClick={() => void add()}>
-                Create tenant
+                {inside ? 'Create inside' : 'Create company'}
               </Button>
             </div>
           </Tooltip>
         </>
       }
     >
-      <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))' }}>
-        {tenants?.map((t) => <TenantCard key={t.id} t={t} />)}
+      {/* As a tree: a company directly under the one that owns it. A grid of
+          equal cards made a subsidiary look like a stranger. */}
+      <div className="flex max-w-[860px] flex-col gap-3">
+        {treeOrder(tenants ?? [], (t) => t.id, (t) => t.parent_id ?? '', (t) => t.name).map(({ item: t, depth }) => (
+          <div key={t.id} style={{ marginLeft: Math.min(depth, 4) * 20, borderLeft: depth ? '2px solid var(--line-soft)' : undefined, paddingLeft: depth ? 12 : 0 }}>
+            <TenantCard t={t} onAddInside={() => setInside(t)} onMove={() => setMoving(t)} />
+          </div>
+        ))}
       </div>
+      {moving && <MoveTenant t={moving} tenants={tenants ?? []} onClose={() => setMoving(null)} />}
     </Page>
   )
 }

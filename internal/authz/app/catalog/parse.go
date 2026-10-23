@@ -95,7 +95,7 @@ func parseCSV(text string) (*Document, error) {
 	default:
 		return nil, apperr.ErrInvalidArgument.
 			With("csv", "header names neither a permission nor a role sheet").
-			With("permissions", "resource, action, description, risk, min_assurance, requires_amr, max_auth_age").
+			With("permissions", "resource, action, description, risk, min_assurance, requires_amr, max_auth_age, module").
 			With("roles", "role, description, permissions, patterns, allowed_realm_kinds")
 	}
 }
@@ -125,6 +125,7 @@ func csvPermissions(r *csv.Reader, idx headerIndex) (*Document, error) {
 			Risk:        idx.get(rec, "risk"),
 			RequiresAMR: multi(idx.get(rec, "requires_amr")),
 			MaxAuthAge:  idx.get(rec, "max_auth_age"),
+			Module:      idx.get(rec, "module"),
 		}
 		// A blank risk column on a spreadsheet means the author did not have
 		// an opinion, and the table's own default is the one to inherit.

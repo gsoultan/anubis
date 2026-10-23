@@ -5,6 +5,12 @@ import "github.com/gsoultan/storm"
 var UpdateTenant = storm.SQLExec(`
 UPDATE tenants SET name = $2, updated_at = now() WHERE id = $1`)
 
+// MoveTenant changes which company owns this one. $2 ” moves it to the top.
+// tenants_tree_guard (0057) refuses loops and groups deeper than six.
+var MoveTenant = storm.SQLExec(`
+UPDATE tenants SET parent_id = nullif($2::text, '')::uuid, updated_at = now()
+ WHERE id::text = $1::text`)
+
 // SetTenantStatus suspends or retires a tenant. There is no DELETE: every
 // grant, identity, scope node and audit record in the installation hangs off
 // this row, and dropping it would take the evidence with it. 'archived' is

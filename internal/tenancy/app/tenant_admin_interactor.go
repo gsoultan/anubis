@@ -98,7 +98,7 @@ func (u *tenantAdminInteractor) ListTenants(ctx context.Context) ([]tenancydomai
 // through their operator role.
 const permManageTenants = "anubis:platform:tenants"
 
-func (u *tenantAdminInteractor) CreateTenant(ctx context.Context, slug, name string) (*tenancydomain.TenantRef, error) {
+func (u *tenantAdminInteractor) CreateTenant(ctx context.Context, slug, name, parentID string) (*tenancydomain.TenantRef, error) {
 	p, err := u.guard.Require(ctx, permManageTenants)
 	if err != nil {
 		return nil, err
@@ -106,12 +106,35 @@ func (u *tenantAdminInteractor) CreateTenant(ctx context.Context, slug, name str
 	if !validate.ValidSlug(slug) {
 		return nil, apperr.ErrInvalidArgument.With("slug", slug)
 	}
-	t, err := u.tenants.CreateTenant(ctx, slug, name)
+	t, err := u.tenants.CreateTenant(ctx, slug, name, strings.TrimSpace(parentID))
 	if err != nil {
 		return nil, err
 	}
-	u.emit(ctx, p, "tenant.create", t.ID, map[string]string{"slug": slug})
+	detail := map[string]string{"slug": slug}
+	if t.ParentID != "" {
+		detail["parent_id"] = t.ParentID
+	}
+	u.emit(ctx, p, "tenant.create", t.ID, detail)
 	return t, nil
+}
+
+// MoveTenant changes which company owns this one. Only an installation
+// owner may: moving a company moves who runs it, which is the kind of
+// change the lifecycle permission exists for.
+func (u *tenantAdminInteractor) MoveTenant(ctx context.Context, id, parentID string) error {
+	p, err := u.guard.Require(ctx, permManageTenants)
+	if err != nil {
+		return err
+	}
+	parentID = strings.TrimSpace(parentID)
+	if parentID == id {
+		return apperr.ErrInvalidArgument.With("parent_id", "a company cannot sit under itself")
+	}
+	if err := u.tenants.MoveTenant(ctx, id, parentID); err != nil {
+		return err
+	}
+	u.emit(ctx, p, "tenant.move", id, map[string]string{"parent_id": parentID})
+	return nil
 }
 
 func (u *tenantAdminInteractor) UpdateTenant(ctx context.Context, id, name string) error {
@@ -295,6 +318,16 @@ func (u *tenantAdminInteractor) ListApplications(ctx context.Context, query, cur
 	return apps, total, nil
 }
 
+// checkSignIn accepts who may sign in to an app. Empty keeps what is there
+// (or, on create, the default: anyone).
+func checkSignIn(v string) error {
+	switch v {
+	case "", "anyone", "role_holders":
+		return nil
+	}
+	return apperr.ErrInvalidArgument.With("sign_in", "anyone or role_holders")
+}
+
 // CreateApplication returns the client secret exactly once for confidential
 // kinds; only its hash persists.
 func (u *tenantAdminInteractor) CreateApplication(ctx context.Context, a tenancydomain.ApplicationRecord) (*tenancydomain.ApplicationRecord, string, error) {
@@ -304,6 +337,9 @@ func (u *tenantAdminInteractor) CreateApplication(ctx context.Context, a tenancy
 	}
 	if !validate.ValidSlug(a.Slug) {
 		return nil, "", apperr.ErrInvalidArgument.With("slug", a.Slug)
+	}
+	if err := checkSignIn(a.SignIn); err != nil {
+		return nil, "", err
 	}
 	clientSecret := ""
 	if a.Kind == "server" || a.Kind == "service" {
@@ -342,10 +378,17 @@ func (u *tenantAdminInteractor) UpdateApplication(ctx context.Context, a tenancy
 	if err := checkAppIdentity(a, *current); err != nil {
 		return nil, err
 	}
+	if err := checkSignIn(a.SignIn); err != nil {
+		return nil, err
+	}
 	if err := u.apps.UpdateApplication(ctx, p.TenantID, a); err != nil {
 		return nil, err
 	}
-	u.emit(ctx, p, "application.update", a.ID, map[string]string{"slug": a.Slug})
+	detail := map[string]string{"slug": a.Slug}
+	if a.SignIn != "" && a.SignIn != current.SignIn {
+		detail["sign_in"] = a.SignIn
+	}
+	u.emit(ctx, p, "application.update", a.ID, detail)
 	return u.apps.ApplicationByID(ctx, p.TenantID, a.ID)
 }
 

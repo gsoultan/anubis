@@ -389,6 +389,129 @@ func (p CatalogVersionWithTenantQuery) All(ctx context.Context, ex runtime.Execu
 	return out, nil
 }
 
+// TenantWithParentRow is tenants with its Parent loaded.
+type TenantWithParentRow struct {
+	tenant.Row
+	// A pointer because the link is optional. nil means the row has no
+	// Parent, which is different from having one that failed to load.
+	Parent *tenant.Row
+}
+
+type TenantWithParentQuery struct {
+	q tenant.Query
+}
+
+// TenantWithParent starts the plan.
+func TenantWithParent() TenantWithParentQuery { return TenantWithParentQuery{q: tenant.New()} }
+
+func (p TenantWithParentQuery) Where(ps ...tenant.Pred) TenantWithParentQuery {
+	p.q = p.q.Where(ps...)
+	return p
+}
+
+func (p TenantWithParentQuery) WhereIf(cond bool, pr tenant.Pred) TenantWithParentQuery {
+	p.q = p.q.WhereIf(cond, pr)
+	return p
+}
+
+func (p TenantWithParentQuery) Any(ps ...tenant.Pred) TenantWithParentQuery {
+	p.q = p.q.Any(ps...)
+	return p
+}
+
+func (p TenantWithParentQuery) Not(pr tenant.Pred) TenantWithParentQuery {
+	p.q = p.q.Not(pr)
+	return p
+}
+
+func (p TenantWithParentQuery) NotAny(ps ...tenant.Pred) TenantWithParentQuery {
+	p.q = p.q.NotAny(ps...)
+	return p
+}
+
+func (p TenantWithParentQuery) Order(ts ...tenant.Sort) TenantWithParentQuery {
+	p.q = p.q.Order(ts...)
+	return p
+}
+
+func (p TenantWithParentQuery) Limit(n int64) TenantWithParentQuery {
+	p.q = p.q.Limit(n)
+	return p
+}
+
+func (p TenantWithParentQuery) Offset(n int64) TenantWithParentQuery {
+	p.q = p.q.Offset(n)
+	return p
+}
+
+// After pages the PARENTS past one already seen — keyset pagination over
+// the plan. It takes the plan's row type, so the cursor is a row you
+// actually received rather than one you had to unwrap.
+func (p TenantWithParentQuery) After(r TenantWithParentRow) TenantWithParentQuery {
+	p.q = p.q.After(r.Row)
+	return p
+}
+
+// Err reports a parent query that outgrew its buffers or was given a
+// mixed ordering to page. Terminals return it too; this is for checking
+// a composed plan before running it.
+func (p TenantWithParentQuery) Err() error { return p.q.Err() }
+
+// All runs the plan in exactly TWO round trips. Distinct parent keys are
+// de-duplicated before the second, so a thousand rows pointing at three
+// orgs fetch three orgs.
+func (p TenantWithParentQuery) All(ctx context.Context, ex runtime.Executor) ([]TenantWithParentRow, error) {
+	parents, err := p.q.All(ctx, ex, nil)
+	if err != nil {
+		return nil, err
+	}
+	if len(parents) == 0 {
+		return nil, nil
+	}
+	out := make([]TenantWithParentRow, len(parents))
+	seen := make(map[[16]byte]bool, len(parents))
+	ids := make([][16]byte, 0, len(parents))
+	for i, r := range parents {
+		out[i] = TenantWithParentRow{Row: r}
+		key, ok := r.ParentID.Get()
+		if !ok {
+			continue
+		}
+		if !seen[key] {
+			seen[key] = true
+			ids = append(ids, key)
+		}
+	}
+	if len(ids) == 0 {
+		return out, nil
+	}
+	targets, err := tenant.New().Unordered().
+		Where(tenant.ID.In(ids...)).
+		Limit(int64(len(ids))).
+		All(ctx, ex, nil)
+	if err != nil {
+		return nil, err
+	}
+	by := make(map[[16]byte]int, len(targets))
+	for i := range targets {
+		by[targets[i].ID] = i
+	}
+	for i := range out {
+		key, ok := out[i].Row.ParentID.Get()
+		if !ok {
+			continue
+		}
+		j, ok := by[key]
+		if !ok {
+			// A foreign key pointing at a row that is not there. The database
+			// forbids it, so reaching this means the constraint was dropped.
+			return nil, fmt.Errorf("storm: %s references a missing %s row", "tenants", "tenants")
+		}
+		out[i].Parent = &targets[j]
+	}
+	return out, nil
+}
+
 // Raw-query scanners, registered by row type. The statements were
 // PREPAREd against the model at generate time; these decode their
 // results with no reflect and no `any`, exactly like a table scanner.
@@ -418,9 +541,11 @@ DELETE FROM route_policies WHERE application_id = $1`)
 INSERT INTO applications (tenant_id, slug, name, kind, redirect_uris,
                           post_logout_redirect_uris, backchannel_logout_uri,
                           token_format, client_secret_hash,
-                          access_token_ttl, refresh_token_ttl, allowed_audiences)
+                          access_token_ttl, refresh_token_ttl, allowed_audiences,
+                          sign_in)
 VALUES ($1, $2, $3, $4, $5::text[], $6::text[], nullif($7, ''), $8,
-        nullif($9, ''), $10::text::interval, $11::text::interval, $12::text[])
+        nullif($9, ''), $10::text::interval, $11::text::interval, $12::text[],
+        coalesce(nullif($13::text, ''), 'anyone'))
 RETURNING id::text AS id, manifest_version`)
 	storm.RegisterStatement(`
 INSERT INTO signin_pages (tenant_id, config, updated_at)
@@ -434,7 +559,7 @@ SELECT
        token_format, client_secret_hash, manifest_version,
        access_token_ttl::text AS access_token_ttl,
        refresh_token_ttl::text AS refresh_token_ttl,
-       allowed_audiences
+       allowed_audiences, sign_in
 FROM applications
 WHERE id = $1 AND tenant_id = $2`)
 	storm.RegisterStatement(`
@@ -444,7 +569,7 @@ SELECT
        token_format, client_secret_hash, manifest_version,
        access_token_ttl::text AS access_token_ttl,
        refresh_token_ttl::text AS refresh_token_ttl,
-       allowed_audiences
+       allowed_audiences, sign_in
 FROM applications
 WHERE tenant_id = $1
   AND ($2::text = '' OR slug ILIKE '%' || $2::text || '%' OR name ILIKE '%' || $2::text || '%')
@@ -458,7 +583,7 @@ SELECT
        token_format, client_secret_hash, manifest_version,
        access_token_ttl::text AS access_token_ttl,
        refresh_token_ttl::text AS refresh_token_ttl,
-       allowed_audiences
+       allowed_audiences, sign_in
 FROM applications
 WHERE tenant_id = $1
 ORDER BY slug`)
@@ -469,7 +594,7 @@ SELECT
        token_format, client_secret_hash, manifest_version,
        access_token_ttl::text AS access_token_ttl,
        refresh_token_ttl::text AS refresh_token_ttl,
-       allowed_audiences,
+       allowed_audiences, sign_in,
        extract(epoch FROM access_token_ttl)::bigint  AS access_token_ttl_secs,
        extract(epoch FROM refresh_token_ttl)::bigint AS refresh_token_ttl_secs
 FROM applications
@@ -544,6 +669,9 @@ SET name = $3, status = $4, redirect_uris = $5::text[],
     access_token_ttl = $9::text::interval,
     refresh_token_ttl = $10::text::interval,
     allowed_audiences = $11::text[],
+    -- '' keeps what is there: a client that predates sign_in must not
+    -- quietly open an app somebody closed to role holders.
+    sign_in = coalesce(nullif($12::text, ''), sign_in),
     updated_at = now()
 WHERE id = $1 AND tenant_id = $2`)
 	storm.RegisterStatement(`
@@ -566,6 +694,9 @@ UPDATE auth_pages SET is_default = true, status = 'active', updated_at = now()
 WHERE id = $1 AND tenant_id = $2`)
 	storm.RegisterStatement(`
 UPDATE tenants SET name = $2, updated_at = now() WHERE id = $1`)
+	storm.RegisterStatement(`
+UPDATE tenants SET parent_id = nullif($2::text, '')::uuid, updated_at = now()
+ WHERE id::text = $1::text`)
 	storm.RegisterStatement(`
 UPDATE tenants SET status = $2, updated_at = now() WHERE id = $1`)
 }
@@ -596,8 +727,9 @@ func scanApplicationWithSecsRow(rv [][]byte, r *tenancyrquery.ApplicationWithSec
 	if decErr != nil {
 		return decErr
 	}
-	r.AccessTokenTtlSecs = runtime.Int8(rv[15])
-	r.RefreshTokenTtlSecs = runtime.Int8(rv[16])
+	r.SignIn = sl.Str(rv[15])
+	r.AccessTokenTtlSecs = runtime.Int8(rv[16])
+	r.RefreshTokenTtlSecs = runtime.Int8(rv[17])
 	return nil
 }
 
@@ -627,6 +759,7 @@ func scanApplicationRow(rv [][]byte, r *tenancyrquery.ApplicationRow, sl *runtim
 	if decErr != nil {
 		return decErr
 	}
+	r.SignIn = sl.Str(rv[15])
 	return nil
 }
 

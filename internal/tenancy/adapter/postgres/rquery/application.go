@@ -27,6 +27,7 @@ type ApplicationRow struct {
 	AccessTokenTtl         string
 	RefreshTokenTtl        string
 	AllowedAudiences       []string
+	SignIn                 string
 }
 
 const appCols = `
@@ -35,7 +36,7 @@ const appCols = `
        token_format, client_secret_hash, manifest_version,
        access_token_ttl::text AS access_token_ttl,
        refresh_token_ttl::text AS refresh_token_ttl,
-       allowed_audiences`
+       allowed_audiences, sign_in`
 
 // ApplicationWithSecsRow is an application plus its TTLs in seconds.
 //
@@ -58,6 +59,7 @@ type ApplicationWithSecsRow struct {
 	AccessTokenTtl         string
 	RefreshTokenTtl        string
 	AllowedAudiences       []string
+	SignIn                 string
 	AccessTokenTtlSecs     int64
 	RefreshTokenTtlSecs    int64
 }
@@ -114,9 +116,11 @@ var CreateApplication = storm.SQL[CreatedApplicationRow](`
 INSERT INTO applications (tenant_id, slug, name, kind, redirect_uris,
                           post_logout_redirect_uris, backchannel_logout_uri,
                           token_format, client_secret_hash,
-                          access_token_ttl, refresh_token_ttl, allowed_audiences)
+                          access_token_ttl, refresh_token_ttl, allowed_audiences,
+                          sign_in)
 VALUES ($1, $2, $3, $4, $5::text[], $6::text[], nullif($7, ''), $8,
-        nullif($9, ''), $10::text::interval, $11::text::interval, $12::text[])
+        nullif($9, ''), $10::text::interval, $11::text::interval, $12::text[],
+        coalesce(nullif($13::text, ''), 'anyone'))
 RETURNING id::text AS id, manifest_version`)
 
 var UpdateApplication = storm.SQLExec(`
@@ -127,6 +131,9 @@ SET name = $3, status = $4, redirect_uris = $5::text[],
     access_token_ttl = $9::text::interval,
     refresh_token_ttl = $10::text::interval,
     allowed_audiences = $11::text[],
+    -- '' keeps what is there: a client that predates sign_in must not
+    -- quietly open an app somebody closed to role holders.
+    sign_in = coalesce(nullif($12::text, ''), sign_in),
     updated_at = now()
 WHERE id = $1 AND tenant_id = $2`)
 

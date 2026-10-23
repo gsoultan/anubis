@@ -1,20 +1,21 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Chip, Radio, SegmentedControl, Select, Textarea, UnstyledButton } from '@mantine/core'
+import { Chip, Radio, SegmentedControl, Select, TextInput, Textarea, UnstyledButton } from '@mantine/core'
 import { DateInput } from '@mantine/dates'
 import {
-  IconCheck, IconChevronRight, IconInfoCircle, IconMapPin, IconShield, IconUser,
-  IconUsersGroup, IconWorld,
+  IconCheck, IconChevronRight, IconInfinity, IconInfoCircle, IconList, IconListCheck, IconShield,
+  IconUser, IconUsersGroup,
 } from '@tabler/icons-react'
 import { api } from '@/lib/api/client'
 import { qk } from '@/lib/query/keys'
 import { realmKindColor } from '@/lib/realmKind'
-import { fmtDate, namesOf, placesToScopes, relDays, roleBlocked, type Until } from '@/lib/access'
+import { axisReach, fmtDate, namesOf, reachWords, relDays, roleBlocked, type Until } from '@/lib/access'
 import { CreateShell, CancelSubmit } from '@/components/create/shell'
 import { IdentityPicker } from '@/components/ui/IdentityPicker'
 import { Initial } from '@/components/ui/Initial'
 import { GrantWhere } from './GrantWhere'
-import { PlacePicker } from './PlacePicker'
+import { PlaceLines } from './PlaceLines'
+import { FeaturePicker } from './FeaturePicker'
 import { ScopeTree } from '@/components/scope/ScopeTree'
 import { useGrantDraft, type GrantDraft, type Reach } from './useGrantDraft'
 import type { Membership, Role, ScopeAxis } from '@/lib/api/types'
@@ -171,10 +172,10 @@ function Seat({ d }: { d: GrantDraft }) {
 }
 
 const REACH: { value: Reach; title: string; body: string; icon: ReactNode }[] = [
-  { value: 'everywhere', title: 'Everywhere', icon: <IconWorld size={16} />,
-    body: 'No limits — every office, product and customer, including ones added later.' },
-  { value: 'places', title: 'Specific places', icon: <IconMapPin size={16} />,
-    body: 'Only the places you choose, in the structures you choose from.' },
+  { value: 'everywhere', title: 'Everything', icon: <IconInfinity size={16} />,
+    body: 'Every office, product and customer, including ones added later. No list to keep up.' },
+  { value: 'places', title: 'Limit by place', icon: <IconList size={16} />,
+    body: 'For each kind of place, everything or only the ones you pick.' },
   { value: 'own', title: 'Their own records', icon: <IconUser size={16} />,
     body: 'Only records they own — their application, their orders. For customers and applicants.' },
 ]
@@ -187,8 +188,28 @@ const UNTIL: { value: Until; label: string }[] = [
   { value: 'date', label: 'Pick a date' },
 ]
 
+/* The choice in one sentence, as it will behave, before the review table.
+   "Every workplace, including new ones" and "exactly these 12" are both
+   written here in words, because they look alike everywhere else. */
+function ReadBack({ d }: { d: GrantDraft }) {
+  const names = new Map(Object.values(d.places).flat().map((v) => [v.id, v.name]))
+  const lines = (d.axes ?? [])
+    .filter((a) => d.scopes.some((s) => s.axis_code === a.code))
+    .map((a) => reachWords(axisReach(d.scopes, a, d.rootOf(a.code)), a.display_name.toLowerCase(), (id) => names.get(id) ?? '…'))
+  if (lines.length === 0) return null
+  return (
+    <div className="callout mt-3">
+      <IconInfoCircle size={14} style={{ color: 'var(--ink-3)', flexShrink: 0, marginTop: 2 }} />
+      <span className="t-xs">
+        Applies in {lines.join(', and in ')}{lines.length < (d.axes?.length ?? 0) ? '. Every other kind of place is not limited' : ''}.
+      </span>
+    </div>
+  )
+}
+
 function Review({ d }: { d: GrantDraft }) {
   const names = new Map(Object.values(d.places).flat().map((v) => [v.id, v.name]))
+  const given = d.what === 'features' ? (d.featKeys.length ? (d.featName.trim() || d.featDefaultName) : null) : d.role?.name
   const row = (label: string, value: ReactNode) => (
     <>
       <dt className="t-xs pt-px">{label}</dt>
@@ -218,15 +239,15 @@ function Review({ d }: { d: GrantDraft }) {
           </>
         ) : (
           <>
-            {row('Role', d.role ? <b style={{ fontWeight: 600 }}>{d.role.name}</b> : none)}
+            {row(d.what === 'features' ? 'Can do' : 'Role', given ? <b style={{ fontWeight: 600 }}>{given}</b> : none)}
             {/* "Specific places" with none chosen is NOT everywhere, though it
                 has the same empty list of scopes. Rendered through GrantWhere
                 it read "Everywhere — no limits": the review promising the
                 widest grant there is for a form that is not finished. */}
             {row('Where', d.reach === null ? none
-              : d.reach === 'places' && !placesToScopes(d.places).some((s) => !s.exclude)
+              : d.reach === 'places' && !d.scopes.some((s) => !s.exclude)
                 ? <span style={{ color: 'var(--ink-3)' }}>No places chosen yet</span>
-              : <GrantWhere scopes={d.reach === 'places' ? placesToScopes(d.places) : []}
+              : <GrantWhere scopes={d.scopes}
                   selfScoped={d.reach === 'own'} axes={d.axes}
                   nodeName={(id) => names.get(id) ?? id} />)}
             {row('Ends', d.ends
@@ -314,15 +335,26 @@ export function GiveAccessSheet({ opened, onClose, identityId = null, pickSubjec
 
         <Step n={++n} title={membershipId ? 'The membership' : 'What should they be able to do?'} done={d.ready.what}
           hint={membershipId ? undefined : hasMemberships ? 'A role on its own, or a membership that bundles several.' : undefined}>
-          {hasMemberships && !membershipId && (
+          {!membershipId && (
             <SegmentedControl fullWidth size="sm" mb="sm" value={d.what}
               onChange={(v) => d.setWhat(v as GrantDraft['what'])}
               data={[
                 { value: 'role', label: <span className="inline-flex items-center gap-1.5"><IconShield size={14} />A role</span> },
-                { value: 'membership', label: <span className="inline-flex items-center gap-1.5"><IconUsersGroup size={14} />A membership</span> },
+                { value: 'features', label: <span className="inline-flex items-center gap-1.5"><IconListCheck size={14} />Only some features</span> },
+                ...(hasMemberships ? [{ value: 'membership', label: <span className="inline-flex items-center gap-1.5"><IconUsersGroup size={14} />A membership</span> }] : []),
               ]} />
           )}
-          {d.what === 'role' ? (
+          {d.what === 'features' ? (
+            <>
+              <FeaturePicker perms={d.perms ?? []} apps={d.apps ?? []} appId={d.featApp} onApp={d.setFeatApp}
+                value={d.featKeys} onChange={d.setFeatKeys} />
+              {d.featKeys.length > 0 && (
+                <TextInput mt="sm" label="Saved as a role named" value={d.featName} placeholder={d.featDefaultName}
+                  onChange={(e) => d.setFeatName(e.currentTarget.value)}
+                  description="If a role already permits exactly these, that role is used instead, so the same picks never make two roles." />
+              )}
+            </>
+          ) : d.what === 'role' ? (
             <>
               <Select searchable placeholder={d.subject ? 'Search roles…' : 'Choose a person first'}
                 disabled={!d.subject} data={roleData} value={d.roleId} onChange={d.setRoleId}
@@ -392,14 +424,14 @@ export function GiveAccessSheet({ opened, onClose, identityId = null, pickSubjec
           )}
         </Step>
 
-        {d.what === 'role' && (
+        {d.what !== 'membership' && (
           <>
             <Step n={++n} title="Where does it apply?" done={d.ready.where}
               hint="Choose deliberately — the widest option is not the default.">
               <Radio.Group value={d.reach ?? ''} onChange={(v) => d.setReach(v as Reach)} aria-label="Where it applies">
                 <div className="grid grid-cols-1 gap-2 @lg:grid-cols-3">
                   {REACH.map((c) => {
-                    const off = d.required.length > 0 && c.value !== 'places'
+                    const off = d.required.length > 0 && c.value === 'own'
                     return (
                       <Radio.Card key={c.value} value={c.value} className="choice" disabled={off}>
                         <span className="flex items-center gap-2">
@@ -414,16 +446,15 @@ export function GiveAccessSheet({ opened, onClose, identityId = null, pickSubjec
               </Radio.Group>
               {d.required.length > 0 && (
                 <div className="t-xs mt-2">
-                  Every grant here must name a place in {namesOf(d.required)} — a grant that does not
-                  never applies — so only specific places are possible.
+                  Every grant here must name a place in {namesOf(d.required)}, so own records only is not possible.
                 </div>
               )}
               {d.reach === 'everywhere' && (
                 <div className="callout mt-3">
                   <IconInfoCircle size={14} style={{ color: 'var(--ink-3)', flexShrink: 0, marginTop: 2 }} />
                   <span className="t-xs">
-                    <b>{d.role?.name ?? 'The role'}</b> will apply in every structure, and in every place
-                    added to one later. Pick specific places if that is more than they need.
+                    <b>{d.role?.name ?? 'This access'}</b> will apply in every kind of place, and in every place
+                    added later. Limit by place if that is more than they need.
                   </span>
                 </div>
               )}
@@ -438,9 +469,11 @@ export function GiveAccessSheet({ opened, onClose, identityId = null, pickSubjec
               )}
               {d.reach === 'places' && d.axes && (
                 <div className="mt-3">
-                  <PlacePicker axes={d.axes} value={d.places} onChange={d.setPlaces} required={d.required} />
+                  <PlaceLines axes={d.axes} required={d.required} rootOf={d.rootOf}
+                    places={d.places} onPlaces={d.setPlaces} modes={d.modes} onModes={d.setModes} />
                 </div>
               )}
+              {d.reach === 'places' && <ReadBack d={d} />}
             </Step>
           </>
         )}

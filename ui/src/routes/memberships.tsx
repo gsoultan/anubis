@@ -240,8 +240,10 @@ function Memberships() {
     m.description.toLowerCase().includes(needle))
   return (
     <Page
-      title="Memberships"
-      description="Named sets of roles that people hold together — a team, a council. Add someone and they get all of it; remove them and it is taken back at once."
+      section="roles"
+      title="Groups"
+      description="A group hands several roles to everyone in it."
+      help="A team or a council: add someone and they get every role in the group, limited to the places the group names. Remove them and it is all taken back at once. Change the group and every member changes with it, which is how one edit reaches a thousand people."
       actions={
         <>
           <TextInput w={200} placeholder="Search memberships"

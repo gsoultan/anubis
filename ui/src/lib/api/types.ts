@@ -132,6 +132,9 @@ export interface Permission {
   max_auth_age: string | null
   min_assurance: Ial
   deprecated_at: string | null
+  /** The part of the app it is filed under, such as Payables. '' when the
+      manifest names none. A label only: the key stays app:resource:action. */
+  module: string
 }
 
 export interface Role {
@@ -327,6 +330,9 @@ export interface Tenant {
   name: string
   status: 'active' | 'suspended'
   created_at: string
+  /** The company that owns this one; null at the top. Whoever runs the
+      parent runs this one too. Access inside each company stays its own. */
+  parent_id: Uuid | null
 }
 
 export interface TenantStats {
@@ -661,4 +667,85 @@ export interface CatalogRun {
   document_sha: string
   report_json: string
   error: string
+}
+
+/* ---------------------------------------------------------------------------
+   Access as a whole: summaries, bulk changes, place reach (0057)
+   --------------------------------------------------------------------------- */
+
+/** One person's live access, counted, for the People list. */
+export interface AccessSummary {
+  identity_id: Uuid
+  direct: number
+  groups: number
+  roles: string[]
+  group_names: string[]
+  next_end: string | null
+}
+
+export type GrantChangeKind =
+  'add_place' | 'remove_place' | 'swap_place' | 'grow' | 'set_until' | 'revoke'
+
+/** A bulk change as asked: which grants (always of one role), and what to do. */
+export interface GrantChangeSpec {
+  role_id: Uuid
+  axis?: string
+  covers_node_ids?: Uuid[]
+  siblings_of?: Uuid
+  kind: GrantChangeKind
+  node_id?: Uuid
+  to_node_id?: Uuid
+  inherit?: boolean
+  valid_until?: string | null
+  reason?: string
+}
+
+export interface GrantChangeRow {
+  grant_id: Uuid
+  identity_id: Uuid
+  username: string
+  before: GrantScope[]
+  after: GrantScope[]
+  before_until: string | null
+  after_until: string | null
+  revoked: boolean
+}
+
+export interface GrantChangePreview {
+  matched: number
+  changes: number
+  people: number
+  skipped: { reason: string; count: number }[]
+  sample: GrantChangeRow[]
+}
+
+export interface GrantChangeRecord {
+  id: Uuid
+  kind: GrantChangeKind
+  reason: string
+  grants: number
+  created_at: string
+  actor_id: Uuid
+  undone_at: string | null
+  spec: Partial<{ role_id: string; axis: string; node: string; to_node: string; kind: string }>
+}
+
+/** Grants of one role whose picks name every place under one parent. */
+export interface FullList {
+  axis: string
+  parent_id: Uuid
+  parent_name: string
+  is_root: boolean
+  role_id: Uuid
+  role_name: string
+  grants: number
+  places: number
+}
+
+export interface PlaceReach {
+  have_all: number
+  have_branch: number
+  might_expect: { role_id: Uuid; role_name: string; people: number; risk: Risk }[]
+  group_entries: { membership_id: Uuid; membership_name: string; role_name: string; members: number }[]
+  other_fixed: number
 }

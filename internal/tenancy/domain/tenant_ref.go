@@ -8,4 +8,6 @@ type TenantRef struct {
 	Name      string
 	Status    string
 	CreatedAt time.Time
+	// ParentID is the company that owns this one; "" at the top.
+	ParentID string
 }

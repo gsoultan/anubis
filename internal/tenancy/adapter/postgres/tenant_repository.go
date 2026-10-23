@@ -50,22 +50,48 @@ func (s *Repository) ListTenants(ctx context.Context) ([]tenancydomain.TenantRef
 	return out, nil
 }
 
-func (s *Repository) CreateTenant(ctx context.Context, slug, name string) (*tenancydomain.TenantRef, error) {
+func (s *Repository) CreateTenant(ctx context.Context, slug, name, parentID string) (*tenancydomain.TenantRef, error) {
 	n := tenant.Create()
 	n.SetSlug(slug)
 	n.SetName(name)
+	if parentID != "" {
+		pid, err := database.ParseUUID(parentID)
+		if err != nil {
+			return nil, database.MapErr(err)
+		}
+		n.SetParentID(pid)
+	}
 	row, err := n.Insert(ctx, s.ex(ctx))
 	if err != nil {
-		return nil, database.MapErr(err)
+		// tenants_tree_guard's refusals name only companies in the caller's
+		// own group, so its sentence is safe to pass on.
+		return nil, database.MapErrSaying(err)
 	}
 	return tenantRef(row), nil
 }
 
 func tenantRef(r tenant.Row) *tenancydomain.TenantRef {
-	return &tenancydomain.TenantRef{
+	ref := &tenancydomain.TenantRef{
 		ID: database.UUIDStr(r.ID), Slug: r.Slug, Name: r.Name,
 		Status: r.Status, CreatedAt: r.CreatedAt,
 	}
+	if r.ParentID.Valid {
+		ref.ParentID = database.UUIDStr(r.ParentID.V)
+	}
+	return ref
+}
+
+// MoveTenant puts a company under another, or at the top with "". The tree
+// guard refuses a loop or a group deeper than six levels, in its own words.
+func (s *Repository) MoveTenant(ctx context.Context, id, parentID string) error {
+	n, err := tenancyrquery.MoveTenant.Exec(ctx, s.ex(ctx), id, parentID)
+	if err != nil {
+		return database.MapErrSaying(err)
+	}
+	if n == 0 {
+		return apperr.ErrNotFound.With("tenant", id)
+	}
+	return nil
 }
 
 // CatalogVersion is the counter a gate snapshot is built from.

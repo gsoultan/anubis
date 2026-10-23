@@ -21,7 +21,7 @@ const PASS = process.env.ANUBIS_SMOKE_PASSWORD ?? 'anubis-dev-password'
 const CHROME = process.env.CHROME_BIN ?? '/usr/bin/google-chrome'
 
 const ROUTES = ['/', '/identities', '/memberships', '/operators', '/audit', '/realms',
-  '/roles', '/applications', '/tenants', '/catalog', '/import', '/keys', '/playground', '/scope',
+  '/roles', '/permissions', '/bulk', '/applications', '/tenants', '/catalog', '/import', '/keys', '/playground', '/scope',
   '/signin-page']
 const DRAWERS = ['identity', 'permission', 'role', 'grant', 'node', 'axis', 'membership']
 const WIDTHS: [number, number][] = [[375, 812], [1280, 900]]
@@ -226,23 +226,37 @@ try {
     report(`375px drawer ${kind}`, [...problems, ...errors])
   }
 
-  // Giving access from a person's page — the one sheet with two panes, so the
-  // one most likely to outgrow a phone. Opened by URL like everything else,
-  // with the place picker showing: that is the part with the width in it.
+  // Giving access from a person's page: the sheet most likely to outgrow a
+  // phone. Opened by URL like everything else, with a line for a kind of
+  // place showing, tree and all: that is the part with the width in it.
   if (person) {
     for (const [w, h] of WIDTHS) {
       await page.setViewport({ width: w, height: h })
       await visit(page, `${person}?give=true`, errors)
       const clicked = await page.evaluate(() => {
         const card = [...document.querySelectorAll('.mantine-Drawer-content [role=radio]')]
-          .find((e) => (e.textContent ?? '').includes('Specific places'))
+          .find((e) => (e.textContent ?? '').includes('Limit by place'))
         if (card instanceof HTMLElement) card.click()
         return !!card
       })
       await settle(page)
+      // A line per kind of place: add the first kind, so its tree is on screen.
+      await page.evaluate(() => {
+        const pick = document.querySelector('.mantine-Drawer-content input[aria-label="Limit by another kind of place"]')
+        if (pick instanceof HTMLElement) pick.click()
+      })
+      await settle(page)
+      // This Select's own list: every Select on the sheet keeps its options in the page.
+      await page.evaluate(() => {
+        const pick = document.querySelector('.mantine-Drawer-content input[aria-label="Limit by another kind of place"]')
+        const list = document.getElementById(pick?.getAttribute('aria-controls') ?? '')
+        const opt = list?.querySelector('[role=option]')
+        if (opt instanceof HTMLElement) opt.click()
+      })
+      await settle(page)
       const problems = await page.evaluate(measureDrawer)
-      if (!clicked) problems.push('no "Specific places" choice to open the place picker with')
-      else if (!(await page.$('.mantine-Drawer-content .picker'))) problems.push('the place picker did not open')
+      if (!clicked) problems.push('no "Limit by place" choice to open the place lines with')
+      else if (!(await page.$('.mantine-Drawer-content .place-line'))) problems.push('no line for a kind of place opened')
       report(`${w}px /identities/<id>?give=true`, [...problems, ...errors])
     }
   }

@@ -1,16 +1,16 @@
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
-import { ActionIcon, Button, Loader, Menu, Popover, SegmentedControl, TextInput, Tooltip, UnstyledButton } from '@mantine/core'
-import { IconDots, IconInfoCircle, IconPencil, IconSearch, IconShieldLock, IconShieldPlus, IconLicense, IconUsers } from '@tabler/icons-react'
+import { ActionIcon, Button, Loader, Menu, Popover, TextInput, Tooltip, UnstyledButton } from '@mantine/core'
+import { IconDots, IconInfoCircle, IconPencil, IconSearch, IconShieldPlus, IconStack2, IconUsers } from '@tabler/icons-react'
 import { RoleHolders } from '@/components/access/RoleHolders'
 import { useState } from 'react'
 import { useCreate } from '@/stores/create'
 import { Page } from '@/components/shell/Page'
-import { DataTable, Cell, type Column } from '@/components/ui/DataTable'
+import { DataTable, type Column } from '@/components/ui/DataTable'
 import { api } from '@/lib/api/client'
 import { qk } from '@/lib/query/keys'
 import { REALM_KIND_COLOR } from '@/lib/realmKind'
-import type { Permission, Role } from '@/lib/api/types'
+import type { Role } from '@/lib/api/types'
 
 export const Route = createFileRoute('/roles')({ component: Roles })
 
@@ -44,24 +44,15 @@ function RolePermissions({ roleId, count }: { roleId: string; count: number }) {
   )
 }
 
-const RISK_COLOR: Record<string, string> = {
-  normal: 'var(--ink-2)', sensitive: 'var(--warn)', critical: 'var(--deny)',
-}
-
 function Roles() {
   const { openCreate } = useCreate()
+  const navigate = useNavigate()
   const { data: roles } = useQuery({ queryKey: qk.roles(), queryFn: api.roles })
-  const { data: perms } = useQuery({ queryKey: qk.permissions(), queryFn: api.permissions })
   const [q, setQ] = useState('')
-  const [risk, setRisk] = useState('all')
   const [holdersOf, setHoldersOf] = useState<Role | null>(null)
   const needle = q.trim().toLowerCase()
   const shownRoles = (roles ?? []).filter((r) =>
     !needle || r.name.toLowerCase().includes(needle) || r.description.toLowerCase().includes(needle))
-  const shownPerms = (perms ?? []).filter((p) =>
-    (risk === 'all' || p.risk === risk) &&
-    (!needle || p.key.toLowerCase().includes(needle)))
-
   /* Every column carries an explicit width. Leave one without and it becomes
      the only column the browser can grow, so all the slack on a wide display
      pools into it — the role column ran 670px for 120px of name while
@@ -114,6 +105,10 @@ function Roles() {
             <Menu.Item leftSection={<IconUsers size={14} />} onClick={() => setHoldersOf(r)}>
               People with this role
             </Menu.Item>
+            <Menu.Item leftSection={<IconStack2 size={14} />}
+              onClick={() => void navigate({ to: '/bulk', search: { role: r.id } })}>
+              Change their access in bulk
+            </Menu.Item>
             <Menu.Divider />
             {r.is_system ? (
               <Menu.Item disabled leftSection={<IconPencil size={14} />}>
@@ -130,44 +125,17 @@ function Roles() {
       ) },
   ]
 
-  const permCols: Column<Permission>[] = [
-    /* stacked: a description is prose, not a qualifier on the key — inline it
-       would compete with the key for the same line and truncate both. */
-    { key: 'key', header: 'Permission', width: 420, render: (p) => (
-        <Cell stacked top={<span className="font-mono" style={{ fontSize: 12 }}>{p.key}</span>}
-          bottom={p.description || undefined} />
-      ) },
-    { key: 'risk', header: 'Risk', width: 110, render: (p) => (
-        <span className="chip" style={{ color: RISK_COLOR[p.risk] }}>{p.risk}</span>
-      ) },
-    { key: 'ial', header: 'Min assurance', width: 130, render: (p) => (
-        <span className="chip" style={{
-          color: p.min_assurance >= 3 ? 'var(--allow)' : p.min_assurance === 2 ? 'var(--info)' : 'var(--warn)',
-        }}>IAL{p.min_assurance}</span>
-      ) },
-    { key: 'stepup', header: 'Step-up', width: 210, render: (p) =>
-        p.requires_amr.length ? (
-          <span className="inline-flex items-center gap-1.5">
-            <IconShieldLock size={11} style={{ color: 'var(--info)' }} />
-            <span className="t-body">{p.requires_amr.join(', ')} within {p.max_auth_age}</span>
-          </span>
-        ) : <span className="t-xs">—</span> },
-  ]
-
   return (
     <Page
-      title="Roles & permissions"
-      description="Roles bundle permissions; permissions belong to the application that registered them. A new permission never silently widens an existing role."
+      section="roles"
+      title="Roles"
+      description="A role is a bundle of permissions with a name. A new permission never silently widens an existing role."
       wide
       actions={
         <>
-          <TextInput w={220} placeholder="Search roles & permissions"
+          <TextInput w={220} placeholder="Search roles"
             leftSection={<IconSearch size={14} />}
             value={q} onChange={(e) => setQ(e.currentTarget.value)} />
-          <Button size="xs" variant="default" leftSection={<IconLicense size={14} />}
-            onClick={() => openCreate('permission')}>
-            Add permission
-          </Button>
           <Button size="xs" leftSection={<IconShieldPlus size={14} />}
             onClick={() => openCreate('role')}>
             Add role
@@ -195,20 +163,6 @@ function Roles() {
               ...(needle ? { hint: `Nothing matching “${q}”.` } : {}) }} />
         </div>
 
-        <div>
-          <div className="mb-2.5 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-2">
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-              <div className="t-label">Permission catalog</div>
-              <SegmentedControl size="xs" value={risk} onChange={setRisk}
-                data={[{ value: 'all', label: 'All' }, { value: 'normal', label: 'Normal' },
-                       { value: 'sensitive', label: 'Sensitive' }, { value: 'critical', label: 'Critical' }]} />
-            </div>
-            <span className="t-xs tnum">{shownPerms.length} of {perms?.length ?? 0}</span>
-          </div>
-          <DataTable columns={permCols} rows={shownPerms} rowKey={(p) => p.id}
-            empty={{ title: 'No permissions match',
-              hint: 'Try another search or risk level.' }} />
-        </div>
       </div>
       <RoleHolders role={holdersOf} onClose={() => setHoldersOf(null)} />
     </Page>

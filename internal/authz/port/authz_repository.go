@@ -14,6 +14,8 @@ type AuthzRepository interface {
 	AuthorizeStrictSim(ctx context.Context, identityID, tenantID, permission string, targets []byte, strictAxis string) (bool, error)
 	PermissionByKey(ctx context.Context, tenantID, key string) (*authzdomain.PermissionMeta, error)
 	RolesForIdentity(ctx context.Context, tenantID, identityID string) ([]string, error)
+	// HoldsRoleInApp backs an app that only role holders may sign in to.
+	HoldsRoleInApp(ctx context.Context, tenantID, identityID, applicationID string) (bool, error)
 	EffectivePermissionsForIdentity(ctx context.Context, tenantID, identityID string) ([]string, error)
 	SampleAuthorizeDecisions(ctx context.Context, tenantID string, n int) ([][]byte, error)
 }

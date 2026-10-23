@@ -27,8 +27,9 @@ import type {
 export const api = {
   tenants: () => live.tenants(),
   tenantStats: (id: Uuid) => live.tenantStats(id),
-  createTenant: (i: { name: string; slug?: string }) =>
-    live.createTenant({ slug: i.slug ?? slugify(i.name), name: i.name }),
+  createTenant: (i: { name: string; slug?: string; parentId?: string }) =>
+    live.createTenant({ slug: i.slug ?? slugify(i.name), name: i.name, parentId: i.parentId ?? '' }),
+  moveTenant: (id: Uuid, parentId: string) => live.moveTenant(id, parentId),
   updateTenant: (id: Uuid, name: string) => live.updateTenant(id, name),
   setTenantStatus: (id: Uuid, status: 'active' | 'suspended' | 'archived') =>
     live.setTenantStatus(id, status),
@@ -85,6 +86,15 @@ export const api = {
 
   grants: (identityId?: Uuid) => live.grants(identityId),
   searchGrants: live.searchGrants,
+  /* Access as a whole: a line per person, bulk changes recorded as one act
+     that can be undone, and the lists that will quietly miss a new place. */
+  summarizeAccess: (ids: Uuid[]) => live.summarizeAccess(ids),
+  previewGrantChange: (c: import('./types').GrantChangeSpec) => live.previewGrantChange(c),
+  applyGrantChange: (c: import('./types').GrantChangeSpec) => live.applyGrantChange(c),
+  undoGrantChange: (id: Uuid, reason?: string) => live.undoGrantChange(id, reason),
+  grantChanges: (limit?: number) => live.grantChanges(limit),
+  fullLists: (axis?: string, roleId?: string) => live.fullLists(axis, roleId),
+  placeReach: (nodeId: Uuid) => live.placeReach(nodeId),
 
   authorize: (req: AuthorizeRequest) => live.authorize(req),
   applications: () => live.applicationChoices(),
