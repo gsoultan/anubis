@@ -59,3 +59,7 @@ updates:
         patterns: ["@mantine/*"]
       tanstack:
         patterns: ["@tanstack/*"]
+      # react and react-dom must move together, with their types: apart they
+      # are two PRs that each rewrite the same bun.lock lines (#77, #78).
+      react:
+        patterns: ["react", "react-dom", "@types/react", "@types/react-dom"]

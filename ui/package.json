@@ -32,8 +32,8 @@
     "@tanstack/react-router": "^1.170.45",
     "@tanstack/react-virtual": "^3.14.21",
     "dayjs": "^1.11.19",
-    "react": "^19.2.8",
-    "react-dom": "^19.2.8",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
     "zustand": "^5.0.15"
   },
   "devDependencies": {
@@ -42,8 +42,8 @@
     "@tanstack/router-cli": "^1.167.45",
     "@tanstack/router-plugin": "^1.168.47",
     "@types/node": "^26.2.0",
-    "@types/react": "^19.2.18",
-    "@types/react-dom": "^19.2.4",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.0",
     "bun-plugin-tailwind": "^0.1.2",
     "postcss": "^8.5.6",
