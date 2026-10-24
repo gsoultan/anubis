@@ -57,7 +57,7 @@ func Provision(
 
 	tenant, err := tenants.TenantBySlug(ctx, in.TenantSlug)
 	if err != nil {
-		if tenant, err = tenants.CreateTenant(ctx, in.TenantSlug, in.TenantName); err != nil {
+		if tenant, err = tenants.CreateTenant(ctx, in.TenantSlug, in.TenantName, ""); err != nil {
 			return nil, fmt.Errorf("create tenant: %w", err)
 		}
 		res.TenantCreated = true

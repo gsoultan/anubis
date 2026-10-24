@@ -143,7 +143,7 @@ func newApplication(ctx context.Context, cfg *config.Config, db *database.DB, lo
 	// the admin RPC surface and the catalog scheduler, and a second instance
 	// would be a second place to get the wiring wrong.
 	a.authzAdmin = authzadmin.NewAuthzAdminInteractor(a.control, a.clock.Now,
-		a.authz, a.authz, a.authz, a.authz,
+		a.authz, a.authz, a.authz, a.authz, a.authz, a.authz,
 		a.authz, a.tenancy, a.tenancy, a.auth, a.auditor)
 	// One authenticator, two doors: AuthService.Login and the hosted sign-in
 	// page. A second instance would be a second place for the factor policy

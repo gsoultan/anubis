@@ -27,6 +27,7 @@ type Row struct {
 	Slug      string
 	Name      string
 	Settings  runtime.JSON
+	ParentID  runtime.Null[[16]byte]
 }
 
 // Operator ids. Argument-taking operators are numbered first, so the
@@ -65,7 +66,7 @@ const (
 	opNotExists runtime.Op = 27
 )
 
-const nCols = 7
+const nCols = 8
 
 // Query is a value type: composing one allocates nothing. Predicates
 // are a postfix token stream, so disjunction and negation are
@@ -220,6 +221,13 @@ func (q *Query) cursor(col uint32, r Row) {
 		}
 		q.strs[q.ns] = r.Name
 		q.ns++
+	case 7:
+		if int(q.nr) >= len(q.raws) {
+			q.over = true
+			return
+		}
+		q.raws[q.nr] = r.ParentID.V
+		q.nr++
 	}
 }
 
@@ -385,6 +393,7 @@ var (
 	Slug      = TextCol{4}
 	Name      = TextCol{5}
 	Settings  = JSONCol{6}
+	ParentID  = NullUUIDCol{7}
 )
 
 // UUIDCol addresses a uuid column.
@@ -473,6 +482,29 @@ func (h JSONCol) ContainedBy(v runtime.JSON) Pred {
 }
 func (h JSONCol) HasAnyKey(v ...string) Pred  { return Pred{col: h.c, op: opHasAnyKey, anyStr: v} }
 func (h JSONCol) HasAllKeys(v ...string) Pred { return Pred{col: h.c, op: opHasAllKeys, anyStr: v} }
+
+// NullUUIDCol addresses a uuid column.
+type NullUUIDCol struct{ c uint8 }
+
+func (h NullUUIDCol) Asc() Sort  { return Sort(runtime.MakeOrder(runtime.Asc, uint32(h.c))) }
+func (h NullUUIDCol) Desc() Sort { return Sort(runtime.MakeOrder(runtime.Desc, uint32(h.c))) }
+func (h NullUUIDCol) AscNullsFirst() Sort {
+	return Sort(runtime.MakeOrder(runtime.AscNullsFirst, uint32(h.c)))
+}
+func (h NullUUIDCol) DescNullsLast() Sort {
+	return Sort(runtime.MakeOrder(runtime.DescNullsLast, uint32(h.c)))
+}
+
+func (h NullUUIDCol) Eq(v [16]byte) Pred    { return Pred{col: h.c, op: opEq, raw: v} }
+func (h NullUUIDCol) NotEq(v [16]byte) Pred { return Pred{col: h.c, op: opNotEq, raw: v} }
+func (h NullUUIDCol) In(v ...[16]byte) Pred { return Pred{col: h.c, op: opIn, anyRaw: v} }
+
+// NotIn is `<> ALL($1)`. A NULL anywhere in v makes the
+// comparison NULL for every row and the result empty —
+// PostgreSQL's rule for NOT IN, not storm's.
+func (h NullUUIDCol) NotIn(v ...[16]byte) Pred { return Pred{col: h.c, op: opNotIn, anyRaw: v} }
+func (h NullUUIDCol) IsNull() Pred             { return Pred{col: h.c, op: opIsNull} }
+func (h NullUUIDCol) IsNotNull() Pred          { return Pred{col: h.c, op: opIsNotNull} }
 
 // Where applies predicates, ANDed together.
 func (q Query) Where(ps ...Pred) Query {
@@ -650,6 +682,13 @@ func (q *Query) leaf(p Pred) {
 			}
 			q.anyStr[q.nas] = p.anyStr
 			q.nas++
+		case 7:
+			if int(q.nar) >= 3 {
+				q.over = true
+				return
+			}
+			q.anyRaw[q.nar] = p.anyRaw
+			q.nar++
 		}
 		q.push(runtime.MakeLeaf(uint32(p.op), uint32(p.col)))
 		return
@@ -708,6 +747,13 @@ func (q *Query) leaf(p Pred) {
 		}
 		q.jsns[q.njs] = p.jsn
 		q.njs++
+	case 7:
+		if int(q.nr) >= 4 {
+			q.over = true
+			return
+		}
+		q.raws[q.nr] = p.raw
+		q.nr++
 	}
 	q.push(runtime.MakeLeaf(uint32(p.op), uint32(p.col)))
 }
@@ -766,8 +812,14 @@ func (q Query) SettingsContains(v runtime.JSON) Query    { return q.Where(Settin
 func (q Query) SettingsContainedBy(v runtime.JSON) Query { return q.Where(Settings.ContainedBy(v)) }
 func (q Query) SettingsHasAnyKey(v ...string) Query      { return q.Where(Settings.HasAnyKey(v...)) }
 func (q Query) SettingsHasAllKeys(v ...string) Query     { return q.Where(Settings.HasAllKeys(v...)) }
+func (q Query) ParentIDEq(v [16]byte) Query              { return q.Where(ParentID.Eq(v)) }
+func (q Query) ParentIDNotEq(v [16]byte) Query           { return q.Where(ParentID.NotEq(v)) }
+func (q Query) ParentIDIn(v ...[16]byte) Query           { return q.Where(ParentID.In(v...)) }
+func (q Query) ParentIDNotIn(v ...[16]byte) Query        { return q.Where(ParentID.NotIn(v...)) }
+func (q Query) ParentIDIsNull() Query                    { return q.Where(ParentID.IsNull()) }
+func (q Query) ParentIDIsNotNull() Query                 { return q.Where(ParentID.IsNotNull()) }
 
-const selectPrefix = `SELECT "id", "created_at", "updated_at", "status", "slug", "name", "settings" FROM "tenants"`
+const selectPrefix = `SELECT "id", "created_at", "updated_at", "status", "slug", "name", "settings", "parent_id" FROM "tenants"`
 const countPrefix = `SELECT count(*) FROM "tenants"`
 const existsPrefix = `SELECT 1 FROM "tenants"`
 const existsSuffix = ` LIMIT 1`
@@ -846,6 +898,12 @@ var orderTable = [nCols][4]string{
 		"\"settings\" ASC NULLS FIRST",
 		"\"settings\" DESC NULLS LAST",
 	},
+	{ // parent_id
+		"\"parent_id\"",
+		"\"parent_id\" DESC",
+		"\"parent_id\" ASC NULLS FIRST",
+		"\"parent_id\" DESC NULLS LAST",
+	},
 }
 
 // identTable is each column's bare quoted name, for the left side of a
@@ -858,6 +916,7 @@ var identTable = [nCols]string{
 	"\"slug\"",
 	"\"name\"",
 	"\"settings\"",
+	"\"parent_id\"",
 }
 
 var lowering = runtime.Lowering{
@@ -890,7 +949,7 @@ func orderOf(dir, col uint32) string {
 
 // fragTable is every predicate this table can produce, lowered at build
 // time. Runtime splices; it never formats.
-var fragTable = [7][28]runtime.Frag{
+var fragTable = [8][28]runtime.Frag{
 	{ // id
 		{}, // opNone
 		{A: "\"id\" = $", B: ""},
@@ -1101,6 +1160,36 @@ var fragTable = [7][28]runtime.Frag{
 		{},
 		{},
 	},
+	{ // parent_id
+		{}, // opNone
+		{A: "\"parent_id\" = $", B: ""},
+		{A: "\"parent_id\" <> $", B: ""},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{A: "\"parent_id\" = ANY($", B: ")"},
+		{A: "\"parent_id\" <> ALL($", B: ")"},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{A: "\"parent_id\" IS NULL", B: ""},
+		{A: "\"parent_id\" IS NOT NULL", B: ""},
+		{},
+		{},
+	},
 }
 
 func fragOf(op, col uint32) runtime.Frag {
@@ -1264,6 +1353,7 @@ func scan(rv [][]byte, r *Row, sl *runtime.Slab) error {
 	r.Slug = sl.Str(rv[4])
 	r.Name = sl.Str(rv[5])
 	r.Settings = runtime.JSON(runtime.JSONB(rv[6], sl))
+	r.ParentID = runtime.Nullable(rv[7], runtime.UUID)
 	return nil
 }
 
@@ -1349,6 +1439,10 @@ func (q Query) bindPreds(b *binder) []any {
 				b.anyStr[nas] = q.anyStr[nas]
 				v = append(v, &b.anyStr[nas])
 				nas++
+			case 7:
+				b.anyRaw[nar] = q.anyRaw[nar]
+				v = append(v, &b.anyRaw[nar])
+				nar++
 			}
 			continue
 		}
@@ -1381,6 +1475,10 @@ func (q Query) bindPreds(b *binder) []any {
 			b.jsns[njs] = q.jsns[njs]
 			v = append(v, &b.jsns[njs])
 			njs++
+		case 7:
+			b.raws[nr] = q.raws[nr]
+			v = append(v, &b.raws[nr])
+			nr++
 		}
 	}
 	b.vals = v
@@ -1516,9 +1614,91 @@ func (q Query) Prepare(b *Binder) (string, []any) {
 	return stmtFor(q.stream(&buf), q.offset > 0, q.lock).SQL, q.bind(b)
 }
 
+// Recursive traversal of tenants's self-reference through parent_id.
+//
+// ONE query for a whole subtree, with a MANDATORY depth bound and a cycle
+// guard. Neither is optional and neither has a default:
+//
+// An unbounded recursive query against production data is an outage, not
+// a slow query — it is the one shape where a missing bound turns into
+// unbounded work rather than a large result.
+//
+// And parent_id is a foreign key, which does not stop A pointing at B pointing
+// at A. The guard is an explicit path array: one array append per row,
+// against a hung connection.
+// ErrDepth is returned by a traversal given no positive depth bound.
+var ErrDepth = errors.New(
+	"storm: recursive traversal needs a positive depth bound — unbounded recursion over a cycle does not return")
+
+// Descend returns the descendants: rows whose parent_id chain leads back to a root.
+//
+// The roots themselves are included, at depth 1. maxDepth counts them,
+// so maxDepth of 1 returns exactly the roots and 2 adds one level.
+//
+// Rows come back in no guaranteed order — a tree has no total order
+// and inventing one would be a lie. Every row carries its parent_id, so the
+// caller reassembles the shape it wanted.
+func Descend(ctx context.Context, ex runtime.Executor, roots [][16]byte, maxDepth int64) ([]Row, error) {
+	if len(roots) == 0 {
+		return nil, nil
+	}
+	if maxDepth <= 0 {
+		return nil, ErrDepth
+	}
+	rows, err := ex.Query(ctx, descendSQL, []any{roots, maxDepth})
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var sl runtime.Slab
+	var out []Row
+	for rows.Next() {
+		out = append(out, Row{})
+		if err := scan(rows.RawValues(), &out[len(out)-1], &sl); err != nil {
+			return nil, err
+		}
+	}
+	return out, rows.Err()
+}
+
+const descendSQL = `WITH RECURSIVE "_storm_r" AS (SELECT "id", "created_at", "updated_at", "status", "slug", "name", "settings", "parent_id", 1 AS "_storm_d", ARRAY["id"] AS "_storm_path" FROM "tenants" WHERE "id" = ANY($1) UNION ALL SELECT "_storm_rc"."id", "_storm_rc"."created_at", "_storm_rc"."updated_at", "_storm_rc"."status", "_storm_rc"."slug", "_storm_rc"."name", "_storm_rc"."settings", "_storm_rc"."parent_id", "_storm_r"."_storm_d" + 1, "_storm_r"."_storm_path" || "_storm_rc"."id" FROM "tenants" "_storm_rc" JOIN "_storm_r" ON "_storm_rc"."parent_id" = "_storm_r"."id" WHERE "_storm_r"."_storm_d" < $2 AND NOT "_storm_rc"."id" = ANY("_storm_r"."_storm_path")) SELECT "id", "created_at", "updated_at", "status", "slug", "name", "settings", "parent_id" FROM "_storm_r"`
+
+// Ascend returns the ancestors: the parent_id chain upward from each row.
+//
+// The roots themselves are included, at depth 1. maxDepth counts them,
+// so maxDepth of 1 returns exactly the roots and 2 adds one level.
+//
+// Rows come back in no guaranteed order — a tree has no total order
+// and inventing one would be a lie. Every row carries its parent_id, so the
+// caller reassembles the shape it wanted.
+func Ascend(ctx context.Context, ex runtime.Executor, roots [][16]byte, maxDepth int64) ([]Row, error) {
+	if len(roots) == 0 {
+		return nil, nil
+	}
+	if maxDepth <= 0 {
+		return nil, ErrDepth
+	}
+	rows, err := ex.Query(ctx, ascendSQL, []any{roots, maxDepth})
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var sl runtime.Slab
+	var out []Row
+	for rows.Next() {
+		out = append(out, Row{})
+		if err := scan(rows.RawValues(), &out[len(out)-1], &sl); err != nil {
+			return nil, err
+		}
+	}
+	return out, rows.Err()
+}
+
+const ascendSQL = `WITH RECURSIVE "_storm_r" AS (SELECT "id", "created_at", "updated_at", "status", "slug", "name", "settings", "parent_id", 1 AS "_storm_d", ARRAY["id"] AS "_storm_path" FROM "tenants" WHERE "id" = ANY($1) UNION ALL SELECT "_storm_rc"."id", "_storm_rc"."created_at", "_storm_rc"."updated_at", "_storm_rc"."status", "_storm_rc"."slug", "_storm_rc"."name", "_storm_rc"."settings", "_storm_rc"."parent_id", "_storm_r"."_storm_d" + 1, "_storm_r"."_storm_path" || "_storm_rc"."id" FROM "tenants" "_storm_rc" JOIN "_storm_r" ON "_storm_r"."parent_id" = "_storm_rc"."id" WHERE "_storm_r"."_storm_d" < $2 AND NOT "_storm_rc"."id" = ANY("_storm_r"."_storm_path")) SELECT "id", "created_at", "updated_at", "status", "slug", "name", "settings", "parent_id" FROM "_storm_r"`
+
 // insertSQL does not vary: the column list is fixed by the table, so
 // the placeholders are known at build time and nothing is spliced.
-const insertSQL = `INSERT INTO "tenants" ("id", "created_at", "updated_at", "status", "slug", "name", "settings") VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING "id", "created_at", "updated_at", "status", "slug", "name", "settings"`
+const insertSQL = `INSERT INTO "tenants" ("id", "created_at", "updated_at", "status", "slug", "name", "settings", "parent_id") VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING "id", "created_at", "updated_at", "status", "slug", "name", "settings", "parent_id"`
 
 const updatePrefix = `UPDATE "tenants" SET `
 const deletePrefix = `DELETE FROM "tenants"`
@@ -1531,9 +1711,10 @@ const (
 	dSlug      uint64 = 1 << 2
 	dName      uint64 = 1 << 3
 	dSettings  uint64 = 1 << 4
+	dParentID  uint64 = 1 << 5
 )
 
-const nUpdatable = 5
+const nUpdatable = 6
 
 // setFrags is every assignment this table can make, lowered at build time.
 var setFrags = [nUpdatable]runtime.Frag{
@@ -1542,6 +1723,7 @@ var setFrags = [nUpdatable]runtime.Frag{
 	{A: "\"slug\" = $", B: ""},       // slug
 	{A: "\"name\" = $", B: ""},       // name
 	{A: "\"settings\" = $", B: ""},   // settings
+	{A: "\"parent_id\" = $", B: ""},  // parent_id
 }
 
 // exprFrags is the SERVER-side assignment each column may take instead
@@ -1553,6 +1735,7 @@ var exprFrags = [nUpdatable]runtime.Frag{
 	{},                                   // slug has no server-side form
 	{},                                   // name has no server-side form
 	{},                                   // settings has no server-side form
+	{},                                   // parent_id has no server-side form
 }
 
 // pkFrags addresses one row.
@@ -1571,9 +1754,10 @@ const (
 	iSlug      uint64 = 1 << 4
 	iName      uint64 = 1 << 5
 	iSettings  uint64 = 1 << 6
+	iParentID  uint64 = 1 << 7
 )
 
-const nInsertable = 7
+const nInsertable = 8
 
 // insCols is the quoted column name for each insert bit.
 var insCols = [nInsertable]string{
@@ -1584,6 +1768,7 @@ var insCols = [nInsertable]string{
 	"\"slug\"",
 	"\"name\"",
 	"\"settings\"",
+	"\"parent_id\"",
 }
 
 // insParts and insPlaceholder come from the back end at build time; the
@@ -1592,7 +1777,7 @@ var insParts = runtime.InsertParts{Open: " (", Sep: ", ", Mid: ") VALUES (", Clo
 var insPlaceholder = runtime.Placeholder{}
 
 const insPrefix = "INSERT INTO \"tenants\""
-const insReturning = " RETURNING \"id\", \"created_at\", \"updated_at\", \"status\", \"slug\", \"name\", \"settings\""
+const insReturning = " RETURNING \"id\", \"created_at\", \"updated_at\", \"status\", \"slug\", \"name\", \"settings\", \"parent_id\""
 
 var insCache = runtime.NewMaskCache()
 
@@ -1611,7 +1796,7 @@ var updOpCache = runtime.NewMaskCache()
 // part of it. Without it m.Row() would hold what the row held BEFORE
 // the statement, so a caller reading back the counter it just
 // incremented would get the old number and never know.
-const updReturning = " RETURNING \"id\", \"created_at\", \"updated_at\", \"status\", \"slug\", \"name\", \"settings\""
+const updReturning = " RETURNING \"id\", \"created_at\", \"updated_at\", \"status\", \"slug\", \"name\", \"settings\", \"parent_id\""
 
 // Masks reports how many distinct UPDATE shapes have compiled.
 func Masks() int { return updCache.Masks() }
@@ -1700,6 +1885,20 @@ func (m *Mut) SetSettings(v runtime.JSON) {
 	m.expr &^= dSettings
 }
 
+func (m *Mut) SetParentID(v [16]byte) {
+	m.row.ParentID = runtime.Null[[16]byte]{V: v, Valid: true}
+	m.dirty |= dParentID
+	m.expr &^= dParentID
+}
+
+// SetParentIDNull writes SQL NULL. It is a separate method because a
+// zero value and an absent value are different facts.
+func (m *Mut) SetParentIDNull() {
+	m.row.ParentID = runtime.Null[[16]byte]{}
+	m.dirty |= dParentID
+	m.expr &^= dParentID
+}
+
 // Ins stages a new row. Unlike Mut it has a setter for every insertable
 // column including the primary key and Immutable ones — supplying your
 // own id is legitimate, changing it later is not.
@@ -1760,6 +1959,18 @@ func (n *Ins) SetSettings(v runtime.JSON) {
 	n.set |= iSettings
 }
 
+func (n *Ins) SetParentID(v [16]byte) {
+	n.row.ParentID = runtime.Null[[16]byte]{V: v, Valid: true}
+	n.set |= iParentID
+}
+
+// SetParentIDNull writes SQL NULL explicitly, which is not the same as
+// leaving the column unset and taking its default.
+func (n *Ins) SetParentIDNull() {
+	n.row.ParentID = runtime.Null[[16]byte]{}
+	n.set |= iParentID
+}
+
 // The conflict encoding. One byte holds both which unique index an
 // upsert names and what it does on collision, so the insert statement
 // cache stays keyed by one mask and one byte:
@@ -1806,7 +2017,7 @@ var conflictSpecs = []string{
 
 // assignable is the columns target i may overwrite, given the mask.
 func assignable(i uint8, mask uint64) []string {
-	set := make([]string, 0, 5)
+	set := make([]string, 0, 6)
 	switch i {
 	case 0:
 		if mask&(1<<2) != 0 {
@@ -1824,6 +2035,9 @@ func assignable(i uint8, mask uint64) []string {
 		if mask&(1<<6) != 0 {
 			set = append(set, "settings")
 		}
+		if mask&(1<<7) != 0 {
+			set = append(set, "parent_id")
+		}
 	case 1:
 		if mask&(1<<2) != 0 {
 			set = append(set, "updated_at")
@@ -1836,6 +2050,9 @@ func assignable(i uint8, mask uint64) []string {
 		}
 		if mask&(1<<6) != 0 {
 			set = append(set, "settings")
+		}
+		if mask&(1<<7) != 0 {
+			set = append(set, "parent_id")
 		}
 	}
 	return set
@@ -1900,6 +2117,7 @@ var assignFor = map[string]string{
 	"slug":       "\"slug\" = EXCLUDED.\"slug\"",
 	"name":       "\"name\" = EXCLUDED.\"name\"",
 	"settings":   "\"settings\" = EXCLUDED.\"settings\"",
+	"parent_id":  "\"parent_id\" = EXCLUDED.\"parent_id\"",
 }
 
 func assignExcluded(c string) string { return assignFor[c] }
@@ -1957,6 +2175,8 @@ func (n *Ins) Insert(ctx context.Context, ex runtime.Executor) (Row, error) {
 			args = append(args, n.row.Name)
 		case 6:
 			args = append(args, n.row.Settings)
+		case 7:
+			args = append(args, n.row.ParentID.Arg())
 		}
 	}
 	var out Row
@@ -1994,7 +2214,7 @@ func Inserts() int { return insCache.Masks() }
 // not treat a zero as 'unset': that guess is why other ORMs cannot insert
 // a false, a 0 or an empty string into a column with a default.
 func Insert(ctx context.Context, ex runtime.Executor, r *Row) error {
-	args := make([]any, 0, 7)
+	args := make([]any, 0, 8)
 	args = append(args, r.ID)
 	args = append(args, r.CreatedAt)
 	args = append(args, r.UpdatedAt)
@@ -2002,6 +2222,7 @@ func Insert(ctx context.Context, ex runtime.Executor, r *Row) error {
 	args = append(args, r.Slug)
 	args = append(args, r.Name)
 	args = append(args, r.Settings)
+	args = append(args, r.ParentID.Arg())
 	rows, err := ex.Query(ctx, insertSQL, args)
 	if err != nil {
 		return err
@@ -2035,13 +2256,14 @@ var copyCols = []string{
 	"slug",
 	"name",
 	"settings",
+	"parent_id",
 }
 
 // rowSource walks a []Row for CopyFrom without copying any of it.
 type rowSource struct {
 	rows []Row
 	i    int
-	buf  [7]any
+	buf  [8]any
 }
 
 func (s *rowSource) Next() bool {
@@ -2066,6 +2288,7 @@ func (s *rowSource) Values() []any {
 	s.buf[4] = &r.Slug
 	s.buf[5] = &r.Name
 	s.buf[6] = &r.Settings
+	s.buf[7] = r.ParentID.Ptr()
 	return s.buf[:]
 }
 
@@ -2103,8 +2326,9 @@ func InsertOp(r Row) runtime.BatchOp {
 	mask |= 1 << 4
 	mask |= 1 << 5
 	mask |= 1 << 6
+	mask |= 1 << 7
 	st := stmtForInsertNoReturn(mask, 0)
-	args := make([]any, 0, 7)
+	args := make([]any, 0, 8)
 	args = append(args, r.ID)
 	args = append(args, r.CreatedAt)
 	args = append(args, r.UpdatedAt)
@@ -2112,6 +2336,7 @@ func InsertOp(r Row) runtime.BatchOp {
 	args = append(args, r.Slug)
 	args = append(args, r.Name)
 	args = append(args, r.Settings)
+	args = append(args, r.ParentID.Arg())
 	return runtime.BatchOp{SQL: st.SQL, Args: args}
 }
 
@@ -2159,6 +2384,8 @@ func (n *Ins) Op() (runtime.BatchOp, error) {
 			args = append(args, n.row.Name)
 		case 6:
 			args = append(args, n.row.Settings)
+		case 7:
+			args = append(args, n.row.ParentID.Arg())
 		}
 	}
 	return runtime.BatchOp{SQL: st.SQL, Args: args}, nil
@@ -2215,6 +2442,8 @@ func (m *Mut) UpdateOp() (runtime.BatchOp, bool) {
 			args = append(args, m.row.Name)
 		case 4:
 			args = append(args, m.row.Settings)
+		case 5:
+			args = append(args, m.row.ParentID.Arg())
 		}
 	}
 	args = append(args, m.row.ID)
@@ -2307,6 +2536,8 @@ func (m *Mut) Update(ctx context.Context, ex runtime.Executor) error {
 			args = append(args, m.row.Name)
 		case 4:
 			args = append(args, m.row.Settings)
+		case 5:
+			args = append(args, m.row.ParentID.Arg())
 		}
 	}
 	args = append(args, m.row.ID)
@@ -2465,6 +2696,8 @@ func (q Query) UpdateAll(ctx context.Context, ex runtime.Executor, m Mut) (int64
 			args = append(args, m.row.Name)
 		case 4:
 			args = append(args, m.row.Settings)
+		case 5:
+			args = append(args, m.row.ParentID.Arg())
 		}
 	}
 	args = append(args, q.bindPreds(b)...)

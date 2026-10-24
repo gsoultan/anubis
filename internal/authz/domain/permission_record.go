@@ -12,4 +12,6 @@ type PermissionRecord struct {
 	RequiresAMR  []string
 	MaxAuthAge   string
 	Deprecated   bool
+	// Module is the label the app files the permission under (Payables).
+	Module string
 }

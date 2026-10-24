@@ -31,6 +31,9 @@ type authzAdminInteractor struct {
 	roleCatalog authzport.RoleCatalogRepository
 	perms       authzport.PermissionCatalogRepository
 	grants      authzport.GrantRepository
+	changes     authzport.GrantChangeRepository
+	insight     authzport.AccessInsightRepository
+	now         func() time.Time
 	members     authzport.MembershipRepository
 	apps        tenancyport.ApplicationRepository
 	routes      tenancyport.RouteRepository
@@ -47,6 +50,8 @@ func NewAuthzAdminInteractor(
 	roleCatalog authzport.RoleCatalogRepository,
 	perms authzport.PermissionCatalogRepository,
 	grants authzport.GrantRepository,
+	changes authzport.GrantChangeRepository,
+	insight authzport.AccessInsightRepository,
 	members authzport.MembershipRepository,
 	apps tenancyport.ApplicationRepository,
 	routes tenancyport.RouteRepository,
@@ -56,7 +61,7 @@ func NewAuthzAdminInteractor(
 	return &authzAdminInteractor{
 		guard: guard.New().WithOperators(ops, clockNow), roles: roles,
 		roleCatalog: roleCatalog, perms: perms,
-		grants: grants, members: members, apps: apps, routes: routes,
+		grants: grants, changes: changes, insight: insight, now: clockNow, members: members, apps: apps, routes: routes,
 		tx: tx, audit: audit,
 	}
 }
@@ -580,6 +585,7 @@ func (u *authzAdminInteractor) applyCatalog(ctx context.Context, actor applyActo
 						Resource: mp.Resource, Action: mp.Action, Description: mp.Description,
 						Risk: mp.Risk, MinAssurance: mp.MinAssurance,
 						RequiresAMR: mp.RequiresAMR, MaxAuthAge: mp.MaxAuthAge,
+						Module: mp.Module,
 					})
 				if uerr != nil {
 					return uerr

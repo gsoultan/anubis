@@ -161,8 +161,10 @@ function Realms() {
   const { data: realms } = useQuery({ queryKey: qk.realms(), queryFn: api.realms })
   return (
     <Page
+      section="settings"
       title="Populations"
-      description="Who can sign in, and under what rules. Populations are data — rename them or add more, even several of the same kind. Only the kind itself (internal, partner, public, service) is fixed by the schema."
+      description="Who can sign in, and under what rules."
+      help="Populations are data: rename them or add more, even several of the same kind. Only the kind itself (internal, partner, public, service) is fixed by the schema, because roles are limited by it."
     >
       <div className="flex flex-col gap-4">
         <div className="panel-inset flex items-start gap-2.5 px-3.5 py-2.5">

@@ -39,6 +39,12 @@ func (d *Document) Validate() error {
 				With("permission", key).With("risk", p.Risk).
 				With("expected", "normal, sensitive or critical")
 		}
+		// A module is a heading people read in a list, not a sentence.
+		if len(p.Module) > 64 || p.Module != strings.TrimSpace(p.Module) {
+			return apperr.ErrInvalidArgument.
+				With("permission", key).With("module", p.Module).
+				With("expected", "a short label of at most 64 characters, no surrounding spaces")
+		}
 		if p.MinAssurance < 0 || p.MinAssurance > 3 {
 			return apperr.ErrInvalidArgument.
 				With("permission", key).

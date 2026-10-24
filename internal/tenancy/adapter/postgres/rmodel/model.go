@@ -32,12 +32,17 @@ type Tenant struct {
 	Slug     string
 	Name     string
 	Settings storm.JSON
+	// Parent is the company that owns this one (0057), for administration
+	// only: access inside each company stays that company's.
+	Parent *Tenant
 }
 
 func (m *Tenant) Schema(t *storm.Table) {
 	t.Col(&m.ID).Default("uuidv7()")
 	t.Col(&m.Status).Default("'active'::text")
 	t.Col(&m.Settings).Default("'{}'::jsonb")
+	t.Col(&m.Parent).ConstraintName("tenants_parent_id_fkey")
+	t.Col(&m.Parent).OnDelete(storm.Restrict)
 	t.UniqueNamed("tenants_slug_key", &m.Slug)
 	t.CheckNamed("tenants_slug_check", "slug ~ '^[a-z0-9][a-z0-9_-]{1,62}$'::text")
 	t.CheckNamed("tenants_status_check",
@@ -68,6 +73,8 @@ type Application struct {
 	TokenFormat            string
 	PostLogoutRedirectUris []string
 	AllowedAudiences       []string
+	// SignIn is who may sign in at all: 'anyone' or 'role_holders' (0057).
+	SignIn string
 }
 
 func (m *Application) Schema(t *storm.Table) {
@@ -80,6 +87,7 @@ func (m *Application) Schema(t *storm.Table) {
 	t.Col(&m.TokenFormat).Default("'v4.public'::text")
 	t.Col(&m.PostLogoutRedirectUris).Default("'{}'::text[]")
 	t.Col(&m.AllowedAudiences).Default("'{}'::text[]")
+	t.Col(&m.SignIn).Default("'anyone'::text")
 	t.Col(&m.Tenant).ConstraintName("applications_tenant_id_fkey")
 	t.Col(&m.Tenant).OnDelete(storm.Restrict)
 

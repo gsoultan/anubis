@@ -72,11 +72,25 @@ func (t *pasetoTokenIssuer) Issue(ctx context.Context, in IssueInput) (*TokenPai
 		in.ClientID = in.RotateFrom.ClientID
 	}
 
-	accessTTL, refreshTTL, aud, appID, format, err := t.ttls(ctx, s, in.ClientID)
+	accessTTL, refreshTTL, aud, appID, format, signIn, err := t.ttls(ctx, s, in.ClientID)
 	if err != nil {
 		return nil, err
 	}
-	_ = appID
+	// An app closed to role holders is closed at the door: no token for it
+	// unless the person holds a live role giving something in it. Checked
+	// on every issue, refreshes included, so taking the last role away
+	// ends their way in at the next refresh rather than never.
+	if signIn == "role_holders" {
+		holds, herr := t.authz.HoldsRoleInApp(ctx, s.TenantID, s.IdentityID, appID)
+		if herr != nil {
+			return nil, apperr.ErrInternal.Wrap(herr)
+		}
+		if !holds {
+			return nil, apperr.ErrPermissionDenied.
+				With("client_id", in.ClientID).
+				With("reason", "only people with a role in this app may sign in to it")
+		}
+	}
 
 	roles, err := t.authz.RolesForIdentity(ctx, s.TenantID, s.IdentityID)
 	if err != nil {
@@ -194,7 +208,7 @@ func (t *pasetoTokenIssuer) Issue(ctx context.Context, in IssueInput) (*TokenPai
 // ttls resolves token lifetimes and audience. Population policy (realm)
 // governs; an application with a STRICTER TTL wins. aud defaults to the
 // tenant's own console surface when no client is named.
-func (t *pasetoTokenIssuer) ttls(ctx context.Context, s *authdomain.SessionView, clientID string) (access, refresh time.Duration, aud []string, appID, format string, err error) {
+func (t *pasetoTokenIssuer) ttls(ctx context.Context, s *authdomain.SessionView, clientID string) (access, refresh time.Duration, aud []string, appID, format, signIn string, err error) {
 	// The default is PASETO for every caller that does not ask otherwise,
 	// including one with no client_id at all. A token format must never be
 	// decided by the absence of configuration.
@@ -215,13 +229,14 @@ func (t *pasetoTokenIssuer) ttls(ctx context.Context, s *authdomain.SessionView,
 	if clientID != "" {
 		app, aerr := t.apps.ApplicationBySlug(ctx, s.TenantID, clientID)
 		if aerr != nil {
-			return 0, 0, nil, "", "", apperr.ErrInvalidArgument.With("client_id", "unknown application")
+			return 0, 0, nil, "", "", "", apperr.ErrInvalidArgument.With("client_id", "unknown application")
 		}
 		if app.TokenFormat == jws.Format {
 			format = jws.Format
 		}
 		aud = []string{app.Slug}
 		appID = app.ID
+		signIn = app.SignIn
 		if d := time.Duration(app.AccessTokenTTLSecs) * time.Second; d > 0 && d < access {
 			access = d
 		}
@@ -229,7 +244,7 @@ func (t *pasetoTokenIssuer) ttls(ctx context.Context, s *authdomain.SessionView,
 			refresh = d
 		}
 	}
-	return access, refresh, aud, appID, format, nil
+	return access, refresh, aud, appID, format, signIn, nil
 }
 
 // newUUIDv7ish builds a time-ordered 128-bit id for refresh families in the

@@ -146,6 +146,7 @@ func (h *PlatformAuthHandler) MyTenants(ctx context.Context,
 	for _, t := range out.([]controlapp.TenantChoice) {
 		resp.Tenants = append(resp.Tenants, &anubisv1.MyTenant{
 			Slug: t.Slug, Name: t.Name, Role: t.Role, All: t.All,
+			Id: t.ID, ParentId: t.ParentID, Inherited: t.Inherited,
 		})
 	}
 	return connect.NewResponse(resp), nil

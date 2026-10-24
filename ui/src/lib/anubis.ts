@@ -248,7 +248,10 @@ export async function confirmTotpEnrolment(code: string) {
 /** Which tenants the signed-in operator may administer. */
 export async function myTenants() {
   const resp = await api.platformSession.myTenants({});
-  const tenants = resp.tenants.map((t) => ({ slug: t.slug, name: t.name, role: t.role, all: t.all }));
+  const tenants = resp.tenants.map((t) => ({
+    slug: t.slug, name: t.name, role: t.role, all: t.all,
+    id: t.id, parentId: t.parentId, inherited: t.inherited,
+  }));
   // An empty answer is also an answer: a fresh installation has no tenants
   // to select, and held requests must proceed to their clean refusals
   // rather than wait out the gate's timeout.

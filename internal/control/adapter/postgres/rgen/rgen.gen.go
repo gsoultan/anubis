@@ -673,7 +673,12 @@ SELECT a.id::text AS id, a.operator_id::text AS operator_id,
        COALESCE(a.tenant_id::text, '') AS tenant_id,
        '' AS tenant_slug,
        a.role, COALESCE(a.granted_by::text, '') AS granted_by,
-       a.reason, a.valid_until, a.revoked_at, a.created_at
+       a.reason, a.valid_until, a.revoked_at, a.created_at,
+       COALESCE((WITH RECURSIVE d(id) AS (
+                   SELECT c.id FROM tenants c WHERE c.parent_id = a.tenant_id
+                   UNION ALL
+                   SELECT c.id FROM tenants c JOIN d ON c.parent_id = d.id)
+                 SELECT array_agg(d.id::text) FROM d), '{}')::text[] AS below
   FROM platform_assignments a
   JOIN platform_users u ON u.id = a.operator_id
  WHERE a.operator_id = $1
@@ -685,7 +690,12 @@ SELECT a.id::text AS id, a.operator_id::text AS operator_id,
        COALESCE(a.tenant_id::text, '') AS tenant_id,
        COALESCE(t.slug, '') AS tenant_slug,
        a.role, COALESCE(a.granted_by::text, '') AS granted_by,
-       a.reason, a.valid_until, a.revoked_at, a.created_at
+       a.reason, a.valid_until, a.revoked_at, a.created_at,
+       COALESCE((WITH RECURSIVE d(id) AS (
+                   SELECT c.id FROM tenants c WHERE c.parent_id = a.tenant_id
+                   UNION ALL
+                   SELECT c.id FROM tenants c JOIN d ON c.parent_id = d.id)
+                 SELECT array_agg(d.id::text) FROM d), '{}')::text[] AS below
   FROM platform_assignments a
   LEFT JOIN tenants t ON t.id = a.tenant_id
  WHERE a.revoked_at IS NULL
@@ -794,6 +804,7 @@ func scanAPIKeyListRow(rv [][]byte, r *controlrquery.APIKeyListRow, sl *runtime.
 }
 
 func scanAssignmentRow(rv [][]byte, r *controlrquery.AssignmentRow, sl *runtime.Slab) error {
+	var decErr error
 	r.ID = sl.Str(rv[0])
 	r.OperatorID = sl.Str(rv[1])
 	r.TenantID = sl.Str(rv[2])
@@ -804,6 +815,10 @@ func scanAssignmentRow(rv [][]byte, r *controlrquery.AssignmentRow, sl *runtime.
 	r.ValidUntil = runtime.Nullable(rv[7], runtime.Timestamptz)
 	r.RevokedAt = runtime.Nullable(rv[8], runtime.Timestamptz)
 	r.CreatedAt = runtime.Timestamptz(rv[9])
+	r.Below, decErr = runtime.TextArray(rv[10], sl)
+	if decErr != nil {
+		return decErr
+	}
 	return nil
 }
 

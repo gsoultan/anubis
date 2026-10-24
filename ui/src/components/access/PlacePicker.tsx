@@ -31,7 +31,7 @@ import type { ScopeAxis, ScopeNode } from '@/lib/api/types'
 const byMode = (a: NodeSel, b: NodeSel) =>
   Number(a.exclude) - Number(b.exclude) || a.name.localeCompare(b.name)
 
-type Mode = { exclude: boolean; inherit: boolean }
+export type Mode = { exclude: boolean; inherit: boolean }
 const MODES: { mode: Mode; label: string; hint: string }[] = [
   { mode: { exclude: false, inherit: true }, label: 'Include, with everything inside',
     hint: 'This place and every place within it.' },
@@ -48,7 +48,7 @@ function modeLabel(v: NodeSel): string {
   return v.inherit ? 'Except, and inside' : 'Except this place'
 }
 
-function ChosenPlace({ v, onChange, onRemove }: {
+export function ChosenPlace({ v, onChange, onRemove }: {
   v: NodeSel
   onChange: (m: Mode) => void
   onRemove: () => void

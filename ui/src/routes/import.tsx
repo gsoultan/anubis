@@ -155,6 +155,7 @@ function ImportPage() {
 
   return (
     <Page
+      back={{ to: '/identities', label: 'People' }}
       title="Import people and access"
       description="Create people and the access they hold from a spreadsheet. Download the template, fill it in, check it, then apply. Re-running the same file is safe — people who already exist are left alone."
       actions={

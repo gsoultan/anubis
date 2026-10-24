@@ -22,7 +22,7 @@ func (s *Repository) ListPermissions(ctx context.Context, tenantID, applicationI
 			Resource: r.Resource, Action: r.Action, Risk: r.Risk,
 			Description: r.Description, MinAssurance: int(r.MinAssurance),
 			RequiresAMR: r.RequiresAmr, MaxAuthAge: r.MaxAuthAge,
-			Deprecated: r.DeprecatedAt.Valid,
+			Deprecated: r.DeprecatedAt.Valid, Module: r.Module,
 		})
 	}
 	return out, nil
@@ -33,7 +33,7 @@ func (s *Repository) UpsertPermission(ctx context.Context, tenantID, application
 		applicationID, tenantID, appSlug, p.Resource, p.Action, p.Description,
 		database.OrDefaultStr(p.Risk, "normal"),
 		int16(database.MaxInt(p.MinAssurance, 1)),
-		database.EmptyIfNil(p.RequiresAMR), p.MaxAuthAge)
+		database.EmptyIfNil(p.RequiresAMR), p.MaxAuthAge, p.Module)
 	if err != nil {
 		return "", "", database.MapErr(err)
 	}

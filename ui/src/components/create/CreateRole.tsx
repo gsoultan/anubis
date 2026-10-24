@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { useForm } from '@tanstack/react-form'
-import { Checkbox, MultiSelect, TextInput } from '@mantine/core'
+import { Checkbox, TextInput } from '@mantine/core'
+import { FeaturePicker } from '@/components/access/FeaturePicker'
 import { api } from '@/lib/api/client'
 import { qk } from '@/lib/query/keys'
 import { queryClient } from '@/lib/query/client'
@@ -97,13 +98,12 @@ export function CreateRole({ opened }: { opened: boolean }) {
 
         <form.Field name="permission_keys">
           {(f) => (
-            <MultiSelect
-              label="Permissions" placeholder="Search the catalog…" searchable required
-              description="Wildcards expand at write time in production; here you pick concrete keys."
-              data={(perms ?? []).map((p) => p.key)}
-              value={f.state.value} onChange={(x) => f.handleChange(x)}
-              maxDropdownHeight={240}
-            />
+            <div>
+              <div className="t-body mb-0.5" style={{ fontWeight: 500 }}>What it permits</div>
+              <div className="t-xs mb-2">Pick by app, part of the app and feature, then the actions.</div>
+              <FeaturePicker perms={perms ?? []} apps={[]} appId={null}
+                value={f.state.value} onChange={(x) => f.handleChange(x)} />
+            </div>
           )}
         </form.Field>
       </form>

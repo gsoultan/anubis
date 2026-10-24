@@ -20,7 +20,7 @@ func (s *Repository) ApplicationBySlug(ctx context.Context, tenantID, slug strin
 		BackchannelLogoutURI: r.BackchannelLogoutURI, TokenFormat: r.TokenFormat,
 		ClientSecretHash: r.ClientSecretHash, ManifestVersion: r.ManifestVersion,
 		AccessTokenTtl: r.AccessTokenTtl, RefreshTokenTtl: r.RefreshTokenTtl,
-		AllowedAudiences: r.AllowedAudiences,
+		AllowedAudiences: r.AllowedAudiences, SignIn: r.SignIn,
 	})
 	// Only this lookup carries the seconds: it is the one on the token path.
 	rec.AccessTokenTTLSecs = r.AccessTokenTtlSecs
@@ -84,6 +84,7 @@ func appRecord(r tenancyrquery.ApplicationRow) tenancydomain.ApplicationRecord {
 		RefreshTokenTTL:        r.RefreshTokenTtl,
 		ManifestVersion:        int(r.ManifestVersion),
 		AllowedAudiences:       r.AllowedAudiences,
+		SignIn:                 r.SignIn,
 	}
 }
 
@@ -97,7 +98,7 @@ func (s *Repository) CreateApplication(ctx context.Context, tenantID string, a t
 		a.ClientSecretHash,
 		database.OrDefaultStr(a.AccessTokenTTL, "10 minutes"),
 		database.OrDefaultStr(a.RefreshTokenTTL, "30 days"),
-		database.EmptyIfNil(a.AllowedAudiences))
+		database.EmptyIfNil(a.AllowedAudiences), a.SignIn)
 	if err != nil {
 		return "", database.MapErr(err)
 	}
@@ -113,7 +114,7 @@ func (s *Repository) UpdateApplication(ctx context.Context, tenantID string, a t
 		database.OrDefaultStr(a.TokenFormat, "v4.public"),
 		database.OrDefaultStr(a.AccessTokenTTL, "10 minutes"),
 		database.OrDefaultStr(a.RefreshTokenTTL, "30 days"),
-		database.EmptyIfNil(a.AllowedAudiences))
+		database.EmptyIfNil(a.AllowedAudiences), a.SignIn)
 	return database.MapErr(err)
 }
 

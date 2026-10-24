@@ -264,6 +264,7 @@ function PageBuilder() {
 
   return (
     <Page
+      section="settings"
       title={kind === 'signout' ? 'Sign-out page' : 'Sign-in page'}
       actions={
         <>

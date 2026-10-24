@@ -103,6 +103,12 @@ type Application struct {
 	// machine client could mint a token audienced at any sibling application
 	// and be accepted by it, defeating the cross-service replay control.
 	AllowedAudiences []string
+	// SignIn is who may sign in to this app at all: 'anyone' in its
+	// populations (what an app always was), or only 'role_holders' — people
+	// holding a live grant of a role that gives something in this app.
+	// Checked when a token is issued for the app, so somebody with no
+	// business in it is stopped at the door rather than inside every page.
+	SignIn string
 }
 
 func (m *Application) Schema(t *storm.Table) {
@@ -117,6 +123,8 @@ func (m *Application) Schema(t *storm.Table) {
 	t.Col(&m.TokenFormat).Default("'v4.public'::text")
 	t.Col(&m.PostLogoutRedirectUris).Default("'{}'::text[]")
 	t.Col(&m.AllowedAudiences).Default("'{}'::text[]")
+	t.Col(&m.SignIn).Default("'anyone'::text")
+	t.CheckNamed("applications_sign_in_check", "sign_in = ANY (ARRAY['anyone'::text, 'role_holders'::text])")
 	t.UniqueNamed("applications_id_slug_key", &m.ID, &m.Slug)
 	t.UniqueNamed("applications_id_tenant_id_key", &m.ID, &m.Tenant)
 	t.UniqueNamed("applications_tenant_id_slug_key", &m.Tenant, &m.Slug)
@@ -393,6 +401,68 @@ func (m *Credential) Schema(t *storm.Table) {
 	t.Index(&m.LookupKey).Unique().Where("(lookup_key IS NOT NULL) AND (revoked_at IS NULL)").Named("credentials_lookup")
 	t.Index(&m.IdentityID).Unique().Where("(kind = 'password'::text) AND (revoked_at IS NULL)").Named("credentials_one_password")
 	t.ForeignKey(&m.IdentityID, &m.TenantID).References(&ref0, &ref0.ID, &ref0.Tenant).Named("credentials_identity_id_tenant_id_fkey").OnDelete(storm.Cascade)
+}
+
+// GrantChange is one bulk change to access: "every Branch manager who lists
+// all four Sumatra workplaces now has Sumatra and everything inside", applied
+// to however many grants matched, as ONE act with one reason.
+//
+// It exists so a change to two thousand people is reviewable and reversible
+// as the single decision it was. Each grant it touched has an item holding
+// the grant as it was and as it became; undoing the change puts every item
+// back exactly as it was, and records who undid it. A change is undone at
+// most once, and only while nothing else has changed those grants since —
+// the undo checks each grant still reads as the change left it.
+type GrantChange struct {
+	CreatedAt time.Time
+	UndoneAt  *time.Time
+	ID        [16]byte
+	Tenant    Tenant
+	ActorID   [16]byte
+	UndoneBy  *[16]byte
+	Kind      string
+	Reason    string
+	Summary   storm.JSON
+	Grants    int32
+}
+
+func (m *GrantChange) Schema(t *storm.Table) {
+	t.PrimaryKey(&m.ID)
+	t.Col(&m.CreatedAt).Default("now()")
+	t.Col(&m.ID).Default("uuidv7()")
+	t.Col(&m.Tenant).ConstraintName("grant_changes_tenant_id_fkey")
+	t.Col(&m.Tenant).OnDelete(storm.Cascade)
+	t.Col(&m.Tenant).NoIndex()
+	t.Col(&m.Reason).Default("''::text")
+	t.Col(&m.Summary).Default("'{}'::jsonb")
+	t.Col(&m.Grants).Default("0")
+	t.UniqueNamed("grant_changes_id_tenant_id_key", &m.ID, &m.Tenant)
+	t.CheckNamed("grant_changes_kind_check", "kind = ANY (ARRAY['add_place'::text, 'remove_place'::text, 'swap_place'::text, 'grow'::text, 'set_until'::text, 'revoke'::text])")
+	t.Index(&m.Tenant, storm.Desc(&m.CreatedAt)).Named("grant_changes_tenant_recent")
+}
+
+// GrantChangeItem is one grant inside a GrantChange: what it was before, and
+// what the change made it. Before and After are the grant's places, end date
+// and whether it was live, in the same JSON shape, so an undo is "write
+// Before back" and the check that nothing moved since is "the grant still
+// reads as After".
+type GrantChangeItem struct {
+	ChangeID [16]byte
+	GrantID  [16]byte
+	TenantID [16]byte
+	Before   storm.JSON
+	After    storm.JSON
+}
+
+func (m *GrantChangeItem) Schema(t *storm.Table) {
+	var change GrantChange
+	var g Grant
+	t.PrimaryKey(&m.ChangeID, &m.GrantID)
+	t.ForeignKey(&m.ChangeID, &m.TenantID).References(&change, &change.ID, &change.Tenant).Named("grant_change_items_change_id_tenant_id_fkey").OnDelete(storm.Cascade).NoIndex()
+	t.ForeignKey(&m.GrantID, &m.TenantID).References(&g, &g.ID, &g.Tenant).Named("grant_change_items_grant_id_tenant_id_fkey").OnDelete(storm.Cascade).NoIndex()
+	// "Which change last touched this grant?" — what an undo asks of every
+	// item before it writes anything back.
+	t.Index(&m.GrantID).Named("grant_change_items_grant")
 }
 
 // GrantScope binds a grant to a place in one axis's tree.
@@ -785,6 +855,11 @@ type Permission struct {
 	Description  string
 	RequiresAmr  []string
 	MinAssurance int16
+	// Module groups an app's permissions for people: Finance's Payables
+	// module holds invoice:read, invoice:approve and supplier:read. It is a
+	// label the manifest declares, never part of the key, so moving a
+	// permission between modules changes no grant and no check.
+	Module string
 }
 
 func (m *Permission) Schema(t *storm.Table) {
@@ -799,6 +874,7 @@ func (m *Permission) Schema(t *storm.Table) {
 	t.Col(&m.Description).Default("''::text")
 	t.Col(&m.RequiresAmr).Default("'{}'::text[]")
 	t.Col(&m.MinAssurance).Default("1")
+	t.Col(&m.Module).Default("''::text")
 	t.UniqueNamed("permissions_application_id_resource_action_key", &m.Application, &m.Resource, &m.Action)
 	t.CheckNamed("permissions_min_assurance_check", "(min_assurance >= 1) AND (min_assurance <= 3)")
 	t.CheckNamed("permissions_risk_check", "risk = ANY (ARRAY['normal'::text, 'sensitive'::text, 'critical'::text])")
@@ -1526,6 +1602,14 @@ func (m *SigningKey) Schema(t *storm.Table) {
 
 // Tenant is public.tenants. The tenancyrmodel package documents this table's
 // invariants; this declaration is the DDL half of the same thing.
+//
+// Parent makes a group of companies: a listed parent with the companies it
+// owns, and theirs below them. It is ownership for ADMINISTRATION only — an
+// operator assigned to a parent runs every company beneath it, including one
+// added later. It is not a door between tenants' data: people, roles, grants
+// and structures stay sealed inside their own tenant by the composite keys
+// everywhere else, and no query that decides access reads this column.
+// tenants_tree_guard keeps the tree a tree (no cycles, bounded depth).
 type Tenant struct {
 	storm.Model
 
@@ -1533,12 +1617,17 @@ type Tenant struct {
 	Slug     string
 	Name     string
 	Settings storm.JSON
+	Parent   *Tenant
 }
 
 func (m *Tenant) Schema(t *storm.Table) {
 	t.Col(&m.ID).Default("uuidv7()")
 	t.Col(&m.Status).Default("'active'::text")
 	t.Col(&m.Settings).Default("'{}'::jsonb")
+	t.Col(&m.Parent).ConstraintName("tenants_parent_id_fkey")
+	t.Col(&m.Parent).OnDelete(storm.Restrict)
+	t.Index(&m.Parent).Where("parent_id IS NOT NULL").Named("tenants_parent")
+	t.CheckNamed("tenants_parent_check", "parent_id <> id")
 	t.UniqueNamed("tenants_slug_key", &m.Slug)
 	t.CheckNamed("tenants_slug_check", "slug ~ '^[a-z0-9][a-z0-9_-]{1,62}$'::text")
 	t.CheckNamed("tenants_status_check", "status = ANY (ARRAY['active'::text, 'suspended'::text, 'archived'::text])")

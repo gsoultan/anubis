@@ -5,9 +5,12 @@ import { qk } from '@/lib/query/keys'
 import { queryClient } from '@/lib/query/client'
 import { notifyCreated, notifyRejected } from '@/components/create/shell'
 import {
-  axisNeedsAnInclude, daysFrom, fmtDate, namesOf, placesToScopes, requiredAxes, roleBlocked,
-  untilDate, type Places, type Until,
+  axisNeedsAnInclude, daysFrom, featureRoleName, fmtDate, namesOf, placesToScopes, requiredAxes,
+  roleBlocked, roleWithExactly, untilDate, type Places, type Until,
 } from '@/lib/access'
+import { useAxisRoots } from './GrantWhere'
+import type { LineMode } from './PlaceLines'
+import type { GrantScope, RealmKind } from '@/lib/api/types'
 
 /* State, validation and the write for giving somebody access. The sheet owns
    layout; this owns every rule the form has to teach before the database has
@@ -26,10 +29,14 @@ import {
       write one.
    6. A membership that applies where each member is assigned needs the one
       place this person holds it — and the same place twice is refused here,
-      not left to come back as "nothing changed". */
+      not left to come back as "nothing changed".
+   7. Everything on a required structure is written as its top place "and
+      everything inside", the one way such a structure can say "all".
+   8. Picked features become a role: the one whose permissions are exactly
+      those, or a new one, so the person's page still reads as a role. */
 
 export type Reach = 'everywhere' | 'places' | 'own'
-export type What = 'role' | 'membership'
+export type What = 'role' | 'membership' | 'features'
 
 export function useGrantDraft({ identityId, onDone }: {
   identityId: string | null
@@ -55,6 +62,7 @@ export function useGrantDraft({ identityId, onDone }: {
   })
   const subjectKind = realms?.find((r) => r.id === subject?.realm_id)?.kind
   const required = requiredAxes(axes)
+  const rootOf = useAxisRoots(axes)
 
   const [what, setWhat] = useState<What>('role')
   const [roleId, setRoleId] = useState<string | null>(null)
@@ -65,6 +73,10 @@ export function useGrantDraft({ identityId, onDone }: {
   const [seatExact, setSeatExact] = useState(false)
   const [reach, setReach] = useState<Reach | null>(null)
   const [places, setPlaces] = useState<Places>({})
+  const [modes, setModes] = useState<Record<string, LineMode>>({})
+  const [featApp, setFeatApp] = useState<string | null>(null)
+  const [featKeys, setFeatKeys] = useState<string[]>([])
+  const [featName, setFeatName] = useState('')
   const [until, setUntil] = useState<Until>('')
   const [pickedDate, setPickedDate] = useState<string | null>(null)
   const [reason, setReason] = useState('')
@@ -92,12 +104,28 @@ export function useGrantDraft({ identityId, onDone }: {
 
   const reset = () => {
     setWhat('role'); setRoleId(null); setMembershipId(null); setReach(null)
-    setPlaces({}); setUntil(''); setPickedDate(null); setReason('')
+    setPlaces({}); setModes({}); setUntil(''); setPickedDate(null); setReason('')
+    setFeatApp(null); setFeatKeys([]); setFeatName('')
     setSeat(null); setSeatExact(false)
   }
 
   const ends = untilDate(until, pickedDate)
-  const scopes = reach === 'places' ? placesToScopes(places) : []
+  const { data: perms } = useQuery({ queryKey: qk.permissions(), queryFn: api.permissions, enabled: what === 'features' })
+  const { data: apps } = useQuery({ queryKey: ['app-choices'], queryFn: () => api.applications(), enabled: what === 'features' })
+  const featPerms = (perms ?? []).filter((p) => featKeys.includes(p.key))
+  const featDefaultName = featKeys.length
+    ? featureRoleName(apps?.find((a) => a.id === featApp)?.name ?? 'App', featPerms) : ''
+
+  /* Everything on a required structure: its top place, and all inside. */
+  const top = (a: { code: string }): GrantScope[] => {
+    const id = rootOf(a.code)
+    return id ? [{ axis_code: a.code, scope_node_id: id, inherit: true, exclude: false }] : []
+  }
+  const scopes: GrantScope[] = reach === 'everywhere'
+    ? required.flatMap(top)
+    : reach === 'places'
+      ? [...placesToScopes(places), ...required.filter((a) => modes[a.code] === 'all').flatMap(top)]
+      : []
   const includes = scopes.filter((s) => !s.exclude)
   const alreadyHeld = (held?.rows ?? []).filter((g) => g.role_id === roleId)
   const heldMemberships = new Set((assignments?.rows ?? []).map((a) => a.membership_id))
@@ -119,16 +147,23 @@ export function useGrantDraft({ identityId, onDone }: {
         where.push(`They already hold it at ${seat.name}.`)
     }
   } else {
-    if (!roleId) whatP.push('Choose a role.')
+    if (what === 'role' && !roleId) whatP.push('Choose a role.')
+    if (what === 'features') {
+      if (!featApp) whatP.push('Choose an app.')
+      else if (featKeys.length === 0) whatP.push('Tick at least one thing they may do.')
+    }
     if (!reach) where.push('Choose where this access applies.')
-    /* The cards for these are disabled when a structure is required — but a
+    /* The own-records card is disabled when a structure is required, but a
        choice made before the structures loaded would survive that, and write
        a grant authorize() drops on every decision. Refused here, not only in
        the layout. */
-    if ((reach === 'everywhere' || reach === 'own') && required.length > 0)
-      where.push(`Every grant must name a place in ${namesOf(required)} — choose specific places.`)
+    if (reach === 'own' && required.length > 0)
+      where.push(`Every grant must name a place in ${namesOf(required)}, so own records only is not possible here.`)
+    if (reach === 'everywhere') {
+      const rootless = required.filter((a) => !rootOf(a.code))
+      if (rootless.length > 0) where.push(`${namesOf(rootless)} has no top place yet. Choose specific places.`)
+    }
     if (reach === 'places') {
-      if (includes.length === 0) where.push('Choose at least one place.')
       for (const [code, list] of Object.entries(places)) {
         if (axisNeedsAnInclude(list)) {
           const name = axes?.find((a) => a.code === code)?.display_name ?? code
@@ -136,9 +171,22 @@ export function useGrantDraft({ identityId, onDone }: {
         }
       }
       for (const a of required) {
-        if (!(places[a.code] ?? []).some((v) => !v.exclude))
-          where.push(`${a.display_name} is required — choose a place in it.`)
+        if (modes[a.code] === 'all') {
+          if (!rootOf(a.code)) where.push(`${a.display_name} has no top place yet. Choose places in it.`)
+        } else if (!(places[a.code] ?? []).some((v) => !v.exclude)) {
+          where.push(modes[a.code] === 'only'
+            ? `${a.display_name}: pick at least one place.`
+            : `${a.display_name}: choose Everything or only some.`)
+        }
       }
+      for (const [code, m] of Object.entries(modes)) {
+        if (m === 'only' && !required.some((a) => a.code === code) && !(places[code] ?? []).some((v) => !v.exclude)) {
+          const name = axes?.find((a) => a.code === code)?.display_name ?? code
+          where.push(`${name}: pick at least one place, or remove the line.`)
+        }
+      }
+      if (required.length === 0 && includes.length === 0 && where.length === 0)
+        where.push('Pick a kind of place to limit by, or choose Everything.')
     }
   }
   // Both paths end the same way: a membership assignment has an end date too.
@@ -150,6 +198,25 @@ export function useGrantDraft({ identityId, onDone }: {
   const ready = {
     who: who.length === 0, what: whatP.length === 0,
     where: where.length === 0, when: when.length === 0,
+  }
+
+  /* The role for picked features: one with exactly these permissions if it
+     exists, so a second person given the same picks shares the first one's
+     role, and a new one otherwise. Only roles with the same count are read. */
+  async function featureRole(): Promise<{ id: string; name: string }> {
+    const same = (roles ?? []).filter((r) => !r.deprecated && r.permission_count === new Set(featKeys).size)
+    const lists = await Promise.all(same.slice(0, 40).map(async (r) => [r.id, await api.rolePermissions(r.id)] as const))
+    const byId = new Map(lists)
+    const found = roleWithExactly(featKeys, same, (r) => byId.get(r.id))
+    if (found) return found
+    const name = featName.trim() || featDefaultName
+    const kinds: RealmKind[] = subjectKind ? [subjectKind] : ['internal', 'partner', 'public', 'service']
+    const id = await api.createRole({
+      name, description: 'Made when access was given by picking features.',
+      allowed_realm_kinds: kinds, permission_keys: featKeys,
+    })
+    await queryClient.invalidateQueries({ queryKey: qk.roles() })
+    return { id, name }
   }
 
   async function submit() {
@@ -169,9 +236,10 @@ export function useGrantDraft({ identityId, onDone }: {
             ? `${name} joined “${membership.name}”${at} and received ${out.grants_created} grant${out.grants_created === 1 ? '' : 's'}.`
             : `${name} already holds “${membership.name}”${at}.`)
         await queryClient.invalidateQueries({ queryKey: qk.memberships() })
-      } else if (role) {
+      } else if (role || what === 'features') {
+        const given = what === 'features' ? await featureRole() : role!
         await api.createGrant({
-          identity_id: identityId, role_id: role.id,
+          identity_id: identityId, role_id: given.id,
           self_scoped: reach === 'own', valid_until: ends?.toISOString() ?? null,
           scopes, reason: reason.trim(),
         })
@@ -184,7 +252,7 @@ export function useGrantDraft({ identityId, onDone }: {
           : `${includes.length} place${includes.length === 1 ? '' : 's'}`
             + (carved ? `, ${carved} excepted` : '')
         notifyCreated('Access given',
-          `${name} → ${role.name} · ${reachWords} · ${ends ? `until ${fmtDate(ends)}` : 'no end date'}`)
+          `${name} → ${given.name} · ${reachWords} · ${ends ? `until ${fmtDate(ends)}` : 'no end date'}`)
       }
       /* One prefix covers every list of grants — a person's own page and the
          holders of a role — which is why they are all keyed under 'grants'. */
@@ -202,7 +270,8 @@ export function useGrantDraft({ identityId, onDone }: {
     subject: subject ?? null, subjectKind, roles, memberships, axes, required,
     what, setWhat, roleId, setRoleId, role, membershipId, setMembershipId, membership,
     seat, setSeat, seatExact, setSeatExact, heldHere,
-    reach, setReach, places, setPlaces,
+    reach, setReach, places, setPlaces, modes, setModes, rootOf, scopes,
+    perms, apps, featApp, setFeatApp, featKeys, setFeatKeys, featName, setFeatName, featDefaultName,
     until, setUntil, pickedDate, setPickedDate, ends,
     reason, setReason,
     alreadyHeld, heldMemberships, problems, ready,

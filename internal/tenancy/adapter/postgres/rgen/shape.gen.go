@@ -28,6 +28,7 @@ func _assertApplicationShape(m m0.Application) {
 		m.TokenFormat,
 		m.PostLogoutRedirectUris,
 		m.AllowedAudiences,
+		m.SignIn,
 	}
 }
 
@@ -89,5 +90,6 @@ func _assertTenantShape(m m0.Tenant) {
 		m.Slug,
 		m.Name,
 		m.Settings,
+		m.Parent,
 	}
 }

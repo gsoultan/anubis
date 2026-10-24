@@ -60,6 +60,26 @@ WHERE g.identity_id = $1 AND g.tenant_id = $2
   AND (g.valid_until IS NULL OR g.valid_until > now())
 ORDER BY r.name`)
 
+// HoldsRoleInAppRow answers whether a person has any business in an app.
+type HoldsRoleInAppRow struct {
+	Holds bool
+}
+
+// HoldsRoleInApp backs applications.sign_in = 'role_holders' (0057): does
+// the person hold a live grant of a role that gives at least one live
+// permission of this app? Places do not enter into it: the question is
+// whether they may come in at all, and what they then see is authorize()'s.
+var HoldsRoleInApp = storm.SQL[HoldsRoleInAppRow](`
+SELECT EXISTS (
+  SELECT 1 FROM grants g
+    JOIN role_permissions_effective rpe ON rpe.role_id = g.role_id
+    JOIN permissions p ON p.id = rpe.permission_id
+   WHERE g.identity_id = $1 AND g.tenant_id = $2
+     AND g.revoked_at IS NULL AND g.valid_from <= now()
+     AND (g.valid_until IS NULL OR g.valid_until > now())
+     AND p.application_id::text = $3::text AND p.deprecated_at IS NULL
+) AS holds`)
+
 // PermissionKeyRow is one effective permission key.
 type PermissionKeyRow struct {
 	Key runtime.Null[string]

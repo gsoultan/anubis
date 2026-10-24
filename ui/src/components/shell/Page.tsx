@@ -1,6 +1,9 @@
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Link } from '@tanstack/react-router'
-import { IconArrowLeft } from '@tabler/icons-react'
+import { Collapse, UnstyledButton } from '@mantine/core'
+import { IconArrowLeft, IconChevronDown, IconHelpCircle } from '@tabler/icons-react'
+import { SectionTabs } from './SectionTabs'
+import type { SectionKey } from './nav'
 
 /* One page frame so heading weight, description measure and gutters cannot
    drift between screens. max-w keeps prose readable on wide displays while
@@ -11,7 +14,7 @@ import { IconArrowLeft } from '@tabler/icons-react'
    reason the heading is: a person's page and a role's page have to open the
    same way, or the console grows a second dialect. */
 export function Page({
-  title, description, actions, children, wide = false, back, lead, badge,
+  title, description, actions, children, wide = false, back, lead, badge, section, help,
 }: {
   title: string
   description?: ReactNode
@@ -24,7 +27,13 @@ export function Page({
   lead?: ReactNode
   /** Rendered on the heading's baseline — status, assurance. Facts, not actions. */
   badge?: ReactNode
+  /** The tabs of the section this page belongs to (Roles, Apps, Settings). */
+  section?: SectionKey
+  /** The long explanation. The description is one line; this sits behind
+      "How this works" so the heading costs one line until somebody asks. */
+  help?: ReactNode
 }) {
+  const [helpOpen, setHelpOpen] = useState(false)
   /* The heading block used to run title → description → content on three
      separate rows, which cost about 190px before a table's first row appeared
      — a fifth of a laptop screen spent on chrome. The description now sits on
@@ -38,6 +47,7 @@ export function Page({
      at 375px that was about 60px, one word per line. */
   return (
     <div className="fade">
+      {section && <div className="px-3 pt-3 md:px-5"><SectionTabs section={section} /></div>}
       <div className="flex flex-col gap-3 px-3 pb-4 pt-4 md:flex-row md:items-start md:justify-between md:gap-6 md:px-5 md:pt-5">
         <div className="flex min-w-0 items-start gap-3">
           {lead}
@@ -57,7 +67,27 @@ export function Page({
               {badge}
             </div>
             {description && (
-              <p className="t-sm mt-1" style={{ maxWidth: 680 }}>{description}</p>
+              <p className="t-sm mt-1" style={{ maxWidth: 680 }}>
+                {description}
+                {help && (
+                  <>
+                    {' '}
+                    <UnstyledButton onClick={() => setHelpOpen((o) => !o)} aria-expanded={helpOpen}
+                      className="t-sm inline-flex items-center gap-1 align-baseline"
+                      style={{ color: 'var(--accent)' }}>
+                      <IconHelpCircle size={13} style={{ alignSelf: 'center' }} />
+                      How this works
+                      <IconChevronDown size={12} style={{ alignSelf: 'center',
+                        transform: helpOpen ? 'rotate(180deg)' : undefined, transition: 'transform var(--t-fast)' }} />
+                    </UnstyledButton>
+                  </>
+                )}
+              </p>
+            )}
+            {help && (
+              <Collapse expanded={helpOpen}>
+                <div className="t-sm panel-inset mt-2 px-3 py-2.5" style={{ maxWidth: 680 }}>{help}</div>
+              </Collapse>
             )}
           </div>
         </div>

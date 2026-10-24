@@ -48,8 +48,10 @@
 
   /* Shell metrics, named once so the header, the sidebar and every sticky
      offset cannot drift apart. */
-  --nav-w:    232px;
+  --nav-w:    216px;
+  --rail-w:   64px;
   --header-h: 56px;
+  --phone-bar-h: 60px;
 }
 
 :root[data-mantine-color-scheme='dark'] {
@@ -90,6 +92,11 @@
   --warn:  #fbbf24;  --warn-bg:  #fbbf2418;
   --info:  #38bdf8;  --info-bg:  #38bdf818;   /* cyan, so it cannot read as accent */
   --grape: #c084fc;
+  /* Everything (grows by itself) and Only these (a fixed list). Named for
+     what they mean so a screen cannot pick green for one and teal for the
+     other: they ARE allow and warn, read as "open" and "look at this". */
+  --every: var(--allow); --every-bg: var(--allow-bg);
+  --fixed: var(--warn);  --fixed-bg: var(--warn-bg);
 
   /* Population kinds. A fourth family, because these are categories and not
      verdicts: a `partner` realm was painted with --info, which is the status
@@ -149,6 +156,8 @@
   --warn:  #b45309;  --warn-bg:  #b4530912;
   --info:  #0369a1;  --info-bg:  #0369a112;
   --grape: #6d28d9;
+  --every: var(--allow); --every-bg: var(--allow-bg);
+  --fixed: var(--warn);  --fixed-bg: var(--warn-bg);
 
   --kind-internal: #a8801c;
   --kind-partner:  #0e7490;
@@ -320,7 +329,7 @@
      position — on the tinted sidebar it disappeared entirely. */
   .nav-item {
     position: relative; display: flex; align-items: center; gap: 10px;
-    padding: 0 10px; height: 32px; border-radius: var(--r-sm);
+    padding: 0 10px; height: 38px; border-radius: var(--r-md);
     color: var(--ink-2); font-size: 13px; font-weight: 480;
     transition: color var(--t-fast), background var(--t-fast);
   }
@@ -333,6 +342,45 @@
   .nav-icon { display: flex; flex: none; color: var(--ink-3); transition: color var(--t-fast); }
   .nav-item:hover .nav-icon { color: var(--ink-2); }
   .nav-item[data-active] .nav-icon { color: var(--accent); }
+  nav[data-folded] .nav-item { justify-content: center; padding: 0; height: 40px; }
+
+  /* The phone bar: four places and More, along the bottom where a thumb is. */
+  .phone-bar {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 150;
+    display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
+    height: calc(var(--phone-bar-h) + env(safe-area-inset-bottom));
+    padding-bottom: env(safe-area-inset-bottom);
+    background: var(--s-nav); border-top: 1px solid var(--line);
+  }
+  .phone-tab {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+    min-height: 44px; color: var(--ink-3); font-size: 11px; font-weight: 560;
+  }
+  .phone-tab[data-active] { color: var(--accent); }
+  .more-group {
+    display: flex; flex-direction: column; border-radius: var(--r-lg);
+    border: 1px solid var(--line); background: var(--s-raised); overflow: hidden;
+  }
+  .more-row {
+    display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 0 14px;
+    color: var(--ink); font-size: 15px; border-bottom: 1px solid var(--line-soft);
+  }
+  .more-row:last-child { border-bottom: 0; }
+
+  /* Tabs at the top of a page that absorbed its old neighbours. */
+  .section-tabs {
+    display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none;
+    border-bottom: 1px solid var(--line);
+  }
+  .section-tabs::-webkit-scrollbar { display: none; }
+  .section-tab {
+    flex: none; display: inline-flex; align-items: center; height: 38px; padding: 0 12px;
+    margin-bottom: -1px; border-bottom: 2px solid transparent;
+    color: var(--ink-3); font-size: 13.5px; font-weight: 520; white-space: nowrap;
+    transition: color var(--t-fast), border-color var(--t-fast);
+  }
+  .section-tab:hover { color: var(--ink); }
+  .section-tab[data-active] { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
 
   /* ---- axis rail -------------------------------------------------------- */
   /* Switching structure is navigation, so it is a rail of tabs, not a grid of

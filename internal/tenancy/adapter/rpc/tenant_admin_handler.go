@@ -90,7 +90,7 @@ func appProto(a *tenancydomain.ApplicationRecord) *anubisv1.Application {
 		BackchannelLogoutUri: a.BackchannelLogoutURI,
 		TokenFormat:          a.TokenFormat, AccessTokenTtl: a.AccessTokenTTL,
 		RefreshTokenTtl: a.RefreshTokenTTL, ManifestVersion: int32(a.ManifestVersion),
-		AllowedAudiences: a.AllowedAudiences,
+		AllowedAudiences: a.AllowedAudiences, SignIn: a.SignIn,
 	}
 }
 
@@ -105,6 +105,7 @@ func (h *TenantAdminHandler) ListTenants(ctx context.Context, _ *connect.Request
 	for _, t := range out.([]tenancydomain.TenantRef) {
 		resp.Tenants = append(resp.Tenants, &anubisv1.Tenant{
 			Id: t.ID, Slug: t.Slug, Name: t.Name, Status: t.Status, CreatedAt: t.CreatedAt.Unix(),
+			ParentId: t.ParentID,
 		})
 	}
 	return connect.NewResponse(resp), nil
@@ -112,14 +113,14 @@ func (h *TenantAdminHandler) ListTenants(ctx context.Context, _ *connect.Request
 
 func (h *TenantAdminHandler) CreateTenant(ctx context.Context, req *connect.Request[anubisv1.CreateTenantRequest]) (*connect.Response[anubisv1.CreateTenantResponse], error) {
 	out, err := h.f.Do(ctx, "admin.tenant.create", func(ctx context.Context) (any, error) {
-		return h.svc.CreateTenant(ctx, req.Msg.Slug, req.Msg.Name)
+		return h.svc.CreateTenant(ctx, req.Msg.Slug, req.Msg.Name, req.Msg.ParentId)
 	})
 	if err != nil {
 		return nil, apiconnect.Err(ctx, err)
 	}
 	t := out.(*tenancydomain.TenantRef)
 	return connect.NewResponse(&anubisv1.CreateTenantResponse{
-		Tenant: &anubisv1.Tenant{Id: t.ID, Slug: t.Slug, Name: t.Name, Status: t.Status},
+		Tenant: &anubisv1.Tenant{Id: t.ID, Slug: t.Slug, Name: t.Name, Status: t.Status, ParentId: t.ParentID},
 	}), nil
 }
 
@@ -235,7 +236,7 @@ func (h *TenantAdminHandler) CreateApplication(ctx context.Context, req *connect
 			BackchannelLogoutURI: a.BackchannelLogoutUri,
 			TokenFormat:          a.TokenFormat, AccessTokenTTL: a.AccessTokenTtl,
 			RefreshTokenTTL:  a.RefreshTokenTtl,
-			AllowedAudiences: a.AllowedAudiences,
+			AllowedAudiences: a.AllowedAudiences, SignIn: a.SignIn,
 		})
 		if err != nil {
 			return nil, err
@@ -262,7 +263,7 @@ func (h *TenantAdminHandler) UpdateApplication(ctx context.Context, req *connect
 			BackchannelLogoutURI: a.BackchannelLogoutUri,
 			TokenFormat:          a.TokenFormat, AccessTokenTTL: a.AccessTokenTtl,
 			RefreshTokenTTL:  a.RefreshTokenTtl,
-			AllowedAudiences: a.AllowedAudiences,
+			AllowedAudiences: a.AllowedAudiences, SignIn: a.SignIn,
 		})
 	})
 	if err != nil {
@@ -588,6 +589,17 @@ func (h *TenantAdminHandler) UpdateTenant(ctx context.Context,
 		return nil, apiconnect.Err(ctx, err)
 	}
 	return connect.NewResponse(&anubisv1.UpdateTenantResponse{}), nil
+}
+
+func (h *TenantAdminHandler) MoveTenant(ctx context.Context,
+	req *connect.Request[anubisv1.MoveTenantRequest],
+) (*connect.Response[anubisv1.MoveTenantResponse], error) {
+	if _, err := h.f.Do(ctx, "admin.tenant.move", func(ctx context.Context) (any, error) {
+		return nil, h.svc.MoveTenant(ctx, req.Msg.Id, req.Msg.ParentId)
+	}); err != nil {
+		return nil, apiconnect.Err(ctx, err)
+	}
+	return connect.NewResponse(&anubisv1.MoveTenantResponse{}), nil
 }
 
 func (h *TenantAdminHandler) SetTenantStatus(ctx context.Context,

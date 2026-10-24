@@ -21,6 +21,7 @@ type PermissionRow struct {
 	RequiresAmr  []string
 	MaxAuthAge   string
 	DeprecatedAt runtime.Null[time.Time]
+	Module       string
 }
 
 // ListPermissions is the TENANT's catalog: what its own applications define.
@@ -29,7 +30,7 @@ var ListPermissions = storm.SQL[PermissionRow](`
 SELECT p.id::text AS id, p.key, p.app_slug, p.resource, p.action, p.risk,
        p.description, p.min_assurance, p.requires_amr,
        COALESCE(p.max_auth_age::text, '')::text AS max_auth_age,
-       p.deprecated_at
+       p.deprecated_at, p.module
 FROM permissions p
 WHERE p.tenant_id = $1
   AND ($2::uuid IS NULL OR p.application_id = $2)
@@ -45,13 +46,16 @@ type UpsertedPermissionRow struct {
 
 // UpsertPermission is manifest apply: it reactivates a previously deprecated
 // permission rather than duplicating it — never orphan a live grant.
-// $10 max_auth_age as interval text (” becomes NULL).
+// $10 max_auth_age as interval text (” becomes NULL). $11 module, the label
+// the manifest files it under; a manifest that names none clears it.
 var UpsertPermission = storm.SQL[UpsertedPermissionRow](`
 INSERT INTO permissions (application_id, tenant_id, app_slug, resource, action,
-                         description, risk, min_assurance, requires_amr, max_auth_age)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::text[], nullif($10, '')::interval)
+                         description, risk, min_assurance, requires_amr, max_auth_age,
+                         module)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::text[], nullif($10, '')::interval, $11)
 ON CONFLICT (application_id, resource, action) DO UPDATE
     SET description = EXCLUDED.description,
+        module = EXCLUDED.module,
         risk = EXCLUDED.risk,
         min_assurance = EXCLUDED.min_assurance,
         requires_amr = EXCLUDED.requires_amr,

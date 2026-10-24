@@ -41,7 +41,7 @@ func Queries() []storm.RawDecl {
 		// signin.go
 		GetSigninPage, PutSigninPage,
 		// tenant.go
-		UpdateTenant, SetTenantStatus, BumpCatalogVersion,
+		UpdateTenant, MoveTenant, SetTenantStatus, BumpCatalogVersion,
 		CountTenantIdentities, GetTenantStats,
 	}
 }

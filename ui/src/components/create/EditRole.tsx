@@ -1,13 +1,27 @@
 import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Button, Checkbox, MultiSelect, TextInput } from '@mantine/core'
+import { Button, Checkbox, TextInput } from '@mantine/core'
+import { FeaturePicker } from '@/components/access/FeaturePicker'
 import { api } from '@/lib/api/client'
 import { qk } from '@/lib/query/keys'
 import { queryClient } from '@/lib/query/client'
 import { useCreate } from '@/stores/create'
 import { KINDS } from './CreateRole'
 import { CreateShell, CancelSubmit, notifyCreated, notifyRejected } from './shell'
-import type { RealmKind } from '@/lib/api/types'
+import type { Permission, RealmKind } from '@/lib/api/types'
+
+/** Keys in the role that name no single permission: patterns such as
+    invoices:invoice:*. Kept as they are; the picker only lists real ones. */
+export function Patterns({ keys, perms }: { keys: string[]; perms: Permission[] }) {
+  const odd = keys.filter((k) => !perms.some((p) => p.key === k))
+  if (odd.length === 0) return null
+  return (
+    <div className="t-xs mt-2 flex flex-wrap items-center gap-1.5">
+      Also matches every permission like:
+      {odd.map((k) => <span key={k} className="chip font-mono">{k}</span>)}
+    </div>
+  )
+}
 
 /* Where "remove a permission from a role" lives: deselect it here and save.
    Changes bite immediately — every holder's next access check uses the new
@@ -94,10 +108,12 @@ export function EditRole({ opened }: { opened: boolean }) {
             ))}
           </div>
         </div>
-        <MultiSelect label="Permissions" searchable
-          description="Deselect to remove. The bundle must keep at least one."
-          data={(perms ?? []).map((p) => p.key)}
-          value={keys} onChange={setKeys} maxDropdownHeight={240} />
+        <div>
+          <div className="t-body mb-0.5" style={{ fontWeight: 500 }}>What it permits</div>
+          <div className="t-xs mb-2">By app, part of the app and feature. Untick to remove; the role must keep at least one.</div>
+          <FeaturePicker perms={perms ?? []} apps={[]} appId={null} value={keys} onChange={setKeys} />
+          <Patterns keys={keys} perms={perms ?? []} />
+        </div>
         {(removed.length > 0 || added.length > 0) && (
           <div className="panel-inset px-3 py-2.5">
             <div className="t-label mb-1.5">Pending changes</div>

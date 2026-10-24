@@ -146,8 +146,9 @@ function Audit() {
 
   return (
     <Page
-      title="Audit"
-      description="Every decision and change, in order, tamper-evident — each entry is chained to the previous one, so history cannot be silently rewritten."
+      title="Activity"
+      description="Every change, by whom and when."
+      help="Each entry is chained to the one before it, so history cannot be quietly rewritten. Verify chain recomputes the chain and names the first entry where it breaks."
       wide
       actions={
         <Tooltip label="Recomputes the hash chain and reports the first entry where it breaks.">

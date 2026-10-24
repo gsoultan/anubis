@@ -6,6 +6,7 @@ type AuthzAdminUsecase interface {
 	RoleAdminUsecase
 	PermissionAdminUsecase
 	GrantAdminUsecase
+	GrantChangeUsecase
 	MembershipAdminUsecase
 	ManifestAdminUsecase
 }
