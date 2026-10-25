@@ -19,6 +19,8 @@ import type {
   SecuritySignal,  StrictDryRun, SyncPlan, SyncRun, SyncSource, Tenant,
   Ial, Risk, Uuid, AuthPage, PageConfig, PageKind, SigningKeyRecord,
   CredentialInfo, CatalogSource, CatalogRun, CatalogFormat,
+  AccessSummary, GrantChangeSpec, GrantChangePreview, GrantChangeRecord,
+  GrantChangeKind, FullList, PlaceReach,
 } from './types'
 
 /** Unix seconds to ISO, with the protobuf zero meaning "never". */
@@ -255,6 +257,7 @@ export async function permissions(): Promise<Permission[]> {
     max_auth_age: p.maxAuthAge || null,
     min_assurance: p.minAssurance as Ial,
     deprecated_at: p.deprecated ? new Date(0).toISOString() : null,
+    module: p.module,
   }))
 }
 
@@ -335,11 +338,14 @@ export async function tenants(): Promise<Tenant[]> {
     name: t.name,
     status: t.status as Tenant['status'],
     created_at: atRequired(t.createdAt),
+    parent_id: t.parentId || null,
   }))
 }
 
-export async function createTenant(input: { slug: string; name: string }): Promise<Tenant> {
-  const resp = await rpc.tenantAdmin.createTenant({ slug: input.slug, name: input.name })
+export async function createTenant(input: { slug: string; name: string; parentId?: string }): Promise<Tenant> {
+  const resp = await rpc.tenantAdmin.createTenant({
+    slug: input.slug, name: input.name, parentId: input.parentId ?? '',
+  })
   const t = resp.tenant
   return {
     id: t?.id ?? '',
@@ -347,7 +353,14 @@ export async function createTenant(input: { slug: string; name: string }): Promi
     name: t?.name ?? input.name,
     status: (t?.status ?? 'active') as Tenant['status'],
     created_at: atRequired(t?.createdAt),
+    parent_id: t?.parentId || null,
   }
+}
+
+/** Puts a company under another, or at the top with ''. The server refuses
+    a loop, or a group deeper than six levels, and says which. */
+export async function moveTenant(id: string, parentId: string): Promise<void> {
+  await rpc.tenantAdmin.moveTenant({ id, parentId })
 }
 
 export async function updateTenant(id: string, name: string): Promise<void> {
@@ -470,6 +483,34 @@ export type AppRecord = {
   id: string; slug: string; name: string; kind: string; status: string
   redirect_uris: string[]; post_logout_redirect_uris: string[]
   backchannel_logout_uri: string; manifest_version: number
+  /* Carried so that saving one field sends the others back as they were.
+     UpdateApplication writes the whole row: an app saved without these got
+     its token lifetimes reset to the defaults and its audiences emptied. */
+  token_format: string; access_token_ttl: string; refresh_token_ttl: string
+  allowed_audiences: string[]
+  /** 'anyone' in its populations, or only 'role_holders'. */
+  sign_in: 'anyone' | 'role_holders'
+}
+
+type AppProto = {
+  id: string; slug: string; name: string; kind: string; status: string
+  redirectUris: string[]; postLogoutRedirectUris: string[]
+  backchannelLogoutUri: string; manifestVersion: number
+  tokenFormat: string; accessTokenTtl: string; refreshTokenTtl: string
+  allowedAudiences: string[]; signIn: string
+}
+
+function toAppRecord(a: AppProto): AppRecord {
+  return {
+    id: a.id, slug: a.slug, name: a.name, kind: a.kind, status: a.status,
+    redirect_uris: a.redirectUris,
+    post_logout_redirect_uris: a.postLogoutRedirectUris,
+    backchannel_logout_uri: a.backchannelLogoutUri,
+    manifest_version: a.manifestVersion,
+    token_format: a.tokenFormat, access_token_ttl: a.accessTokenTtl,
+    refresh_token_ttl: a.refreshTokenTtl, allowed_audiences: a.allowedAudiences,
+    sign_in: a.signIn === 'role_holders' ? 'role_holders' : 'anyone',
+  }
 }
 
 export async function applications(opts: {
@@ -480,13 +521,7 @@ export async function applications(opts: {
     query: opts.query ?? '', pageToken: opts.cursor ?? '', pageSize: size,
   })
   return {
-    rows: resp.applications.map((a): AppRecord => ({
-      id: a.id, slug: a.slug, name: a.name, kind: a.kind, status: a.status,
-      redirect_uris: a.redirectUris,
-      post_logout_redirect_uris: a.postLogoutRedirectUris,
-      backchannel_logout_uri: a.backchannelLogoutUri,
-      manifest_version: a.manifestVersion,
-    })),
+    rows: resp.applications.map(toAppRecord),
     next: resp.nextPageToken,
     total: resp.total,
   }
@@ -495,6 +530,7 @@ export async function applications(opts: {
 export async function createApplication(input: {
   slug: string; name: string; kind: string; redirectUris: string[]
   postLogoutRedirectUris: string[]
+  signIn?: 'anyone' | 'role_holders'
 }): Promise<{ clientSecret: string }> {
   const resp = await rpc.tenantAdmin.createApplication({
     application: {
@@ -504,6 +540,7 @@ export async function createApplication(input: {
       postLogoutRedirectUris: input.postLogoutRedirectUris,
       backchannelLogoutUri: '', tokenFormat: '', accessTokenTtl: '',
       refreshTokenTtl: '', manifestVersion: 0, allowedAudiences: [],
+      signIn: input.signIn ?? '',
     },
   })
   // Server and service clients get a secret, shown exactly once.
@@ -551,6 +588,9 @@ export async function updateApplication(a: AppRecord): Promise<void> {
       postLogoutRedirectUris: a.post_logout_redirect_uris,
       backchannelLogoutUri: a.backchannel_logout_uri,
       manifestVersion: a.manifest_version,
+      tokenFormat: a.token_format, accessTokenTtl: a.access_token_ttl,
+      refreshTokenTtl: a.refresh_token_ttl, allowedAudiences: a.allowed_audiences,
+      signIn: a.sign_in,
     },
   })
 }
@@ -1270,7 +1310,7 @@ export async function removeAssignment(assignmentId: Uuid, reason = ''): Promise
   return resp.grantsRevoked
 }
 
-export async function createRole(i: NewRoleInput): Promise<void> {
+export async function createRole(i: NewRoleInput): Promise<string> {
   // The console picks permission KEYS; UpdateRole replaces patterns, and a
   // key used as a pattern matches exactly itself — no wildcard implied.
   const resp = await rpc.authzAdmin.createRole({
@@ -1284,7 +1324,7 @@ export async function createRole(i: NewRoleInput): Promise<void> {
       deprecated: false,
     },
   })
-  void resp
+  return resp.role?.id ?? ''
 }
 
 export async function updateRole(i: {
@@ -1503,4 +1543,90 @@ export async function syncRuns(sourceId: Uuid, limit = 25): Promise<SyncRun[]> {
       ...(typeof rep?.['error'] === 'string' ? { error: rep['error'] as string } : {}),
     }
   })
+}
+
+/* ---- access as a whole (0057) ------------------------------------------ */
+
+/** What each person on one page of the People list can do. At most 200. */
+export async function summarizeAccess(identityIds: Uuid[]): Promise<AccessSummary[]> {
+  if (identityIds.length === 0) return []
+  const resp = await rpc.authzAdmin.summarizeAccess({ identityIds })
+  return resp.summaries.map((s) => ({
+    identity_id: s.identityId, direct: s.direct, groups: s.groups,
+    roles: s.roles, group_names: s.groupNames, next_end: at(s.nextEnd),
+  }))
+}
+
+function changeSpec(c: GrantChangeSpec) {
+  return {
+    filter: {
+      roleId: c.role_id, axis: c.axis ?? '',
+      coversNodeIds: c.covers_node_ids ?? [], siblingsOf: c.siblings_of ?? '',
+    },
+    kind: c.kind, axis: c.axis ?? '', nodeId: c.node_id ?? '', toNodeId: c.to_node_id ?? '',
+    inherit: c.inherit ?? false,
+    validUntil: BigInt(c.valid_until ? Math.floor(new Date(c.valid_until).getTime() / 1000) : 0),
+    reason: c.reason ?? '',
+  }
+}
+
+function toScopes(ss: { axis: string; nodeId: string; inherit: boolean; exclude: boolean }[]): GrantScope[] {
+  return ss.map((s) => ({ axis_code: s.axis, scope_node_id: s.nodeId, inherit: s.inherit, exclude: s.exclude }))
+}
+
+export async function previewGrantChange(c: GrantChangeSpec): Promise<GrantChangePreview> {
+  const r = await rpc.authzAdmin.previewGrantChange({ change: changeSpec(c) })
+  return {
+    matched: r.matched, changes: r.changes, people: r.people,
+    skipped: r.skipped.map((s) => ({ reason: s.reason, count: s.count })),
+    sample: r.sample.map((row) => ({
+      grant_id: row.grantId, identity_id: row.identityId, username: row.username,
+      before: toScopes(row.before), after: toScopes(row.after),
+      before_until: at(row.beforeUntil), after_until: at(row.afterUntil), revoked: row.revoked,
+    })),
+  }
+}
+
+export async function applyGrantChange(c: GrantChangeSpec): Promise<{ changeId: string; changed: number }> {
+  const r = await rpc.authzAdmin.applyGrantChange({ change: changeSpec(c) })
+  return { changeId: r.changeId, changed: r.changed }
+}
+
+export async function undoGrantChange(changeId: Uuid, reason = ''): Promise<number> {
+  const r = await rpc.authzAdmin.undoGrantChange({ changeId, reason })
+  return r.restored
+}
+
+export async function grantChanges(limit = 20): Promise<GrantChangeRecord[]> {
+  const r = await rpc.authzAdmin.listGrantChanges({ limit })
+  return r.changes.map((c) => {
+    let spec: GrantChangeRecord['spec'] = {}
+    try { spec = JSON.parse(c.summaryJson) } catch { /* an old row with no summary */ }
+    return {
+      id: c.id, kind: c.kind as GrantChangeKind, reason: c.reason, grants: c.grants,
+      created_at: atRequired(c.createdAt), actor_id: c.actorId, undone_at: at(c.undoneAt), spec,
+    }
+  })
+}
+
+export async function fullLists(axis = '', roleId = ''): Promise<FullList[]> {
+  const r = await rpc.authzAdmin.listFullLists({ axis, roleId })
+  return r.lists.map((l) => ({
+    axis: l.axis, parent_id: l.parentId, parent_name: l.parentName, is_root: l.isRoot,
+    role_id: l.roleId, role_name: l.roleName, grants: l.grants, places: l.places,
+  }))
+}
+
+export async function placeReach(nodeId: Uuid): Promise<PlaceReach> {
+  const r = await rpc.authzAdmin.placeReach({ nodeId })
+  return {
+    have_all: r.haveAll, have_branch: r.haveBranch, other_fixed: r.otherFixed,
+    might_expect: r.mightExpect.map((g) => ({
+      role_id: g.roleId, role_name: g.roleName, people: g.people, risk: g.risk as Risk,
+    })),
+    group_entries: r.groupEntries.map((e) => ({
+      membership_id: e.membershipId, membership_name: e.membershipName,
+      role_name: e.roleName, members: e.members,
+    })),
+  }
 }

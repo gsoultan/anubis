@@ -287,8 +287,9 @@ function Playground() {
 
   return (
     <Page
-      title="Access check"
-      description="Ask “can this person do this, here?” and see exactly why the answer is yes or no. An axis left unset counts against access, never for it."
+      title="Check access"
+      description="Ask “can this person do this, here?” and see exactly why."
+      help="Pick a person, a permission and, if it matters, the places the record belongs to. The answer lists every check it went through. A kind of place you leave unset counts against access, never for it."
       wide
       actions={
         <>

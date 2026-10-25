@@ -41,6 +41,7 @@ func init() {
 	storm.RegisterScanner(scanPermissionKeyRow)
 	storm.RegisterScanner(scanStrictSimRow)
 	storm.RegisterScanner(scanDecisionDetailRow)
+	storm.RegisterScanner(scanHoldsRoleInAppRow)
 	storm.RegisterScanner(scanRoleRow)
 	storm.RegisterScanner(scanCreatedRoleRow)
 	storm.RegisterScanner(scanParentRow)
@@ -55,6 +56,18 @@ func init() {
 	storm.RegisterScanner(scanRevokedGrantRow)
 	storm.RegisterScanner(scanSearchGrantRow)
 	storm.RegisterScanner(scanCountRow)
+	storm.RegisterScanner(scanChangeCandidateRow)
+	storm.RegisterScanner(scanAxisFactsRow)
+	storm.RegisterScanner(scanNodeFamilyRow)
+	storm.RegisterScanner(scanGrantStateRow)
+	storm.RegisterScanner(scanCreatedChangeRow)
+	storm.RegisterScanner(scanChangeItemRow)
+	storm.RegisterScanner(scanGrantChangeRow)
+	storm.RegisterScanner(scanAccessSummaryRow)
+	storm.RegisterScanner(scanFullListRow)
+	storm.RegisterScanner(scanReachCoverRow)
+	storm.RegisterScanner(scanReachGroupRow)
+	storm.RegisterScanner(scanReachEntryRow)
 	storm.RegisterScanner(scanMembershipListRow)
 	storm.RegisterScanner(scanMembershipRow)
 	storm.RegisterScanner(scanCreatedMembershipRow)
@@ -76,6 +89,8 @@ func init() {
 	storm.RegisterStatement(`
 DELETE FROM catalog_sync_sources WHERE id = $1 AND tenant_id = $2`)
 	storm.RegisterStatement(`
+DELETE FROM grant_scopes WHERE tenant_id = $1 AND grant_id = ANY($2::uuid[])`)
+	storm.RegisterStatement(`
 DELETE FROM role_parents WHERE role_id = $1`)
 	storm.RegisterStatement(`
 DELETE FROM role_permission_patterns WHERE role_id = $1`)
@@ -92,6 +107,20 @@ INSERT INTO catalog_sync_sources
 VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8,
         CASE WHEN $8 > 0 THEN now() ELSE NULL END)
 RETURNING id::text AS id`)
+	storm.RegisterStatement(`
+INSERT INTO grant_change_items (change_id, grant_id, tenant_id, before, after)
+SELECT $1, x.grant_id, $2, x.before, x.after
+  FROM jsonb_to_recordset($3::jsonb) AS x(grant_id uuid, before jsonb, after jsonb)`)
+	storm.RegisterStatement(`
+INSERT INTO grant_changes (tenant_id, actor_id, kind, reason, summary, grants)
+VALUES ($1, $2, $3, $4, $5::jsonb, $6)
+RETURNING id::text AS id`)
+	storm.RegisterStatement(`
+INSERT INTO grant_scopes (grant_id, tenant_id, axis_code, scope_node_id, inherit, mode)
+SELECT x.grant_id, $1, x.axis, x.node, x.inherit,
+       CASE WHEN x.exclude THEN 'exclude' ELSE 'include' END
+  FROM jsonb_to_recordset($2::jsonb)
+       AS x(grant_id uuid, axis text, node uuid, inherit boolean, exclude boolean)`)
 	storm.RegisterStatement(`
 INSERT INTO grant_scopes (grant_id, tenant_id, axis_code, scope_node_id, inherit, mode)
 VALUES ($1, $2, $3, $4, $5, CASE WHEN $6::boolean THEN 'exclude' ELSE 'include' END)`)
@@ -114,10 +143,12 @@ VALUES ($1, $2, $3, NULLIF($4, ''))
 RETURNING id::text AS id`)
 	storm.RegisterStatement(`
 INSERT INTO permissions (application_id, tenant_id, app_slug, resource, action,
-                         description, risk, min_assurance, requires_amr, max_auth_age)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::text[], nullif($10, '')::interval)
+                         description, risk, min_assurance, requires_amr, max_auth_age,
+                         module)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::text[], nullif($10, '')::interval, $11)
 ON CONFLICT (application_id, resource, action) DO UPDATE
     SET description = EXCLUDED.description,
+        module = EXCLUDED.module,
         risk = EXCLUDED.risk,
         min_assurance = EXCLUDED.min_assurance,
         requires_amr = EXCLUDED.requires_amr,
@@ -222,9 +253,25 @@ FROM role_permission_patterns rp
 JOIN roles r ON r.id = rp.role_id
 WHERE r.tenant_id = $1`)
 	storm.RegisterStatement(`
+SELECT EXISTS (
+  SELECT 1 FROM grants g
+    JOIN role_permissions_effective rpe ON rpe.role_id = g.role_id
+    JOIN permissions p ON p.id = rpe.permission_id
+   WHERE g.identity_id = $1 AND g.tenant_id = $2
+     AND g.revoked_at IS NULL AND g.valid_from <= now()
+     AND (g.valid_until IS NULL OR g.valid_until > now())
+     AND p.application_id::text = $3::text AND p.deprecated_at IS NULL
+) AS holds`)
+	storm.RegisterStatement(`
 SELECT authorize($1, $2, $3, $4::jsonb) AS allow`)
 	storm.RegisterStatement(`
 SELECT authorize_explain($1, $2, $3, $4::jsonb)::text AS detail`)
+	storm.RegisterStatement(`
+SELECT ax.default_effect = 'deny' AS deny, root.id::text AS root_id
+  FROM scope_axes ax
+  JOIN scope_nodes root ON root.tenant_id = ax.tenant_id
+                       AND root.axis_code = ax.code AND root.is_axis_root
+ WHERE ax.tenant_id = $1 AND ax.code = $2`)
 	storm.RegisterStatement(`
 SELECT count(*) AS count FROM grants
 WHERE tenant_id = $1 AND revoked_at IS NULL
@@ -283,6 +330,37 @@ SELECT g.id::text AS id, g.identity_id::text AS identity_id, i.username,
  ORDER BY g.created_at DESC, g.id DESC
  LIMIT $8`)
 	storm.RegisterStatement(`
+SELECT g.id::text AS id, g.identity_id::text AS identity_id, i.username,
+       g.self_scoped, g.via_membership_id IS NOT NULL AS from_group,
+       g.valid_until
+  FROM grants g
+  JOIN identities i ON i.id = g.identity_id
+ WHERE g.tenant_id = $1 AND g.role_id::text = $2::text
+   AND g.revoked_at IS NULL
+   AND (g.valid_until IS NULL OR g.valid_until > now())
+ ORDER BY i.username, g.id
+ LIMIT $3
+   FOR UPDATE OF g`)
+	storm.RegisterStatement(`
+SELECT g.identity_id::text AS identity_id,
+       (count(*) FILTER (WHERE g.via_membership_id IS NULL))::int4 AS direct,
+       (count(DISTINCT g.via_membership_id))::int4 AS groups,
+       (array_agg(DISTINCT r.name ORDER BY r.name))[1:6]::text[] AS roles,
+       coalesce((array_agg(DISTINCT m.name ORDER BY m.name)
+                 FILTER (WHERE m.name IS NOT NULL))[1:6], '{}')::text[] AS group_names,
+       min(g.valid_until) AS next_end
+  FROM grants g
+  JOIN roles r ON r.id = g.role_id
+  LEFT JOIN memberships m ON m.id = g.via_membership_id
+ WHERE g.tenant_id = $1 AND g.identity_id = ANY($2::uuid[])
+   AND g.revoked_at IS NULL
+   AND (g.valid_until IS NULL OR g.valid_until > now())
+ GROUP BY g.identity_id`)
+	storm.RegisterStatement(`
+SELECT grant_id::text AS grant_id, before::text AS before, after::text AS after
+  FROM grant_change_items
+ WHERE change_id::text = $1::text AND tenant_id = $2`)
+	storm.RegisterStatement(`
 SELECT gs.grant_id::text AS grant_id, gs.axis_code,
        gs.scope_node_id::text AS scope_node_id, gs.inherit,
        gs.mode = 'exclude' AS exclude,
@@ -301,6 +379,19 @@ SELECT id::text AS id, key, risk, min_assurance, requires_amr,
 FROM permissions
 WHERE tenant_id = $1 AND key = $2`)
 	storm.RegisterStatement(`
+SELECT id::text AS id, kind, reason, grants, actor_id::text AS actor_id,
+       created_at, undone_at, summary::text AS summary
+  FROM grant_changes
+ WHERE id::text = $1::text AND tenant_id = $2
+   FOR UPDATE`)
+	storm.RegisterStatement(`
+SELECT id::text AS id, kind, reason, grants, actor_id::text AS actor_id,
+       created_at, undone_at, summary::text AS summary
+  FROM grant_changes
+ WHERE tenant_id = $1
+ ORDER BY created_at DESC
+ LIMIT $2`)
+	storm.RegisterStatement(`
 SELECT id::text AS id, source_id::text AS source_id, started_at, finished_at,
        dry, status, actor, document_sha, report::text AS report, error
 FROM catalog_sync_runs
@@ -311,6 +402,11 @@ LIMIT $2`)
 SELECT id::text AS id, tenant_id::text AS tenant_id, name, description, anchor_axis
 FROM memberships
 WHERE id = $1 AND tenant_id = $2`)
+	storm.RegisterStatement(`
+SELECT id::text AS id, valid_until, revoked_at IS NOT NULL AS revoked
+  FROM grants
+ WHERE tenant_id = $1 AND id = ANY($2::uuid[])
+   FOR UPDATE`)
 	storm.RegisterStatement(`
 SELECT m.id::text AS id, m.name, m.description, m.anchor_axis,
        (SELECT count(DISTINCT mm.identity_id) FROM membership_members mm
@@ -366,7 +462,7 @@ SELECT mm.id::text AS id, mm.membership_id::text AS membership_id,
 SELECT p.id::text AS id, p.key, p.app_slug, p.resource, p.action, p.risk,
        p.description, p.min_assurance, p.requires_amr,
        COALESCE(p.max_auth_age::text, '')::text AS max_auth_age,
-       p.deprecated_at
+       p.deprecated_at, p.module
 FROM permissions p
 WHERE p.tenant_id = $1
   AND ($2::uuid IS NULL OR p.application_id = $2)
@@ -404,6 +500,15 @@ WHERE r.tenant_id = $1
   AND ($2::text IS NULL OR r.name ILIKE '%' || $2 || '%')
 ORDER BY r.name`)
 	storm.RegisterStatement(`
+SELECT sn.axis_code,
+       coalesce((SELECT array_agg(s.id::text ORDER BY s.id) FROM scope_nodes s
+                  WHERE s.parent_id = sn.parent_id AND s.id <> sn.id
+                    AND s.status = 'active'), '{}')::text[] AS siblings,
+       coalesce((SELECT array_agg(c.descendant_id::text) FROM scope_closure c
+                  WHERE c.ancestor_id = sn.id AND c.depth > 0), '{}')::text[] AS below
+  FROM scope_nodes sn
+ WHERE sn.id::text = $2::text AND sn.tenant_id = $1`)
+	storm.RegisterStatement(`
 UPDATE catalog_sync_runs
 SET finished_at = now(), status = $2, document_sha = $3,
     report = nullif($4, '')::jsonb, error = $5
@@ -429,12 +534,23 @@ SET name = $3, status = $4, config = $5::jsonb, format = $6,
     updated_at = now()
 WHERE id = $1 AND tenant_id = $2`)
 	storm.RegisterStatement(`
+UPDATE grant_changes SET undone_at = now(), undone_by = $3
+ WHERE id::text = $1::text AND tenant_id = $2 AND undone_at IS NULL`)
+	storm.RegisterStatement(`
 UPDATE grants
 SET revoked_at = now(),
     revoke_reason = nullif($3, '')
 WHERE id = $1 AND tenant_id = $2 AND revoked_at IS NULL
 RETURNING id::text AS id, identity_id::text AS identity_id,
           role_id::text AS role_id`)
+	storm.RegisterStatement(`
+UPDATE grants g
+   SET valid_until = CASE WHEN x.until IS NULL THEN NULL ELSE to_timestamp(x.until) END,
+       revoked_at = CASE WHEN x.revoked THEN coalesce(g.revoked_at, now()) ELSE NULL END,
+       revoke_reason = CASE WHEN x.revoked THEN coalesce(g.revoke_reason, nullif($3, ''))
+                            ELSE NULL END
+  FROM jsonb_to_recordset($2::jsonb) AS x(grant_id uuid, until bigint, revoked boolean)
+ WHERE g.id = x.grant_id AND g.tenant_id = $1`)
 	storm.RegisterStatement(`
 UPDATE membership_entries SET retired_at = now()
  WHERE membership_id = $1 AND id = ANY($2::uuid[]) AND retired_at IS NULL`)
@@ -474,6 +590,138 @@ WITH RECURSIVE down AS (
     SELECT rp.role_id FROM role_parents rp JOIN down d ON rp.parent_id = d.role_id
 )
 SELECT DISTINCT role_id::text AS role_id FROM down`)
+	storm.RegisterStatement(`
+WITH n AS (
+  SELECT sn.id, sn.axis_code, sn.parent_id FROM scope_nodes sn
+   WHERE sn.id::text = $2::text AND sn.tenant_id = $1
+), sib AS (
+  SELECT s.id FROM scope_nodes s, n
+   WHERE s.parent_id = n.parent_id AND s.id <> n.id AND s.status = 'active'
+), nsib AS (
+  SELECT count(*) AS c FROM sib
+), per AS (
+  SELECT e.membership_id, e.role_id,
+         count(*) FILTER (WHERE mes.scope_node_id IN (SELECT id FROM sib)) AS hit,
+         bool_or(mes.scope_node_id = n.id) AS has_it
+    FROM membership_entries e
+    JOIN membership_entry_scopes mes ON mes.entry_id = e.id AND mes.mode = 'include'
+    JOIN n ON mes.axis_code = n.axis_code
+   WHERE e.tenant_id = $1 AND e.retired_at IS NULL
+   GROUP BY e.id, e.membership_id, e.role_id
+)
+SELECT m.id::text AS membership_id, m.name AS membership_name, r.name AS role_name,
+       (SELECT count(DISTINCT mm.identity_id) FROM membership_members mm
+         WHERE mm.membership_id = m.id AND mm.removed_at IS NULL)::int4 AS members
+  FROM per, nsib, memberships m, roles r
+ WHERE m.id = per.membership_id AND r.id = per.role_id
+   AND nsib.c > 0 AND per.hit = nsib.c AND NOT per.has_it
+ ORDER BY m.name, r.name`)
+	storm.RegisterStatement(`
+WITH n AS (
+  SELECT sn.id, sn.axis_code, sn.parent_id FROM scope_nodes sn
+   WHERE sn.id::text = $2::text AND sn.tenant_id = $1
+), sib AS (
+  SELECT s.id FROM scope_nodes s, n
+   WHERE s.parent_id = n.parent_id AND s.id <> n.id AND s.status = 'active'
+), nsib AS (
+  SELECT count(*) AS c FROM sib
+), per AS (
+  SELECT g.id AS grant_id, g.identity_id, g.role_id,
+         count(*) FILTER (WHERE gs.scope_node_id IN (SELECT id FROM sib)) AS hit,
+         bool_or(EXISTS (SELECT 1 FROM scope_closure c
+                          WHERE c.ancestor_id = gs.scope_node_id AND c.descendant_id = n.id
+                            AND (gs.inherit OR c.depth = 0))) AS has_it
+    FROM grants g
+    JOIN grant_scopes gs ON gs.grant_id = g.id AND gs.mode = 'include'
+    JOIN n ON gs.axis_code = n.axis_code
+   WHERE g.tenant_id = $1 AND g.revoked_at IS NULL
+     AND (g.valid_until IS NULL OR g.valid_until > now())
+     AND g.via_membership_id IS NULL AND NOT g.self_scoped
+   GROUP BY g.id, g.identity_id, g.role_id
+)
+SELECT
+  (SELECT count(DISTINCT g.identity_id) FROM grants g, n
+    WHERE g.tenant_id = $1 AND g.revoked_at IS NULL
+      AND (g.valid_until IS NULL OR g.valid_until > now()) AND NOT g.self_scoped
+      AND NOT EXISTS (SELECT 1 FROM scope_axes ax WHERE ax.tenant_id = $1
+                         AND ax.code = n.axis_code AND ax.default_effect = 'deny')
+      AND NOT EXISTS (SELECT 1 FROM grant_scopes gs WHERE gs.grant_id = g.id
+                         AND gs.axis_code = n.axis_code AND gs.mode = 'include'))::int4 AS have_all,
+  (SELECT count(DISTINCT g.identity_id) FROM grants g
+     JOIN grant_scopes gs ON gs.grant_id = g.id AND gs.mode = 'include'
+     JOIN n ON gs.axis_code = n.axis_code
+     JOIN scope_closure c ON c.ancestor_id = gs.scope_node_id AND c.descendant_id = n.id
+    WHERE g.tenant_id = $1 AND g.revoked_at IS NULL
+      AND (g.valid_until IS NULL OR g.valid_until > now()) AND NOT g.self_scoped
+      AND (gs.inherit OR c.depth = 0))::int4 AS have_branch,
+  (SELECT count(DISTINCT per.identity_id) FROM per, nsib
+    WHERE per.hit > 0 AND per.hit < nsib.c AND NOT per.has_it)::int4 AS other_fixed`)
+	storm.RegisterStatement(`
+WITH n AS (
+  SELECT sn.id, sn.axis_code, sn.parent_id FROM scope_nodes sn
+   WHERE sn.id::text = $2::text AND sn.tenant_id = $1
+), sib AS (
+  SELECT s.id FROM scope_nodes s, n
+   WHERE s.parent_id = n.parent_id AND s.id <> n.id AND s.status = 'active'
+), nsib AS (
+  SELECT count(*) AS c FROM sib
+), per AS (
+  SELECT g.id AS grant_id, g.identity_id, g.role_id,
+         count(*) FILTER (WHERE gs.scope_node_id IN (SELECT id FROM sib)) AS hit,
+         bool_or(EXISTS (SELECT 1 FROM scope_closure c
+                          WHERE c.ancestor_id = gs.scope_node_id AND c.descendant_id = n.id
+                            AND (gs.inherit OR c.depth = 0))) AS has_it
+    FROM grants g
+    JOIN grant_scopes gs ON gs.grant_id = g.id AND gs.mode = 'include'
+    JOIN n ON gs.axis_code = n.axis_code
+   WHERE g.tenant_id = $1 AND g.revoked_at IS NULL
+     AND (g.valid_until IS NULL OR g.valid_until > now())
+     AND g.via_membership_id IS NULL AND NOT g.self_scoped
+   GROUP BY g.id, g.identity_id, g.role_id
+)
+SELECT per.role_id::text AS role_id, r.name AS role_name,
+       count(DISTINCT per.identity_id)::int4 AS people,
+       coalesce((SELECT CASE max(CASE p.risk WHEN 'critical' THEN 3 WHEN 'sensitive' THEN 2 ELSE 1 END)
+                        WHEN 3 THEN 'critical' WHEN 2 THEN 'sensitive' ELSE 'normal' END
+                   FROM role_permissions_effective rpe
+                   JOIN permissions p ON p.id = rpe.permission_id
+                  WHERE rpe.role_id = per.role_id), 'normal') AS risk
+  FROM per, nsib
+  JOIN roles r ON true
+ WHERE r.id = per.role_id AND nsib.c > 0 AND per.hit = nsib.c AND NOT per.has_it
+ GROUP BY per.role_id, r.name
+ ORDER BY count(DISTINCT per.identity_id) DESC, r.name`)
+	storm.RegisterStatement(`
+WITH picks AS (
+  SELECT g.id AS grant_id, g.role_id, gs.axis_code, sn.parent_id, gs.scope_node_id
+    FROM grants g
+    JOIN grant_scopes gs ON gs.grant_id = g.id AND gs.mode = 'include'
+    JOIN scope_nodes sn  ON sn.id = gs.scope_node_id AND sn.status = 'active'
+   WHERE g.tenant_id = $1 AND g.revoked_at IS NULL
+     AND (g.valid_until IS NULL OR g.valid_until > now())
+     AND g.via_membership_id IS NULL
+     AND sn.parent_id IS NOT NULL
+     AND ($2::text = '' OR gs.axis_code = $2::text)
+     AND ($3::text = '' OR g.role_id::text = $3::text)
+), kids AS (
+  SELECT parent_id, count(*) AS n FROM scope_nodes
+   WHERE tenant_id = $1 AND status = 'active' AND parent_id IS NOT NULL
+   GROUP BY parent_id HAVING count(*) >= 2
+), full_lists AS (
+  SELECT p.grant_id, p.role_id, p.axis_code, p.parent_id, k.n
+    FROM picks p JOIN kids k USING (parent_id)
+   GROUP BY p.grant_id, p.role_id, p.axis_code, p.parent_id, k.n
+  HAVING count(DISTINCT p.scope_node_id) = k.n
+)
+SELECT f.axis_code, f.parent_id::text AS parent_id, pn.name AS parent_name,
+       pn.is_axis_root AS is_root, f.role_id::text AS role_id, r.name AS role_name,
+       count(*)::int4 AS grants, max(f.n)::int4 AS places
+  FROM full_lists f
+  JOIN scope_nodes pn ON pn.id = f.parent_id
+  JOIN roles r ON r.id = f.role_id
+ GROUP BY f.axis_code, f.parent_id, pn.name, pn.is_axis_root, f.role_id, r.name
+ ORDER BY count(*) DESC, r.name
+ LIMIT 100`)
 	storm.RegisterStatement(`
 WITH targets AS MATERIALIZED (
     SELECT t.key AS axis_code, t.value::uuid AS node_id
@@ -576,6 +824,11 @@ func scanStrictSimRow(rv [][]byte, r *authzrquery.StrictSimRow, sl *runtime.Slab
 
 func scanDecisionDetailRow(rv [][]byte, r *authzrquery.DecisionDetailRow, sl *runtime.Slab) error {
 	r.Detail = runtime.JSON(runtime.JSONB(rv[0], sl))
+	return nil
+}
+
+func scanHoldsRoleInAppRow(rv [][]byte, r *authzrquery.HoldsRoleInAppRow, sl *runtime.Slab) error {
+	r.Holds = runtime.Bool(rv[0])
 	return nil
 }
 
@@ -700,6 +953,119 @@ func scanCountRow(rv [][]byte, r *authzrquery.CountRow, sl *runtime.Slab) error 
 	return nil
 }
 
+func scanChangeCandidateRow(rv [][]byte, r *authzrquery.ChangeCandidateRow, sl *runtime.Slab) error {
+	r.ID = sl.Str(rv[0])
+	r.IdentityID = sl.Str(rv[1])
+	r.Username = sl.Str(rv[2])
+	r.SelfScoped = runtime.Bool(rv[3])
+	r.FromGroup = runtime.Bool(rv[4])
+	r.ValidUntil = runtime.Nullable(rv[5], runtime.Timestamptz)
+	return nil
+}
+
+func scanAxisFactsRow(rv [][]byte, r *authzrquery.AxisFactsRow, sl *runtime.Slab) error {
+	r.Deny = runtime.Bool(rv[0])
+	r.RootID = sl.Str(rv[1])
+	return nil
+}
+
+func scanNodeFamilyRow(rv [][]byte, r *authzrquery.NodeFamilyRow, sl *runtime.Slab) error {
+	var decErr error
+	r.AxisCode = sl.Str(rv[0])
+	r.Siblings, decErr = runtime.TextArray(rv[1], sl)
+	if decErr != nil {
+		return decErr
+	}
+	r.Below, decErr = runtime.TextArray(rv[2], sl)
+	if decErr != nil {
+		return decErr
+	}
+	return nil
+}
+
+func scanGrantStateRow(rv [][]byte, r *authzrquery.GrantStateRow, sl *runtime.Slab) error {
+	r.ID = sl.Str(rv[0])
+	r.ValidUntil = runtime.Nullable(rv[1], runtime.Timestamptz)
+	r.Revoked = runtime.Bool(rv[2])
+	return nil
+}
+
+func scanCreatedChangeRow(rv [][]byte, r *authzrquery.CreatedChangeRow, sl *runtime.Slab) error {
+	r.ID = sl.Str(rv[0])
+	return nil
+}
+
+func scanChangeItemRow(rv [][]byte, r *authzrquery.ChangeItemRow, sl *runtime.Slab) error {
+	r.GrantID = sl.Str(rv[0])
+	r.Before = sl.Str(rv[1])
+	r.After = sl.Str(rv[2])
+	return nil
+}
+
+func scanGrantChangeRow(rv [][]byte, r *authzrquery.GrantChangeRow, sl *runtime.Slab) error {
+	r.ID = sl.Str(rv[0])
+	r.Kind = sl.Str(rv[1])
+	r.Reason = sl.Str(rv[2])
+	r.Grants = runtime.Int4(rv[3])
+	r.ActorID = sl.Str(rv[4])
+	r.CreatedAt = runtime.Timestamptz(rv[5])
+	r.UndoneAt = runtime.Nullable(rv[6], runtime.Timestamptz)
+	r.Summary = sl.Str(rv[7])
+	return nil
+}
+
+func scanAccessSummaryRow(rv [][]byte, r *authzrquery.AccessSummaryRow, sl *runtime.Slab) error {
+	var decErr error
+	r.IdentityID = sl.Str(rv[0])
+	r.Direct = runtime.Int4(rv[1])
+	r.Groups = runtime.Int4(rv[2])
+	r.Roles, decErr = runtime.TextArray(rv[3], sl)
+	if decErr != nil {
+		return decErr
+	}
+	r.GroupNames, decErr = runtime.TextArray(rv[4], sl)
+	if decErr != nil {
+		return decErr
+	}
+	r.NextEnd = runtime.Nullable(rv[5], runtime.Timestamptz)
+	return nil
+}
+
+func scanFullListRow(rv [][]byte, r *authzrquery.FullListRow, sl *runtime.Slab) error {
+	r.AxisCode = sl.Str(rv[0])
+	r.ParentID = sl.Str(rv[1])
+	r.ParentName = sl.Str(rv[2])
+	r.IsRoot = runtime.Bool(rv[3])
+	r.RoleID = sl.Str(rv[4])
+	r.RoleName = sl.Str(rv[5])
+	r.Grants = runtime.Int4(rv[6])
+	r.Places = runtime.Int4(rv[7])
+	return nil
+}
+
+func scanReachCoverRow(rv [][]byte, r *authzrquery.ReachCoverRow, sl *runtime.Slab) error {
+	r.HaveAll = runtime.Int4(rv[0])
+	r.HaveBranch = runtime.Int4(rv[1])
+	r.OtherFixed = runtime.Int4(rv[2])
+	return nil
+}
+
+func scanReachGroupRow(rv [][]byte, r *authzrquery.ReachGroupRow, sl *runtime.Slab) error {
+	r.RoleID = sl.Str(rv[0])
+	r.RoleName = sl.Str(rv[1])
+	r.People = runtime.Int4(rv[2])
+	r.Risk = sl.Str(rv[3])
+	return nil
+}
+
+func scanReachEntryRow(rv [][]byte, r *authzrquery.ReachEntryRow, sl *runtime.Slab) error {
+	r.MembershipID = sl.Str(rv[0])
+	r.MembershipName = sl.Str(rv[1])
+	r.RoleName = sl.Str(rv[2])
+	r.Members = runtime.Int4(rv[3])
+	return nil
+}
+
 func scanMembershipListRow(rv [][]byte, r *authzrquery.MembershipListRow, sl *runtime.Slab) error {
 	r.ID = sl.Str(rv[0])
 	r.Name = sl.Str(rv[1])
@@ -794,6 +1160,7 @@ func scanPermissionRow(rv [][]byte, r *authzrquery.PermissionRow, sl *runtime.Sl
 	}
 	r.MaxAuthAge = sl.Str(rv[9])
 	r.DeprecatedAt = runtime.Nullable(rv[10], runtime.Timestamptz)
+	r.Module = sl.Str(rv[11])
 	return nil
 }
 

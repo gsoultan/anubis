@@ -18,7 +18,8 @@ import (
 // TenantProvisioner creates the tenant an installation is built around.
 type TenantProvisioner interface {
 	TenantBySlug(ctx context.Context, slug string) (*tenancydomain.TenantRef, error)
-	CreateTenant(ctx context.Context, slug, name string) (*tenancydomain.TenantRef, error)
+	// parentID is "" for a top-level organisation.
+	CreateTenant(ctx context.Context, slug, name, parentID string) (*tenancydomain.TenantRef, error)
 }
 
 // IdentityProvisioner creates the realm a tenant's people live in, and

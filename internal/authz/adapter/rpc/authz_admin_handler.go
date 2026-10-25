@@ -125,7 +125,7 @@ func (h *AuthzAdminHandler) ListPermissions(ctx context.Context, req *connect.Re
 			Id: p.ID, Key: p.Key, AppSlug: p.AppSlug, Resource: p.Resource,
 			Action: p.Action, Risk: p.Risk, Description: p.Description,
 			MinAssurance: int32(p.MinAssurance), RequiresAmr: p.RequiresAMR,
-			MaxAuthAge: p.MaxAuthAge, Deprecated: p.Deprecated,
+			MaxAuthAge: p.MaxAuthAge, Deprecated: p.Deprecated, Module: p.Module,
 		})
 	}
 	return connect.NewResponse(resp), nil

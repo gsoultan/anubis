@@ -104,6 +104,16 @@ func (s *Repository) RolesForIdentity(ctx context.Context, tenantID, identityID 
 	return roles, nil
 }
 
+// HoldsRoleInApp reports whether a person holds a live role giving
+// anything in the application.
+func (s *Repository) HoldsRoleInApp(ctx context.Context, tenantID, identityID, applicationID string) (bool, error) {
+	row, _, err := authzrquery.HoldsRoleInApp.One(ctx, s.rex(ctx), identityID, tenantID, applicationID)
+	if err != nil {
+		return false, database.MapErr(err)
+	}
+	return row.Holds, nil
+}
+
 func (s *Repository) EffectivePermissionsForIdentity(ctx context.Context, tenantID, identityID string) ([]string, error) {
 	rows, err := authzrquery.EffectivePermissionsForIdentity.Query(ctx, s.rex(ctx), identityID, tenantID)
 	if err != nil {

@@ -21,7 +21,19 @@ type AssignmentRow struct {
 	ValidUntil runtime.Null[time.Time]
 	RevokedAt  runtime.Null[time.Time]
 	CreatedAt  time.Time
+	// Below is every company inside the assigned one (0057): whoever runs a
+	// company runs the companies it owns. Empty for a global assignment.
+	Below []string
 }
+
+// belowCol lists the companies under a.tenant_id, all levels down. The tree
+// guard keeps it at most six deep, so the walk is short.
+const belowCol = `
+       COALESCE((WITH RECURSIVE d(id) AS (
+                   SELECT c.id FROM tenants c WHERE c.parent_id = a.tenant_id
+                   UNION ALL
+                   SELECT c.id FROM tenants c JOIN d ON c.parent_id = d.id)
+                 SELECT array_agg(d.id::text) FROM d), '{}')::text[] AS below`
 
 // ListAssignments is the user-management page's read: every live assignment,
 // with the tenant slug resolved for display.
@@ -33,7 +45,7 @@ SELECT a.id::text AS id, a.operator_id::text AS operator_id,
        COALESCE(a.tenant_id::text, '') AS tenant_id,
        COALESCE(t.slug, '') AS tenant_slug,
        a.role, COALESCE(a.granted_by::text, '') AS granted_by,
-       a.reason, a.valid_until, a.revoked_at, a.created_at
+       a.reason, a.valid_until, a.revoked_at, a.created_at,` + belowCol + `
   FROM platform_assignments a
   LEFT JOIN tenants t ON t.id = a.tenant_id
  WHERE a.revoked_at IS NULL
@@ -51,7 +63,7 @@ SELECT a.id::text AS id, a.operator_id::text AS operator_id,
        COALESCE(a.tenant_id::text, '') AS tenant_id,
        '' AS tenant_slug,
        a.role, COALESCE(a.granted_by::text, '') AS granted_by,
-       a.reason, a.valid_until, a.revoked_at, a.created_at
+       a.reason, a.valid_until, a.revoked_at, a.created_at,` + belowCol + `
   FROM platform_assignments a
   JOIN platform_users u ON u.id = a.operator_id
  WHERE a.operator_id = $1

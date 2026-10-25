@@ -83,7 +83,7 @@ func assignments(rows []controlrquery.AssignmentRow) []controldomain.AssignmentR
 			TenantSlug: r.TenantSlug, Role: controldomain.OperatorRole(r.Role),
 			GrantedBy: r.GrantedBy, Reason: r.Reason,
 			ValidUntil: tptr(r.ValidUntil), RevokedAt: tptr(r.RevokedAt),
-			CreatedAt: r.CreatedAt,
+			CreatedAt: r.CreatedAt, Below: r.Below,
 		})
 	}
 	return out

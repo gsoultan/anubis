@@ -111,15 +111,10 @@ function Catalog() {
 
   return (
     <Page
-      title="Catalog sync"
-      description={
-        <>
-          Where an application&rsquo;s permissions and roles are read from when
-          nobody is pushing them. Each source is pinned to one application and
-          applies under that application alone; a document it stops naming is
-          retired, never deleted, so existing access keeps working.
-        </>
-      }
+      section="apps"
+      title="Sync"
+      description="Where an app's permissions and roles are read from when nobody sends them."
+      help="Each source is pinned to one app and applies under that app alone. A permission or role it stops naming is retired, never deleted, so access people already have keeps working."
       wide
       actions={
         <Button size="xs" leftSection={<IconPlus size={14} />} onClick={() => setCreating(true)}>

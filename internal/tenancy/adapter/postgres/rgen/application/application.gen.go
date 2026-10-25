@@ -37,6 +37,7 @@ type Row struct {
 	TokenFormat            string
 	PostLogoutRedirectUris []string
 	AllowedAudiences       []string
+	SignIn                 string
 }
 
 // Operator ids. Argument-taking operators are numbered first, so the
@@ -75,7 +76,7 @@ const (
 	opNotExists runtime.Op = 27
 )
 
-const nCols = 17
+const nCols = 18
 
 // Query is a value type: composing one allocates nothing. Predicates
 // are a postfix token stream, so disjunction and negation are
@@ -273,6 +274,13 @@ func (q *Query) cursor(col uint32, r Row) {
 		}
 		q.strs[q.ns] = r.TokenFormat
 		q.ns++
+	case 17:
+		if int(q.ns) >= len(q.strs) {
+			q.over = true
+			return
+		}
+		q.strs[q.ns] = r.SignIn
+		q.ns++
 	}
 }
 
@@ -449,6 +457,7 @@ var (
 	TokenFormat            = TextCol{14}
 	PostLogoutRedirectUris = TextArrayCol{15}
 	AllowedAudiences       = TextArrayCol{16}
+	SignIn                 = TextCol{17}
 )
 
 // UUIDCol addresses a uuid column.
@@ -847,6 +856,13 @@ func (q *Query) leaf(p Pred) {
 			}
 			q.anyStr[q.nas] = p.anyStr
 			q.nas++
+		case 17:
+			if int(q.nas) >= 3 {
+				q.over = true
+				return
+			}
+			q.anyStr[q.nas] = p.anyStr
+			q.nas++
 		}
 		q.push(runtime.MakeLeaf(uint32(p.op), uint32(p.col)))
 		return
@@ -934,6 +950,13 @@ func (q *Query) leaf(p Pred) {
 		q.strs[q.ns] = p.str
 		q.ns++
 	case 14:
+		if int(q.ns) >= 6 {
+			q.over = true
+			return
+		}
+		q.strs[q.ns] = p.str
+		q.ns++
+	case 17:
 		if int(q.ns) >= 6 {
 			q.over = true
 			return
@@ -1089,8 +1112,19 @@ func (q Query) AllowedAudiencesContainedBy(v ...string) Query {
 func (q Query) AllowedAudiencesOverlaps(v ...string) Query {
 	return q.Where(AllowedAudiences.Overlaps(v...))
 }
+func (q Query) SignInEq(v string) Query       { return q.Where(SignIn.Eq(v)) }
+func (q Query) SignInNotEq(v string) Query    { return q.Where(SignIn.NotEq(v)) }
+func (q Query) SignInGt(v string) Query       { return q.Where(SignIn.Gt(v)) }
+func (q Query) SignInGte(v string) Query      { return q.Where(SignIn.Gte(v)) }
+func (q Query) SignInLt(v string) Query       { return q.Where(SignIn.Lt(v)) }
+func (q Query) SignInLte(v string) Query      { return q.Where(SignIn.Lte(v)) }
+func (q Query) SignInEqLower(v string) Query  { return q.Where(SignIn.EqLower(v)) }
+func (q Query) SignInLike(v string) Query     { return q.Where(SignIn.Like(v)) }
+func (q Query) SignInILike(v string) Query    { return q.Where(SignIn.ILike(v)) }
+func (q Query) SignInIn(v ...string) Query    { return q.Where(SignIn.In(v...)) }
+func (q Query) SignInNotIn(v ...string) Query { return q.Where(SignIn.NotIn(v...)) }
 
-const selectPrefix = `SELECT "id", "created_at", "updated_at", "access_token_ttl", "refresh_token_ttl", "tenant_id", "manifest_version", "kind", "status", "slug", "name", "client_secret_hash", "redirect_uris", "backchannel_logout_uri", "token_format", "post_logout_redirect_uris", "allowed_audiences" FROM "applications"`
+const selectPrefix = `SELECT "id", "created_at", "updated_at", "access_token_ttl", "refresh_token_ttl", "tenant_id", "manifest_version", "kind", "status", "slug", "name", "client_secret_hash", "redirect_uris", "backchannel_logout_uri", "token_format", "post_logout_redirect_uris", "allowed_audiences", "sign_in" FROM "applications"`
 const countPrefix = `SELECT count(*) FROM "applications"`
 const existsPrefix = `SELECT 1 FROM "applications"`
 const existsSuffix = ` LIMIT 1`
@@ -1229,6 +1263,12 @@ var orderTable = [nCols][4]string{
 		"\"allowed_audiences\" ASC NULLS FIRST",
 		"\"allowed_audiences\" DESC NULLS LAST",
 	},
+	{ // sign_in
+		"\"sign_in\"",
+		"\"sign_in\" DESC",
+		"\"sign_in\" ASC NULLS FIRST",
+		"\"sign_in\" DESC NULLS LAST",
+	},
 }
 
 // identTable is each column's bare quoted name, for the left side of a
@@ -1251,6 +1291,7 @@ var identTable = [nCols]string{
 	"\"token_format\"",
 	"\"post_logout_redirect_uris\"",
 	"\"allowed_audiences\"",
+	"\"sign_in\"",
 }
 
 var lowering = runtime.Lowering{
@@ -1283,7 +1324,7 @@ func orderOf(dir, col uint32) string {
 
 // fragTable is every predicate this table can produce, lowered at build
 // time. Runtime splices; it never formats.
-var fragTable = [17][28]runtime.Frag{
+var fragTable = [18][28]runtime.Frag{
 	{ // id
 		{}, // opNone
 		{A: "\"id\" = $", B: ""},
@@ -1794,6 +1835,36 @@ var fragTable = [17][28]runtime.Frag{
 		{},
 		{},
 	},
+	{ // sign_in
+		{}, // opNone
+		{A: "\"sign_in\" = $", B: ""},
+		{A: "\"sign_in\" <> $", B: ""},
+		{A: "\"sign_in\" > $", B: ""},
+		{A: "\"sign_in\" >= $", B: ""},
+		{A: "\"sign_in\" < $", B: ""},
+		{A: "\"sign_in\" <= $", B: ""},
+		{A: "lower(\"sign_in\") = lower($", B: ")"},
+		{A: "\"sign_in\" LIKE $", B: ""},
+		{A: "\"sign_in\" ILIKE $", B: ""},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{A: "\"sign_in\" = ANY($", B: ")"},
+		{A: "\"sign_in\" <> ALL($", B: ")"},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{},
+		{},
+	},
 }
 
 func fragOf(op, col uint32) runtime.Frag {
@@ -1983,6 +2054,7 @@ func scan(rv [][]byte, r *Row, sl *runtime.Slab) error {
 	if decErr != nil {
 		return decErr
 	}
+	r.SignIn = sl.Str(rv[17])
 	return decErr
 }
 
@@ -2104,6 +2176,10 @@ func (q Query) bindPreds(b *binder) []any {
 				b.anyStr[nas] = q.anyStr[nas]
 				v = append(v, &b.anyStr[nas])
 				nas++
+			case 17:
+				b.anyStr[nas] = q.anyStr[nas]
+				v = append(v, &b.anyStr[nas])
+				nas++
 			}
 			continue
 		}
@@ -2153,6 +2229,10 @@ func (q Query) bindPreds(b *binder) []any {
 			v = append(v, &b.strs[ns])
 			ns++
 		case 14:
+			b.strs[ns] = q.strs[ns]
+			v = append(v, &b.strs[ns])
+			ns++
+		case 17:
 			b.strs[ns] = q.strs[ns]
 			v = append(v, &b.strs[ns])
 			ns++
@@ -2293,7 +2373,7 @@ func (q Query) Prepare(b *Binder) (string, []any) {
 
 // insertSQL does not vary: the column list is fixed by the table, so
 // the placeholders are known at build time and nothing is spliced.
-const insertSQL = `INSERT INTO "applications" ("id", "created_at", "updated_at", "access_token_ttl", "refresh_token_ttl", "tenant_id", "manifest_version", "kind", "status", "slug", "name", "client_secret_hash", "redirect_uris", "backchannel_logout_uri", "token_format", "post_logout_redirect_uris", "allowed_audiences") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17) RETURNING "id", "created_at", "updated_at", "access_token_ttl", "refresh_token_ttl", "tenant_id", "manifest_version", "kind", "status", "slug", "name", "client_secret_hash", "redirect_uris", "backchannel_logout_uri", "token_format", "post_logout_redirect_uris", "allowed_audiences"`
+const insertSQL = `INSERT INTO "applications" ("id", "created_at", "updated_at", "access_token_ttl", "refresh_token_ttl", "tenant_id", "manifest_version", "kind", "status", "slug", "name", "client_secret_hash", "redirect_uris", "backchannel_logout_uri", "token_format", "post_logout_redirect_uris", "allowed_audiences", "sign_in") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18) RETURNING "id", "created_at", "updated_at", "access_token_ttl", "refresh_token_ttl", "tenant_id", "manifest_version", "kind", "status", "slug", "name", "client_secret_hash", "redirect_uris", "backchannel_logout_uri", "token_format", "post_logout_redirect_uris", "allowed_audiences", "sign_in"`
 
 const updatePrefix = `UPDATE "applications" SET `
 const deletePrefix = `DELETE FROM "applications"`
@@ -2316,9 +2396,10 @@ const (
 	dTokenFormat            uint64 = 1 << 12
 	dPostLogoutRedirectUris uint64 = 1 << 13
 	dAllowedAudiences       uint64 = 1 << 14
+	dSignIn                 uint64 = 1 << 15
 )
 
-const nUpdatable = 15
+const nUpdatable = 16
 
 // setFrags is every assignment this table can make, lowered at build time.
 var setFrags = [nUpdatable]runtime.Frag{
@@ -2337,6 +2418,7 @@ var setFrags = [nUpdatable]runtime.Frag{
 	{A: "\"token_format\" = $", B: ""},              // token_format
 	{A: "\"post_logout_redirect_uris\" = $", B: ""}, // post_logout_redirect_uris
 	{A: "\"allowed_audiences\" = $", B: ""},         // allowed_audiences
+	{A: "\"sign_in\" = $", B: ""},                   // sign_in
 }
 
 // exprFrags is the SERVER-side assignment each column may take instead
@@ -2358,6 +2440,7 @@ var exprFrags = [nUpdatable]runtime.Frag{
 	{}, // token_format has no server-side form
 	{}, // post_logout_redirect_uris has no server-side form
 	{}, // allowed_audiences has no server-side form
+	{}, // sign_in has no server-side form
 }
 
 // pkFrags addresses one row.
@@ -2386,9 +2469,10 @@ const (
 	iTokenFormat            uint64 = 1 << 14
 	iPostLogoutRedirectUris uint64 = 1 << 15
 	iAllowedAudiences       uint64 = 1 << 16
+	iSignIn                 uint64 = 1 << 17
 )
 
-const nInsertable = 17
+const nInsertable = 18
 
 // insCols is the quoted column name for each insert bit.
 var insCols = [nInsertable]string{
@@ -2409,6 +2493,7 @@ var insCols = [nInsertable]string{
 	"\"token_format\"",
 	"\"post_logout_redirect_uris\"",
 	"\"allowed_audiences\"",
+	"\"sign_in\"",
 }
 
 // insParts and insPlaceholder come from the back end at build time; the
@@ -2417,7 +2502,7 @@ var insParts = runtime.InsertParts{Open: " (", Sep: ", ", Mid: ") VALUES (", Clo
 var insPlaceholder = runtime.Placeholder{}
 
 const insPrefix = "INSERT INTO \"applications\""
-const insReturning = " RETURNING \"id\", \"created_at\", \"updated_at\", \"access_token_ttl\", \"refresh_token_ttl\", \"tenant_id\", \"manifest_version\", \"kind\", \"status\", \"slug\", \"name\", \"client_secret_hash\", \"redirect_uris\", \"backchannel_logout_uri\", \"token_format\", \"post_logout_redirect_uris\", \"allowed_audiences\""
+const insReturning = " RETURNING \"id\", \"created_at\", \"updated_at\", \"access_token_ttl\", \"refresh_token_ttl\", \"tenant_id\", \"manifest_version\", \"kind\", \"status\", \"slug\", \"name\", \"client_secret_hash\", \"redirect_uris\", \"backchannel_logout_uri\", \"token_format\", \"post_logout_redirect_uris\", \"allowed_audiences\", \"sign_in\""
 
 var insCache = runtime.NewMaskCache()
 
@@ -2436,7 +2521,7 @@ var updOpCache = runtime.NewMaskCache()
 // part of it. Without it m.Row() would hold what the row held BEFORE
 // the statement, so a caller reading back the counter it just
 // incremented would get the old number and never know.
-const updReturning = " RETURNING \"id\", \"created_at\", \"updated_at\", \"access_token_ttl\", \"refresh_token_ttl\", \"tenant_id\", \"manifest_version\", \"kind\", \"status\", \"slug\", \"name\", \"client_secret_hash\", \"redirect_uris\", \"backchannel_logout_uri\", \"token_format\", \"post_logout_redirect_uris\", \"allowed_audiences\""
+const updReturning = " RETURNING \"id\", \"created_at\", \"updated_at\", \"access_token_ttl\", \"refresh_token_ttl\", \"tenant_id\", \"manifest_version\", \"kind\", \"status\", \"slug\", \"name\", \"client_secret_hash\", \"redirect_uris\", \"backchannel_logout_uri\", \"token_format\", \"post_logout_redirect_uris\", \"allowed_audiences\", \"sign_in\""
 
 // Masks reports how many distinct UPDATE shapes have compiled.
 func Masks() int { return updCache.Masks() }
@@ -2611,6 +2696,12 @@ func (m *Mut) SetAllowedAudiences(v []string) {
 	m.expr &^= dAllowedAudiences
 }
 
+func (m *Mut) SetSignIn(v string) {
+	m.row.SignIn = v
+	m.dirty |= dSignIn
+	m.expr &^= dSignIn
+}
+
 // Ins stages a new row. Unlike Mut it has a setter for every insertable
 // column including the primary key and Immutable ones — supplying your
 // own id is legitimate, changing it later is not.
@@ -2755,6 +2846,11 @@ func (n *Ins) SetAllowedAudiences(v []string) {
 	n.set |= iAllowedAudiences
 }
 
+func (n *Ins) SetSignIn(v string) {
+	n.row.SignIn = v
+	n.set |= iSignIn
+}
+
 // The conflict encoding. One byte holds both which unique index an
 // upsert names and what it does on collision, so the insert statement
 // cache stays keyed by one mask and one byte:
@@ -2807,7 +2903,7 @@ var conflictSpecs = []string{
 
 // assignable is the columns target i may overwrite, given the mask.
 func assignable(i uint8, mask uint64) []string {
-	set := make([]string, 0, 15)
+	set := make([]string, 0, 16)
 	switch i {
 	case 0:
 		if mask&(1<<2) != 0 {
@@ -2855,6 +2951,9 @@ func assignable(i uint8, mask uint64) []string {
 		if mask&(1<<16) != 0 {
 			set = append(set, "allowed_audiences")
 		}
+		if mask&(1<<17) != 0 {
+			set = append(set, "sign_in")
+		}
 	case 1:
 		if mask&(1<<2) != 0 {
 			set = append(set, "updated_at")
@@ -2897,6 +2996,9 @@ func assignable(i uint8, mask uint64) []string {
 		}
 		if mask&(1<<16) != 0 {
 			set = append(set, "allowed_audiences")
+		}
+		if mask&(1<<17) != 0 {
+			set = append(set, "sign_in")
 		}
 	case 2:
 		if mask&(1<<2) != 0 {
@@ -2941,6 +3043,9 @@ func assignable(i uint8, mask uint64) []string {
 		if mask&(1<<16) != 0 {
 			set = append(set, "allowed_audiences")
 		}
+		if mask&(1<<17) != 0 {
+			set = append(set, "sign_in")
+		}
 	case 3:
 		if mask&(1<<2) != 0 {
 			set = append(set, "updated_at")
@@ -2980,6 +3085,9 @@ func assignable(i uint8, mask uint64) []string {
 		}
 		if mask&(1<<16) != 0 {
 			set = append(set, "allowed_audiences")
+		}
+		if mask&(1<<17) != 0 {
+			set = append(set, "sign_in")
 		}
 	}
 	return set
@@ -3090,6 +3198,7 @@ var assignFor = map[string]string{
 	"token_format":              "\"token_format\" = EXCLUDED.\"token_format\"",
 	"post_logout_redirect_uris": "\"post_logout_redirect_uris\" = EXCLUDED.\"post_logout_redirect_uris\"",
 	"allowed_audiences":         "\"allowed_audiences\" = EXCLUDED.\"allowed_audiences\"",
+	"sign_in":                   "\"sign_in\" = EXCLUDED.\"sign_in\"",
 }
 
 func assignExcluded(c string) string { return assignFor[c] }
@@ -3174,6 +3283,8 @@ func (n *Ins) Insert(ctx context.Context, ex runtime.Executor) (Row, error) {
 			args = append(args, n.row.PostLogoutRedirectUris)
 		case 16:
 			args = append(args, n.row.AllowedAudiences)
+		case 17:
+			args = append(args, n.row.SignIn)
 		}
 	}
 	var out Row
@@ -3211,7 +3322,7 @@ func Inserts() int { return insCache.Masks() }
 // not treat a zero as 'unset': that guess is why other ORMs cannot insert
 // a false, a 0 or an empty string into a column with a default.
 func Insert(ctx context.Context, ex runtime.Executor, r *Row) error {
-	args := make([]any, 0, 17)
+	args := make([]any, 0, 18)
 	args = append(args, r.ID)
 	args = append(args, r.CreatedAt)
 	args = append(args, r.UpdatedAt)
@@ -3229,6 +3340,7 @@ func Insert(ctx context.Context, ex runtime.Executor, r *Row) error {
 	args = append(args, r.TokenFormat)
 	args = append(args, r.PostLogoutRedirectUris)
 	args = append(args, r.AllowedAudiences)
+	args = append(args, r.SignIn)
 	rows, err := ex.Query(ctx, insertSQL, args)
 	if err != nil {
 		return err
@@ -3272,13 +3384,14 @@ var copyCols = []string{
 	"token_format",
 	"post_logout_redirect_uris",
 	"allowed_audiences",
+	"sign_in",
 }
 
 // rowSource walks a []Row for CopyFrom without copying any of it.
 type rowSource struct {
 	rows []Row
 	i    int
-	buf  [17]any
+	buf  [18]any
 }
 
 func (s *rowSource) Next() bool {
@@ -3313,6 +3426,7 @@ func (s *rowSource) Values() []any {
 	s.buf[14] = &r.TokenFormat
 	s.buf[15] = &r.PostLogoutRedirectUris
 	s.buf[16] = &r.AllowedAudiences
+	s.buf[17] = &r.SignIn
 	return s.buf[:]
 }
 
@@ -3360,8 +3474,9 @@ func InsertOp(r Row) runtime.BatchOp {
 	mask |= 1 << 14
 	mask |= 1 << 15
 	mask |= 1 << 16
+	mask |= 1 << 17
 	st := stmtForInsertNoReturn(mask, 0, 0)
-	args := make([]any, 0, 17)
+	args := make([]any, 0, 18)
 	args = append(args, r.ID)
 	args = append(args, r.CreatedAt)
 	args = append(args, r.UpdatedAt)
@@ -3379,6 +3494,7 @@ func InsertOp(r Row) runtime.BatchOp {
 	args = append(args, r.TokenFormat)
 	args = append(args, r.PostLogoutRedirectUris)
 	args = append(args, r.AllowedAudiences)
+	args = append(args, r.SignIn)
 	return runtime.BatchOp{SQL: st.SQL, Args: args}
 }
 
@@ -3446,6 +3562,8 @@ func (n *Ins) Op() (runtime.BatchOp, error) {
 			args = append(args, n.row.PostLogoutRedirectUris)
 		case 16:
 			args = append(args, n.row.AllowedAudiences)
+		case 17:
+			args = append(args, n.row.SignIn)
 		}
 	}
 	return runtime.BatchOp{SQL: st.SQL, Args: args}, nil
@@ -3531,6 +3649,8 @@ func (m *Mut) UpdateOp() (runtime.BatchOp, bool) {
 			args = append(args, m.row.PostLogoutRedirectUris)
 		case 14:
 			args = append(args, m.row.AllowedAudiences)
+		case 15:
+			args = append(args, m.row.SignIn)
 		}
 	}
 	args = append(args, m.row.ID)
@@ -3643,6 +3763,8 @@ func (m *Mut) Update(ctx context.Context, ex runtime.Executor) error {
 			args = append(args, m.row.PostLogoutRedirectUris)
 		case 14:
 			args = append(args, m.row.AllowedAudiences)
+		case 15:
+			args = append(args, m.row.SignIn)
 		}
 	}
 	args = append(args, m.row.ID)
@@ -3821,6 +3943,8 @@ func (q Query) UpdateAll(ctx context.Context, ex runtime.Executor, m Mut) (int64
 			args = append(args, m.row.PostLogoutRedirectUris)
 		case 14:
 			args = append(args, m.row.AllowedAudiences)
+		case 15:
+			args = append(args, m.row.SignIn)
 		}
 	}
 	args = append(args, q.bindPreds(b)...)

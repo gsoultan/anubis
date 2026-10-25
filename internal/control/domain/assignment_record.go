@@ -1,6 +1,9 @@
 package controldomain
 
-import "time"
+import (
+	"slices"
+	"time"
+)
 
 // AssignmentRecord is one operator's authority over one tenant, or over the
 // whole installation when TenantID is empty.
@@ -18,6 +21,10 @@ type AssignmentRecord struct {
 	ValidUntil *time.Time
 	RevokedAt  *time.Time
 	CreatedAt  time.Time
+	// Below is every company inside TenantID. An assignment to a company is
+	// authority over the companies it owns too: that is what a group of
+	// companies is for. Access INSIDE each company is never inherited.
+	Below []string
 }
 
 // Global reports whether this assignment covers every tenant.
@@ -41,5 +48,5 @@ func (a AssignmentRecord) Covers(tenantID string, now time.Time) bool {
 	if !a.Live(now) {
 		return false
 	}
-	return a.Global() || a.TenantID == tenantID
+	return a.Global() || a.TenantID == tenantID || slices.Contains(a.Below, tenantID)
 }

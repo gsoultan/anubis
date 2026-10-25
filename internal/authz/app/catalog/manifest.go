@@ -23,6 +23,10 @@ type Permission struct {
 	MinAssurance int      `json:"min_assurance"`
 	RequiresAMR  []string `json:"requires_amr"`
 	MaxAuthAge   string   `json:"max_auth_age"`
+	// Module files the permission under a part of the app, such as
+	// "Payables", so people pick a module, then a feature, then an action.
+	// Only a label: the key stays resource:action.
+	Module string `json:"module"`
 }
 
 type Role struct {

@@ -213,6 +213,27 @@ const (
 	// AuthzAdminServiceListMembershipAssignmentsProcedure is the fully-qualified name of the
 	// AuthzAdminService's ListMembershipAssignments RPC.
 	AuthzAdminServiceListMembershipAssignmentsProcedure = "/anubis.v1.AuthzAdminService/ListMembershipAssignments"
+	// AuthzAdminServiceSummarizeAccessProcedure is the fully-qualified name of the AuthzAdminService's
+	// SummarizeAccess RPC.
+	AuthzAdminServiceSummarizeAccessProcedure = "/anubis.v1.AuthzAdminService/SummarizeAccess"
+	// AuthzAdminServicePreviewGrantChangeProcedure is the fully-qualified name of the
+	// AuthzAdminService's PreviewGrantChange RPC.
+	AuthzAdminServicePreviewGrantChangeProcedure = "/anubis.v1.AuthzAdminService/PreviewGrantChange"
+	// AuthzAdminServiceApplyGrantChangeProcedure is the fully-qualified name of the AuthzAdminService's
+	// ApplyGrantChange RPC.
+	AuthzAdminServiceApplyGrantChangeProcedure = "/anubis.v1.AuthzAdminService/ApplyGrantChange"
+	// AuthzAdminServiceUndoGrantChangeProcedure is the fully-qualified name of the AuthzAdminService's
+	// UndoGrantChange RPC.
+	AuthzAdminServiceUndoGrantChangeProcedure = "/anubis.v1.AuthzAdminService/UndoGrantChange"
+	// AuthzAdminServiceListGrantChangesProcedure is the fully-qualified name of the AuthzAdminService's
+	// ListGrantChanges RPC.
+	AuthzAdminServiceListGrantChangesProcedure = "/anubis.v1.AuthzAdminService/ListGrantChanges"
+	// AuthzAdminServiceListFullListsProcedure is the fully-qualified name of the AuthzAdminService's
+	// ListFullLists RPC.
+	AuthzAdminServiceListFullListsProcedure = "/anubis.v1.AuthzAdminService/ListFullLists"
+	// AuthzAdminServicePlaceReachProcedure is the fully-qualified name of the AuthzAdminService's
+	// PlaceReach RPC.
+	AuthzAdminServicePlaceReachProcedure = "/anubis.v1.AuthzAdminService/PlaceReach"
 	// AuthzAdminServiceApplyManifestProcedure is the fully-qualified name of the AuthzAdminService's
 	// ApplyManifest RPC.
 	AuthzAdminServiceApplyManifestProcedure = "/anubis.v1.AuthzAdminService/ApplyManifest"
@@ -243,6 +264,9 @@ const (
 	// TenantAdminServiceUpdateTenantProcedure is the fully-qualified name of the TenantAdminService's
 	// UpdateTenant RPC.
 	TenantAdminServiceUpdateTenantProcedure = "/anubis.v1.TenantAdminService/UpdateTenant"
+	// TenantAdminServiceMoveTenantProcedure is the fully-qualified name of the TenantAdminService's
+	// MoveTenant RPC.
+	TenantAdminServiceMoveTenantProcedure = "/anubis.v1.TenantAdminService/MoveTenant"
 	// TenantAdminServiceGetTenantStatsProcedure is the fully-qualified name of the TenantAdminService's
 	// GetTenantStats RPC.
 	TenantAdminServiceGetTenantStatsProcedure = "/anubis.v1.TenantAdminService/GetTenantStats"
@@ -1611,6 +1635,21 @@ type AuthzAdminServiceClient interface {
 	UnassignMembership(context.Context, *connect.Request[v1.UnassignMembershipRequest]) (*connect.Response[v1.UnassignMembershipResponse], error)
 	ResyncMembership(context.Context, *connect.Request[v1.ResyncMembershipRequest]) (*connect.Response[v1.ResyncMembershipResponse], error)
 	ListMembershipAssignments(context.Context, *connect.Request[v1.ListMembershipAssignmentsRequest]) (*connect.Response[v1.ListMembershipAssignmentsResponse], error)
+	// SummarizeAccess says what each person on one page of the People list
+	// can do, in one call. At most 200 people.
+	SummarizeAccess(context.Context, *connect.Request[v1.SummarizeAccessRequest]) (*connect.Response[v1.SummarizeAccessResponse], error)
+	// Bulk changes: find grants of one role, change one thing about all of
+	// them, as one recorded act that can be undone as one.
+	PreviewGrantChange(context.Context, *connect.Request[v1.PreviewGrantChangeRequest]) (*connect.Response[v1.PreviewGrantChangeResponse], error)
+	ApplyGrantChange(context.Context, *connect.Request[v1.ApplyGrantChangeRequest]) (*connect.Response[v1.ApplyGrantChangeResponse], error)
+	UndoGrantChange(context.Context, *connect.Request[v1.UndoGrantChangeRequest]) (*connect.Response[v1.UndoGrantChangeResponse], error)
+	ListGrantChanges(context.Context, *connect.Request[v1.ListGrantChangesRequest]) (*connect.Response[v1.ListGrantChangesResponse], error)
+	// ListFullLists finds hand-picked lists that name every place under one
+	// parent: a fixed list that looks like "all" but will miss the next one.
+	ListFullLists(context.Context, *connect.Request[v1.ListFullListsRequest]) (*connect.Response[v1.ListFullListsResponse], error)
+	// PlaceReach answers, for one place: who already has it, and who holds a
+	// list naming all of its siblings and so might expect it too.
+	PlaceReach(context.Context, *connect.Request[v1.PlaceReachRequest]) (*connect.Response[v1.PlaceReachResponse], error)
 	// Registers an application's permission/role/route catalog. Validates,
 	// diffs, applies. Removed permissions are deprecated, never deleted.
 	ApplyManifest(context.Context, *connect.Request[v1.ApplyManifestRequest]) (*connect.Response[v1.ApplyManifestResponse], error)
@@ -1732,6 +1771,48 @@ func NewAuthzAdminServiceClient(httpClient connect.HTTPClient, baseURL string, o
 			connect.WithSchema(authzAdminServiceMethods.ByName("ListMembershipAssignments")),
 			connect.WithClientOptions(opts...),
 		),
+		summarizeAccess: connect.NewClient[v1.SummarizeAccessRequest, v1.SummarizeAccessResponse](
+			httpClient,
+			baseURL+AuthzAdminServiceSummarizeAccessProcedure,
+			connect.WithSchema(authzAdminServiceMethods.ByName("SummarizeAccess")),
+			connect.WithClientOptions(opts...),
+		),
+		previewGrantChange: connect.NewClient[v1.PreviewGrantChangeRequest, v1.PreviewGrantChangeResponse](
+			httpClient,
+			baseURL+AuthzAdminServicePreviewGrantChangeProcedure,
+			connect.WithSchema(authzAdminServiceMethods.ByName("PreviewGrantChange")),
+			connect.WithClientOptions(opts...),
+		),
+		applyGrantChange: connect.NewClient[v1.ApplyGrantChangeRequest, v1.ApplyGrantChangeResponse](
+			httpClient,
+			baseURL+AuthzAdminServiceApplyGrantChangeProcedure,
+			connect.WithSchema(authzAdminServiceMethods.ByName("ApplyGrantChange")),
+			connect.WithClientOptions(opts...),
+		),
+		undoGrantChange: connect.NewClient[v1.UndoGrantChangeRequest, v1.UndoGrantChangeResponse](
+			httpClient,
+			baseURL+AuthzAdminServiceUndoGrantChangeProcedure,
+			connect.WithSchema(authzAdminServiceMethods.ByName("UndoGrantChange")),
+			connect.WithClientOptions(opts...),
+		),
+		listGrantChanges: connect.NewClient[v1.ListGrantChangesRequest, v1.ListGrantChangesResponse](
+			httpClient,
+			baseURL+AuthzAdminServiceListGrantChangesProcedure,
+			connect.WithSchema(authzAdminServiceMethods.ByName("ListGrantChanges")),
+			connect.WithClientOptions(opts...),
+		),
+		listFullLists: connect.NewClient[v1.ListFullListsRequest, v1.ListFullListsResponse](
+			httpClient,
+			baseURL+AuthzAdminServiceListFullListsProcedure,
+			connect.WithSchema(authzAdminServiceMethods.ByName("ListFullLists")),
+			connect.WithClientOptions(opts...),
+		),
+		placeReach: connect.NewClient[v1.PlaceReachRequest, v1.PlaceReachResponse](
+			httpClient,
+			baseURL+AuthzAdminServicePlaceReachProcedure,
+			connect.WithSchema(authzAdminServiceMethods.ByName("PlaceReach")),
+			connect.WithClientOptions(opts...),
+		),
 		applyManifest: connect.NewClient[v1.ApplyManifestRequest, v1.ApplyManifestResponse](
 			httpClient,
 			baseURL+AuthzAdminServiceApplyManifestProcedure,
@@ -1795,6 +1876,13 @@ type authzAdminServiceClient struct {
 	unassignMembership        *connect.Client[v1.UnassignMembershipRequest, v1.UnassignMembershipResponse]
 	resyncMembership          *connect.Client[v1.ResyncMembershipRequest, v1.ResyncMembershipResponse]
 	listMembershipAssignments *connect.Client[v1.ListMembershipAssignmentsRequest, v1.ListMembershipAssignmentsResponse]
+	summarizeAccess           *connect.Client[v1.SummarizeAccessRequest, v1.SummarizeAccessResponse]
+	previewGrantChange        *connect.Client[v1.PreviewGrantChangeRequest, v1.PreviewGrantChangeResponse]
+	applyGrantChange          *connect.Client[v1.ApplyGrantChangeRequest, v1.ApplyGrantChangeResponse]
+	undoGrantChange           *connect.Client[v1.UndoGrantChangeRequest, v1.UndoGrantChangeResponse]
+	listGrantChanges          *connect.Client[v1.ListGrantChangesRequest, v1.ListGrantChangesResponse]
+	listFullLists             *connect.Client[v1.ListFullListsRequest, v1.ListFullListsResponse]
+	placeReach                *connect.Client[v1.PlaceReachRequest, v1.PlaceReachResponse]
 	applyManifest             *connect.Client[v1.ApplyManifestRequest, v1.ApplyManifestResponse]
 	listCatalogSources        *connect.Client[v1.ListCatalogSourcesRequest, v1.ListCatalogSourcesResponse]
 	createCatalogSource       *connect.Client[v1.CreateCatalogSourceRequest, v1.CreateCatalogSourceResponse]
@@ -1884,6 +1972,41 @@ func (c *authzAdminServiceClient) ListMembershipAssignments(ctx context.Context,
 	return c.listMembershipAssignments.CallUnary(ctx, req)
 }
 
+// SummarizeAccess calls anubis.v1.AuthzAdminService.SummarizeAccess.
+func (c *authzAdminServiceClient) SummarizeAccess(ctx context.Context, req *connect.Request[v1.SummarizeAccessRequest]) (*connect.Response[v1.SummarizeAccessResponse], error) {
+	return c.summarizeAccess.CallUnary(ctx, req)
+}
+
+// PreviewGrantChange calls anubis.v1.AuthzAdminService.PreviewGrantChange.
+func (c *authzAdminServiceClient) PreviewGrantChange(ctx context.Context, req *connect.Request[v1.PreviewGrantChangeRequest]) (*connect.Response[v1.PreviewGrantChangeResponse], error) {
+	return c.previewGrantChange.CallUnary(ctx, req)
+}
+
+// ApplyGrantChange calls anubis.v1.AuthzAdminService.ApplyGrantChange.
+func (c *authzAdminServiceClient) ApplyGrantChange(ctx context.Context, req *connect.Request[v1.ApplyGrantChangeRequest]) (*connect.Response[v1.ApplyGrantChangeResponse], error) {
+	return c.applyGrantChange.CallUnary(ctx, req)
+}
+
+// UndoGrantChange calls anubis.v1.AuthzAdminService.UndoGrantChange.
+func (c *authzAdminServiceClient) UndoGrantChange(ctx context.Context, req *connect.Request[v1.UndoGrantChangeRequest]) (*connect.Response[v1.UndoGrantChangeResponse], error) {
+	return c.undoGrantChange.CallUnary(ctx, req)
+}
+
+// ListGrantChanges calls anubis.v1.AuthzAdminService.ListGrantChanges.
+func (c *authzAdminServiceClient) ListGrantChanges(ctx context.Context, req *connect.Request[v1.ListGrantChangesRequest]) (*connect.Response[v1.ListGrantChangesResponse], error) {
+	return c.listGrantChanges.CallUnary(ctx, req)
+}
+
+// ListFullLists calls anubis.v1.AuthzAdminService.ListFullLists.
+func (c *authzAdminServiceClient) ListFullLists(ctx context.Context, req *connect.Request[v1.ListFullListsRequest]) (*connect.Response[v1.ListFullListsResponse], error) {
+	return c.listFullLists.CallUnary(ctx, req)
+}
+
+// PlaceReach calls anubis.v1.AuthzAdminService.PlaceReach.
+func (c *authzAdminServiceClient) PlaceReach(ctx context.Context, req *connect.Request[v1.PlaceReachRequest]) (*connect.Response[v1.PlaceReachResponse], error) {
+	return c.placeReach.CallUnary(ctx, req)
+}
+
 // ApplyManifest calls anubis.v1.AuthzAdminService.ApplyManifest.
 func (c *authzAdminServiceClient) ApplyManifest(ctx context.Context, req *connect.Request[v1.ApplyManifestRequest]) (*connect.Response[v1.ApplyManifestResponse], error) {
 	return c.applyManifest.CallUnary(ctx, req)
@@ -1940,6 +2063,21 @@ type AuthzAdminServiceHandler interface {
 	UnassignMembership(context.Context, *connect.Request[v1.UnassignMembershipRequest]) (*connect.Response[v1.UnassignMembershipResponse], error)
 	ResyncMembership(context.Context, *connect.Request[v1.ResyncMembershipRequest]) (*connect.Response[v1.ResyncMembershipResponse], error)
 	ListMembershipAssignments(context.Context, *connect.Request[v1.ListMembershipAssignmentsRequest]) (*connect.Response[v1.ListMembershipAssignmentsResponse], error)
+	// SummarizeAccess says what each person on one page of the People list
+	// can do, in one call. At most 200 people.
+	SummarizeAccess(context.Context, *connect.Request[v1.SummarizeAccessRequest]) (*connect.Response[v1.SummarizeAccessResponse], error)
+	// Bulk changes: find grants of one role, change one thing about all of
+	// them, as one recorded act that can be undone as one.
+	PreviewGrantChange(context.Context, *connect.Request[v1.PreviewGrantChangeRequest]) (*connect.Response[v1.PreviewGrantChangeResponse], error)
+	ApplyGrantChange(context.Context, *connect.Request[v1.ApplyGrantChangeRequest]) (*connect.Response[v1.ApplyGrantChangeResponse], error)
+	UndoGrantChange(context.Context, *connect.Request[v1.UndoGrantChangeRequest]) (*connect.Response[v1.UndoGrantChangeResponse], error)
+	ListGrantChanges(context.Context, *connect.Request[v1.ListGrantChangesRequest]) (*connect.Response[v1.ListGrantChangesResponse], error)
+	// ListFullLists finds hand-picked lists that name every place under one
+	// parent: a fixed list that looks like "all" but will miss the next one.
+	ListFullLists(context.Context, *connect.Request[v1.ListFullListsRequest]) (*connect.Response[v1.ListFullListsResponse], error)
+	// PlaceReach answers, for one place: who already has it, and who holds a
+	// list naming all of its siblings and so might expect it too.
+	PlaceReach(context.Context, *connect.Request[v1.PlaceReachRequest]) (*connect.Response[v1.PlaceReachResponse], error)
 	// Registers an application's permission/role/route catalog. Validates,
 	// diffs, applies. Removed permissions are deprecated, never deleted.
 	ApplyManifest(context.Context, *connect.Request[v1.ApplyManifestRequest]) (*connect.Response[v1.ApplyManifestResponse], error)
@@ -2057,6 +2195,48 @@ func NewAuthzAdminServiceHandler(svc AuthzAdminServiceHandler, opts ...connect.H
 		connect.WithSchema(authzAdminServiceMethods.ByName("ListMembershipAssignments")),
 		connect.WithHandlerOptions(opts...),
 	)
+	authzAdminServiceSummarizeAccessHandler := connect.NewUnaryHandler(
+		AuthzAdminServiceSummarizeAccessProcedure,
+		svc.SummarizeAccess,
+		connect.WithSchema(authzAdminServiceMethods.ByName("SummarizeAccess")),
+		connect.WithHandlerOptions(opts...),
+	)
+	authzAdminServicePreviewGrantChangeHandler := connect.NewUnaryHandler(
+		AuthzAdminServicePreviewGrantChangeProcedure,
+		svc.PreviewGrantChange,
+		connect.WithSchema(authzAdminServiceMethods.ByName("PreviewGrantChange")),
+		connect.WithHandlerOptions(opts...),
+	)
+	authzAdminServiceApplyGrantChangeHandler := connect.NewUnaryHandler(
+		AuthzAdminServiceApplyGrantChangeProcedure,
+		svc.ApplyGrantChange,
+		connect.WithSchema(authzAdminServiceMethods.ByName("ApplyGrantChange")),
+		connect.WithHandlerOptions(opts...),
+	)
+	authzAdminServiceUndoGrantChangeHandler := connect.NewUnaryHandler(
+		AuthzAdminServiceUndoGrantChangeProcedure,
+		svc.UndoGrantChange,
+		connect.WithSchema(authzAdminServiceMethods.ByName("UndoGrantChange")),
+		connect.WithHandlerOptions(opts...),
+	)
+	authzAdminServiceListGrantChangesHandler := connect.NewUnaryHandler(
+		AuthzAdminServiceListGrantChangesProcedure,
+		svc.ListGrantChanges,
+		connect.WithSchema(authzAdminServiceMethods.ByName("ListGrantChanges")),
+		connect.WithHandlerOptions(opts...),
+	)
+	authzAdminServiceListFullListsHandler := connect.NewUnaryHandler(
+		AuthzAdminServiceListFullListsProcedure,
+		svc.ListFullLists,
+		connect.WithSchema(authzAdminServiceMethods.ByName("ListFullLists")),
+		connect.WithHandlerOptions(opts...),
+	)
+	authzAdminServicePlaceReachHandler := connect.NewUnaryHandler(
+		AuthzAdminServicePlaceReachProcedure,
+		svc.PlaceReach,
+		connect.WithSchema(authzAdminServiceMethods.ByName("PlaceReach")),
+		connect.WithHandlerOptions(opts...),
+	)
 	authzAdminServiceApplyManifestHandler := connect.NewUnaryHandler(
 		AuthzAdminServiceApplyManifestProcedure,
 		svc.ApplyManifest,
@@ -2133,6 +2313,20 @@ func NewAuthzAdminServiceHandler(svc AuthzAdminServiceHandler, opts ...connect.H
 			authzAdminServiceResyncMembershipHandler.ServeHTTP(w, r)
 		case AuthzAdminServiceListMembershipAssignmentsProcedure:
 			authzAdminServiceListMembershipAssignmentsHandler.ServeHTTP(w, r)
+		case AuthzAdminServiceSummarizeAccessProcedure:
+			authzAdminServiceSummarizeAccessHandler.ServeHTTP(w, r)
+		case AuthzAdminServicePreviewGrantChangeProcedure:
+			authzAdminServicePreviewGrantChangeHandler.ServeHTTP(w, r)
+		case AuthzAdminServiceApplyGrantChangeProcedure:
+			authzAdminServiceApplyGrantChangeHandler.ServeHTTP(w, r)
+		case AuthzAdminServiceUndoGrantChangeProcedure:
+			authzAdminServiceUndoGrantChangeHandler.ServeHTTP(w, r)
+		case AuthzAdminServiceListGrantChangesProcedure:
+			authzAdminServiceListGrantChangesHandler.ServeHTTP(w, r)
+		case AuthzAdminServiceListFullListsProcedure:
+			authzAdminServiceListFullListsHandler.ServeHTTP(w, r)
+		case AuthzAdminServicePlaceReachProcedure:
+			authzAdminServicePlaceReachHandler.ServeHTTP(w, r)
 		case AuthzAdminServiceApplyManifestProcedure:
 			authzAdminServiceApplyManifestHandler.ServeHTTP(w, r)
 		case AuthzAdminServiceListCatalogSourcesProcedure:
@@ -2220,6 +2414,34 @@ func (UnimplementedAuthzAdminServiceHandler) ListMembershipAssignments(context.C
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.AuthzAdminService.ListMembershipAssignments is not implemented"))
 }
 
+func (UnimplementedAuthzAdminServiceHandler) SummarizeAccess(context.Context, *connect.Request[v1.SummarizeAccessRequest]) (*connect.Response[v1.SummarizeAccessResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.AuthzAdminService.SummarizeAccess is not implemented"))
+}
+
+func (UnimplementedAuthzAdminServiceHandler) PreviewGrantChange(context.Context, *connect.Request[v1.PreviewGrantChangeRequest]) (*connect.Response[v1.PreviewGrantChangeResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.AuthzAdminService.PreviewGrantChange is not implemented"))
+}
+
+func (UnimplementedAuthzAdminServiceHandler) ApplyGrantChange(context.Context, *connect.Request[v1.ApplyGrantChangeRequest]) (*connect.Response[v1.ApplyGrantChangeResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.AuthzAdminService.ApplyGrantChange is not implemented"))
+}
+
+func (UnimplementedAuthzAdminServiceHandler) UndoGrantChange(context.Context, *connect.Request[v1.UndoGrantChangeRequest]) (*connect.Response[v1.UndoGrantChangeResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.AuthzAdminService.UndoGrantChange is not implemented"))
+}
+
+func (UnimplementedAuthzAdminServiceHandler) ListGrantChanges(context.Context, *connect.Request[v1.ListGrantChangesRequest]) (*connect.Response[v1.ListGrantChangesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.AuthzAdminService.ListGrantChanges is not implemented"))
+}
+
+func (UnimplementedAuthzAdminServiceHandler) ListFullLists(context.Context, *connect.Request[v1.ListFullListsRequest]) (*connect.Response[v1.ListFullListsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.AuthzAdminService.ListFullLists is not implemented"))
+}
+
+func (UnimplementedAuthzAdminServiceHandler) PlaceReach(context.Context, *connect.Request[v1.PlaceReachRequest]) (*connect.Response[v1.PlaceReachResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.AuthzAdminService.PlaceReach is not implemented"))
+}
+
 func (UnimplementedAuthzAdminServiceHandler) ApplyManifest(context.Context, *connect.Request[v1.ApplyManifestRequest]) (*connect.Response[v1.ApplyManifestResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.AuthzAdminService.ApplyManifest is not implemented"))
 }
@@ -2255,6 +2477,8 @@ type TenantAdminServiceClient interface {
 	// UpdateTenant renames. The slug is not editable: it is in URLs, tokens and
 	// every hosted page path, and changing it breaks links already in the world.
 	UpdateTenant(context.Context, *connect.Request[v1.UpdateTenantRequest]) (*connect.Response[v1.UpdateTenantResponse], error)
+	// MoveTenant changes which company owns this one. Installation owners only.
+	MoveTenant(context.Context, *connect.Request[v1.MoveTenantRequest]) (*connect.Response[v1.MoveTenantResponse], error)
 	GetTenantStats(context.Context, *connect.Request[v1.GetTenantStatsRequest]) (*connect.Response[v1.GetTenantStatsResponse], error)
 	// GetDashboard is the console overview: measured facts only — counts and
 	// signals, never invented deltas or percentiles.
@@ -2345,6 +2569,12 @@ func NewTenantAdminServiceClient(httpClient connect.HTTPClient, baseURL string, 
 			httpClient,
 			baseURL+TenantAdminServiceUpdateTenantProcedure,
 			connect.WithSchema(tenantAdminServiceMethods.ByName("UpdateTenant")),
+			connect.WithClientOptions(opts...),
+		),
+		moveTenant: connect.NewClient[v1.MoveTenantRequest, v1.MoveTenantResponse](
+			httpClient,
+			baseURL+TenantAdminServiceMoveTenantProcedure,
+			connect.WithSchema(tenantAdminServiceMethods.ByName("MoveTenant")),
 			connect.WithClientOptions(opts...),
 		),
 		getTenantStats: connect.NewClient[v1.GetTenantStatsRequest, v1.GetTenantStatsResponse](
@@ -2535,6 +2765,7 @@ type tenantAdminServiceClient struct {
 	listTenants         *connect.Client[v1.ListTenantsRequest, v1.ListTenantsResponse]
 	createTenant        *connect.Client[v1.CreateTenantRequest, v1.CreateTenantResponse]
 	updateTenant        *connect.Client[v1.UpdateTenantRequest, v1.UpdateTenantResponse]
+	moveTenant          *connect.Client[v1.MoveTenantRequest, v1.MoveTenantResponse]
 	getTenantStats      *connect.Client[v1.GetTenantStatsRequest, v1.GetTenantStatsResponse]
 	getDashboard        *connect.Client[v1.GetDashboardRequest, v1.GetDashboardResponse]
 	listApiKeys         *connect.Client[v1.ListApiKeysRequest, v1.ListApiKeysResponse]
@@ -2580,6 +2811,11 @@ func (c *tenantAdminServiceClient) CreateTenant(ctx context.Context, req *connec
 // UpdateTenant calls anubis.v1.TenantAdminService.UpdateTenant.
 func (c *tenantAdminServiceClient) UpdateTenant(ctx context.Context, req *connect.Request[v1.UpdateTenantRequest]) (*connect.Response[v1.UpdateTenantResponse], error) {
 	return c.updateTenant.CallUnary(ctx, req)
+}
+
+// MoveTenant calls anubis.v1.TenantAdminService.MoveTenant.
+func (c *tenantAdminServiceClient) MoveTenant(ctx context.Context, req *connect.Request[v1.MoveTenantRequest]) (*connect.Response[v1.MoveTenantResponse], error) {
+	return c.moveTenant.CallUnary(ctx, req)
 }
 
 // GetTenantStats calls anubis.v1.TenantAdminService.GetTenantStats.
@@ -2743,6 +2979,8 @@ type TenantAdminServiceHandler interface {
 	// UpdateTenant renames. The slug is not editable: it is in URLs, tokens and
 	// every hosted page path, and changing it breaks links already in the world.
 	UpdateTenant(context.Context, *connect.Request[v1.UpdateTenantRequest]) (*connect.Response[v1.UpdateTenantResponse], error)
+	// MoveTenant changes which company owns this one. Installation owners only.
+	MoveTenant(context.Context, *connect.Request[v1.MoveTenantRequest]) (*connect.Response[v1.MoveTenantResponse], error)
 	GetTenantStats(context.Context, *connect.Request[v1.GetTenantStatsRequest]) (*connect.Response[v1.GetTenantStatsResponse], error)
 	// GetDashboard is the console overview: measured facts only — counts and
 	// signals, never invented deltas or percentiles.
@@ -2829,6 +3067,12 @@ func NewTenantAdminServiceHandler(svc TenantAdminServiceHandler, opts ...connect
 		TenantAdminServiceUpdateTenantProcedure,
 		svc.UpdateTenant,
 		connect.WithSchema(tenantAdminServiceMethods.ByName("UpdateTenant")),
+		connect.WithHandlerOptions(opts...),
+	)
+	tenantAdminServiceMoveTenantHandler := connect.NewUnaryHandler(
+		TenantAdminServiceMoveTenantProcedure,
+		svc.MoveTenant,
+		connect.WithSchema(tenantAdminServiceMethods.ByName("MoveTenant")),
 		connect.WithHandlerOptions(opts...),
 	)
 	tenantAdminServiceGetTenantStatsHandler := connect.NewUnaryHandler(
@@ -3019,6 +3263,8 @@ func NewTenantAdminServiceHandler(svc TenantAdminServiceHandler, opts ...connect
 			tenantAdminServiceCreateTenantHandler.ServeHTTP(w, r)
 		case TenantAdminServiceUpdateTenantProcedure:
 			tenantAdminServiceUpdateTenantHandler.ServeHTTP(w, r)
+		case TenantAdminServiceMoveTenantProcedure:
+			tenantAdminServiceMoveTenantHandler.ServeHTTP(w, r)
 		case TenantAdminServiceGetTenantStatsProcedure:
 			tenantAdminServiceGetTenantStatsHandler.ServeHTTP(w, r)
 		case TenantAdminServiceGetDashboardProcedure:
@@ -3098,6 +3344,10 @@ func (UnimplementedTenantAdminServiceHandler) CreateTenant(context.Context, *con
 
 func (UnimplementedTenantAdminServiceHandler) UpdateTenant(context.Context, *connect.Request[v1.UpdateTenantRequest]) (*connect.Response[v1.UpdateTenantResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.TenantAdminService.UpdateTenant is not implemented"))
+}
+
+func (UnimplementedTenantAdminServiceHandler) MoveTenant(context.Context, *connect.Request[v1.MoveTenantRequest]) (*connect.Response[v1.MoveTenantResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.TenantAdminService.MoveTenant is not implemented"))
 }
 
 func (UnimplementedTenantAdminServiceHandler) GetTenantStats(context.Context, *connect.Request[v1.GetTenantStatsRequest]) (*connect.Response[v1.GetTenantStatsResponse], error) {

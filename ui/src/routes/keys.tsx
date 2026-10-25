@@ -83,8 +83,10 @@ function Keys() {
 
   return (
     <Page
+      section="settings"
       title="Signing keys"
-      description="The keys that sign every token. If one leaks, an attacker can impersonate anyone — rotation discipline is what prevents that."
+      description="The keys that sign every token."
+      help="If a signing key leaks, whoever holds it can impersonate anyone. Rotating on a schedule limits how long a leaked key is any use."
       wide
       actions={
         <>

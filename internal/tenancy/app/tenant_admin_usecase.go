@@ -15,8 +15,11 @@ import (
 
 type TenantOpsUsecase interface {
 	ListTenants(ctx context.Context) ([]tenancydomain.TenantRef, error)
-	CreateTenant(ctx context.Context, slug, name string) (*tenancydomain.TenantRef, error)
+	// CreateTenant with a parentID creates a company inside that one.
+	CreateTenant(ctx context.Context, slug, name, parentID string) (*tenancydomain.TenantRef, error)
 	UpdateTenant(ctx context.Context, id, name string) error
+	// MoveTenant puts a company under another ("" for the top level).
+	MoveTenant(ctx context.Context, id, parentID string) error
 	// SetTenantStatus is how a tenant is suspended or retired; "archived" is
 	// what deleting one means, because the row is what every record in the
 	// installation hangs off.

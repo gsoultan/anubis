@@ -1,11 +1,12 @@
-import { createFileRoute, Link } from '@tanstack/react-router'
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
+import { useState } from 'react'
 import {
   IconAlertTriangle, IconKey, IconTrash, IconActivity, IconUsers, IconSitemap,
   IconAffiliate, IconArrowRight, IconShieldExclamation, IconChevronRight,
 } from '@tabler/icons-react'
 import { IconX, IconUserPlus, IconCirclePlus, IconTestPipe } from '@tabler/icons-react'
-import { Button, ActionIcon } from '@mantine/core'
+import { Button, ActionIcon, Loader } from '@mantine/core'
 import { Page } from '@/components/shell/Page'
 import { useCreate } from '@/stores/create'
 import { useSession } from '@/stores/session'
@@ -94,12 +95,53 @@ function StartHere() {
   )
 }
 
+/* Hand-picked lists that hold every place. Such a list reads as "all" today
+   and leaves out the next place added, so Home offers to turn it into one
+   that grows. Checked when asked: it reads every grant there is. */
+function FullListsCard() {
+  const navigate = useNavigate()
+  const [asked, setAsked] = useState(false)
+  const { data, isFetching } = useQuery({ queryKey: ['grant-change', 'full-lists'], queryFn: () => api.fullLists(), enabled: asked })
+  return (
+    <div className="panel p-4">
+      <div className="t-label mb-2">Lists that hold every place</div>
+      {!asked && (
+        <>
+          <div className="t-xs mb-2.5">
+            Someone ticked every workplace by hand? That list misses the next one added. Check for lists like that.
+          </div>
+          <Button size="xs" variant="light" onClick={() => setAsked(true)}>Check now</Button>
+        </>
+      )}
+      {asked && isFetching && <Loader size="xs" />}
+      {data && data.length === 0 && <div className="t-sm">None. Every list that means "all" is written as all.</div>}
+      {data && data.length > 0 && (
+        <div className="flex flex-col gap-2">
+          {data.slice(0, 6).map((f) => (
+            <div key={`${f.role_id}-${f.parent_id}`} className="flex items-start gap-2">
+              <span className="t-xs min-w-0 flex-1">
+                <b style={{ color: 'var(--ink)' }}>{f.grants}</b> {f.grants === 1 ? 'grant' : 'grants'} of <b style={{ color: 'var(--ink)' }}>{f.role_name}</b> list
+                {' '}{f.is_root ? `all ${f.places}` : `every place in ${f.parent_name}`} by hand
+              </span>
+              <Button size="compact-xs" variant="light"
+                onClick={() => void navigate({ to: '/bulk', search: { role: f.role_id, axis: f.axis, kind: 'grow', ...(f.is_root ? {} : { node: f.parent_id }) } })}>
+                Make it grow
+              </Button>
+            </div>
+          ))}
+          {data.length > 6 && <div className="t-xs">and {data.length - 6} more</div>}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function Overview() {
   const { data, isLoading } = useQuery({ queryKey: qk.dashboard(), queryFn: api.dashboard })
 
   if (isLoading || !data) {
     return (
-      <Page title="Overview">
+      <Page title="Home">
         <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
           {[0, 1, 2, 3].map((i) => (
             <div key={i} className="panel h-[108px] animate-pulse" style={{ opacity: 0.4 }} />
@@ -122,7 +164,7 @@ function Overview() {
 
   return (
     <Page
-      title="Overview"
+      title="Home"
       description="Alerts first, numbers second — anything needing a human leads the page."
     >
       <div className="flex flex-col gap-4">
@@ -262,6 +304,7 @@ function Overview() {
           </div>
 
           <div className="flex flex-col gap-4">
+            <FullListsCard />
             <div className="panel p-4">
               <div className="t-label mb-3">Open alerts</div>
               <div className="flex flex-col gap-2.5">

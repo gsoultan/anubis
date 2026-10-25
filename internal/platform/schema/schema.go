@@ -16,6 +16,8 @@ func All() []any {
 		&CatalogVersion{},
 		&Consent{},
 		&Credential{},
+		&GrantChange{},
+		&GrantChangeItem{},
 		&GrantScope{},
 		&Grant{},
 		&Identity{},

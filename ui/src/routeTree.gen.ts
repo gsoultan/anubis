@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApplicationsRouteImport } from './routes/applications'
 import { Route as AuditRouteImport } from './routes/audit'
+import { Route as BulkRouteImport } from './routes/bulk'
 import { Route as CatalogRouteImport } from './routes/catalog'
 import { Route as GrantsRouteImport } from './routes/grants'
 import { Route as IdentitiesRouteImport } from './routes/identities'
@@ -19,10 +20,12 @@ import { Route as ImportRouteImport } from './routes/import'
 import { Route as KeysRouteImport } from './routes/keys'
 import { Route as MembershipsRouteImport } from './routes/memberships'
 import { Route as OperatorsRouteImport } from './routes/operators'
+import { Route as PermissionsRouteImport } from './routes/permissions'
 import { Route as PlaygroundRouteImport } from './routes/playground'
 import { Route as RealmsRouteImport } from './routes/realms'
 import { Route as RolesRouteImport } from './routes/roles'
 import { Route as ScopeRouteImport } from './routes/scope'
+import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SetupRouteImport } from './routes/setup'
 import { Route as SigninRouteImport } from './routes/signin'
 import { Route as SigninPageRouteImport } from './routes/signin-page'
@@ -42,6 +45,11 @@ const ApplicationsRoute = ApplicationsRouteImport.update({
 const AuditRoute = AuditRouteImport.update({
   id: '/audit',
   path: '/audit',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BulkRoute = BulkRouteImport.update({
+  id: '/bulk',
+  path: '/bulk',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CatalogRoute = CatalogRouteImport.update({
@@ -79,6 +87,11 @@ const OperatorsRoute = OperatorsRouteImport.update({
   path: '/operators',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PermissionsRoute = PermissionsRouteImport.update({
+  id: '/permissions',
+  path: '/permissions',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PlaygroundRoute = PlaygroundRouteImport.update({
   id: '/playground',
   path: '/playground',
@@ -97,6 +110,11 @@ const RolesRoute = RolesRouteImport.update({
 const ScopeRoute = ScopeRouteImport.update({
   id: '/scope',
   path: '/scope',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SetupRoute = SetupRouteImport.update({
@@ -129,6 +147,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/applications': typeof ApplicationsRoute
   '/audit': typeof AuditRoute
+  '/bulk': typeof BulkRoute
   '/catalog': typeof CatalogRoute
   '/grants': typeof GrantsRoute
   '/identities': typeof IdentitiesRoute
@@ -136,10 +155,12 @@ export interface FileRoutesByFullPath {
   '/keys': typeof KeysRoute
   '/memberships': typeof MembershipsRoute
   '/operators': typeof OperatorsRoute
+  '/permissions': typeof PermissionsRoute
   '/playground': typeof PlaygroundRoute
   '/realms': typeof RealmsRoute
   '/roles': typeof RolesRoute
   '/scope': typeof ScopeRoute
+  '/settings': typeof SettingsRoute
   '/setup': typeof SetupRoute
   '/signin': typeof SigninRoute
   '/signin-page': typeof SigninPageRoute
@@ -150,6 +171,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/applications': typeof ApplicationsRoute
   '/audit': typeof AuditRoute
+  '/bulk': typeof BulkRoute
   '/catalog': typeof CatalogRoute
   '/grants': typeof GrantsRoute
   '/identities': typeof IdentitiesRoute
@@ -157,10 +179,12 @@ export interface FileRoutesByTo {
   '/keys': typeof KeysRoute
   '/memberships': typeof MembershipsRoute
   '/operators': typeof OperatorsRoute
+  '/permissions': typeof PermissionsRoute
   '/playground': typeof PlaygroundRoute
   '/realms': typeof RealmsRoute
   '/roles': typeof RolesRoute
   '/scope': typeof ScopeRoute
+  '/settings': typeof SettingsRoute
   '/setup': typeof SetupRoute
   '/signin': typeof SigninRoute
   '/signin-page': typeof SigninPageRoute
@@ -172,6 +196,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/applications': typeof ApplicationsRoute
   '/audit': typeof AuditRoute
+  '/bulk': typeof BulkRoute
   '/catalog': typeof CatalogRoute
   '/grants': typeof GrantsRoute
   '/identities': typeof IdentitiesRoute
@@ -179,10 +204,12 @@ export interface FileRoutesById {
   '/keys': typeof KeysRoute
   '/memberships': typeof MembershipsRoute
   '/operators': typeof OperatorsRoute
+  '/permissions': typeof PermissionsRoute
   '/playground': typeof PlaygroundRoute
   '/realms': typeof RealmsRoute
   '/roles': typeof RolesRoute
   '/scope': typeof ScopeRoute
+  '/settings': typeof SettingsRoute
   '/setup': typeof SetupRoute
   '/signin': typeof SigninRoute
   '/signin-page': typeof SigninPageRoute
@@ -195,6 +222,7 @@ export interface FileRouteTypes {
     | '/'
     | '/applications'
     | '/audit'
+    | '/bulk'
     | '/catalog'
     | '/grants'
     | '/identities'
@@ -202,10 +230,12 @@ export interface FileRouteTypes {
     | '/keys'
     | '/memberships'
     | '/operators'
+    | '/permissions'
     | '/playground'
     | '/realms'
     | '/roles'
     | '/scope'
+    | '/settings'
     | '/setup'
     | '/signin'
     | '/signin-page'
@@ -216,6 +246,7 @@ export interface FileRouteTypes {
     | '/'
     | '/applications'
     | '/audit'
+    | '/bulk'
     | '/catalog'
     | '/grants'
     | '/identities'
@@ -223,10 +254,12 @@ export interface FileRouteTypes {
     | '/keys'
     | '/memberships'
     | '/operators'
+    | '/permissions'
     | '/playground'
     | '/realms'
     | '/roles'
     | '/scope'
+    | '/settings'
     | '/setup'
     | '/signin'
     | '/signin-page'
@@ -237,6 +270,7 @@ export interface FileRouteTypes {
     | '/'
     | '/applications'
     | '/audit'
+    | '/bulk'
     | '/catalog'
     | '/grants'
     | '/identities'
@@ -244,10 +278,12 @@ export interface FileRouteTypes {
     | '/keys'
     | '/memberships'
     | '/operators'
+    | '/permissions'
     | '/playground'
     | '/realms'
     | '/roles'
     | '/scope'
+    | '/settings'
     | '/setup'
     | '/signin'
     | '/signin-page'
@@ -259,6 +295,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ApplicationsRoute: typeof ApplicationsRoute
   AuditRoute: typeof AuditRoute
+  BulkRoute: typeof BulkRoute
   CatalogRoute: typeof CatalogRoute
   GrantsRoute: typeof GrantsRoute
   IdentitiesRoute: typeof IdentitiesRoute
@@ -266,10 +303,12 @@ export interface RootRouteChildren {
   KeysRoute: typeof KeysRoute
   MembershipsRoute: typeof MembershipsRoute
   OperatorsRoute: typeof OperatorsRoute
+  PermissionsRoute: typeof PermissionsRoute
   PlaygroundRoute: typeof PlaygroundRoute
   RealmsRoute: typeof RealmsRoute
   RolesRoute: typeof RolesRoute
   ScopeRoute: typeof ScopeRoute
+  SettingsRoute: typeof SettingsRoute
   SetupRoute: typeof SetupRoute
   SigninRoute: typeof SigninRoute
   SigninPageRoute: typeof SigninPageRoute
@@ -298,6 +337,13 @@ declare module '@tanstack/react-router' {
       path: '/audit'
       fullPath: '/audit'
       preLoaderRoute: typeof AuditRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/bulk': {
+      id: '/bulk'
+      path: '/bulk'
+      fullPath: '/bulk'
+      preLoaderRoute: typeof BulkRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/catalog': {
@@ -349,6 +395,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OperatorsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/permissions': {
+      id: '/permissions'
+      path: '/permissions'
+      fullPath: '/permissions'
+      preLoaderRoute: typeof PermissionsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/playground': {
       id: '/playground'
       path: '/playground'
@@ -375,6 +428,13 @@ declare module '@tanstack/react-router' {
       path: '/scope'
       fullPath: '/scope'
       preLoaderRoute: typeof ScopeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/setup': {
@@ -419,6 +479,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ApplicationsRoute: ApplicationsRoute,
   AuditRoute: AuditRoute,
+  BulkRoute: BulkRoute,
   CatalogRoute: CatalogRoute,
   GrantsRoute: GrantsRoute,
   IdentitiesRoute: IdentitiesRoute,
@@ -426,10 +487,12 @@ const rootRouteChildren: RootRouteChildren = {
   KeysRoute: KeysRoute,
   MembershipsRoute: MembershipsRoute,
   OperatorsRoute: OperatorsRoute,
+  PermissionsRoute: PermissionsRoute,
   PlaygroundRoute: PlaygroundRoute,
   RealmsRoute: RealmsRoute,
   RolesRoute: RolesRoute,
   ScopeRoute: ScopeRoute,
+  SettingsRoute: SettingsRoute,
   SetupRoute: SetupRoute,
   SigninRoute: SigninRoute,
   SigninPageRoute: SigninPageRoute,

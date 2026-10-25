@@ -73,6 +73,11 @@ type TenantChoice struct {
 	Role string
 	// All marks an owner's blanket authority rather than a listed assignment.
 	All bool
+	ID  string
+	// ParentID lets the picker draw a group of companies as a tree.
+	ParentID string
+	// Inherited: reached through an assignment to a company above it.
+	Inherited bool
 }
 
 // PlatformSession is what an operator sign-in yields: either a token pair,
@@ -315,18 +320,45 @@ func (u *platformAuthInteractor) MyTenants(ctx context.Context) ([]TenantChoice,
 			}
 			out := make([]TenantChoice, 0, len(all))
 			for _, t := range all {
-				out = append(out, TenantChoice{Slug: t.Slug, Name: t.Name, Role: string(a.Role), All: true})
+				out = append(out, TenantChoice{Slug: t.Slug, Name: t.Name, Role: string(a.Role), All: true,
+					ID: t.ID, ParentID: t.ParentID})
 			}
 			return out, nil
 		}
 	}
-	out := make([]TenantChoice, 0, len(mine))
+	// A company assignment reaches the companies below it. Each tenant
+	// appears once, under the assignment that reaches it most directly: an
+	// assignment to the company itself beats one inherited from above.
+	type reach struct {
+		role      string
+		inherited bool
+	}
+	reached := map[string]reach{}
 	for _, a := range mine {
-		t, terr := u.tenants.TenantBySlug(ctx, a.TenantSlug)
-		if terr != nil || t == nil {
+		reached[a.TenantID] = reach{role: string(a.Role)}
+	}
+	for _, a := range mine {
+		for _, id := range a.Below {
+			if _, ok := reached[id]; !ok {
+				reached[id] = reach{role: string(a.Role), inherited: true}
+			}
+		}
+	}
+	if len(reached) == 0 {
+		return []TenantChoice{}, nil
+	}
+	all, err := u.tenants.ListTenants(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]TenantChoice, 0, len(reached))
+	for _, t := range all {
+		r, ok := reached[t.ID]
+		if !ok {
 			continue
 		}
-		out = append(out, TenantChoice{Slug: t.Slug, Name: t.Name, Role: string(a.Role)})
+		out = append(out, TenantChoice{Slug: t.Slug, Name: t.Name, Role: r.role,
+			ID: t.ID, ParentID: t.ParentID, Inherited: r.inherited})
 	}
 	return out, nil
 }

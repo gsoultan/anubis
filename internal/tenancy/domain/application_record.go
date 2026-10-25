@@ -12,12 +12,16 @@ type ApplicationRecord struct {
 	// request beyond its own slug. Empty means self only.
 	AllowedAudiences     []string
 	BackchannelLogoutURI string
-	TokenFormat          string
-	AccessTokenTTL       string
-	RefreshTokenTTL      string
-	AccessTokenTTLSecs   int64
-	RefreshTokenTTLSecs  int64
-	ManifestVersion      int
+	// SignIn is who may sign in at all: "anyone" in its populations, or
+	// "role_holders", people with a live role giving something in this app.
+	// Empty on a write keeps what is stored.
+	SignIn              string
+	TokenFormat         string
+	AccessTokenTTL      string
+	RefreshTokenTTL     string
+	AccessTokenTTLSecs  int64
+	RefreshTokenTTLSecs int64
+	ManifestVersion     int
 	// IsSystem marks one of Anubis's own applications (ADR-0011). They own
 	// the permission catalog and are never something a tenant's people sign
 	// in to, so they stay out of the tenant's application list.

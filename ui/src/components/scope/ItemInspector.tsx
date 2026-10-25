@@ -7,6 +7,7 @@ import {
 } from '@tabler/icons-react'
 import { api } from '@/lib/api/client'
 import { qk } from '@/lib/query/keys'
+import { PlaceReachPanel } from './PlaceReachPanel'
 import { queryClient } from '@/lib/query/client'
 import { useCreate } from '@/stores/create'
 import { notifyCreated, notifyRejected } from '@/components/create/shell'
@@ -160,6 +161,7 @@ export function ItemInspector({ node, levels, onChanged }: {
   }
 
   return (
+    <div className="flex flex-col gap-3">
     <div className="panel rise p-4">
       <div className="t-label mb-2">Selected item</div>
       <div className="t-h1" style={archived ? { color: 'var(--ink-3)' } : undefined}>{node.name}</div>
@@ -245,6 +247,8 @@ export function ItemInspector({ node, levels, onChanged }: {
           {node.external_ref && ' It comes from a connected source — the next sync restores it if the source still has it.'}
         </p>
       </ConfirmModal>
+    </div>
+    <PlaceReachPanel node={node} />
     </div>
   )
 }
