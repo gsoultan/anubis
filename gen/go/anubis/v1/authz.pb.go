@@ -21,6 +21,212 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type ListGrantedNodesRequest struct {
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	Subject    string                 `protobuf:"bytes,1,opt,name=subject,proto3" json:"subject,omitempty"`       // identity id
+	Permission string                 `protobuf:"bytes,2,opt,name=permission,proto3" json:"permission,omitempty"` // "app:resource:action"
+	Axis       string                 `protobuf:"bytes,3,opt,name=axis,proto3" json:"axis,omitempty"`             // the axis left open
+	// The OTHER axes, fixed (usually the session's active scope). A grant
+	// limited on an axis that is neither `axis` nor fixed here is dropped,
+	// the same fail-closed rule Authorize applies.
+	Scopes        map[string]string `protobuf:"bytes,4,rep,name=scopes,proto3" json:"scopes,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListGrantedNodesRequest) Reset() {
+	*x = ListGrantedNodesRequest{}
+	mi := &file_anubis_v1_authz_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListGrantedNodesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListGrantedNodesRequest) ProtoMessage() {}
+
+func (x *ListGrantedNodesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_anubis_v1_authz_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListGrantedNodesRequest.ProtoReflect.Descriptor instead.
+func (*ListGrantedNodesRequest) Descriptor() ([]byte, []int) {
+	return file_anubis_v1_authz_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *ListGrantedNodesRequest) GetSubject() string {
+	if x != nil {
+		return x.Subject
+	}
+	return ""
+}
+
+func (x *ListGrantedNodesRequest) GetPermission() string {
+	if x != nil {
+		return x.Permission
+	}
+	return ""
+}
+
+func (x *ListGrantedNodesRequest) GetAxis() string {
+	if x != nil {
+		return x.Axis
+	}
+	return ""
+}
+
+func (x *ListGrantedNodesRequest) GetScopes() map[string]string {
+	if x != nil {
+		return x.Scopes
+	}
+	return nil
+}
+
+// One place a grant reaches. inherit: everything inside it too. except:
+// what the same grant carves out — it narrows THIS node only.
+type GrantedNode struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	NodeId        string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	Inherit       bool                   `protobuf:"varint,2,opt,name=inherit,proto3" json:"inherit,omitempty"`
+	Except        []*GrantedNode         `protobuf:"bytes,3,rep,name=except,proto3" json:"except,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GrantedNode) Reset() {
+	*x = GrantedNode{}
+	mi := &file_anubis_v1_authz_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GrantedNode) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GrantedNode) ProtoMessage() {}
+
+func (x *GrantedNode) ProtoReflect() protoreflect.Message {
+	mi := &file_anubis_v1_authz_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GrantedNode.ProtoReflect.Descriptor instead.
+func (*GrantedNode) Descriptor() ([]byte, []int) {
+	return file_anubis_v1_authz_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *GrantedNode) GetNodeId() string {
+	if x != nil {
+		return x.NodeId
+	}
+	return ""
+}
+
+func (x *GrantedNode) GetInherit() bool {
+	if x != nil {
+		return x.Inherit
+	}
+	return false
+}
+
+func (x *GrantedNode) GetExcept() []*GrantedNode {
+	if x != nil {
+		return x.Except
+	}
+	return nil
+}
+
+type ListGrantedNodesResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Some qualifying grant puts no limit on the axis: apply no filter.
+	// nodes is empty when this is set.
+	Everywhere bool `protobuf:"varint,1,opt,name=everywhere,proto3" json:"everywhere,omitempty"`
+	// A self-scoped grant qualifies: rows the subject owns pass anywhere.
+	OwnRecords bool `protobuf:"varint,2,opt,name=own_records,json=ownRecords,proto3" json:"own_records,omitempty"`
+	// Otherwise the places. All three unset means nowhere.
+	Nodes []*GrantedNode `protobuf:"bytes,3,rep,name=nodes,proto3" json:"nodes,omitempty"`
+	// unix seconds: when the snapshot this was read from was current.
+	AsOf          int64 `protobuf:"varint,4,opt,name=as_of,json=asOf,proto3" json:"as_of,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListGrantedNodesResponse) Reset() {
+	*x = ListGrantedNodesResponse{}
+	mi := &file_anubis_v1_authz_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListGrantedNodesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListGrantedNodesResponse) ProtoMessage() {}
+
+func (x *ListGrantedNodesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_anubis_v1_authz_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListGrantedNodesResponse.ProtoReflect.Descriptor instead.
+func (*ListGrantedNodesResponse) Descriptor() ([]byte, []int) {
+	return file_anubis_v1_authz_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *ListGrantedNodesResponse) GetEverywhere() bool {
+	if x != nil {
+		return x.Everywhere
+	}
+	return false
+}
+
+func (x *ListGrantedNodesResponse) GetOwnRecords() bool {
+	if x != nil {
+		return x.OwnRecords
+	}
+	return false
+}
+
+func (x *ListGrantedNodesResponse) GetNodes() []*GrantedNode {
+	if x != nil {
+		return x.Nodes
+	}
+	return nil
+}
+
+func (x *ListGrantedNodesResponse) GetAsOf() int64 {
+	if x != nil {
+		return x.AsOf
+	}
+	return 0
+}
+
 type AuthorizeRequest struct {
 	state      protoimpl.MessageState `protogen:"open.v1"`
 	Subject    string                 `protobuf:"bytes,1,opt,name=subject,proto3" json:"subject,omitempty"`                                                                         // identity id
@@ -35,7 +241,7 @@ type AuthorizeRequest struct {
 
 func (x *AuthorizeRequest) Reset() {
 	*x = AuthorizeRequest{}
-	mi := &file_anubis_v1_authz_proto_msgTypes[0]
+	mi := &file_anubis_v1_authz_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -47,7 +253,7 @@ func (x *AuthorizeRequest) String() string {
 func (*AuthorizeRequest) ProtoMessage() {}
 
 func (x *AuthorizeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_authz_proto_msgTypes[0]
+	mi := &file_anubis_v1_authz_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -60,7 +266,7 @@ func (x *AuthorizeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AuthorizeRequest.ProtoReflect.Descriptor instead.
 func (*AuthorizeRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_authz_proto_rawDescGZIP(), []int{0}
+	return file_anubis_v1_authz_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *AuthorizeRequest) GetSubject() string {
@@ -122,7 +328,7 @@ type AuthorizeResponse struct {
 
 func (x *AuthorizeResponse) Reset() {
 	*x = AuthorizeResponse{}
-	mi := &file_anubis_v1_authz_proto_msgTypes[1]
+	mi := &file_anubis_v1_authz_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -134,7 +340,7 @@ func (x *AuthorizeResponse) String() string {
 func (*AuthorizeResponse) ProtoMessage() {}
 
 func (x *AuthorizeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_authz_proto_msgTypes[1]
+	mi := &file_anubis_v1_authz_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -147,7 +353,7 @@ func (x *AuthorizeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AuthorizeResponse.ProtoReflect.Descriptor instead.
 func (*AuthorizeResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_authz_proto_rawDescGZIP(), []int{1}
+	return file_anubis_v1_authz_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *AuthorizeResponse) GetAllow() bool {
@@ -217,7 +423,7 @@ type ExplainRequest struct {
 
 func (x *ExplainRequest) Reset() {
 	*x = ExplainRequest{}
-	mi := &file_anubis_v1_authz_proto_msgTypes[2]
+	mi := &file_anubis_v1_authz_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -229,7 +435,7 @@ func (x *ExplainRequest) String() string {
 func (*ExplainRequest) ProtoMessage() {}
 
 func (x *ExplainRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_authz_proto_msgTypes[2]
+	mi := &file_anubis_v1_authz_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -242,7 +448,7 @@ func (x *ExplainRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExplainRequest.ProtoReflect.Descriptor instead.
 func (*ExplainRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_authz_proto_rawDescGZIP(), []int{2}
+	return file_anubis_v1_authz_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *ExplainRequest) GetSubject() string {
@@ -281,7 +487,7 @@ type ExplainResponse struct {
 
 func (x *ExplainResponse) Reset() {
 	*x = ExplainResponse{}
-	mi := &file_anubis_v1_authz_proto_msgTypes[3]
+	mi := &file_anubis_v1_authz_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -293,7 +499,7 @@ func (x *ExplainResponse) String() string {
 func (*ExplainResponse) ProtoMessage() {}
 
 func (x *ExplainResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_authz_proto_msgTypes[3]
+	mi := &file_anubis_v1_authz_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -306,7 +512,7 @@ func (x *ExplainResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExplainResponse.ProtoReflect.Descriptor instead.
 func (*ExplainResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_authz_proto_rawDescGZIP(), []int{3}
+	return file_anubis_v1_authz_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *ExplainResponse) GetAllow() bool {
@@ -346,7 +552,7 @@ type SwitchScopeRequest struct {
 
 func (x *SwitchScopeRequest) Reset() {
 	*x = SwitchScopeRequest{}
-	mi := &file_anubis_v1_authz_proto_msgTypes[4]
+	mi := &file_anubis_v1_authz_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -358,7 +564,7 @@ func (x *SwitchScopeRequest) String() string {
 func (*SwitchScopeRequest) ProtoMessage() {}
 
 func (x *SwitchScopeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_authz_proto_msgTypes[4]
+	mi := &file_anubis_v1_authz_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -371,7 +577,7 @@ func (x *SwitchScopeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SwitchScopeRequest.ProtoReflect.Descriptor instead.
 func (*SwitchScopeRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_authz_proto_rawDescGZIP(), []int{4}
+	return file_anubis_v1_authz_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *SwitchScopeRequest) GetScopes() map[string]string {
@@ -390,7 +596,7 @@ type SwitchScopeResponse struct {
 
 func (x *SwitchScopeResponse) Reset() {
 	*x = SwitchScopeResponse{}
-	mi := &file_anubis_v1_authz_proto_msgTypes[5]
+	mi := &file_anubis_v1_authz_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -402,7 +608,7 @@ func (x *SwitchScopeResponse) String() string {
 func (*SwitchScopeResponse) ProtoMessage() {}
 
 func (x *SwitchScopeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_authz_proto_msgTypes[5]
+	mi := &file_anubis_v1_authz_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -415,7 +621,7 @@ func (x *SwitchScopeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SwitchScopeResponse.ProtoReflect.Descriptor instead.
 func (*SwitchScopeResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_authz_proto_rawDescGZIP(), []int{5}
+	return file_anubis_v1_authz_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *SwitchScopeResponse) GetTokens() *TokenPair {
@@ -429,7 +635,29 @@ var File_anubis_v1_authz_proto protoreflect.FileDescriptor
 
 const file_anubis_v1_authz_proto_rawDesc = "" +
 	"\n" +
-	"\x15anubis/v1/authz.proto\x12\tanubis.v1\x1a\x16anubis/v1/common.proto\"\xf7\x01\n" +
+	"\x15anubis/v1/authz.proto\x12\tanubis.v1\x1a\x16anubis/v1/common.proto\"\xea\x01\n" +
+	"\x17ListGrantedNodesRequest\x12\x18\n" +
+	"\asubject\x18\x01 \x01(\tR\asubject\x12\x1e\n" +
+	"\n" +
+	"permission\x18\x02 \x01(\tR\n" +
+	"permission\x12\x12\n" +
+	"\x04axis\x18\x03 \x01(\tR\x04axis\x12F\n" +
+	"\x06scopes\x18\x04 \x03(\v2..anubis.v1.ListGrantedNodesRequest.ScopesEntryR\x06scopes\x1a9\n" +
+	"\vScopesEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"p\n" +
+	"\vGrantedNode\x12\x17\n" +
+	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x18\n" +
+	"\ainherit\x18\x02 \x01(\bR\ainherit\x12.\n" +
+	"\x06except\x18\x03 \x03(\v2\x16.anubis.v1.GrantedNodeR\x06except\"\x9e\x01\n" +
+	"\x18ListGrantedNodesResponse\x12\x1e\n" +
+	"\n" +
+	"everywhere\x18\x01 \x01(\bR\n" +
+	"everywhere\x12\x1f\n" +
+	"\vown_records\x18\x02 \x01(\bR\n" +
+	"ownRecords\x12,\n" +
+	"\x05nodes\x18\x03 \x03(\v2\x16.anubis.v1.GrantedNodeR\x05nodes\x12\x13\n" +
+	"\x05as_of\x18\x04 \x01(\x03R\x04asOf\"\xf7\x01\n" +
 	"\x10AuthorizeRequest\x12\x18\n" +
 	"\asubject\x18\x01 \x01(\tR\asubject\x12\x1e\n" +
 	"\n" +
@@ -473,11 +701,12 @@ const file_anubis_v1_authz_proto_rawDesc = "" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"C\n" +
 	"\x13SwitchScopeResponse\x12,\n" +
-	"\x06tokens\x18\x01 \x01(\v2\x14.anubis.v1.TokenPairR\x06tokens2\xe6\x01\n" +
+	"\x06tokens\x18\x01 \x01(\v2\x14.anubis.v1.TokenPairR\x06tokens2\xc3\x02\n" +
 	"\fAuthzService\x12F\n" +
 	"\tAuthorize\x12\x1b.anubis.v1.AuthorizeRequest\x1a\x1c.anubis.v1.AuthorizeResponse\x12@\n" +
 	"\aExplain\x12\x19.anubis.v1.ExplainRequest\x1a\x1a.anubis.v1.ExplainResponse\x12L\n" +
-	"\vSwitchScope\x12\x1d.anubis.v1.SwitchScopeRequest\x1a\x1e.anubis.v1.SwitchScopeResponseB6Z4github.com/gsoultan/anubis/gen/go/anubis/v1;anubisv1b\x06proto3"
+	"\vSwitchScope\x12\x1d.anubis.v1.SwitchScopeRequest\x1a\x1e.anubis.v1.SwitchScopeResponse\x12[\n" +
+	"\x10ListGrantedNodes\x12\".anubis.v1.ListGrantedNodesRequest\x1a#.anubis.v1.ListGrantedNodesResponseB6Z4github.com/gsoultan/anubis/gen/go/anubis/v1;anubisv1b\x06proto3"
 
 var (
 	file_anubis_v1_authz_proto_rawDescOnce sync.Once
@@ -491,35 +720,44 @@ func file_anubis_v1_authz_proto_rawDescGZIP() []byte {
 	return file_anubis_v1_authz_proto_rawDescData
 }
 
-var file_anubis_v1_authz_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_anubis_v1_authz_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
 var file_anubis_v1_authz_proto_goTypes = []any{
-	(*AuthorizeRequest)(nil),    // 0: anubis.v1.AuthorizeRequest
-	(*AuthorizeResponse)(nil),   // 1: anubis.v1.AuthorizeResponse
-	(*ExplainRequest)(nil),      // 2: anubis.v1.ExplainRequest
-	(*ExplainResponse)(nil),     // 3: anubis.v1.ExplainResponse
-	(*SwitchScopeRequest)(nil),  // 4: anubis.v1.SwitchScopeRequest
-	(*SwitchScopeResponse)(nil), // 5: anubis.v1.SwitchScopeResponse
-	nil,                         // 6: anubis.v1.AuthorizeRequest.ScopesEntry
-	nil,                         // 7: anubis.v1.ExplainRequest.ScopesEntry
-	nil,                         // 8: anubis.v1.SwitchScopeRequest.ScopesEntry
-	(*TokenPair)(nil),           // 9: anubis.v1.TokenPair
+	(*ListGrantedNodesRequest)(nil),  // 0: anubis.v1.ListGrantedNodesRequest
+	(*GrantedNode)(nil),              // 1: anubis.v1.GrantedNode
+	(*ListGrantedNodesResponse)(nil), // 2: anubis.v1.ListGrantedNodesResponse
+	(*AuthorizeRequest)(nil),         // 3: anubis.v1.AuthorizeRequest
+	(*AuthorizeResponse)(nil),        // 4: anubis.v1.AuthorizeResponse
+	(*ExplainRequest)(nil),           // 5: anubis.v1.ExplainRequest
+	(*ExplainResponse)(nil),          // 6: anubis.v1.ExplainResponse
+	(*SwitchScopeRequest)(nil),       // 7: anubis.v1.SwitchScopeRequest
+	(*SwitchScopeResponse)(nil),      // 8: anubis.v1.SwitchScopeResponse
+	nil,                              // 9: anubis.v1.ListGrantedNodesRequest.ScopesEntry
+	nil,                              // 10: anubis.v1.AuthorizeRequest.ScopesEntry
+	nil,                              // 11: anubis.v1.ExplainRequest.ScopesEntry
+	nil,                              // 12: anubis.v1.SwitchScopeRequest.ScopesEntry
+	(*TokenPair)(nil),                // 13: anubis.v1.TokenPair
 }
 var file_anubis_v1_authz_proto_depIdxs = []int32{
-	6, // 0: anubis.v1.AuthorizeRequest.scopes:type_name -> anubis.v1.AuthorizeRequest.ScopesEntry
-	7, // 1: anubis.v1.ExplainRequest.scopes:type_name -> anubis.v1.ExplainRequest.ScopesEntry
-	8, // 2: anubis.v1.SwitchScopeRequest.scopes:type_name -> anubis.v1.SwitchScopeRequest.ScopesEntry
-	9, // 3: anubis.v1.SwitchScopeResponse.tokens:type_name -> anubis.v1.TokenPair
-	0, // 4: anubis.v1.AuthzService.Authorize:input_type -> anubis.v1.AuthorizeRequest
-	2, // 5: anubis.v1.AuthzService.Explain:input_type -> anubis.v1.ExplainRequest
-	4, // 6: anubis.v1.AuthzService.SwitchScope:input_type -> anubis.v1.SwitchScopeRequest
-	1, // 7: anubis.v1.AuthzService.Authorize:output_type -> anubis.v1.AuthorizeResponse
-	3, // 8: anubis.v1.AuthzService.Explain:output_type -> anubis.v1.ExplainResponse
-	5, // 9: anubis.v1.AuthzService.SwitchScope:output_type -> anubis.v1.SwitchScopeResponse
-	7, // [7:10] is the sub-list for method output_type
-	4, // [4:7] is the sub-list for method input_type
-	4, // [4:4] is the sub-list for extension type_name
-	4, // [4:4] is the sub-list for extension extendee
-	0, // [0:4] is the sub-list for field type_name
+	9,  // 0: anubis.v1.ListGrantedNodesRequest.scopes:type_name -> anubis.v1.ListGrantedNodesRequest.ScopesEntry
+	1,  // 1: anubis.v1.GrantedNode.except:type_name -> anubis.v1.GrantedNode
+	1,  // 2: anubis.v1.ListGrantedNodesResponse.nodes:type_name -> anubis.v1.GrantedNode
+	10, // 3: anubis.v1.AuthorizeRequest.scopes:type_name -> anubis.v1.AuthorizeRequest.ScopesEntry
+	11, // 4: anubis.v1.ExplainRequest.scopes:type_name -> anubis.v1.ExplainRequest.ScopesEntry
+	12, // 5: anubis.v1.SwitchScopeRequest.scopes:type_name -> anubis.v1.SwitchScopeRequest.ScopesEntry
+	13, // 6: anubis.v1.SwitchScopeResponse.tokens:type_name -> anubis.v1.TokenPair
+	3,  // 7: anubis.v1.AuthzService.Authorize:input_type -> anubis.v1.AuthorizeRequest
+	5,  // 8: anubis.v1.AuthzService.Explain:input_type -> anubis.v1.ExplainRequest
+	7,  // 9: anubis.v1.AuthzService.SwitchScope:input_type -> anubis.v1.SwitchScopeRequest
+	0,  // 10: anubis.v1.AuthzService.ListGrantedNodes:input_type -> anubis.v1.ListGrantedNodesRequest
+	4,  // 11: anubis.v1.AuthzService.Authorize:output_type -> anubis.v1.AuthorizeResponse
+	6,  // 12: anubis.v1.AuthzService.Explain:output_type -> anubis.v1.ExplainResponse
+	8,  // 13: anubis.v1.AuthzService.SwitchScope:output_type -> anubis.v1.SwitchScopeResponse
+	2,  // 14: anubis.v1.AuthzService.ListGrantedNodes:output_type -> anubis.v1.ListGrantedNodesResponse
+	11, // [11:15] is the sub-list for method output_type
+	7,  // [7:11] is the sub-list for method input_type
+	7,  // [7:7] is the sub-list for extension type_name
+	7,  // [7:7] is the sub-list for extension extendee
+	0,  // [0:7] is the sub-list for field type_name
 }
 
 func init() { file_anubis_v1_authz_proto_init() }
@@ -534,7 +772,7 @@ func file_anubis_v1_authz_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_anubis_v1_authz_proto_rawDesc), len(file_anubis_v1_authz_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   9,
+			NumMessages:   13,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

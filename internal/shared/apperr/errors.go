@@ -41,6 +41,10 @@ var (
 	// Returned before any account lookup, so it is the same answer for every
 	// username: a reset link cannot be sent from a server with no mail.
 	ErrMailNotConfigured = E(KindUnavailable, "mail_not_configured", "This server cannot send email")
+	// The gate's per-tenant snapshot is missing or too old to serve from.
+	// Fail closed: an answer from a stale snapshot can name a place a
+	// revoked grant used to reach.
+	ErrSnapshotUnavailable = E(KindUnavailable, "snapshot_unavailable", "Authorization snapshot unavailable; try again shortly")
 
 	// Registration / flows.
 	ErrRegistrationClosed = E(KindPermissionDenied, "registration_closed", "Self-registration is not enabled for this realm")

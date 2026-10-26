@@ -40,6 +40,9 @@ const (
 	// AuthzServiceSwitchScopeProcedure is the fully-qualified name of the AuthzService's SwitchScope
 	// RPC.
 	AuthzServiceSwitchScopeProcedure = "/anubis.v1.AuthzService/SwitchScope"
+	// AuthzServiceListGrantedNodesProcedure is the fully-qualified name of the AuthzService's
+	// ListGrantedNodes RPC.
+	AuthzServiceListGrantedNodesProcedure = "/anubis.v1.AuthzService/ListGrantedNodes"
 )
 
 // AuthzServiceClient is a client for the anubis.v1.AuthzService service.
@@ -49,6 +52,11 @@ type AuthzServiceClient interface {
 	// Re-issue the caller's access token pinned to a different active scope,
 	// without re-authentication. Mirrors AWS AssumeRole.
 	SwitchScope(context.Context, *connect.Request[v1.SwitchScopeRequest]) (*connect.Response[v1.SwitchScopeResponse], error)
+	// Where, on one axis, may the subject exercise the permission? Asked
+	// once per screen so an application can filter a list, instead of asking
+	// Authorize once per row. Served from the gate snapshot (as_of says how
+	// fresh); refused as unavailable rather than answered from a stale one.
+	ListGrantedNodes(context.Context, *connect.Request[v1.ListGrantedNodesRequest]) (*connect.Response[v1.ListGrantedNodesResponse], error)
 }
 
 // NewAuthzServiceClient constructs a client for the anubis.v1.AuthzService service. By default, it
@@ -80,14 +88,21 @@ func NewAuthzServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 			connect.WithSchema(authzServiceMethods.ByName("SwitchScope")),
 			connect.WithClientOptions(opts...),
 		),
+		listGrantedNodes: connect.NewClient[v1.ListGrantedNodesRequest, v1.ListGrantedNodesResponse](
+			httpClient,
+			baseURL+AuthzServiceListGrantedNodesProcedure,
+			connect.WithSchema(authzServiceMethods.ByName("ListGrantedNodes")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // authzServiceClient implements AuthzServiceClient.
 type authzServiceClient struct {
-	authorize   *connect.Client[v1.AuthorizeRequest, v1.AuthorizeResponse]
-	explain     *connect.Client[v1.ExplainRequest, v1.ExplainResponse]
-	switchScope *connect.Client[v1.SwitchScopeRequest, v1.SwitchScopeResponse]
+	authorize        *connect.Client[v1.AuthorizeRequest, v1.AuthorizeResponse]
+	explain          *connect.Client[v1.ExplainRequest, v1.ExplainResponse]
+	switchScope      *connect.Client[v1.SwitchScopeRequest, v1.SwitchScopeResponse]
+	listGrantedNodes *connect.Client[v1.ListGrantedNodesRequest, v1.ListGrantedNodesResponse]
 }
 
 // Authorize calls anubis.v1.AuthzService.Authorize.
@@ -105,6 +120,11 @@ func (c *authzServiceClient) SwitchScope(ctx context.Context, req *connect.Reque
 	return c.switchScope.CallUnary(ctx, req)
 }
 
+// ListGrantedNodes calls anubis.v1.AuthzService.ListGrantedNodes.
+func (c *authzServiceClient) ListGrantedNodes(ctx context.Context, req *connect.Request[v1.ListGrantedNodesRequest]) (*connect.Response[v1.ListGrantedNodesResponse], error) {
+	return c.listGrantedNodes.CallUnary(ctx, req)
+}
+
 // AuthzServiceHandler is an implementation of the anubis.v1.AuthzService service.
 type AuthzServiceHandler interface {
 	Authorize(context.Context, *connect.Request[v1.AuthorizeRequest]) (*connect.Response[v1.AuthorizeResponse], error)
@@ -112,6 +132,11 @@ type AuthzServiceHandler interface {
 	// Re-issue the caller's access token pinned to a different active scope,
 	// without re-authentication. Mirrors AWS AssumeRole.
 	SwitchScope(context.Context, *connect.Request[v1.SwitchScopeRequest]) (*connect.Response[v1.SwitchScopeResponse], error)
+	// Where, on one axis, may the subject exercise the permission? Asked
+	// once per screen so an application can filter a list, instead of asking
+	// Authorize once per row. Served from the gate snapshot (as_of says how
+	// fresh); refused as unavailable rather than answered from a stale one.
+	ListGrantedNodes(context.Context, *connect.Request[v1.ListGrantedNodesRequest]) (*connect.Response[v1.ListGrantedNodesResponse], error)
 }
 
 // NewAuthzServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -139,6 +164,12 @@ func NewAuthzServiceHandler(svc AuthzServiceHandler, opts ...connect.HandlerOpti
 		connect.WithSchema(authzServiceMethods.ByName("SwitchScope")),
 		connect.WithHandlerOptions(opts...),
 	)
+	authzServiceListGrantedNodesHandler := connect.NewUnaryHandler(
+		AuthzServiceListGrantedNodesProcedure,
+		svc.ListGrantedNodes,
+		connect.WithSchema(authzServiceMethods.ByName("ListGrantedNodes")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/anubis.v1.AuthzService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case AuthzServiceAuthorizeProcedure:
@@ -147,6 +178,8 @@ func NewAuthzServiceHandler(svc AuthzServiceHandler, opts ...connect.HandlerOpti
 			authzServiceExplainHandler.ServeHTTP(w, r)
 		case AuthzServiceSwitchScopeProcedure:
 			authzServiceSwitchScopeHandler.ServeHTTP(w, r)
+		case AuthzServiceListGrantedNodesProcedure:
+			authzServiceListGrantedNodesHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -166,4 +199,8 @@ func (UnimplementedAuthzServiceHandler) Explain(context.Context, *connect.Reques
 
 func (UnimplementedAuthzServiceHandler) SwitchScope(context.Context, *connect.Request[v1.SwitchScopeRequest]) (*connect.Response[v1.SwitchScopeResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.AuthzService.SwitchScope is not implemented"))
+}
+
+func (UnimplementedAuthzServiceHandler) ListGrantedNodes(context.Context, *connect.Request[v1.ListGrantedNodesRequest]) (*connect.Response[v1.ListGrantedNodesResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.AuthzService.ListGrantedNodes is not implemented"))
 }

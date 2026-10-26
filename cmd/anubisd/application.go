@@ -93,6 +93,7 @@ type application struct {
 	// recovery is built once and served by two doors: the AuthService RPCs
 	// and the hosted reset pages.
 	recovery  identityrecovery.RecoveryUsecase
+	snaps     *gateapp.Manager
 	masterKey []byte
 	// bootstrapTenantSlug is the FALLBACK tenant for the page URLs the console
 	// shows: a caller carrying a tenant on its principal gets that one instead,
@@ -179,6 +180,14 @@ func newApplication(ctx context.Context, cfg *config.Config, db *database.DB, lo
 	default:
 		logger.Warn("no ANUBIS_SMTP_HOST configured: password reset links cannot be sent")
 	}
+	// The gate snapshot is built here rather than where the gate mounts,
+	// because authz serves two questions from it too (ListGrantedNodes and
+	// SwitchScope's entitlement check) and those are wired before the gate.
+	// Before Run: the manager announces deltas on every swap, and the first
+	// swap happens inside Run.
+	a.snaps = gateapp.NewManager(a.gate, a.gate, cfg.SnapshotMaxAge, logger)
+	a.snaps.PublishRevocationsTo(a.revocations)
+	go a.snaps.Run(ctx)
 	a.recovery = identityrecovery.NewRecoveryInteractor(a.tenancy, a.identity, a.identity,
 		a.identity, a.auth, a.auth, a.auth, mailSender, resetLink(cfg.Issuer),
 		a.auth, a.clock, a.auditor, logger)
@@ -263,8 +272,9 @@ func (a *application) registerRPC(rpc *http.ServeMux, opts connect.HandlerOption
 	// --- authz context ------------------------------------------------------
 	authorize := authzapp.NewAuthorizeInteractor(a.authz, a.clock, a.auditor)
 	explain := authzapp.NewExplainInteractor(a.authz)
-	switchScope := authzapp.NewSwitchScopeInteractor(a.auth, a.scope, a.tenancy, a.issuer, a.auth, a.auditor)
-	authzService := authzsvc.NewAuthzService(authorize, explain, switchScope)
+	granted := gateapp.NewGrantedNodesInteractor(a.snaps, a.clock)
+	switchScope := authzapp.NewSwitchScopeInteractor(a.auth, a.scope, a.tenancy, a.issuer, a.auth, a.auditor, granted)
+	authzService := authzsvc.NewAuthzService(authorize, explain, switchScope, granted)
 	rpc.Handle(anubisv1connect.NewAuthzServiceHandler(
 		authzrpc.NewAuthzHandler(authzep.NewAuthzEndpoints(authzService, logger)), opts))
 
@@ -376,11 +386,7 @@ func (a *application) registerHTTP(ctx context.Context, srv *apihttp.Server,
 	srv.HandleFunc("GET /p/{tenant}/{kind}/{slug}", oidc.ServePage)
 	authhttprecovery.NewHandler(a.recovery, a.tenancy, a.identity, a.tenancy, limiter, logger).Mount(srv.HandleFunc)
 
-	snaps := gateapp.NewManager(a.gate, a.gate, cfg.SnapshotMaxAge, logger)
-	// Before Run: the manager announces deltas on every swap, and the first
-	// swap happens inside Run.
-	snaps.PublishRevocationsTo(a.revocations)
-	go snaps.Run(ctx)
+	snaps := a.snaps
 	// Readiness must fail while the snapshot is too stale to serve from:
 	// past that age the gate fails closed, so this instance is denying
 	// traffic and should leave the load balancer.

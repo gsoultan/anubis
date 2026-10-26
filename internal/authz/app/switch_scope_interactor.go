@@ -3,6 +3,7 @@ package authzapp
 import (
 	"context"
 	"encoding/json"
+	authzreach "github.com/gsoultan/anubis/internal/authz/app/reach"
 
 	auditdomain "github.com/gsoultan/anubis/internal/audit/domain"
 	auditport "github.com/gsoultan/anubis/internal/audit/port"
@@ -11,6 +12,7 @@ import (
 	scopeport "github.com/gsoultan/anubis/internal/scope/port"
 	"github.com/gsoultan/anubis/internal/shared/apperr"
 	"github.com/gsoultan/anubis/internal/shared/authctx"
+	"github.com/gsoultan/anubis/internal/shared/jsonx"
 	"github.com/gsoultan/anubis/internal/shared/txm"
 	"github.com/gsoultan/anubis/internal/shared/validate"
 	tenancyport "github.com/gsoultan/anubis/internal/tenancy/port"
@@ -18,6 +20,7 @@ import (
 
 // switchScopeInteractor implements SwitchScopeUsecase.
 type switchScopeInteractor struct {
+	reach    authzreach.ScopeReach
 	sessions authport.SessionRepository
 	nodes    scopeport.ScopeNodeRepository
 	tenants  tenancyport.TenantRepository
@@ -33,10 +36,11 @@ func NewSwitchScopeInteractor(
 	issuer authapp.TokenIssuer,
 	tx txm.TxManager,
 	audit auditport.Auditor,
+	reach authzreach.ScopeReach,
 ) SwitchScopeUsecase {
 	return &switchScopeInteractor{
 		sessions: sessions, nodes: nodes, tenants: tenants,
-		issuer: issuer, tx: tx, audit: audit,
+		issuer: issuer, tx: tx, audit: audit, reach: reach,
 	}
 }
 
@@ -50,7 +54,11 @@ func (u *switchScopeInteractor) Execute(ctx context.Context, scopes map[string]s
 	}
 	// Every requested node must exist in this tenant on the axis it claims —
 	// the schema's composite keys make lying about that unrepresentable, so
-	// existence here IS validity.
+	// existence here IS validity of the NODE. It is not entitlement: a
+	// place that exists is not a place the caller may stand, and the SDK
+	// promises callers that a refused switch means "not yours". Checked
+	// against the gate snapshot, because that is what will decide every
+	// call made from the switched session.
 	for axis, nodeID := range scopes {
 		if !validate.ValidCode(axis) {
 			return nil, apperr.ErrInvalidArgument.With("axis", axis)
@@ -58,6 +66,19 @@ func (u *switchScopeInteractor) Execute(ctx context.Context, scopes map[string]s
 		node, err := u.nodes.ScopeNode(ctx, p.TenantID, nodeID)
 		if err != nil || node == nil || node.Axis != axis || node.Status != "active" {
 			return nil, apperr.ErrInvalidArgument.With("axis", axis).With("node", nodeID)
+		}
+		ok, err := u.reach.CanReach(ctx, p.TenantSlug, p.IdentityID, axis, nodeID)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			u.audit.Emit(ctx, auditdomain.AuditEvent{
+				TenantID: p.TenantID, ActorID: p.IdentityID, ActorKind: "identity",
+				SessionID: p.SessionID, Action: "auth.scope_switch", Result: "deny",
+				IP: authctx.ClientIP(ctx), Detail: jsonx.Must(map[string]string{"axis": axis, "node": nodeID, "reason": "not_entitled"}),
+			})
+			return nil, apperr.ErrPermissionDenied.With("axis", axis).With("node", nodeID).
+				With("hint", "no grant reaches that place")
 		}
 	}
 	raw, err := json.Marshal(scopes)

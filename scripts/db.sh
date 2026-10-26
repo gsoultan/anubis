@@ -186,6 +186,7 @@ cmd_seed() {
     dim "  $tenants tenants already present — not reseeding"
   fi
   cmd_devadmin
+  cmd_devgroup
 }
 
 # bench/seed.sql creates tens of thousands of identities and NOT ONE password:
@@ -238,6 +239,40 @@ cmd_devadmin() {
   dim "  tenant '$tenant' also holds a person '$user' for tenant-facing flows (no admin power)"
 }
 
+# A group of companies (migration 0057): a holding with two companies inside
+# it. Without one, every seeded tenant sits at the top and the Organisations
+# screen is a flat list that cannot show "whoever runs a company runs the ones
+# inside it". bench/seed.sql deliberately builds ONE tenant, so this lives
+# here and is safe to run on every start: each insert is keyed by slug and
+# does nothing when the company already exists. Creating a tenant through the
+# console does the same single insert, so the group is not a special case.
+cmd_devgroup() {
+  local created
+  created="$(psql_db -tAc "
+    WITH holding AS (
+      INSERT INTO tenants (slug, name) VALUES ('nusantara', 'Nusantara Group')
+      ON CONFLICT (slug) DO NOTHING RETURNING id, slug
+    ), parent AS (
+      -- A data-modifying CTE is invisible to the rest of its own statement,
+      -- so a holding created just now is found in \"holding\", not in tenants.
+      SELECT id FROM holding UNION SELECT id FROM tenants WHERE slug = 'nusantara'
+    ), inside AS (
+      INSERT INTO tenants (slug, name, parent_id)
+      SELECT v.slug, v.name, parent.id
+        FROM (VALUES ('nusantara-retail',    'Nusantara Retail'),
+                     ('nusantara-logistics', 'Nusantara Logistics')) AS v(slug, name), parent
+      ON CONFLICT (slug) DO NOTHING RETURNING slug
+    )
+    SELECT count(*) FROM (SELECT slug FROM holding UNION ALL SELECT slug FROM inside) c" 2>/dev/null || echo "")"
+  if [ -z "$created" ]; then
+    warn "could not create the company group (is the database migrated to 0057?)"
+  elif [ "$created" -gt 0 ]; then
+    ok "company group: 'Nusantara Group' with 'Nusantara Retail' and 'Nusantara Logistics' inside it"
+  else
+    dim "  company group already present"
+  fi
+}
+
 db_url() {
   printf 'postgres://%s:%s@localhost:%s/%s?sslmode=disable' \
     "$ANUBIS_DB_USER" "$ANUBIS_DB_USER" "$ANUBIS_DB_PORT" "$ANUBIS_DB_NAME"
@@ -250,6 +285,7 @@ case "${1:-status}" in
   migrate)  cmd_migrate ;;
   seed)     cmd_seed ;;
   devadmin) cmd_devadmin ;;
+  devgroup) cmd_devgroup ;;
   baseline) cmd_baseline ;;
   reset)    cmd_reset ;;
   recreate) cmd_recreate ;;

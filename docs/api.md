@@ -232,6 +232,44 @@ Not optional once more than two axes exist. Returns which grant matched, which
 role conferred the permission, and — on denial — exactly which axis failed and
 why.
 
+### `AuthzService/ListGrantedNodes` — where can they?
+
+The question an application asks **once per screen** so it can filter a
+list, instead of asking `Authorize` once per row.
+
+```json
+{ "subject": "<identity id>", "permission": "training:request:approve",
+  "axis": "org", "scopes": { "unit": "<node id>" } }
+```
+
+`axis` is left open; `scopes` fixes the others (usually the session's active
+scope). A grant limited on an axis that is neither open nor fixed is dropped —
+the same fail-closed rule `Authorize` applies — so the list can never name a
+place `Authorize` would deny.
+
+```json
+{ "everywhere": false, "own_records": true,
+  "nodes": [ { "node_id": "finance", "inherit": true,
+               "except": [ { "node_id": "surabaya", "inherit": true } ] },
+             { "node_id": "jkt-hq", "inherit": false } ],
+  "as_of": 1761470531 }
+```
+
+| Field | Meaning for a filter |
+| :--- | :--- |
+| `everywhere` | Some qualifying grant puts no limit on the axis: apply **no** filter. `nodes` is empty when this is set |
+| `own_records` | A self-scoped grant qualifies: rows the subject owns pass regardless of place |
+| `nodes` | The places, each with its reach (`inherit`) and the exceptions the *same grant* carves out |
+| all three unset | Nowhere: show the empty state, not every row |
+
+Served from the gate's per-tenant snapshot — `as_of` is when it was current
+— and refused as `snapshot_unavailable` rather than answered from a stale
+one. An unknown subject or permission is `not_found`, not an empty list.
+
+`SwitchScope` uses the same snapshot to refuse a place the caller holds no
+grant at (`permission_denied`); a node that merely exists is not a node the
+caller may stand at.
+
 ### `POST /v1/gate/check` — forward-auth
 
 For nginx `auth_request` and Traefik `forwardAuth`. Envoy can use this too,
