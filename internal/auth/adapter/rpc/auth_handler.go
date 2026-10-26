@@ -16,6 +16,7 @@ import (
 	"github.com/gsoultan/anubis/internal/auth/app/signin"
 	tokenapp "github.com/gsoultan/anubis/internal/auth/app/token"
 	authep "github.com/gsoultan/anubis/internal/auth/endpoint"
+	identityrecovery "github.com/gsoultan/anubis/internal/identity/app/recovery"
 	"github.com/gsoultan/anubis/internal/identity/app/registration"
 )
 
@@ -177,6 +178,30 @@ func (h *AuthHandler) VerifyEmail(ctx context.Context, req *connect.Request[anub
 		return nil, apiconnect.Err(ctx, err)
 	}
 	return connect.NewResponse(&anubisv1.VerifyEmailResponse{}), nil
+}
+
+func (h *AuthHandler) RequestPasswordReset(ctx context.Context, req *connect.Request[anubisv1.RequestPasswordResetRequest]) (*connect.Response[anubisv1.RequestPasswordResetResponse], error) {
+	in := identityrecovery.RequestResetInput{
+		Tenant: req.Msg.Tenant, Realm: req.Msg.Realm, Username: req.Msg.Username,
+	}
+	if _, err := h.eps.RequestReset(ctx, authep.WrapResetRequest(in)); err != nil {
+		return nil, apiconnect.Err(ctx, err)
+	}
+	return connect.NewResponse(&anubisv1.RequestPasswordResetResponse{}), nil
+}
+
+func (h *AuthHandler) CompletePasswordReset(ctx context.Context, req *connect.Request[anubisv1.CompletePasswordResetRequest]) (*connect.Response[anubisv1.CompletePasswordResetResponse], error) {
+	if _, err := h.eps.CompleteReset(ctx, [2]string{req.Msg.Token, req.Msg.Password}); err != nil {
+		return nil, apiconnect.Err(ctx, err)
+	}
+	return connect.NewResponse(&anubisv1.CompletePasswordResetResponse{}), nil
+}
+
+func (h *AuthHandler) ChangePassword(ctx context.Context, req *connect.Request[anubisv1.ChangePasswordRequest]) (*connect.Response[anubisv1.ChangePasswordResponse], error) {
+	if _, err := h.eps.ChangePassword(ctx, [2]string{req.Msg.CurrentPassword, req.Msg.NewPassword}); err != nil {
+		return nil, apiconnect.Err(ctx, err)
+	}
+	return connect.NewResponse(&anubisv1.ChangePasswordResponse{}), nil
 }
 
 func (h *AuthHandler) BeginTotpEnrollment(ctx context.Context, req *connect.Request[anubisv1.BeginTotpEnrollmentRequest]) (*connect.Response[anubisv1.BeginTotpEnrollmentResponse], error) {

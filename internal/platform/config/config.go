@@ -76,6 +76,9 @@ type Config struct {
 	// its own — single-tenant installs, and the example page URLs the console
 	// displays (ANUBIS_DEFAULT_TENANT).
 	DefaultTenant string
+
+	// SMTP is the relay reset links go through; see smtp.go.
+	SMTP SMTPConfig
 }
 
 func Load() (*Config, error) {
@@ -128,6 +131,11 @@ func Load() (*Config, error) {
 		return nil, errors.New("config: no database configured — set ANUBIS_DB_URL, or run the installer to write " + ConfigPath())
 	}
 	c.AutoKeys = c.Env != "prod" || os.Getenv("ANUBIS_AUTOKEYS") == "1"
+	smtp, err := loadSMTP()
+	if err != nil {
+		return nil, err
+	}
+	c.SMTP = smtp
 
 	// The key may arrive in the environment OR in a file, and the file is the
 	// better answer: an environment variable is readable from /proc by

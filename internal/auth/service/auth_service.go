@@ -10,11 +10,16 @@ import (
 	"github.com/gsoultan/anubis/internal/auth/app/mfa"
 	"github.com/gsoultan/anubis/internal/auth/app/signin"
 	tokenapp "github.com/gsoultan/anubis/internal/auth/app/token"
+	identityrecovery "github.com/gsoultan/anubis/internal/identity/app/recovery"
 	"github.com/gsoultan/anubis/internal/identity/app/registration"
 )
 
-// AuthService is the authentication surface (proto AuthService).
+// AuthService is the authentication surface (proto AuthService). Password
+// recovery is composed in rather than listed: it is the identity context's
+// usecase, served through this door because it is where people type.
 type AuthService interface {
+	identityrecovery.RecoveryUsecase
+
 	Login(ctx context.Context, in signin.LoginInput) (*signin.LoginOutput, error)
 	VerifyMfa(ctx context.Context, in mfa.VerifyMfaInput) (*authapp.TokenPair, error)
 	Refresh(ctx context.Context, in tokenapp.RefreshInput) (*authapp.TokenPair, error)

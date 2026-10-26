@@ -38,6 +38,9 @@ var (
 	// has nothing to stream. Unavailable rather than Unimplemented — the RPC
 	// exists and another instance can serve it.
 	ErrStreamUnavailable = E(KindUnavailable, "stream_unavailable", "Revocation streaming is not enabled on this instance")
+	// Returned before any account lookup, so it is the same answer for every
+	// username: a reset link cannot be sent from a server with no mail.
+	ErrMailNotConfigured = E(KindUnavailable, "mail_not_configured", "This server cannot send email")
 
 	// Registration / flows.
 	ErrRegistrationClosed = E(KindPermissionDenied, "registration_closed", "Self-registration is not enabled for this realm")

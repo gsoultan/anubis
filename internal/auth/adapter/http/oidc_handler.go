@@ -713,6 +713,12 @@ func (h *OIDCHandler) renderLogin(w http.ResponseWriter, r *http.Request, tenant
 			}
 		}
 	}
+	// Offered whenever there is a realm to reset in. The request page
+	// answers the same for every username, so advertising it reveals
+	// nothing the sign-in form does not.
+	if data.Tenant != "" && data.Realm != "" && data.MFAToken == "" && data.EnrolToken == "" {
+		view.ResetURL = "/p/" + data.Tenant + "/reset/request?realm=" + url.QueryEscape(data.Realm)
+	}
 	if tenantID != "" && cfg.Features.ShowRegistration && data.Realm != "" {
 		if realm, err := h.realms.RealmByCode(r.Context(), tenantID, data.Realm); err == nil &&
 			realm.SelfRegistration {

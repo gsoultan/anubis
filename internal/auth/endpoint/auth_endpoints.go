@@ -11,6 +11,7 @@ import (
 	"github.com/gsoultan/anubis/internal/auth/app/signin"
 	tokenapp "github.com/gsoultan/anubis/internal/auth/app/token"
 	authsvc "github.com/gsoultan/anubis/internal/auth/service"
+	identityrecovery "github.com/gsoultan/anubis/internal/identity/app/recovery"
 	"github.com/gsoultan/anubis/internal/identity/app/registration"
 	"github.com/gsoultan/anubis/internal/platform/mw"
 	"github.com/gsoultan/anubis/internal/platform/ratelimit"
@@ -28,6 +29,9 @@ type AuthEndpoints struct {
 	DeviceVerify    endpoint.Endpoint
 	Register        endpoint.Endpoint
 	VerifyEmail     endpoint.Endpoint
+	RequestReset    endpoint.Endpoint
+	CompleteReset   endpoint.Endpoint
+	ChangePassword  endpoint.Endpoint
 	BeginTotp       endpoint.Endpoint
 	ConfirmTotp     endpoint.Endpoint
 	EnrollDeviceKey endpoint.Endpoint
@@ -82,6 +86,21 @@ func NewAuthEndpoints(svc authsvc.AuthService, logger *slog.Logger, limiter *rat
 		VerifyEmail: wrap("auth.verify_email", limited, func(ctx context.Context, req any) (any, error) {
 			return nil, svc.VerifyEmail(ctx, req.(string))
 		}),
+		// Tighter than sign-in on the account key: every accepted request
+		// is a mail somebody receives, and three a minute to one inbox is
+		// already a nuisance. The IP key stops one source spraying a list.
+		RequestReset: wrap("auth.reset_request", []endpoint.Middleware{mw.RateLimit(limiter, mw.LoginKeys(10, 3, 120))},
+			func(ctx context.Context, req any) (any, error) {
+				return nil, svc.RequestPasswordReset(ctx, req.(resetRateKeys).RequestResetInput)
+			}),
+		CompleteReset: wrap("auth.reset_complete", limited, func(ctx context.Context, req any) (any, error) {
+			r := req.([2]string)
+			return nil, svc.CompletePasswordReset(ctx, r[0], r[1])
+		}),
+		ChangePassword: wrap("auth.password_change", limited, func(ctx context.Context, req any) (any, error) {
+			r := req.([2]string)
+			return nil, svc.ChangePassword(ctx, r[0], r[1])
+		}),
 		// The grant token rides in the request rather than the context: it
 		// is not a session, and treating it like one would put it in reach
 		// of every other endpoint the middleware serves.
@@ -109,3 +128,6 @@ func NewAuthEndpoints(svc authsvc.AuthService, logger *slog.Logger, limiter *rat
 // these helpers so the adapters stay unexported.
 func WrapLogin(in signin.LoginInput) any             { return loginRateKeys{in} }
 func WrapRegister(in registration.RegisterInput) any { return registerRateKeys{in} }
+func WrapResetRequest(in identityrecovery.RequestResetInput) any {
+	return resetRateKeys{in}
+}

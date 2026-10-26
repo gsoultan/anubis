@@ -1746,6 +1746,278 @@ func (*VerifyEmailResponse) Descriptor() ([]byte, []int) {
 	return file_anubis_v1_auth_proto_rawDescGZIP(), []int{30}
 }
 
+type RequestPasswordResetRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Tenant        string                 `protobuf:"bytes,1,opt,name=tenant,proto3" json:"tenant,omitempty"` // tenant slug
+	Realm         string                 `protobuf:"bytes,2,opt,name=realm,proto3" json:"realm,omitempty"`   // realm code; empty = "internal"
+	Username      string                 `protobuf:"bytes,3,opt,name=username,proto3" json:"username,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RequestPasswordResetRequest) Reset() {
+	*x = RequestPasswordResetRequest{}
+	mi := &file_anubis_v1_auth_proto_msgTypes[31]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RequestPasswordResetRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RequestPasswordResetRequest) ProtoMessage() {}
+
+func (x *RequestPasswordResetRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_anubis_v1_auth_proto_msgTypes[31]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RequestPasswordResetRequest.ProtoReflect.Descriptor instead.
+func (*RequestPasswordResetRequest) Descriptor() ([]byte, []int) {
+	return file_anubis_v1_auth_proto_rawDescGZIP(), []int{31}
+}
+
+func (x *RequestPasswordResetRequest) GetTenant() string {
+	if x != nil {
+		return x.Tenant
+	}
+	return ""
+}
+
+func (x *RequestPasswordResetRequest) GetRealm() string {
+	if x != nil {
+		return x.Realm
+	}
+	return ""
+}
+
+func (x *RequestPasswordResetRequest) GetUsername() string {
+	if x != nil {
+		return x.Username
+	}
+	return ""
+}
+
+type RequestPasswordResetResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RequestPasswordResetResponse) Reset() {
+	*x = RequestPasswordResetResponse{}
+	mi := &file_anubis_v1_auth_proto_msgTypes[32]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RequestPasswordResetResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RequestPasswordResetResponse) ProtoMessage() {}
+
+func (x *RequestPasswordResetResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_anubis_v1_auth_proto_msgTypes[32]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RequestPasswordResetResponse.ProtoReflect.Descriptor instead.
+func (*RequestPasswordResetResponse) Descriptor() ([]byte, []int) {
+	return file_anubis_v1_auth_proto_rawDescGZIP(), []int{32}
+}
+
+type CompletePasswordResetRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Token         string                 `protobuf:"bytes,1,opt,name=token,proto3" json:"token,omitempty"`
+	Password      string                 `protobuf:"bytes,2,opt,name=password,proto3" json:"password,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CompletePasswordResetRequest) Reset() {
+	*x = CompletePasswordResetRequest{}
+	mi := &file_anubis_v1_auth_proto_msgTypes[33]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CompletePasswordResetRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CompletePasswordResetRequest) ProtoMessage() {}
+
+func (x *CompletePasswordResetRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_anubis_v1_auth_proto_msgTypes[33]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CompletePasswordResetRequest.ProtoReflect.Descriptor instead.
+func (*CompletePasswordResetRequest) Descriptor() ([]byte, []int) {
+	return file_anubis_v1_auth_proto_rawDescGZIP(), []int{33}
+}
+
+func (x *CompletePasswordResetRequest) GetToken() string {
+	if x != nil {
+		return x.Token
+	}
+	return ""
+}
+
+func (x *CompletePasswordResetRequest) GetPassword() string {
+	if x != nil {
+		return x.Password
+	}
+	return ""
+}
+
+type CompletePasswordResetResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CompletePasswordResetResponse) Reset() {
+	*x = CompletePasswordResetResponse{}
+	mi := &file_anubis_v1_auth_proto_msgTypes[34]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CompletePasswordResetResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CompletePasswordResetResponse) ProtoMessage() {}
+
+func (x *CompletePasswordResetResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_anubis_v1_auth_proto_msgTypes[34]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CompletePasswordResetResponse.ProtoReflect.Descriptor instead.
+func (*CompletePasswordResetResponse) Descriptor() ([]byte, []int) {
+	return file_anubis_v1_auth_proto_rawDescGZIP(), []int{34}
+}
+
+type ChangePasswordRequest struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	CurrentPassword string                 `protobuf:"bytes,1,opt,name=current_password,json=currentPassword,proto3" json:"current_password,omitempty"`
+	NewPassword     string                 `protobuf:"bytes,2,opt,name=new_password,json=newPassword,proto3" json:"new_password,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *ChangePasswordRequest) Reset() {
+	*x = ChangePasswordRequest{}
+	mi := &file_anubis_v1_auth_proto_msgTypes[35]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ChangePasswordRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ChangePasswordRequest) ProtoMessage() {}
+
+func (x *ChangePasswordRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_anubis_v1_auth_proto_msgTypes[35]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ChangePasswordRequest.ProtoReflect.Descriptor instead.
+func (*ChangePasswordRequest) Descriptor() ([]byte, []int) {
+	return file_anubis_v1_auth_proto_rawDescGZIP(), []int{35}
+}
+
+func (x *ChangePasswordRequest) GetCurrentPassword() string {
+	if x != nil {
+		return x.CurrentPassword
+	}
+	return ""
+}
+
+func (x *ChangePasswordRequest) GetNewPassword() string {
+	if x != nil {
+		return x.NewPassword
+	}
+	return ""
+}
+
+type ChangePasswordResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ChangePasswordResponse) Reset() {
+	*x = ChangePasswordResponse{}
+	mi := &file_anubis_v1_auth_proto_msgTypes[36]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ChangePasswordResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ChangePasswordResponse) ProtoMessage() {}
+
+func (x *ChangePasswordResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_anubis_v1_auth_proto_msgTypes[36]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ChangePasswordResponse.ProtoReflect.Descriptor instead.
+func (*ChangePasswordResponse) Descriptor() ([]byte, []int) {
+	return file_anubis_v1_auth_proto_rawDescGZIP(), []int{36}
+}
+
 var File_anubis_v1_auth_proto protoreflect.FileDescriptor
 
 const file_anubis_v1_auth_proto_rawDesc = "" +
@@ -1862,7 +2134,20 @@ const file_anubis_v1_auth_proto_rawDesc = "" +
 	"\x15verification_required\x18\x02 \x01(\bR\x14verificationRequired\"*\n" +
 	"\x12VerifyEmailRequest\x12\x14\n" +
 	"\x05token\x18\x01 \x01(\tR\x05token\"\x15\n" +
-	"\x13VerifyEmailResponse2\xf8\b\n" +
+	"\x13VerifyEmailResponse\"g\n" +
+	"\x1bRequestPasswordResetRequest\x12\x16\n" +
+	"\x06tenant\x18\x01 \x01(\tR\x06tenant\x12\x14\n" +
+	"\x05realm\x18\x02 \x01(\tR\x05realm\x12\x1a\n" +
+	"\busername\x18\x03 \x01(\tR\busername\"\x1e\n" +
+	"\x1cRequestPasswordResetResponse\"P\n" +
+	"\x1cCompletePasswordResetRequest\x12\x14\n" +
+	"\x05token\x18\x01 \x01(\tR\x05token\x12\x1a\n" +
+	"\bpassword\x18\x02 \x01(\tR\bpassword\"\x1f\n" +
+	"\x1dCompletePasswordResetResponse\"e\n" +
+	"\x15ChangePasswordRequest\x12)\n" +
+	"\x10current_password\x18\x01 \x01(\tR\x0fcurrentPassword\x12!\n" +
+	"\fnew_password\x18\x02 \x01(\tR\vnewPassword\"\x18\n" +
+	"\x16ChangePasswordResponse2\xa4\v\n" +
 	"\vAuthService\x12:\n" +
 	"\x05Login\x12\x17.anubis.v1.LoginRequest\x1a\x18.anubis.v1.LoginResponse\x12F\n" +
 	"\tVerifyMfa\x12\x1b.anubis.v1.VerifyMfaRequest\x1a\x1c.anubis.v1.VerifyMfaResponse\x12@\n" +
@@ -1873,7 +2158,10 @@ const file_anubis_v1_auth_proto_rawDesc = "" +
 	"\x0fDeviceChallenge\x12!.anubis.v1.DeviceChallengeRequest\x1a\".anubis.v1.DeviceChallengeResponse\x12O\n" +
 	"\fDeviceVerify\x12\x1e.anubis.v1.DeviceVerifyRequest\x1a\x1f.anubis.v1.DeviceVerifyResponse\x12C\n" +
 	"\bRegister\x12\x1a.anubis.v1.RegisterRequest\x1a\x1b.anubis.v1.RegisterResponse\x12L\n" +
-	"\vVerifyEmail\x12\x1d.anubis.v1.VerifyEmailRequest\x1a\x1e.anubis.v1.VerifyEmailResponse\x12d\n" +
+	"\vVerifyEmail\x12\x1d.anubis.v1.VerifyEmailRequest\x1a\x1e.anubis.v1.VerifyEmailResponse\x12g\n" +
+	"\x14RequestPasswordReset\x12&.anubis.v1.RequestPasswordResetRequest\x1a'.anubis.v1.RequestPasswordResetResponse\x12j\n" +
+	"\x15CompletePasswordReset\x12'.anubis.v1.CompletePasswordResetRequest\x1a(.anubis.v1.CompletePasswordResetResponse\x12U\n" +
+	"\x0eChangePassword\x12 .anubis.v1.ChangePasswordRequest\x1a!.anubis.v1.ChangePasswordResponse\x12d\n" +
 	"\x13BeginTotpEnrollment\x12%.anubis.v1.BeginTotpEnrollmentRequest\x1a&.anubis.v1.BeginTotpEnrollmentResponse\x12j\n" +
 	"\x15ConfirmTotpEnrollment\x12'.anubis.v1.ConfirmTotpEnrollmentRequest\x1a(.anubis.v1.ConfirmTotpEnrollmentResponse\x12X\n" +
 	"\x0fEnrollDeviceKey\x12!.anubis.v1.EnrollDeviceKeyRequest\x1a\".anubis.v1.EnrollDeviceKeyResponse\x12^\n" +
@@ -1891,7 +2179,7 @@ func file_anubis_v1_auth_proto_rawDescGZIP() []byte {
 	return file_anubis_v1_auth_proto_rawDescData
 }
 
-var file_anubis_v1_auth_proto_msgTypes = make([]protoimpl.MessageInfo, 31)
+var file_anubis_v1_auth_proto_msgTypes = make([]protoimpl.MessageInfo, 37)
 var file_anubis_v1_auth_proto_goTypes = []any{
 	(*BeginTotpEnrollmentRequest)(nil),    // 0: anubis.v1.BeginTotpEnrollmentRequest
 	(*BeginTotpEnrollmentResponse)(nil),   // 1: anubis.v1.BeginTotpEnrollmentResponse
@@ -1924,16 +2212,22 @@ var file_anubis_v1_auth_proto_goTypes = []any{
 	(*RegisterResponse)(nil),              // 28: anubis.v1.RegisterResponse
 	(*VerifyEmailRequest)(nil),            // 29: anubis.v1.VerifyEmailRequest
 	(*VerifyEmailResponse)(nil),           // 30: anubis.v1.VerifyEmailResponse
-	(*TokenPair)(nil),                     // 31: anubis.v1.TokenPair
+	(*RequestPasswordResetRequest)(nil),   // 31: anubis.v1.RequestPasswordResetRequest
+	(*RequestPasswordResetResponse)(nil),  // 32: anubis.v1.RequestPasswordResetResponse
+	(*CompletePasswordResetRequest)(nil),  // 33: anubis.v1.CompletePasswordResetRequest
+	(*CompletePasswordResetResponse)(nil), // 34: anubis.v1.CompletePasswordResetResponse
+	(*ChangePasswordRequest)(nil),         // 35: anubis.v1.ChangePasswordRequest
+	(*ChangePasswordResponse)(nil),        // 36: anubis.v1.ChangePasswordResponse
+	(*TokenPair)(nil),                     // 37: anubis.v1.TokenPair
 }
 var file_anubis_v1_auth_proto_depIdxs = []int32{
-	31, // 0: anubis.v1.LoginResponse.tokens:type_name -> anubis.v1.TokenPair
+	37, // 0: anubis.v1.LoginResponse.tokens:type_name -> anubis.v1.TokenPair
 	9,  // 1: anubis.v1.LoginResponse.mfa:type_name -> anubis.v1.MfaChallenge
 	11, // 2: anubis.v1.LoginResponse.enrolment_required:type_name -> anubis.v1.EnrolmentChallenge
 	11, // 3: anubis.v1.LoginResponse.enrolment_due:type_name -> anubis.v1.EnrolmentChallenge
-	31, // 4: anubis.v1.VerifyMfaResponse.tokens:type_name -> anubis.v1.TokenPair
-	31, // 5: anubis.v1.RefreshResponse.tokens:type_name -> anubis.v1.TokenPair
-	31, // 6: anubis.v1.DeviceVerifyResponse.tokens:type_name -> anubis.v1.TokenPair
+	37, // 4: anubis.v1.VerifyMfaResponse.tokens:type_name -> anubis.v1.TokenPair
+	37, // 5: anubis.v1.RefreshResponse.tokens:type_name -> anubis.v1.TokenPair
+	37, // 6: anubis.v1.DeviceVerifyResponse.tokens:type_name -> anubis.v1.TokenPair
 	26, // 7: anubis.v1.RegisterRequest.consents:type_name -> anubis.v1.ConsentInput
 	8,  // 8: anubis.v1.AuthService.Login:input_type -> anubis.v1.LoginRequest
 	12, // 9: anubis.v1.AuthService.VerifyMfa:input_type -> anubis.v1.VerifyMfaRequest
@@ -1945,26 +2239,32 @@ var file_anubis_v1_auth_proto_depIdxs = []int32{
 	24, // 15: anubis.v1.AuthService.DeviceVerify:input_type -> anubis.v1.DeviceVerifyRequest
 	27, // 16: anubis.v1.AuthService.Register:input_type -> anubis.v1.RegisterRequest
 	29, // 17: anubis.v1.AuthService.VerifyEmail:input_type -> anubis.v1.VerifyEmailRequest
-	0,  // 18: anubis.v1.AuthService.BeginTotpEnrollment:input_type -> anubis.v1.BeginTotpEnrollmentRequest
-	2,  // 19: anubis.v1.AuthService.ConfirmTotpEnrollment:input_type -> anubis.v1.ConfirmTotpEnrollmentRequest
-	4,  // 20: anubis.v1.AuthService.EnrollDeviceKey:input_type -> anubis.v1.EnrollDeviceKeyRequest
-	6,  // 21: anubis.v1.AuthService.ClientCredentials:input_type -> anubis.v1.ClientCredentialsRequest
-	10, // 22: anubis.v1.AuthService.Login:output_type -> anubis.v1.LoginResponse
-	13, // 23: anubis.v1.AuthService.VerifyMfa:output_type -> anubis.v1.VerifyMfaResponse
-	15, // 24: anubis.v1.AuthService.Refresh:output_type -> anubis.v1.RefreshResponse
-	17, // 25: anubis.v1.AuthService.Logout:output_type -> anubis.v1.LogoutResponse
-	19, // 26: anubis.v1.AuthService.LogoutAll:output_type -> anubis.v1.LogoutAllResponse
-	21, // 27: anubis.v1.AuthService.LogoutSession:output_type -> anubis.v1.LogoutSessionResponse
-	23, // 28: anubis.v1.AuthService.DeviceChallenge:output_type -> anubis.v1.DeviceChallengeResponse
-	25, // 29: anubis.v1.AuthService.DeviceVerify:output_type -> anubis.v1.DeviceVerifyResponse
-	28, // 30: anubis.v1.AuthService.Register:output_type -> anubis.v1.RegisterResponse
-	30, // 31: anubis.v1.AuthService.VerifyEmail:output_type -> anubis.v1.VerifyEmailResponse
-	1,  // 32: anubis.v1.AuthService.BeginTotpEnrollment:output_type -> anubis.v1.BeginTotpEnrollmentResponse
-	3,  // 33: anubis.v1.AuthService.ConfirmTotpEnrollment:output_type -> anubis.v1.ConfirmTotpEnrollmentResponse
-	5,  // 34: anubis.v1.AuthService.EnrollDeviceKey:output_type -> anubis.v1.EnrollDeviceKeyResponse
-	7,  // 35: anubis.v1.AuthService.ClientCredentials:output_type -> anubis.v1.ClientCredentialsResponse
-	22, // [22:36] is the sub-list for method output_type
-	8,  // [8:22] is the sub-list for method input_type
+	31, // 18: anubis.v1.AuthService.RequestPasswordReset:input_type -> anubis.v1.RequestPasswordResetRequest
+	33, // 19: anubis.v1.AuthService.CompletePasswordReset:input_type -> anubis.v1.CompletePasswordResetRequest
+	35, // 20: anubis.v1.AuthService.ChangePassword:input_type -> anubis.v1.ChangePasswordRequest
+	0,  // 21: anubis.v1.AuthService.BeginTotpEnrollment:input_type -> anubis.v1.BeginTotpEnrollmentRequest
+	2,  // 22: anubis.v1.AuthService.ConfirmTotpEnrollment:input_type -> anubis.v1.ConfirmTotpEnrollmentRequest
+	4,  // 23: anubis.v1.AuthService.EnrollDeviceKey:input_type -> anubis.v1.EnrollDeviceKeyRequest
+	6,  // 24: anubis.v1.AuthService.ClientCredentials:input_type -> anubis.v1.ClientCredentialsRequest
+	10, // 25: anubis.v1.AuthService.Login:output_type -> anubis.v1.LoginResponse
+	13, // 26: anubis.v1.AuthService.VerifyMfa:output_type -> anubis.v1.VerifyMfaResponse
+	15, // 27: anubis.v1.AuthService.Refresh:output_type -> anubis.v1.RefreshResponse
+	17, // 28: anubis.v1.AuthService.Logout:output_type -> anubis.v1.LogoutResponse
+	19, // 29: anubis.v1.AuthService.LogoutAll:output_type -> anubis.v1.LogoutAllResponse
+	21, // 30: anubis.v1.AuthService.LogoutSession:output_type -> anubis.v1.LogoutSessionResponse
+	23, // 31: anubis.v1.AuthService.DeviceChallenge:output_type -> anubis.v1.DeviceChallengeResponse
+	25, // 32: anubis.v1.AuthService.DeviceVerify:output_type -> anubis.v1.DeviceVerifyResponse
+	28, // 33: anubis.v1.AuthService.Register:output_type -> anubis.v1.RegisterResponse
+	30, // 34: anubis.v1.AuthService.VerifyEmail:output_type -> anubis.v1.VerifyEmailResponse
+	32, // 35: anubis.v1.AuthService.RequestPasswordReset:output_type -> anubis.v1.RequestPasswordResetResponse
+	34, // 36: anubis.v1.AuthService.CompletePasswordReset:output_type -> anubis.v1.CompletePasswordResetResponse
+	36, // 37: anubis.v1.AuthService.ChangePassword:output_type -> anubis.v1.ChangePasswordResponse
+	1,  // 38: anubis.v1.AuthService.BeginTotpEnrollment:output_type -> anubis.v1.BeginTotpEnrollmentResponse
+	3,  // 39: anubis.v1.AuthService.ConfirmTotpEnrollment:output_type -> anubis.v1.ConfirmTotpEnrollmentResponse
+	5,  // 40: anubis.v1.AuthService.EnrollDeviceKey:output_type -> anubis.v1.EnrollDeviceKeyResponse
+	7,  // 41: anubis.v1.AuthService.ClientCredentials:output_type -> anubis.v1.ClientCredentialsResponse
+	25, // [25:42] is the sub-list for method output_type
+	8,  // [8:25] is the sub-list for method input_type
 	8,  // [8:8] is the sub-list for extension type_name
 	8,  // [8:8] is the sub-list for extension extendee
 	0,  // [0:8] is the sub-list for field type_name
@@ -1987,7 +2287,7 @@ func file_anubis_v1_auth_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_anubis_v1_auth_proto_rawDesc), len(file_anubis_v1_auth_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   31,
+			NumMessages:   37,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

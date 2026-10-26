@@ -23,6 +23,18 @@ service AuthService {
   rpc Register(RegisterRequest) returns (RegisterResponse);
   rpc VerifyEmail(VerifyEmailRequest) returns (VerifyEmailResponse);
 
+  // --- password recovery (no bearer) and change (bearer) -----------------
+  // Answers the same whether or not the account exists: a link is mailed
+  // to the address on file, if there is one. Rate limited per IP and per
+  // account.
+  rpc RequestPasswordReset(RequestPasswordResetRequest) returns (RequestPasswordResetResponse);
+  // Consumes the emailed token (single use) and sets the password. Every
+  // session is revoked and the token epoch bumped: sign in again.
+  rpc CompletePasswordReset(CompletePasswordResetRequest) returns (CompletePasswordResetResponse);
+  // Needs the CURRENT password, not merely the session. Revokes every
+  // session, including this one — a changed password is a new start.
+  rpc ChangePassword(ChangePasswordRequest) returns (ChangePasswordResponse);
+
   // --- second-factor enrolment (bearer token required) --------------------
   // Two steps on purpose: the secret is only committed once the user proves
   // they can generate a code from it, so a mistyped transfer to the
@@ -223,3 +235,25 @@ message VerifyEmailRequest {
 }
 
 message VerifyEmailResponse {}
+
+message RequestPasswordResetRequest {
+  string tenant = 1;    // tenant slug
+  string realm = 2;     // realm code; empty = "internal"
+  string username = 3;
+}
+
+message RequestPasswordResetResponse {}
+
+message CompletePasswordResetRequest {
+  string token = 1;
+  string password = 2;
+}
+
+message CompletePasswordResetResponse {}
+
+message ChangePasswordRequest {
+  string current_password = 1;
+  string new_password = 2;
+}
+
+message ChangePasswordResponse {}

@@ -139,6 +139,32 @@ Global logout triggers **back-channel logout**: Anubis POSTs a signed logout
 token to each application's `backchannel_logout_uri`. Without it, an application
 with its own session cookie keeps the user logged in after they signed out.
 
+### Password reset and change
+
+Three `AuthService` procedures, and hosted pages for the two that need no
+bearer. All three end by revoking **every** session and refresh family and
+bumping `token_epoch`: a password is changed because the old one is
+forgotten, suspected or inherited, and no session opened with it should
+outlive the change. Sign in again afterwards.
+
+| Procedure | Bearer | Effect |
+| :--- | :--- | :--- |
+| `RequestPasswordReset {tenant, realm, username}` | none | Mails a single-use link to the address on file. **Answers the same whether or not the account exists**, is disabled, or has no address — the difference is in the audit log (`credential.reset_requested`, `credential.reset_mail`). Rate limited 10/min per IP, 3/min per account. The only error it returns is `mail_not_configured`, which is true for every username at once and is checked before any lookup |
+| `CompletePasswordReset {token, password}` | none | Consumes the token (single use, 30 minutes) and sets the password under the realm's policy. A refused password **burns the token**: ask for a new link |
+| `ChangePassword {current_password, new_password}` | tenant person | Needs the current password, not merely a session — a token left in a browser must not be enough to re-key the account. Platform operators use `ChangePlatformPassword` |
+
+The hosted pages render on the tenant's sign-in page configuration:
+
+| Page | What it does |
+| :--- | :--- |
+| `GET /p/{tenant}/reset/request?realm=` | Asks for a username; the sign-in page links here as "Forgot your password?" |
+| `POST /p/{tenant}/reset/request` | Always answers "check your email" |
+| `GET /p/{tenant}/reset/complete?realm=&token=` | The page the mail opens. It moves the token into the form and **consumes nothing**, so a mail client that prefetches links does not burn the reset |
+| `POST /p/{tenant}/reset/complete` | Sets the password; links back to sign-in |
+
+Mail needs a relay (`ANUBIS_SMTP_*`, [operations.md](operations.md#configuration)).
+Outside `prod` with no relay, the message — link included — goes to the log.
+
 ---
 
 ## Tokens

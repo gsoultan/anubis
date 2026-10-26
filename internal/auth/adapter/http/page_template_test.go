@@ -110,3 +110,40 @@ func TestFontStacksSurviveEscaping(t *testing.T) {
 		t.Error("serif did not reach the stylesheet")
 	}
 }
+
+// The sign-in form offers a way back in only when there is a realm to reset
+// in; the reset pages themselves render on the sign-in page's brand with
+// their own heading, and never show the configured sign-in subheading.
+func TestResetLinkAndPagesRenderOnTheSigninBrand(t *testing.T) {
+	cfg := `{"brand":{"title":"Impack"},"copy":{"subheading":"Welcome back"}}`
+
+	with := render(t, pagecfg.KindSignin, cfg, func(v *PageView) { v.ResetURL = "/p/acme/reset/request?realm=internal" })
+	if !strings.Contains(with, `href="/p/acme/reset/request?realm=internal">Forgot your password?`) {
+		t.Fatal("sign-in page offers no way to reset")
+	}
+	without := render(t, pagecfg.KindSignin, cfg, nil)
+	if strings.Contains(without, "Forgot your password?") {
+		t.Fatal("a sign-in page with no realm advertises a reset it cannot route")
+	}
+
+	request := render(t, pagecfg.KindSignin, cfg, func(v *PageView) {
+		v.Kind, v.Title, v.ResetStep = "reset", "Reset your password", "request"
+	})
+	for _, want := range []string{"<h1>Reset your password</h1>", `action="/p/acme/reset/request"`, "Impack"} {
+		if !strings.Contains(request, want) {
+			t.Errorf("request page lacks %q", want)
+		}
+	}
+	if strings.Contains(request, "Welcome back") || strings.Contains(request, `name="password"`) {
+		t.Fatal("the request page carries sign-in copy or a password field")
+	}
+
+	complete := render(t, pagecfg.KindSignin, cfg, func(v *PageView) {
+		v.Kind, v.Title, v.ResetStep, v.ResetToken, v.MinLength = "reset", "Choose a new password", "complete", "tok", 12
+	})
+	for _, want := range []string{`name="token" value="tok"`, `minlength="12"`, `autocomplete="new-password"`} {
+		if !strings.Contains(complete, want) {
+			t.Errorf("complete page lacks %q", want)
+		}
+	}
+}

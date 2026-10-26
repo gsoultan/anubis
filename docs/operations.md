@@ -98,6 +98,11 @@ says how to get the real one.
 | `ANUBIS_SETUP_TOKEN` | *(random per boot)* | Guards the first-run installer. Supply it for an unattended install; otherwise it is printed once and dies with the process |
 | `ANUBIS_DEFAULT_TENANT` | `impack` | The tenant assumed when a request carries none. **Single-tenant installs should set this**; the default is a development fixture name |
 | `ANUBIS_SYNC_DENY_HOSTS` | *(none)* | CIDRs a structure feed may not reach. Link-local is always refused |
+| `ANUBIS_SMTP_HOST` | *(none)* | Relay for password-reset mail. **Unset in prod means reset links cannot be sent** and the flow says so (the same way for every username); outside prod the mail goes to the log instead |
+| `ANUBIS_SMTP_PORT` | `587` | |
+| `ANUBIS_SMTP_SECURITY` | `starttls` | `starttls` (refuses a relay that cannot upgrade) · `implicit` (TLS from the first byte, usually 465) · `none` (loopback relays only; credentials are refused in the clear) |
+| `ANUBIS_SMTP_USERNAME` / `ANUBIS_SMTP_PASSWORD` | *(none)* | Together or not at all. `ANUBIS_SMTP_PASSWORD_FILE` is preferred for the same reason `ANUBIS_KEY_FILE` is |
+| `ANUBIS_SMTP_FROM` | *required with a host* | The sender address |
 | `ANUBIS_SYNC_ALLOW_LOOPBACK` | `0` | Let a feed reach 127.0.0.1 — development only |
 
 **Rate limits are per instance.** Counters live in the process
@@ -563,6 +568,11 @@ Each tenant publishes as many as it needs; each has its own URL
 `/v1/authorize` and `/v1/logout` fall back to — it cannot be deleted or
 disabled without promoting another first, because those endpoints must always
 have something to render.
+
+Password-reset pages live beside them at `/p/{tenant}/reset/request` and
+`/p/{tenant}/reset/complete`, rendered on the sign-in page's configuration
+(the realm's page if it has one, else the tenant default). They need a mail
+relay — see `ANUBIS_SMTP_HOST` above.
 
 **Browser flows need TLS.** The SSO and sign-out cookies use the `__Host-`
 prefix, which browsers only accept over HTTPS. Outside `ANUBIS_ENV=prod`, and

@@ -3,6 +3,7 @@ package authep
 import (
 	"github.com/gsoultan/anubis/internal/auth/app/clientcreds"
 	"github.com/gsoultan/anubis/internal/auth/app/signin"
+	identityrecovery "github.com/gsoultan/anubis/internal/identity/app/recovery"
 	"github.com/gsoultan/anubis/internal/identity/app/registration"
 )
 
@@ -32,4 +33,15 @@ func (r clientCredsRateKeys) RateAccount() string { return r.Tenant + "/client/"
 // so the rate-key carriers stay unexported.
 func WrapClientCredentials(in clientcreds.ClientCredentialsInput) any {
 	return clientCredsRateKeys{in}
+}
+
+// resetRateKeys keys a reset request the way a sign-in is keyed, so the
+// per-account budget is shared with the account it names.
+type resetRateKeys struct {
+	identityrecovery.RequestResetInput
+}
+
+func (r resetRateKeys) RateTenant() string { return r.Tenant }
+func (r resetRateKeys) RateAccount() string {
+	return r.Tenant + "/" + r.Realm + "/" + r.Username
 }
