@@ -7707,12 +7707,11 @@ type ApplyManifestRequest struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
 	ApplicationSlug string                 `protobuf:"bytes,1,opt,name=application_slug,json=applicationSlug,proto3" json:"application_slug,omitempty"`
 	// {permissions:[{resource,action,description,risk,min_assurance,
-	//
-	//	 requires_amr,max_auth_age}],
-	//	roles:[{name,description,permissions:[...],patterns:[...],
-	//	 allowed_realm_kinds:[...]}],
-	//	routes:[{priority,path_pattern,methods,effect,permission,host_pattern,
-	//	 scope_bindings}]}
+	//   requires_amr,max_auth_age}],
+	//  roles:[{name,description,permissions:[...],patterns:[...],
+	//   allowed_realm_kinds:[...]}],
+	//  routes:[{priority,path_pattern,methods,effect,permission,host_pattern,
+	//   scope_bindings}]}
 	//
 	// CSV carries ONE sheet per document, decided by its header: a permission
 	// sheet (resource, action, description, risk, min_assurance, requires_amr,
@@ -7790,8 +7789,7 @@ func (x *ApplyManifestRequest) GetFormat() string {
 type ApplyManifestResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// {permissions:{added,updated,deprecated},roles:{added,updated},
-	//
-	//	routes:{replaced},warnings:[...]}
+	//  routes:{replaced},warnings:[...]}
 	ReportJson      string `protobuf:"bytes,1,opt,name=report_json,json=reportJson,proto3" json:"report_json,omitempty"`
 	ManifestVersion int32  `protobuf:"varint,2,opt,name=manifest_version,json=manifestVersion,proto3" json:"manifest_version,omitempty"`
 	unknownFields   protoimpl.UnknownFields
