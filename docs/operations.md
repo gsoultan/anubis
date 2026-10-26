@@ -310,6 +310,41 @@ If a tenant's snapshot no longer fits comfortably, shard tenants across
 instances before reaching for anything cleverer — the gate is deliberately
 share-nothing, so that is a routing change and no code.
 
+## Migrating from Osiris
+
+`cmd/osiris2anubis` reads the Osiris IAM tables (read-only) and writes what
+Anubis imports. It applies nothing: every output goes through a step that has
+a dry run.
+
+```sh
+go run ./cmd/osiris2anubis -dsn "$OSIRIS_DB_URL" -out osiris-export \
+  -app osiris -realms EMPLOYEE=internal,DEVICE=internal,APPLICANT=public,REGISTRANT=public
+```
+
+| Output | Goes through | What it is |
+| :--- | :--- | :--- |
+| `manifest.json` | `AuthzAdminService/ApplyManifest` (dry run first) | One permission per Osiris rule (`LIST_TRAINING` → `osiris:training:list`), one role per policy (`osiris.training-admin`), module labels from Osiris features |
+| `rules.csv` | the Osiris side's `CheckRule` adapter | rule name → permission key; `*_FULL_SCOPE` rules are marked `scope_marker` and have no key |
+| `people-and-access.xlsx` | `ProvisioningService/ImportWorkbook` (dry run first) | People per realm, external_ref = Osiris user id; one grant row per (person, role, axis) from group membership at a placement |
+| `report.txt` | you | counts and every decision made: key conflicts, rules no policy confers, usernames that collide once lowercased, people with no place |
+
+Order of operations, because each step depends on the one before:
+
+1. **Structures first.** Sync Osiris's organisations, units and workplaces as
+   three structures (`db_table` feeds on Osiris's own tables, external_ref =
+   the Osiris id). The grant rows name places by that id.
+2. **Manifest**, dry run, then apply.
+3. **Workbook**, dry run — it resolves every role and place before writing —
+   then apply. People with no org/unit/workplace are *skipped* unless you pass
+   `-unplaced-everywhere`; in Osiris they see everything, and that is the one
+   outcome to decide on purpose.
+4. **Passwords** move at cut-over through `IdentityAdminService/ImportPasswordHash`
+   with an expiry; the tool never writes a hash to disk.
+
+Grade and job type are dropped (a position is not a place; scoping to a grade
+revokes access on promotion). Osiris's shared records and SHARE links are not
+exported: Anubis has no record-bound sharing yet.
+
 ## Connecting a structure feed to another system
 
 A scope axis can be kept in step with wherever that structure actually lives
