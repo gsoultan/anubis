@@ -55,5 +55,7 @@ func Queries() []storm.RawDecl {
 		ListCatalogSources, GetCatalogSource, DueCatalogSources,
 		CreateCatalogSource, UpdateCatalogSource, DeleteCatalogSource, ScheduleCatalogSource,
 		StartCatalogRun, FinishCatalogRun, ListCatalogRuns, LastAppliedDigest,
+		// share.go
+		CreateShare, GetShare, ListSharesOnRecord, ListSharesForRecipient, RevokeShare,
 	}
 }

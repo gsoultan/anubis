@@ -43,6 +43,7 @@ func init() {
 	storm.RegisterScanner(scanTenantRow)
 	storm.RegisterScanner(scanCatalogVersionRow)
 	storm.RegisterScanner(scanSessionIDRow)
+	storm.RegisterScanner(scanShareRow)
 	storm.RegisterStatement(`
 SELECT code, default_effect, status, sort_order FROM scope_axes
 WHERE tenant_id = $1 AND status = 'active'`)
@@ -91,6 +92,10 @@ SELECT rpe.role_id::text AS role_id, p.key
 FROM role_permissions_effective rpe
 JOIN permissions p ON p.id = rpe.permission_id
 WHERE p.tenant_id = $1 AND p.deprecated_at IS NULL`)
+	storm.RegisterStatement(`
+SELECT s.to_identity_id::text AS to_identity_id, s.record, s.permission_keys, s.valid_until
+FROM record_shares s
+WHERE s.tenant_id = $1 AND s.revoked_at IS NULL AND s.valid_until > now()`)
 	storm.RegisterStatement(`
 SELECT version, changed_at FROM catalog_version WHERE tenant_id = $1`)
 }
@@ -187,5 +192,17 @@ func scanCatalogVersionRow(rv [][]byte, r *gaterquery.CatalogVersionRow, sl *run
 
 func scanSessionIDRow(rv [][]byte, r *gaterquery.SessionIDRow, sl *runtime.Slab) error {
 	r.ID = sl.Str(rv[0])
+	return nil
+}
+
+func scanShareRow(rv [][]byte, r *gaterquery.ShareRow, sl *runtime.Slab) error {
+	var decErr error
+	r.ToIdentityID = sl.Str(rv[0])
+	r.Record = sl.Str(rv[1])
+	r.PermissionKeys, decErr = runtime.TextArray(rv[2], sl)
+	if decErr != nil {
+		return decErr
+	}
+	r.ValidUntil = runtime.Timestamptz(rv[3])
 	return nil
 }

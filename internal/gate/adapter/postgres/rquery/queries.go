@@ -27,6 +27,6 @@ func Queries() []storm.RawDecl {
 		SnapshotAxes, SnapshotNodes, SnapshotGrants, SnapshotGrantScopes,
 		SnapshotRolePermissions, SnapshotPermissions, SnapshotIdentities,
 		SnapshotRoutes, SnapshotTenants, SnapshotCatalogVersion,
-		SnapshotRevokedSessions,
+		SnapshotRevokedSessions, SnapshotShares,
 	}
 }

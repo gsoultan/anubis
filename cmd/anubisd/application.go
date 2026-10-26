@@ -277,6 +277,12 @@ func (a *application) registerRPC(rpc *http.ServeMux, opts connect.HandlerOption
 	authzService := authzsvc.NewAuthzService(authorize, explain, switchScope, granted)
 	rpc.Handle(anubisv1connect.NewAuthzServiceHandler(
 		authzrpc.NewAuthzHandler(authzep.NewAuthzEndpoints(authzService, logger)), opts))
+	// Record sharing: a person opening one record to another. Authorised
+	// through the same authorize() the decision uses, so "you can only share
+	// what you can do" is the engine's answer, not a second one.
+	shares := authzshare.NewShareInteractor(a.authz, a.authz, a.identity, a.clock, a.auditor)
+	rpc.Handle(anubisv1connect.NewShareServiceHandler(
+		authzrpc.NewShareHandler(authzep.NewShareEndpoints(authzsvc.NewShareService(shares), logger)), opts))
 
 	// --- admin planes -------------------------------------------------------
 	f := mw.NewFactory(logger)

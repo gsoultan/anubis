@@ -1,7 +1,11 @@
 package authzpg
 
 import (
+	"context"
+	"fmt"
+	_ "github.com/gsoultan/anubis/internal/authz/adapter/postgres/rgen"
 	"github.com/gsoultan/anubis/internal/platform/database"
+	"github.com/gsoultan/storm/runtime"
 )
 
 // Repository implements the authz context's ports over storm: generated
@@ -14,3 +18,14 @@ type Repository struct {
 }
 
 func New(db *database.DB) *Repository { return &Repository{DB: db} }
+
+// The executor and the id helpers every topical file in this package uses.
+func (s *Repository) rex(ctx context.Context) runtime.Executor { return s.StormExec(ctx) }
+
+func parseUUID(s string) ([16]byte, error) { return database.ParseUUID(s) }
+
+func uuidStr(u [16]byte) string { return database.UUIDStr(u) }
+
+func fmtSscanf(s, format string, args ...any) (int, error) {
+	return fmt.Sscanf(s, format, args...)
+}

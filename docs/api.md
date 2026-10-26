@@ -270,6 +270,36 @@ one. An unknown subject or permission is `not_found`, not an empty list.
 grant at (`permission_denied`); a node that merely exists is not a node the
 caller may stand at.
 
+### `ShareService` — one person opens one record to another
+
+The narrowest way Anubis says yes. A share names a **record** — not a place —
+hands over a subset of what the sharer may do on it, and always ends.
+
+| Procedure | Who | Effect |
+| :--- | :--- | :--- |
+| `Share {record_kind, record_ref, record_scopes, to_identity_id, permissions[], valid_until, note}` | a tenant person | **You can only share what you can do**: every permission is authorised for the caller at `record_scopes` (the targets `Authorize` gets for that record, `_owner` included) through their grants — a share the caller holds does not count, so a share cannot beget a share. `valid_until` is required, at most 90 days out. The recipient must be able to sign in |
+| `Unshare {share_id, reason}` | the sharer, or anybody holding every permission the share confers at the record's places | Ends it now: the catalog version bumps, the gate snapshot rebuilds |
+| `ListSharesOnRecord {record_kind, record_ref, record_scopes}` | the two parties, or anybody who could have made it | Live shares on the record |
+| `ListSharedWithMe` | the recipient | Live shares to the caller |
+
+**How a share is checked.** `Authorize` and the gate consult shares only when
+the targets name the record:
+
+```json
+{ "subject": "<recipient>", "permission": "ats:requisition:comment",
+  "scopes": { "org": "<node>", "_record": "job_requisition/JR-0142" } }
+```
+
+Grants are tried first, exactly as before; if none reaches the target, a live
+share to the subject on `_record` that names the permission allows. Every
+identity and permission gate still applies (a disabled recipient is refused).
+A share confers nothing where the record is not named, nothing on any other
+record, and nothing to `ListGrantedNodes` or `SwitchScope` — it is not a
+place. `Explain` lists the matching shares under `shares`.
+
+Operators and services do not share; a share is one person's access handed
+to another. Audited as `share.create` / `share.revoke`.
+
 ### `POST /v1/gate/check` — forward-auth
 
 For nginx `auth_request` and Traefik `forwardAuth`. Envoy can use this too,

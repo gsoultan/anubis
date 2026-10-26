@@ -20,6 +20,7 @@ func All() []any {
 		&GrantChangeItem{},
 		&GrantScope{},
 		&Grant{},
+		&RecordShare{},
 		&Identity{},
 		&IdentityLink{},
 		&MembershipEntry{},

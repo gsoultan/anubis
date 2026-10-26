@@ -569,6 +569,54 @@ func (m *Grant) Schema(t *storm.Table) {
 	t.ForeignKey(&m.RoleID, &m.Tenant).References(&ref1, &ref1.ID, &ref1.Tenant).Named("grants_role_id_tenant_id_fkey").OnDelete(storm.Restrict)
 }
 
+// RecordShare is public.record_shares: one person opening ONE record to
+// another for a while — "see and comment on this job requisition until
+// Monday". It is a third source of allow beside grants and memberships, and
+// the narrowest: it names a record, not a place, and authorize() consults it
+// only when the caller passes the reserved "_record" target.
+//
+// It always ends (valid_until is NOT NULL) and it carries the sharer, so the
+// audit answer to "why could they see that?" is one row. record_scopes
+// remembers where the record lived when it was shared, so a later revoke or
+// listing can be authorised against the same places. Permission keys are
+// stored as text, not ids: a share is the recipient's view of what they may
+// do, and a key that is deprecated later simply stops matching.
+type RecordShare struct {
+	CreatedAt      time.Time
+	ValidUntil     time.Time
+	RevokedAt      *time.Time
+	ID             [16]byte
+	Tenant         Tenant
+	FromIdentityID [16]byte
+	ToIdentityID   [16]byte
+	Record         string
+	RecordScopes   storm.JSON
+	PermissionKeys []string
+	Note           string
+	RevokeReason   *string
+}
+
+func (m *RecordShare) Schema(t *storm.Table) {
+	var ident Identity
+	t.PrimaryKey(&m.ID)
+	t.Col(&m.CreatedAt).Default("now()")
+	t.Col(&m.ID).Default("uuidv7()")
+	t.Col(&m.Tenant).ConstraintName("record_shares_tenant_id_fkey")
+	t.Col(&m.Tenant).OnDelete(storm.Cascade)
+	t.Col(&m.Tenant).NoIndex()
+	t.Col(&m.RecordScopes).Default("'{}'::jsonb")
+	t.Col(&m.Note).Default("''::text")
+	t.UniqueNamed("record_shares_id_tenant_id_key", &m.ID, &m.Tenant)
+	t.CheckNamed("record_shares_ends", "valid_until > created_at")
+	t.CheckNamed("record_shares_not_self", "from_identity_id <> to_identity_id")
+	t.CheckNamed("record_shares_record", "record <> ''")
+	t.Index(&m.Tenant, &m.ToIdentityID, &m.Record).Where("revoked_at IS NULL").Named("record_shares_recipient_live")
+	t.Index(&m.Tenant, &m.Record).Where("revoked_at IS NULL").Named("record_shares_record_live")
+	t.Index(&m.ValidUntil).Where("revoked_at IS NULL").Named("record_shares_expiring")
+	t.ForeignKey(&m.FromIdentityID, &m.Tenant).References(&ident, &ident.ID, &ident.Tenant).Named("record_shares_from_identity_id_tenant_id_fkey").OnDelete(storm.Cascade)
+	t.ForeignKey(&m.ToIdentityID, &m.Tenant).References(&ident, &ident.ID, &ident.Tenant).Named("record_shares_to_identity_id_tenant_id_fkey").OnDelete(storm.Cascade)
+}
+
 // Identity is one person (or service principal) inside one tenant.
 //
 // token_epoch is the revocation lever: every issued token carries the epoch it

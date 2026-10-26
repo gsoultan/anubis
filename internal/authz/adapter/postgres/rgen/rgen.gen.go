@@ -86,6 +86,7 @@ func init() {
 	storm.RegisterScanner(scanCreatedCatalogSourceRow)
 	storm.RegisterScanner(scanCatalogRunRow)
 	storm.RegisterScanner(scanLastAppliedDigestRow)
+	storm.RegisterScanner(scanShareRow)
 	storm.RegisterStatement(`
 DELETE FROM catalog_sync_sources WHERE id = $1 AND tenant_id = $2`)
 	storm.RegisterStatement(`
@@ -155,6 +156,14 @@ ON CONFLICT (application_id, resource, action) DO UPDATE
         max_auth_age = EXCLUDED.max_auth_age,
         deprecated_at = NULL
 RETURNING id::text AS id, key, (xmax = 0) AS inserted`)
+	storm.RegisterStatement(`
+INSERT INTO record_shares (tenant_id, from_identity_id, to_identity_id, record,
+                           record_scopes, permission_keys, note, valid_until)
+VALUES ($1, $2, $3, $4, $5::jsonb, $6::text[], $7, $8)
+RETURNING id::text AS id, tenant_id::text AS tenant_id,
+          from_identity_id::text AS from_identity_id, to_identity_id::text AS to_identity_id,
+          record, record_scopes, permission_keys, note,
+          created_at, valid_until, revoked_at, revoke_reason`)
 	storm.RegisterStatement(`
 INSERT INTO role_parents (role_id, parent_id)
 VALUES ($1, $2)
@@ -500,6 +509,29 @@ WHERE r.tenant_id = $1
   AND ($2::text IS NULL OR r.name ILIKE '%' || $2 || '%')
 ORDER BY r.name`)
 	storm.RegisterStatement(`
+SELECT s.id::text AS id, s.tenant_id::text AS tenant_id,
+       s.from_identity_id::text AS from_identity_id, s.to_identity_id::text AS to_identity_id,
+       s.record, s.record_scopes, s.permission_keys, s.note,
+       s.created_at, s.valid_until, s.revoked_at, s.revoke_reason
+FROM record_shares s
+WHERE s.id = $1 AND s.tenant_id = $2`)
+	storm.RegisterStatement(`
+SELECT s.id::text AS id, s.tenant_id::text AS tenant_id,
+       s.from_identity_id::text AS from_identity_id, s.to_identity_id::text AS to_identity_id,
+       s.record, s.record_scopes, s.permission_keys, s.note,
+       s.created_at, s.valid_until, s.revoked_at, s.revoke_reason
+FROM record_shares s
+WHERE s.tenant_id = $1 AND s.record = $2 AND s.revoked_at IS NULL AND s.valid_until > now()
+ORDER BY s.created_at DESC`)
+	storm.RegisterStatement(`
+SELECT s.id::text AS id, s.tenant_id::text AS tenant_id,
+       s.from_identity_id::text AS from_identity_id, s.to_identity_id::text AS to_identity_id,
+       s.record, s.record_scopes, s.permission_keys, s.note,
+       s.created_at, s.valid_until, s.revoked_at, s.revoke_reason
+FROM record_shares s
+WHERE s.tenant_id = $1 AND s.to_identity_id = $2 AND s.revoked_at IS NULL AND s.valid_until > now()
+ORDER BY s.created_at DESC`)
+	storm.RegisterStatement(`
 SELECT sn.axis_code,
        coalesce((SELECT array_agg(s.id::text ORDER BY s.id) FROM scope_nodes s
                   WHERE s.parent_id = sn.parent_id AND s.id <> sn.id
@@ -565,6 +597,10 @@ WHERE application_id = $1
   -- the only reason this has never bitten.
   AND NOT (id = ANY(COALESCE($2::uuid[], '{}')))
 RETURNING key`)
+	storm.RegisterStatement(`
+UPDATE record_shares
+   SET revoked_at = now(), revoke_reason = nullif($3, '')
+ WHERE id = $1 AND tenant_id = $2 AND revoked_at IS NULL`)
 	storm.RegisterStatement(`
 UPDATE roles
 SET deprecated_at = now(), updated_at = now()
@@ -1219,5 +1255,25 @@ func scanCatalogRunRow(rv [][]byte, r *authzrquery.CatalogRunRow, sl *runtime.Sl
 
 func scanLastAppliedDigestRow(rv [][]byte, r *authzrquery.LastAppliedDigestRow, sl *runtime.Slab) error {
 	r.DocumentSha = sl.Str(rv[0])
+	return nil
+}
+
+func scanShareRow(rv [][]byte, r *authzrquery.ShareRow, sl *runtime.Slab) error {
+	var decErr error
+	r.ID = sl.Str(rv[0])
+	r.TenantID = sl.Str(rv[1])
+	r.FromIdentityID = sl.Str(rv[2])
+	r.ToIdentityID = sl.Str(rv[3])
+	r.Record = sl.Str(rv[4])
+	r.RecordScopes = runtime.JSON(runtime.JSONB(rv[5], sl))
+	r.PermissionKeys, decErr = runtime.TextArray(rv[6], sl)
+	if decErr != nil {
+		return decErr
+	}
+	r.Note = sl.Str(rv[7])
+	r.CreatedAt = runtime.Timestamptz(rv[8])
+	r.ValidUntil = runtime.Timestamptz(rv[9])
+	r.RevokedAt = runtime.Nullable(rv[10], runtime.Timestamptz)
+	r.RevokeReason = runtime.NullText(rv[11], sl)
 	return nil
 }
