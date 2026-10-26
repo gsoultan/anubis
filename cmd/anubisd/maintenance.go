@@ -11,7 +11,7 @@ import (
 	authport "github.com/gsoultan/anubis/internal/auth/port"
 	authzcatalog "github.com/gsoultan/anubis/internal/authz/app/catalog"
 	controlport "github.com/gsoultan/anubis/internal/control/port"
-	identityapp "github.com/gsoultan/anubis/internal/identity/app"
+	identityretention "github.com/gsoultan/anubis/internal/identity/app/retention"
 	"github.com/gsoultan/anubis/internal/platform/crypto/keyring"
 	"github.com/gsoultan/anubis/internal/platform/jobs"
 	scopeapp "github.com/gsoultan/anubis/internal/scope/app"
@@ -36,7 +36,7 @@ const (
 func maintenanceJobs(
 	partitions auditport.PartitionMaintainer,
 	tokens authport.OneTimeSweeper,
-	retention identityapp.RetentionUsecase,
+	retention identityretention.RetentionUsecase,
 	keys authport.KeyRepository,
 	refresh controlport.PlatformRefreshStore,
 	catalog authzcatalog.CatalogSyncUsecase,

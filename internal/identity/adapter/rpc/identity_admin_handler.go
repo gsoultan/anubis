@@ -2,6 +2,7 @@ package identityrpc
 
 import (
 	"context"
+	"time"
 
 	"connectrpc.com/connect"
 
@@ -12,6 +13,7 @@ import (
 	identitydomain "github.com/gsoultan/anubis/internal/identity/domain"
 	"github.com/gsoultan/anubis/internal/identity/domain/credential"
 	identitysvc "github.com/gsoultan/anubis/internal/identity/service"
+	"github.com/gsoultan/anubis/internal/platform/crypto/kdf"
 	"github.com/gsoultan/anubis/internal/platform/mw"
 )
 
@@ -160,6 +162,23 @@ func (h *IdentityAdminHandler) SetPassword(ctx context.Context, req *connect.Req
 		return nil, apiconnect.Err(ctx, err)
 	}
 	return connect.NewResponse(&anubisv1.SetPasswordResponse{}), nil
+}
+
+func (h *IdentityAdminHandler) ImportPasswordHash(ctx context.Context, req *connect.Request[anubisv1.ImportPasswordHashRequest]) (*connect.Response[anubisv1.ImportPasswordHashResponse], error) {
+	var expires time.Time
+	if req.Msg.ExpiresAt != 0 {
+		expires = time.Unix(req.Msg.ExpiresAt, 0)
+	}
+	// The algorithm is read before the call rather than returned by it:
+	// the usecase refuses anything Describe does not recognise, so on
+	// success the two agree, and the response needs no second field.
+	alg, _, _ := kdf.Describe(req.Msg.PasswordHash)
+	if _, err := h.f.Do(ctx, "admin.identity.import_password_hash", func(ctx context.Context) (any, error) {
+		return nil, h.svc.ImportPasswordHash(ctx, req.Msg.Id, req.Msg.PasswordHash, expires)
+	}); err != nil {
+		return nil, apiconnect.Err(ctx, err)
+	}
+	return connect.NewResponse(&anubisv1.ImportPasswordHashResponse{Algorithm: alg}), nil
 }
 
 func (h *IdentityAdminHandler) LinkIdentities(ctx context.Context, req *connect.Request[anubisv1.LinkIdentitiesRequest]) (*connect.Response[anubisv1.LinkIdentitiesResponse], error) {

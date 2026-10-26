@@ -24,6 +24,11 @@ service IdentityAdminService {
   // Global kill switch: invalidates every outstanding token for the identity.
   rpc BumpTokenEpoch(BumpTokenEpochRequest) returns (BumpTokenEpochResponse);
   rpc SetPassword(SetPasswordRequest) returns (SetPasswordResponse);
+  // Install a password hash made by ANOTHER system (a migration), so the
+  // person keeps the password they know. Verified once at their next
+  // sign-in and replaced by a hash at this installation's cost. A legacy
+  // format must carry an expiry; after it the person needs a reset.
+  rpc ImportPasswordHash(ImportPasswordHashRequest) returns (ImportPasswordHashResponse);
   // Same human across realms. Records method and evidence; never merges grants.
   rpc LinkIdentities(LinkIdentitiesRequest) returns (LinkIdentitiesResponse);
   // Right-to-erasure: sets deletion_requested_at; the retention sweeper and
@@ -139,6 +144,21 @@ message SetPasswordRequest {
 }
 
 message SetPasswordResponse {}
+
+message ImportPasswordHashRequest {
+  string id = 1;
+  // Modular-crypt string as stored by the source system. Accepted today:
+  // bcrypt ($2a$/$2b$/$2y$) and Anubis's own $pbkdf2-sha256$.
+  string password_hash = 2;
+  // unix seconds. Required for a legacy format; 0 means no expiry and is
+  // allowed only for a hash in Anubis's own format.
+  int64 expires_at = 3;
+}
+
+message ImportPasswordHashResponse {
+  // What the server recognised, e.g. "bcrypt".
+  string algorithm = 1;
+}
 
 message LinkIdentitiesRequest {
   string primary_id = 1;

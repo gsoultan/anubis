@@ -102,3 +102,42 @@ func TestDummyIsStableAndValid(t *testing.T) {
 		t.Fatalf("dummy hash unparseable: %v", err)
 	}
 }
+
+// A hash imported from the system being replaced verifies, and is ALWAYS
+// reported for rehash — its cost is the source's policy, not ours, and the
+// first sign-in is the only moment the plaintext is in hand to replace it.
+func TestALegacyHashVerifiesOnceAndAlwaysAsksForRehash(t *testing.T) {
+	const legacy = "$2a$10$XajjQvNhvvRt5GSeFk1xFeyqRrsxkhBkUiQeg0dt.wU1qD4aFDcga" // "allmine"
+
+	ok, rehash, err := Verify("allmine", legacy)
+	if err != nil || !ok {
+		t.Fatalf("legacy hash did not verify: ok=%v err=%v", ok, err)
+	}
+	if !rehash {
+		t.Fatal("a legacy hash was not reported for rehash; it would stay at the source's cost forever")
+	}
+	ok, rehash, err = Verify("not-allmine", legacy)
+	if err != nil || ok || rehash {
+		t.Fatalf("wrong password against a legacy hash: ok=%v rehash=%v err=%v", ok, rehash, err)
+	}
+}
+
+// Describe is what the importer trusts to refuse a plaintext password or any
+// string that is not a hash — before anything is stored.
+func TestDescribeNamesTheFormatOrRefuses(t *testing.T) {
+	native, err := hashWith("x", 1000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if alg, legacy, err := Describe(native); err != nil || alg != algID || legacy {
+		t.Fatalf("native: alg=%q legacy=%v err=%v", alg, legacy, err)
+	}
+	if alg, legacy, err := Describe("$2y$04$XajjQvNhvvRt5GSeFk1xFeyqRrsxkhBkUiQeg0dt.wU1qD4aFDcga"); err != nil || alg != "bcrypt" || !legacy {
+		t.Fatalf("bcrypt: alg=%q legacy=%v err=%v", alg, legacy, err)
+	}
+	for _, s := range []string{"", "hunter2-is-a-password", "$argon2id$v=19$m=65536,t=3,p=4$c2FsdA$ZGs"} {
+		if _, _, err := Describe(s); err == nil {
+			t.Errorf("%q described as a hash", s)
+		}
+	}
+}

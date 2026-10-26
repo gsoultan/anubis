@@ -1,4 +1,4 @@
-package identityapp
+package identityretention
 
 // SweepReport is what one retention pass did.
 type SweepReport struct {

@@ -18,6 +18,8 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/gsoultan/anubis/internal/platform/crypto/legacyhash"
 )
 
 const (
@@ -54,6 +56,24 @@ func hashWith(password string, iterations int) (string, error) {
 // hash uses weaker parameters than current policy and should be replaced on
 // this (successful) login.
 func Verify(password, encoded string) (ok bool, needsRehash bool, err error) {
+	if legacyhash.IsLegacy(encoded) {
+		// A hash imported from the system being replaced. It verifies once
+		// and is ALWAYS reported for rehash: whatever its cost was there, it
+		// is not this installation's policy, and the caller holds the
+		// plaintext right now, which is the only moment it can be replaced.
+		//
+		// Followed by a full-cost burn so that a person still on an imported
+		// hash is not a faster sign-in than one who has already moved —
+		// bcrypt at the cost it arrived with is milliseconds; PBKDF2 here is
+		// tens of them, and the difference says who has not signed in since
+		// the migration.
+		ok, err = legacyhash.Verify(password, encoded)
+		burnDummy(password)
+		if err != nil {
+			return false, false, err
+		}
+		return ok, ok, nil
+	}
 	alg, iterations, salt, want, err := parse(encoded)
 	if err != nil {
 		// An absent or unreadable hash must cost what a real one costs.
@@ -80,6 +100,24 @@ func Verify(password, encoded string) (ok bool, needsRehash bool, err error) {
 	}
 	ok = subtle.ConstantTimeCompare(got, want) == 1
 	return ok, ok && iterations < DefaultIterations, nil
+}
+
+// Describe names the algorithm behind an encoded hash and whether Verify
+// would treat it as legacy. It is what an importer uses to refuse a string
+// that is not a hash at all, without ever running it against a password.
+func Describe(encoded string) (alg string, legacy bool, err error) {
+	if legacyhash.IsLegacy(encoded) {
+		alg, err = legacyhash.Describe(encoded)
+		return alg, true, err
+	}
+	alg, _, _, _, err = parse(encoded)
+	if err != nil {
+		return "", false, err
+	}
+	if alg != algID {
+		return "", false, ErrFormat
+	}
+	return alg, false, nil
 }
 
 // The uniform-timing defence: when the username does not exist, verify the

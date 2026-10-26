@@ -45,6 +45,7 @@ import (
 	identityrpc "github.com/gsoultan/anubis/internal/identity/adapter/rpc"
 	identityapp "github.com/gsoultan/anubis/internal/identity/app"
 	"github.com/gsoultan/anubis/internal/identity/app/registration"
+	identityretention "github.com/gsoultan/anubis/internal/identity/app/retention"
 	identitysvc "github.com/gsoultan/anubis/internal/identity/service"
 	"github.com/gsoultan/anubis/internal/platform/config"
 	"github.com/gsoultan/anubis/internal/platform/crypto/keyring"
@@ -183,7 +184,7 @@ func (a *application) scopeSync(logger *slog.Logger) scopeapp.ScopeAdmin {
 // needs. Replicas coordinate through advisory locks, so this is safe to run
 // on every instance.
 func (a *application) runMaintenance(ctx context.Context, db *database.DB, logger *slog.Logger) {
-	retention := identityapp.NewRetentionInteractor(a.identity, a.identity, db, a.auditor)
+	retention := identityretention.NewRetentionInteractor(a.identity, a.identity, db, a.auditor)
 	sched := jobs.NewScheduler(db, logger,
 		maintenanceJobs(a.audit, a.auth, retention, a.auth, a.control,
 			a.catalogSync(logger), a.scopeSync(logger),
