@@ -163,14 +163,11 @@ export function ItemInspector({ node, levels, onChanged }: {
   return (
     <div className="flex flex-col gap-3">
     <div className="panel rise p-4">
-      <div className="t-label mb-2">Selected item</div>
+      {above.length > 0 && <div className="t-xs mb-1">{above.map((a) => a.name).join(' › ')}</div>}
       <div className="t-h1" style={archived ? { color: 'var(--ink-3)' } : undefined}>{node.name}</div>
-      {above.length > 0 && (
-        <div className="t-xs mt-1">In {above.map((a) => a.name).join(' › ')}</div>
-      )}
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
         <span className="chip">{levelName(node.node_type)}</span>
-        {node.is_axis_root && <span className="chip chip-accent">top of the structure</span>}
+        {node.is_axis_root && <span className="chip chip-accent">the top</span>}
         {archived && <span className="v-pill v-pill-idle">archived</span>}
         <span className="chip">{node.child_count} inside</span>
         {node.external_ref && <span className="chip">from source · {node.external_ref}</span>}
@@ -197,7 +194,7 @@ export function ItemInspector({ node, levels, onChanged }: {
             <Button size="xs" variant="light" mt={12} fullWidth leftSection={<IconPlus size={13} />}
               onClick={() => openCreate('node', { axisCode: node.axis_code, parentId: node.id })}>
               {/* The levels know what may live here, so the button says it. */}
-              Add {under.length === 1 ? under[0]!.display_name.toLowerCase() : 'item'} under “{node.name}”
+              Add {under.length === 1 ? `a ${under[0]!.display_name.toLowerCase()}` : 'a place'} inside {node.name}
             </Button>
           )}
           <div className="mt-2 grid grid-cols-3 gap-1.5">

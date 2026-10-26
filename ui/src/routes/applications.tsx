@@ -1,301 +1,16 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
-import type { CatalogFormat } from '@/lib/api/types'
 import { useQuery } from '@tanstack/react-query'
-import {
-  Button, Code, FileInput, Modal, SegmentedControl, Select, TextInput, Textarea, Tooltip,
-} from '@mantine/core'
-import { IconFileCode, IconPlus, IconRefresh, IconPencil } from '@tabler/icons-react'
+import { Button, TextInput } from '@mantine/core'
 import { useState } from 'react'
 import { Page } from '@/components/shell/Page'
 import { DataTable, type Column } from '@/components/ui/DataTable'
 import { notifyCreated, notifyRejected } from '@/components/create/shell'
-import { queryClient } from '@/lib/query/client'
+import { SecretOnce } from '@/components/apps/SecretOnce'
+import { ConnectApp } from '@/components/apps/ConnectApp'
+import { hasSecret, kindLabel } from '@/components/apps/AppConnection'
 import * as live from '@/lib/api/live'
 
 export const Route = createFileRoute('/applications')({ component: Applications })
-
-const KINDS = [
-  { value: 'spa', label: 'SPA — browser app, no secret' },
-  { value: 'native', label: 'Native — mobile or desktop, no secret' },
-  { value: 'server', label: 'Server — confidential, gets a secret' },
-  { value: 'service', label: 'Service — machine to machine, gets a secret' },
-]
-
-/** A secret is shown exactly once. If it is lost, the only way back is to
-    rotate — which is why this is a panel and not a toast. */
-function SecretOnce({ secret, onDone }: { secret: string; onDone: () => void }) {
-  return (
-    <Modal opened onClose={onDone} title="Client secret" centered>
-      <p className="t-sm mb-3">
-        Copy this now. It is not stored anywhere readable and will never be
-        shown again — losing it means rotating, which breaks whatever is
-        already using the old one.
-      </p>
-      <Code block>{secret}</Code>
-      <Button className="mt-3" onClick={onDone}>I have copied it</Button>
-    </Modal>
-  )
-}
-
-/* slug and kind are absent on purpose: UpdateApplication does not write them
-   — slug IS the client_id, so changing it breaks every configured client, and
-   kind decides the auth model. The server refuses a change now rather than
-   accepting it and doing nothing, and an input that always fails is worse
-   than none.
-
-   The redirect lists are separate for a reason worth repeating where they are
-   edited: a login callback is not a safe place to land after signing out, and
-   an open redirect on the logout side is a phishing primitive. */
-/* Who may sign in at all, before any permission is asked about. An app for
-   the finance team should not hand a session to everyone in the company who
-   happens to have an account. */
-function SignInChoice({ value, onChange }: { value: SignIn; onChange: (v: SignIn) => void }) {
-  return (
-    <div>
-      <div className="t-body mb-1" style={{ fontWeight: 500 }}>Who may sign in</div>
-      <SegmentedControl fullWidth size="sm" value={value} onChange={(v) => onChange(v as SignIn)}
-        data={[{ value: 'anyone', label: 'Anyone with an account' }, { value: 'role_holders', label: 'Only people with a role in it' }]} />
-      <div className="t-xs mt-1">
-        {value === 'anyone'
-          ? 'Everyone in this organisation can sign in. What they can do inside is still decided by their roles.'
-          : 'Someone with no role in this app is turned away at sign-in, and so is a refresh once their last role ends.'}
-      </div>
-    </div>
-  )
-}
-
-type SignIn = live.AppRecord['sign_in']
-
-function EditDialog({ a, onDone }: { a: live.AppRecord; onDone: () => void }) {
-  const [open, setOpen] = useState(false)
-  const [name, setName] = useState(a.name)
-  const [status, setStatus] = useState(a.status)
-  const [redirects, setRedirects] = useState(a.redirect_uris.join('\n'))
-  const [logouts, setLogouts] = useState(a.post_logout_redirect_uris.join('\n'))
-  const [backchannel, setBackchannel] = useState(a.backchannel_logout_uri)
-  const [signIn, setSignIn] = useState(a.sign_in)
-  const [busy, setBusy] = useState(false)
-
-  function reset() {
-    setName(a.name); setStatus(a.status); setSignIn(a.sign_in)
-    setRedirects(a.redirect_uris.join('\n'))
-    setLogouts(a.post_logout_redirect_uris.join('\n'))
-    setBackchannel(a.backchannel_logout_uri)
-  }
-
-  const lines = (v: string) => v.split('\n').map((l) => l.trim()).filter(Boolean)
-
-  async function save() {
-    setBusy(true)
-    try {
-      await live.updateApplication({
-        ...a, name, status, sign_in: signIn,
-        redirect_uris: lines(redirects),
-        post_logout_redirect_uris: lines(logouts),
-        backchannel_logout_uri: backchannel.trim(),
-      })
-      notifyCreated(`${a.slug} updated`, 'Applies to the next authorization request.')
-      setOpen(false); onDone()
-    } catch (e) { notifyRejected(e) } finally { setBusy(false) }
-  }
-
-  return (
-    <>
-      <Button variant="default" size="compact-xs" leftSection={<IconPencil size={13} />}
-        onClick={() => { reset(); setOpen(true) }}>
-        Edit
-      </Button>
-      <Modal opened={open} onClose={() => setOpen(false)} centered size="lg"
-        title={`Edit ${a.slug}`}>
-        <div className="flex flex-col gap-3.5">
-          <TextInput label="Name" value={name} onChange={(e) => setName(e.currentTarget.value)} />
-          <Select label="Status" value={status} onChange={(v) => setStatus(v ?? 'active')}
-            data={[{ value: 'active', label: 'active' }, { value: 'disabled', label: 'disabled' }]} />
-          <SignInChoice value={signIn} onChange={setSignIn} />
-          <Textarea
-            label="Redirect URIs" autosize minRows={2} value={redirects}
-            description="One per line. Exact match — where the authorization code is delivered."
-            onChange={(e) => setRedirects(e.currentTarget.value)}
-          />
-          <Textarea
-            label="Post-logout redirect URIs" autosize minRows={2} value={logouts}
-            description="One per line, and deliberately a separate list: a login callback is not a safe place to land after signing out, and an open redirect here is a phishing primitive."
-            onChange={(e) => setLogouts(e.currentTarget.value)}
-          />
-          <TextInput
-            label="Back-channel logout URI" value={backchannel}
-            description="Called server-to-server when a session ends. Empty disables it."
-            onChange={(e) => setBackchannel(e.currentTarget.value)}
-          />
-          <div className="t-xs" style={{ opacity: 0.7 }}>
-            The slug ({a.slug}) is this application's client_id and its kind ({a.kind}) decides
-            the auth model — both are fixed at registration.
-          </div>
-          <div className="flex justify-end gap-2">
-            <Button variant="default" size="xs" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button size="xs" loading={busy} onClick={save}>Save</Button>
-          </div>
-        </div>
-      </Modal>
-    </>
-  )
-}
-
-/* The catalog by hand: paste a manifest, or drop in the CSV the platform team
-   actually maintains. The scheduled version of the same thing — a URL Anubis
-   reads on a clock — is the Catalog sync screen. */
-function ManifestDialog({ slug, onDone }: { slug: string; onDone: () => void }) {
-  const [open, setOpen] = useState(false)
-  const [json, setJson] = useState('')
-  const [format, setFormat] = useState<CatalogFormat>('json')
-  const [report, setReport] = useState('')
-  const [busy, setBusy] = useState(false)
-
-  /* Read the file here rather than posting it: the document goes over the
-     same RPC either way, and holding the text means it is editable and
-     dry-runnable before anything is applied. */
-  async function load(file: File | null) {
-    if (!file) return
-    try {
-      const text = await file.text()
-      setJson(text)
-      setReport('')
-      setFormat(/\.csv$/i.test(file.name) ? 'csv' : 'json')
-    } catch (e) { notifyRejected(e) }
-  }
-
-  const run = async (dry: boolean) => {
-    setBusy(true)
-    try {
-      const resp = await live.applyManifest(slug, json, dry, format)
-      setReport(resp.reportJson)
-      if (!dry) {
-        notifyCreated('Manifest applied', `${slug} is now at version ${resp.manifestVersion}.`)
-        await queryClient.invalidateQueries({ queryKey: ['applications'] })
-        onDone()
-      }
-    } catch (e) { notifyRejected(e) }
-    setBusy(false)
-  }
-
-  return (
-    <>
-      <Button variant="default" size="compact-xs" leftSection={<IconFileCode size={13} />}
-        onClick={() => setOpen(true)}>
-        Manifest
-      </Button>
-      <Modal opened={open} onClose={() => setOpen(false)} title={`Manifest — ${slug}`} centered size="lg">
-        <p className="t-sm mb-3">
-          What this application declares: the permissions it defines, the roles
-          that bundle them, and the routes a gateway should protect. Only the
-          sections the document carries are touched, and anything it stops
-          naming is retired rather than deleted — existing access keeps
-          working. Check first; the report says what would change.
-        </p>
-        <div className="mb-3 flex flex-wrap items-end gap-3">
-          <div>
-            <div className="t-body mb-1.5" style={{ fontWeight: 550 }}>Format</div>
-            <SegmentedControl
-              size="xs" value={format}
-              onChange={(v) => { setFormat(v as CatalogFormat); setReport('') }}
-              data={[{ value: 'json', label: 'JSON manifest' }, { value: 'csv', label: 'CSV sheet' }]}
-            />
-          </div>
-          <FileInput
-            size="xs" w={260} clearable accept=".json,.csv,text/csv,application/json"
-            label="…or load a file"
-            placeholder="permissions.csv"
-            onChange={(f) => void load(f)}
-          />
-        </div>
-        {format === 'csv' && (
-          <div className="t-xs mb-2" style={{ opacity: 0.75 }}>
-            One sheet per file, decided by its header: <b>resource, action, …</b> for
-            permissions, <b>role, permissions, …</b> for roles. A roles sheet may
-            name permissions a previous document installed. Routes are JSON only.
-          </div>
-        )}
-        <Textarea autosize minRows={8} maxRows={18} styles={{ input: { fontFamily: 'monospace' } }}
-          placeholder={format === 'csv'
-            ? 'resource,action,description,risk\ninvoice,read,Read invoices,normal'
-            : '{"permissions":[{"resource":"invoice","action":"read","risk":"normal"}]}'}
-          value={json} onChange={(e) => { setJson(e.currentTarget.value); setReport('') }} />
-        <div className="mt-3 flex items-center gap-2">
-          <Button variant="default" loading={busy} disabled={!json.trim()}
-            onClick={() => void run(true)}>Check</Button>
-          <Button loading={busy} disabled={!report}
-            onClick={() => void run(false)}>Apply</Button>
-          {!report && <span className="t-xs">Check before applying.</span>}
-        </div>
-        {report && (
-          <div className="mt-3">
-            <div className="t-label mb-1">What this would do</div>
-            <Code block>{report}</Code>
-          </div>
-        )}
-      </Modal>
-    </>
-  )
-}
-
-function AddDialog({ onSecret }: { onSecret: (s: string) => void }) {
-  const [open, setOpen] = useState(false)
-  const [slug, setSlug] = useState('')
-  const [name, setName] = useState('')
-  const [kind, setKind] = useState<string | null>('spa')
-  const [redirects, setRedirects] = useState('')
-  const [postLogout, setPostLogout] = useState('')
-  const [signIn, setSignIn] = useState<SignIn>('anyone')
-  const [busy, setBusy] = useState(false)
-
-  const lines = (v: string) => v.split('\n').map((x) => x.trim()).filter(Boolean)
-
-  const submit = async () => {
-    if (!slug.trim() || !name.trim() || !kind) return
-    setBusy(true)
-    try {
-      const { clientSecret } = await live.createApplication({
-        slug: slug.trim(), name: name.trim(), kind,
-        redirectUris: lines(redirects),
-        postLogoutRedirectUris: lines(postLogout),
-        signIn,
-      })
-      notifyCreated('Application created', `${name.trim()} can now own permissions.`)
-      await queryClient.invalidateQueries({ queryKey: ['applications'] })
-      setOpen(false); setSlug(''); setName(''); setRedirects(''); setPostLogout('')
-      if (clientSecret) onSecret(clientSecret)
-    } catch (e) { notifyRejected(e) }
-    setBusy(false)
-  }
-
-  return (
-    <>
-      <Button leftSection={<IconPlus size={15} />} onClick={() => setOpen(true)}>
-        Add application
-      </Button>
-      <Modal opened={open} onClose={() => setOpen(false)} title="Add an application" centered>
-        <div className="flex flex-col gap-3">
-          <TextInput label="Slug" required value={slug} autoFocus
-            description="Namespaces every permission this app defines, and cannot be changed."
-            onChange={(e) => setSlug(e.currentTarget.value)} />
-          <TextInput label="Name" required value={name}
-            onChange={(e) => setName(e.currentTarget.value)} />
-          <Select label="Kind" data={KINDS} value={kind} onChange={setKind} />
-          <Textarea label="Redirect URIs" autosize minRows={2}
-            description="One per line. Matched exactly — a wildcard here is an open redirect."
-            value={redirects} onChange={(e) => setRedirects(e.currentTarget.value)} />
-          <Textarea label="Post-logout redirect URIs" autosize minRows={2}
-            description="A separate allowlist: where a login lands is not where a logout should."
-            value={postLogout} onChange={(e) => setPostLogout(e.currentTarget.value)} />
-          <SignInChoice value={signIn} onChange={setSignIn} />
-          <Button loading={busy} disabled={!slug.trim() || !name.trim()} onClick={() => void submit()}>
-            Create
-          </Button>
-        </div>
-      </Modal>
-    </>
-  )
-}
 
 
 /* The tenant's machine credentials, beside its relying parties: both are the
@@ -388,35 +103,24 @@ function Applications() {
     retry: false,
   })
 
-  const rotate = async (id: string, slug: string) => {
-    try {
-      const s = await live.rotateClientSecret(id)
-      notifyCreated('Secret rotated', `${slug}'s previous secret stopped working immediately.`)
-      setSecret(s)
-      await refetch()
-    } catch (e) { notifyRejected(e) }
-  }
-
   const columns: Column<live.AppRecord>[] = [
     {
       key: 'app', header: 'Application', width: 260,
       render: (a) => (
-        <div className="flex flex-col gap-1">
-          <span className="t-body" style={{ fontWeight: 550 }}>{a.name}</span>
-          <span className="chip">{a.slug}</span>
-        </div>
+        <Link to="/applications/$slug" params={{ slug: a.slug }} className="flex flex-col gap-1 no-underline" style={{ color: 'inherit' }}>
+          <span className="t-body" style={{ fontWeight: 550, color: 'var(--accent)' }}>{a.name}</span>
+          <span className="chip w-fit">{a.slug}</span>
+        </Link>
       ),
     },
     {
       key: 'kind', header: 'Kind', width: 150,
       render: (a) => (
         <div className="flex flex-col gap-1">
-          <span className="t-body">{a.kind}</span>
+          <span className="t-body">{kindLabel(a.kind)}</span>
           {/* Whether a client can keep a secret decides half of how it is
               configured, so it belongs on the row rather than in a dialog. */}
-          <span className="t-xs">
-            {a.kind === 'server' || a.kind === 'service' ? 'confidential' : 'public — no secret'}
-          </span>
+          <span className="t-xs">{hasSecret(a.kind) ? 'has a secret' : 'no secret'}</span>
         </div>
       ),
     },
@@ -442,26 +146,15 @@ function Applications() {
     {
       key: 'manifest', header: 'Features', width: 120, align: 'right',
       render: (a) => (
-        <Link to="/permissions" search={{ app: a.slug }} className="t-xs" style={{ color: 'var(--accent)' }}>
+        <Link to="/applications/$slug" params={{ slug: a.slug }} search={{ tab: 'features' }} className="t-xs" style={{ color: 'var(--accent)' }}>
           See features{a.manifest_version > 0 && <span className="chip ml-1">v{a.manifest_version}</span>}
         </Link>
       ),
     },
     {
-      key: 'actions', header: '', width: 210, align: 'right',
+      key: 'actions', header: '', width: 90, align: 'right',
       render: (a) => (
-        <div className="flex items-center justify-end gap-1">
-          <EditDialog a={a} onDone={() => void refetch()} />
-          <ManifestDialog slug={a.slug} onDone={() => void refetch()} />
-          {(a.kind === 'server' || a.kind === 'service') && (
-            <Tooltip label="The old secret stops working immediately">
-              <Button variant="default" size="compact-xs" leftSection={<IconRefresh size={13} />}
-                onClick={() => void rotate(a.id, a.slug)}>
-                Rotate
-              </Button>
-            </Tooltip>
-          )}
-        </div>
+        <Link to="/applications/$slug" params={{ slug: a.slug }} className="t-sm" style={{ color: 'var(--accent)' }}>Open</Link>
       ),
     },
   ]
@@ -470,8 +163,8 @@ function Applications() {
     <Page
       section="apps"
       title="Apps"
-      description="The relying parties on this tenant — the things its people sign in to. Every permission is namespaced by the application that defines it, so a permission cannot exist until its application does. Anubis's own console and service are not listed: they are infrastructure, not somewhere anybody signs in."
-      actions={<AddDialog onSecret={setSecret} />}
+      description="The apps people sign in to. Open one to see who can use it, its roles and features, and the rules for its pages."
+      actions={<ConnectApp />}
       wide
     >
       {secret && <SecretOnce secret={secret} onDone={() => setSecret('')} />}

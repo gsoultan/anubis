@@ -638,6 +638,12 @@
     gap: 5px 14px; align-items: baseline;
   }
   .where-label { max-width: 180px; }
+  /* One grant: CAN over WHERE, labels in a narrow column so the two read as
+     a pair. Stacked on a phone, where a label column costs a third of it. */
+  .grant-block {
+    display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 8px 10px; align-items: baseline;
+  }
+  @media (max-width: 480px) { .grant-block { grid-template-columns: minmax(0, 1fr); gap: 4px; } }
 
   .review {
     padding: 14px 16px; border-radius: var(--r-md);

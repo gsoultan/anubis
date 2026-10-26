@@ -68,6 +68,10 @@ func init() {
 	storm.RegisterScanner(scanReachCoverRow)
 	storm.RegisterScanner(scanReachGroupRow)
 	storm.RegisterScanner(scanReachEntryRow)
+	storm.RegisterScanner(scanRoleUsageRow)
+	storm.RegisterScanner(scanAppUsageRow)
+	storm.RegisterScanner(scanHolderKindsRow)
+	storm.RegisterScanner(scanPlaceHolderRow)
 	storm.RegisterScanner(scanMembershipListRow)
 	storm.RegisterScanner(scanMembershipRow)
 	storm.RegisterScanner(scanCreatedMembershipRow)
@@ -230,6 +234,28 @@ SELECT (role_recompute_effective($1) IS NULL) AS done`)
 SELECT COALESCE(membership_assign($1::uuid, $2::uuid, $3::uuid, NULLIF($4::text, '')::uuid,
                                   $5::boolean, $6::timestamptz, $7::text)::text, '') AS assignment_id`)
 	storm.RegisterStatement(`
+SELECT DISTINCT ON (c.depth, i.username, r.name)
+       i.id::text AS identity_id, i.username, r.name AS role_name,
+       coalesce(m.name, '') AS group_name,
+       (c.depth = 0 AND NOT gs.inherit) AS only_here, (c.depth > 0) AS from_above
+  FROM scope_nodes n
+  JOIN scope_closure c ON c.descendant_id = n.id
+  JOIN grant_scopes gs ON gs.scope_node_id = c.ancestor_id AND gs.mode = 'include'
+                      AND gs.axis_code = n.axis_code AND (gs.inherit OR c.depth = 0)
+  JOIN grants g ON g.id = gs.grant_id
+  JOIN identities i ON i.id = g.identity_id
+  JOIN roles r ON r.id = g.role_id
+  LEFT JOIN memberships m ON m.id = g.via_membership_id
+ WHERE n.tenant_id = $1 AND n.id::text = $2::text
+   AND g.tenant_id = $1 AND g.revoked_at IS NULL
+   AND (g.valid_until IS NULL OR g.valid_until > now())
+   AND NOT EXISTS (
+     SELECT 1 FROM grant_scopes x
+       JOIN scope_closure xc ON xc.ancestor_id = x.scope_node_id AND xc.descendant_id = n.id
+      WHERE x.grant_id = g.id AND x.mode = 'exclude' AND (x.inherit OR xc.depth = 0))
+ ORDER BY c.depth, i.username, r.name
+ LIMIT $3`)
+	storm.RegisterStatement(`
 SELECT DISTINCT p.key
 FROM grants g
 JOIN role_permissions_effective rpe ON rpe.role_id = g.role_id
@@ -278,6 +304,14 @@ WHERE tenant_id = $1 AND revoked_at IS NULL
   AND (valid_until IS NULL OR valid_until > now())`)
 	storm.RegisterStatement(`
 SELECT count(*) AS count FROM grants WHERE via_member_id = $1::uuid AND revoked_at IS NULL`)
+	storm.RegisterStatement(`
+SELECT count(DISTINCT g.identity_id)::int4 AS people,
+       (count(DISTINCT g.identity_id) FILTER (WHERE g.via_membership_id IS NULL))::int4 AS direct,
+       (count(DISTINCT g.identity_id) FILTER (WHERE g.via_membership_id IS NOT NULL))::int4 AS via_groups
+  FROM grants g
+  JOIN roles r ON r.id = g.role_id
+ WHERE g.tenant_id = $1 AND r.application_id::text = $2::text
+   AND g.revoked_at IS NULL AND (g.valid_until IS NULL OR g.valid_until > now())`)
 	storm.RegisterStatement(`
 SELECT detail
 FROM audit_log
@@ -356,6 +390,15 @@ SELECT g.identity_id::text AS identity_id,
    AND g.revoked_at IS NULL
    AND (g.valid_until IS NULL OR g.valid_until > now())
  GROUP BY g.identity_id`)
+	storm.RegisterStatement(`
+SELECT g.role_id::text AS role_id,
+       count(DISTINCT g.identity_id)::int4 AS people,
+       (count(DISTINCT g.identity_id) FILTER (WHERE g.via_membership_id IS NOT NULL))::int4 AS via_groups
+  FROM grants g
+ WHERE g.tenant_id = $1 AND g.revoked_at IS NULL
+   AND (g.valid_until IS NULL OR g.valid_until > now())
+   AND (cardinality($2::uuid[]) = 0 OR g.role_id = ANY($2::uuid[]))
+ GROUP BY g.role_id`)
 	storm.RegisterStatement(`
 SELECT grant_id::text AS grant_id, before::text AS before, after::text AS after
   FROM grant_change_items
@@ -485,7 +528,8 @@ ORDER BY pattern`)
 SELECT r.id::text AS id, r.tenant_id::text AS tenant_id, r.name, r.description,
        r.is_system, r.allowed_realm_kinds, r.assignable_at,
        r.application_id::text AS application_id,
-       a.slug AS application_slug, r.deprecated_at
+       a.slug AS application_slug, r.deprecated_at,
+       (SELECT count(*)::int FROM role_permissions_effective e WHERE e.role_id = r.id) AS permission_count
 FROM roles r
 LEFT JOIN applications a ON a.id = r.application_id
 WHERE r.id = $1 AND r.tenant_id = $2`)
@@ -493,7 +537,8 @@ WHERE r.id = $1 AND r.tenant_id = $2`)
 SELECT r.id::text AS id, r.tenant_id::text AS tenant_id, r.name, r.description,
        r.is_system, r.allowed_realm_kinds, r.assignable_at,
        r.application_id::text AS application_id,
-       a.slug AS application_slug, r.deprecated_at
+       a.slug AS application_slug, r.deprecated_at,
+       (SELECT count(*)::int FROM role_permissions_effective e WHERE e.role_id = r.id) AS permission_count
 FROM roles r
 LEFT JOIN applications a ON a.id = r.application_id
 WHERE r.tenant_id = $1
@@ -590,6 +635,36 @@ WITH RECURSIVE down AS (
     SELECT rp.role_id FROM role_parents rp JOIN down d ON rp.parent_id = d.role_id
 )
 SELECT DISTINCT role_id::text AS role_id FROM down`)
+	storm.RegisterStatement(`
+WITH gr AS (
+  SELECT g.id FROM grants g
+   WHERE g.tenant_id = $1 AND g.role_id::text = $2::text AND NOT g.self_scoped
+     AND g.revoked_at IS NULL AND (g.valid_until IS NULL OR g.valid_until > now())
+), s AS (
+  SELECT gs.grant_id, gs.inherit, gs.mode, sn.is_axis_root,
+         EXISTS (SELECT 1 FROM scope_nodes k WHERE k.parent_id = gs.scope_node_id
+                    AND k.status = 'active') AS has_kids
+    FROM grant_scopes gs
+    JOIN scope_nodes sn ON sn.id = gs.scope_node_id
+   WHERE gs.grant_id IN (SELECT id FROM gr) AND gs.axis_code = $3::text
+), per AS (
+  SELECT gr.id,
+         count(s.grant_id) FILTER (WHERE s.mode = 'include') AS inc,
+         count(s.grant_id) FILTER (WHERE s.mode = 'exclude') AS exc,
+         coalesce(bool_and(s.is_axis_root AND s.inherit) FILTER (WHERE s.mode = 'include'), false) AS rooted,
+         coalesce(bool_and(s.inherit AND s.has_kids) FILTER (WHERE s.mode = 'include'), false) AS branches
+    FROM gr LEFT JOIN s ON s.grant_id = gr.id
+   GROUP BY gr.id
+), deny AS (
+  SELECT EXISTS (SELECT 1 FROM scope_axes ax WHERE ax.tenant_id = $1
+                    AND ax.code = $3::text AND ax.default_effect = 'deny') AS d
+)
+SELECT count(*)::int4 AS total,
+       (count(*) FILTER (WHERE (per.inc = 0 AND NOT deny.d) OR (per.inc > 0 AND per.exc = 0 AND per.rooted)))::int4 AS everything,
+       (count(*) FILTER (WHERE per.inc > 0 AND NOT (per.exc = 0 AND per.rooted) AND per.branches))::int4 AS branch,
+       (count(*) FILTER (WHERE per.inc > 0 AND NOT (per.exc = 0 AND per.rooted) AND NOT per.branches))::int4 AS fixed,
+       (count(*) FILTER (WHERE per.inc = 0 AND deny.d))::int4 AS nothing
+  FROM per, deny`)
 	storm.RegisterStatement(`
 WITH n AS (
   SELECT sn.id, sn.axis_code, sn.parent_id FROM scope_nodes sn
@@ -850,6 +925,7 @@ func scanRoleRow(rv [][]byte, r *authzrquery.RoleRow, sl *runtime.Slab) error {
 	r.ApplicationID = runtime.NullText(rv[7], sl)
 	r.ApplicationSlug = runtime.NullText(rv[8], sl)
 	r.DeprecatedAt = runtime.Nullable(rv[9], runtime.Timestamptz)
+	r.PermissionCount = runtime.Int4(rv[10])
 	return nil
 }
 
@@ -1063,6 +1139,39 @@ func scanReachEntryRow(rv [][]byte, r *authzrquery.ReachEntryRow, sl *runtime.Sl
 	r.MembershipName = sl.Str(rv[1])
 	r.RoleName = sl.Str(rv[2])
 	r.Members = runtime.Int4(rv[3])
+	return nil
+}
+
+func scanRoleUsageRow(rv [][]byte, r *authzrquery.RoleUsageRow, sl *runtime.Slab) error {
+	r.RoleID = sl.Str(rv[0])
+	r.People = runtime.Int4(rv[1])
+	r.ViaGroups = runtime.Int4(rv[2])
+	return nil
+}
+
+func scanAppUsageRow(rv [][]byte, r *authzrquery.AppUsageRow, sl *runtime.Slab) error {
+	r.People = runtime.Int4(rv[0])
+	r.Direct = runtime.Int4(rv[1])
+	r.ViaGroups = runtime.Int4(rv[2])
+	return nil
+}
+
+func scanHolderKindsRow(rv [][]byte, r *authzrquery.HolderKindsRow, sl *runtime.Slab) error {
+	r.Total = runtime.Int4(rv[0])
+	r.Everything = runtime.Int4(rv[1])
+	r.Branch = runtime.Int4(rv[2])
+	r.Fixed = runtime.Int4(rv[3])
+	r.Nothing = runtime.Int4(rv[4])
+	return nil
+}
+
+func scanPlaceHolderRow(rv [][]byte, r *authzrquery.PlaceHolderRow, sl *runtime.Slab) error {
+	r.IdentityID = sl.Str(rv[0])
+	r.Username = sl.Str(rv[1])
+	r.RoleName = sl.Str(rv[2])
+	r.GroupName = sl.Str(rv[3])
+	r.OnlyHere = runtime.Bool(rv[4])
+	r.FromAbove = runtime.Bool(rv[5])
 	return nil
 }
 

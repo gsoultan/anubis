@@ -203,3 +203,124 @@ SELECT m.id::text AS membership_id, m.name AS membership_name, r.name AS role_na
  WHERE m.id = per.membership_id AND r.id = per.role_id
    AND nsib.c > 0 AND per.hit = nsib.c AND NOT per.has_it
  ORDER BY m.name, r.name`)
+
+// RoleUsageRow is how many people hold one role, and how many of them have
+// it from a group.
+type RoleUsageRow struct {
+	RoleID    string
+	People    int32
+	ViaGroups int32
+}
+
+// RoleUsage counts the people holding each role: the number on every row of
+// the Roles list. $2 limits it to some roles; empty means every role.
+var RoleUsage = storm.SQL[RoleUsageRow](`
+SELECT g.role_id::text AS role_id,
+       count(DISTINCT g.identity_id)::int4 AS people,
+       (count(DISTINCT g.identity_id) FILTER (WHERE g.via_membership_id IS NOT NULL))::int4 AS via_groups
+  FROM grants g
+ WHERE g.tenant_id = $1 AND g.revoked_at IS NULL
+   AND (g.valid_until IS NULL OR g.valid_until > now())
+   AND (cardinality($2::uuid[]) = 0 OR g.role_id = ANY($2::uuid[]))
+ GROUP BY g.role_id`)
+
+// AppUsageRow is who can use one app today.
+type AppUsageRow struct {
+	People    int32
+	Direct    int32
+	ViaGroups int32
+}
+
+// AppUsage counts the people holding any live role of one application: the
+// people who may sign in to it when it is closed to everyone else.
+var AppUsage = storm.SQL[AppUsageRow](`
+SELECT count(DISTINCT g.identity_id)::int4 AS people,
+       (count(DISTINCT g.identity_id) FILTER (WHERE g.via_membership_id IS NULL))::int4 AS direct,
+       (count(DISTINCT g.identity_id) FILTER (WHERE g.via_membership_id IS NOT NULL))::int4 AS via_groups
+  FROM grants g
+  JOIN roles r ON r.id = g.role_id
+ WHERE g.tenant_id = $1 AND r.application_id::text = $2::text
+   AND g.revoked_at IS NULL AND (g.valid_until IS NULL OR g.valid_until > now())`)
+
+// HolderKindsRow counts one role's grants by what they reach on one kind of
+// place.
+type HolderKindsRow struct {
+	Total      int32
+	Everything int32
+	Branch     int32
+	Fixed      int32
+	Nothing    int32
+}
+
+// HolderKinds sorts the live grants of one role by their reach on one kind
+// of place: everything (no picks, or the top "and everything inside"), a
+// branch (every pick has places inside it and takes them), a fixed list,
+// or nothing (a required kind the grant names nothing in).
+var HolderKinds = storm.SQL[HolderKindsRow](`
+WITH gr AS (
+  SELECT g.id FROM grants g
+   WHERE g.tenant_id = $1 AND g.role_id::text = $2::text AND NOT g.self_scoped
+     AND g.revoked_at IS NULL AND (g.valid_until IS NULL OR g.valid_until > now())
+), s AS (
+  SELECT gs.grant_id, gs.inherit, gs.mode, sn.is_axis_root,
+         EXISTS (SELECT 1 FROM scope_nodes k WHERE k.parent_id = gs.scope_node_id
+                    AND k.status = 'active') AS has_kids
+    FROM grant_scopes gs
+    JOIN scope_nodes sn ON sn.id = gs.scope_node_id
+   WHERE gs.grant_id IN (SELECT id FROM gr) AND gs.axis_code = $3::text
+), per AS (
+  SELECT gr.id,
+         count(s.grant_id) FILTER (WHERE s.mode = 'include') AS inc,
+         count(s.grant_id) FILTER (WHERE s.mode = 'exclude') AS exc,
+         coalesce(bool_and(s.is_axis_root AND s.inherit) FILTER (WHERE s.mode = 'include'), false) AS rooted,
+         coalesce(bool_and(s.inherit AND s.has_kids) FILTER (WHERE s.mode = 'include'), false) AS branches
+    FROM gr LEFT JOIN s ON s.grant_id = gr.id
+   GROUP BY gr.id
+), deny AS (
+  SELECT EXISTS (SELECT 1 FROM scope_axes ax WHERE ax.tenant_id = $1
+                    AND ax.code = $3::text AND ax.default_effect = 'deny') AS d
+)
+SELECT count(*)::int4 AS total,
+       (count(*) FILTER (WHERE (per.inc = 0 AND NOT deny.d) OR (per.inc > 0 AND per.exc = 0 AND per.rooted)))::int4 AS everything,
+       (count(*) FILTER (WHERE per.inc > 0 AND NOT (per.exc = 0 AND per.rooted) AND per.branches))::int4 AS branch,
+       (count(*) FILTER (WHERE per.inc > 0 AND NOT (per.exc = 0 AND per.rooted) AND NOT per.branches))::int4 AS fixed,
+       (count(*) FILTER (WHERE per.inc = 0 AND deny.d))::int4 AS nothing
+  FROM per, deny`)
+
+// PlaceHolderRow is one person whose access reaches a place by naming it,
+// or a place above it with everything inside.
+type PlaceHolderRow struct {
+	IdentityID string
+	Username   string
+	RoleName   string
+	GroupName  string
+	OnlyHere   bool
+	FromAbove  bool
+}
+
+// PlaceHolders lists who reaches a place by a pick, nearest first: the
+// "Who has access here" panel. People with no limit on its kind are counted
+// by PlaceReachCover, not listed; there can be tens of thousands. A pick
+// carved out again by an exception on the same grant does not count.
+var PlaceHolders = storm.SQL[PlaceHolderRow](`
+SELECT DISTINCT ON (c.depth, i.username, r.name)
+       i.id::text AS identity_id, i.username, r.name AS role_name,
+       coalesce(m.name, '') AS group_name,
+       (c.depth = 0 AND NOT gs.inherit) AS only_here, (c.depth > 0) AS from_above
+  FROM scope_nodes n
+  JOIN scope_closure c ON c.descendant_id = n.id
+  JOIN grant_scopes gs ON gs.scope_node_id = c.ancestor_id AND gs.mode = 'include'
+                      AND gs.axis_code = n.axis_code AND (gs.inherit OR c.depth = 0)
+  JOIN grants g ON g.id = gs.grant_id
+  JOIN identities i ON i.id = g.identity_id
+  JOIN roles r ON r.id = g.role_id
+  LEFT JOIN memberships m ON m.id = g.via_membership_id
+ WHERE n.tenant_id = $1 AND n.id::text = $2::text
+   AND g.tenant_id = $1 AND g.revoked_at IS NULL
+   AND (g.valid_until IS NULL OR g.valid_until > now())
+   AND NOT EXISTS (
+     SELECT 1 FROM grant_scopes x
+       JOIN scope_closure xc ON xc.ancestor_id = x.scope_node_id AND xc.descendant_id = n.id
+      WHERE x.grant_id = g.id AND x.mode = 'exclude' AND (x.inherit OR xc.depth = 0))
+ ORDER BY c.depth, i.username, r.name
+ LIMIT $3`)

@@ -9,6 +9,7 @@ import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useCreate } from '@/stores/create'
 import { ChangePassword } from './ChangePassword'
+import { CompanySwitcher } from './CompanySwitcher'
 import { signOut, useAuthed, useWho } from '@/stores/auth'
 import { currentTenant, myTenants, setCurrentTenant } from '@/lib/anubis'
 import { treeOrder } from '@/lib/tree'
@@ -125,44 +126,13 @@ export function TenantPicker() {
     )
   }
   return (
-    <Menu position="bottom-start" width={280}>
-      <Menu.Target>
-        <button
-          className="flex items-center gap-2 px-2.5"
-          style={{
-            cursor: 'pointer', height: 32, borderRadius: 'var(--r-sm)',
-            border: '1px solid var(--line)', background: 'var(--s-raised)',
-            transition: 'border-color var(--t-fast), background var(--t-fast)',
-          }}
-        >
-          <IconBuildingBank size={14} style={{ color: 'var(--accent)', flex: 'none' }} />
-          <span className="t-body truncate max-w-[112px] md:max-w-[180px]" style={{ fontWeight: 560 }}>
-            {active?.name ?? current}
-          </span>
-          <IconChevronDown size={13} style={{ color: 'var(--ink-3)', flex: 'none' }} />
-        </button>
-      </Menu.Target>
-      <Menu.Dropdown>
-        <Menu.Label>Administering</Menu.Label>
-        {/* As the tree it is: a company under its parent, indented. A
-            company someone covers because they run its parent says so, so
-            nobody wonders where the access came from. */}
-        {treeOrder(tenants, (t) => t.id, (t) => t.parentId, (t) => t.name).map(({ item: t, depth }) => (
-          <Menu.Item key={t.slug}
-            rightSection={t.slug === current ? <IconCheck size={13} /> : null}
-            style={{ paddingLeft: 12 + depth * 14 }}
-            onClick={() => {
-              setCurrentTenant(t.slug)
-              setCurrent(t.slug)
-              // Everything on screen was fetched for the previous tenant.
-              queryClient.clear()
-            }}>
-            {t.name}
-            <span className="t-xs block">{t.inherited ? 'through the company above' : t.role}</span>
-          </Menu.Item>
-        ))}
-      </Menu.Dropdown>
-    </Menu>
+    <CompanySwitcher companies={tenants} current={current}
+      onPick={(slug) => {
+        setCurrentTenant(slug)
+        setCurrent(slug)
+        // Everything on screen was fetched for the previous tenant.
+        queryClient.clear()
+      }} />
   )
 }
 

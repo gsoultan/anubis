@@ -582,6 +582,8 @@ export interface NewPermissionInput {
 export interface NewRoleInput {
   name: string
   description: string
+  /** The app the role belongs to, by slug. Left out for a role across apps. */
+  application_slug?: string
   allowed_realm_kinds: RealmKind[]
   permission_keys: string[]
 }
@@ -748,4 +750,30 @@ export interface PlaceReach {
   might_expect: { role_id: Uuid; role_name: string; people: number; risk: Risk }[]
   group_entries: { membership_id: Uuid; membership_name: string; role_name: string; members: number }[]
   other_fixed: number
+}
+
+export interface RoleUsage { role_id: Uuid; people: number; via_groups: number }
+export interface AppUsage { people: number; direct: number; via_groups: number }
+/** One role's grants by what they reach on one kind of place. */
+export interface HolderKinds { total: number; everything: number; branch: number; fixed: number; nothing: number; full: number }
+export interface PlaceHolder {
+  identity_id: Uuid; username: string; role_name: string
+  /** '' unless the access comes from a group. */
+  group_name: string
+  only_here: boolean
+  from_above: boolean
+}
+export type RouteEffect = 'public' | 'require_auth' | 'require_permission' | 'deny'
+/** One page rule of an app, in the order they are checked. */
+export interface RouteRule {
+  priority: number
+  path_pattern: string
+  host_pattern: string
+  methods: string[]
+  effect: RouteEffect
+  /** resource:action within the app, for require_permission. */
+  permission: string
+  /** Which record a permission is checked against (axis to 'token' or
+      'path.<name>'). Not edited here, only carried through a save. */
+  scope_bindings: Record<string, string>
 }

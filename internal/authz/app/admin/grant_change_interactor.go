@@ -44,6 +44,59 @@ func (u *authzAdminInteractor) PlaceReach(ctx context.Context, nodeID string) (i
 	return u.insight.PlaceReach(ctx, p.TenantID, nodeID)
 }
 
+// maxRoleUsage bounds one RoleUsage call; empty asks for every role.
+const maxRoleUsage = 500
+
+func (u *authzAdminInteractor) RoleUsage(ctx context.Context, roleIDs []string) ([]insight.RoleUsage, error) {
+	p, err := u.guard.Require(ctx, "anubis:identity:read")
+	if err != nil {
+		return nil, err
+	}
+	if len(roleIDs) > maxRoleUsage {
+		return nil, apperr.ErrInvalidArgument.With("role_ids", "at most 500 at a time")
+	}
+	return u.insight.RoleUsage(ctx, p.TenantID, roleIDs)
+}
+
+func (u *authzAdminInteractor) AppUsage(ctx context.Context, applicationID string) (insight.AppUsage, error) {
+	p, err := u.guard.Require(ctx, "anubis:identity:read")
+	if err != nil {
+		return insight.AppUsage{}, err
+	}
+	if strings.TrimSpace(applicationID) == "" {
+		return insight.AppUsage{}, apperr.ErrInvalidArgument.With("application_id", "required")
+	}
+	return u.insight.AppUsage(ctx, p.TenantID, applicationID)
+}
+
+func (u *authzAdminInteractor) HolderKinds(ctx context.Context, roleID, axis string) (insight.HolderKinds, error) {
+	p, err := u.guard.Require(ctx, "anubis:identity:read")
+	if err != nil {
+		return insight.HolderKinds{}, err
+	}
+	if strings.TrimSpace(roleID) == "" || strings.TrimSpace(axis) == "" {
+		return insight.HolderKinds{}, apperr.ErrInvalidArgument.With("role_id", "a role and a kind of place")
+	}
+	return u.insight.HolderKinds(ctx, p.TenantID, roleID, axis)
+}
+
+// maxPlaceHolders is the most "Who has access here" lists by name.
+const maxPlaceHolders = 100
+
+func (u *authzAdminInteractor) PlaceHolders(ctx context.Context, nodeID string, limit int) ([]insight.PlaceHolder, error) {
+	p, err := u.guard.Require(ctx, "anubis:identity:read")
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(nodeID) == "" {
+		return nil, apperr.ErrInvalidArgument.With("node_id", "required")
+	}
+	if limit <= 0 || limit > maxPlaceHolders {
+		limit = maxPlaceHolders
+	}
+	return u.insight.PlaceHolders(ctx, p.TenantID, nodeID, limit)
+}
+
 func (u *authzAdminInteractor) ListGrantChanges(ctx context.Context, limit int) ([]grantchange.Record, error) {
 	p, err := u.guard.Require(ctx, "anubis:identity:read")
 	if err != nil {

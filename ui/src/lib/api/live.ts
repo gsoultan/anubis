@@ -20,7 +20,8 @@ import type {
   Ial, Risk, Uuid, AuthPage, PageConfig, PageKind, SigningKeyRecord,
   CredentialInfo, CatalogSource, CatalogRun, CatalogFormat,
   AccessSummary, GrantChangeSpec, GrantChangePreview, GrantChangeRecord,
-  GrantChangeKind, FullList, PlaceReach,
+  GrantChangeKind, FullList, PlaceReach, RoleUsage, AppUsage, HolderKinds, PlaceHolder,
+  RouteRule, RouteEffect,
 } from './types'
 
 /** Unix seconds to ISO, with the protobuf zero meaning "never". */
@@ -234,11 +235,7 @@ export async function roles(): Promise<Role[]> {
     allowed_realm_kinds: r.allowedRealmKinds as RealmKind[],
     assignable_at: r.assignableAt,
     deprecated: r.deprecated,
-    /* ListRoles does not carry a permission count, so this is not a real
-       number and the roles screen should not present it as one. Fixing it
-       properly means adding the count to the Role message rather than making
-       fifty GetRoleEffective calls to render one list. */
-    permission_count: 0,
+    permission_count: r.permissionCount,
   }))
 }
 
@@ -1317,11 +1314,11 @@ export async function createRole(i: NewRoleInput): Promise<string> {
     role: {
       $typeName: 'anubis.v1.Role',
       id: '', name: i.name, description: i.description,
-      applicationSlug: '', isSystem: false,
+      applicationSlug: i.application_slug ?? '', isSystem: false,
       allowedRealmKinds: i.allowed_realm_kinds,
       assignableAt: [], parentIds: [], patterns: i.permission_keys,
       // Server-owned: a request never retires a role, a manifest does.
-      deprecated: false,
+      deprecated: false, permissionCount: 0,
     },
   })
   return resp.role?.id ?? ''
@@ -1339,16 +1336,17 @@ export async function updateRole(i: {
       allowedRealmKinds: i.allowed_realm_kinds,
       assignableAt: [], parentIds: [], patterns: i.permission_keys,
       // Server-owned: a request never retires a role, a manifest does.
-      deprecated: false,
+      deprecated: false, permissionCount: 0,
     },
   })
 }
 
-export async function createScopeNode(i: NewNodeInput): Promise<void> {
-  await rpc.scopeAdmin.createScopeNode({
+export async function createScopeNode(i: NewNodeInput): Promise<ScopeNode | null> {
+  const resp = await rpc.scopeAdmin.createScopeNode({
     axis: i.axis_code, nodeType: i.node_type, parentId: i.parent_id,
     slug: i.slug, name: i.name, externalRef: i.external_ref ?? '',
   })
+  return resp.node ? toNode(resp.node) : null
 }
 
 export async function createAxis(i: NewAxisInput): Promise<void> {
@@ -1629,4 +1627,61 @@ export async function placeReach(nodeId: Uuid): Promise<PlaceReach> {
       role_name: e.roleName, members: e.members,
     })),
   }
+}
+
+/* --- usage, for the Roles list, the app page and a place ------------------- */
+
+export async function roleUsage(roleIds: Uuid[] = []): Promise<RoleUsage[]> {
+  const r = await rpc.authzAdmin.roleUsage({ roleIds })
+  return r.roles.map((u) => ({ role_id: u.roleId, people: u.people, via_groups: u.viaGroups }))
+}
+
+export async function appUsage(applicationId: Uuid): Promise<AppUsage> {
+  const r = await rpc.authzAdmin.appUsage({ applicationId })
+  return { people: r.people, direct: r.direct, via_groups: r.viaGroups }
+}
+
+export async function holderKinds(roleId: Uuid, axis: string): Promise<HolderKinds> {
+  const r = await rpc.authzAdmin.holderKinds({ roleId, axis })
+  return { total: r.total, everything: r.everything, branch: r.branch, fixed: r.fixed, nothing: r.nothing, full: r.full }
+}
+
+export async function placeHolders(nodeId: Uuid, limit = 50): Promise<PlaceHolder[]> {
+  const r = await rpc.authzAdmin.placeHolders({ nodeId, limit })
+  return r.holders.map((h) => ({
+    identity_id: h.identityId, username: h.username, role_name: h.roleName,
+    group_name: h.groupName, only_here: h.onlyHere, from_above: h.fromAbove,
+  }))
+}
+
+/* Page rules are read one by one and written as a whole: the manifest's
+   routes section replaces the app's rule set in one transaction, because a
+   half-written set is a different policy. Only that section is sent, so the
+   app's permissions and roles are untouched. */
+export async function routeRules(applicationSlug: string): Promise<RouteRule[]> {
+  const r = await rpc.tenantAdmin.listRoutePolicies({ applicationSlug })
+  const prefix = `${applicationSlug}:`
+  return r.policies.map((p) => ({
+    priority: p.priority, path_pattern: p.pathPattern, host_pattern: p.hostPattern,
+    methods: p.methods, effect: p.effect as RouteEffect,
+    permission: p.permissionKey.startsWith(prefix) ? p.permissionKey.slice(prefix.length) : p.permissionKey,
+    scope_bindings: parseBindings(p.scopeBindingsJson),
+  }))
+}
+
+function parseBindings(json: string): Record<string, string> {
+  try {
+    const v: unknown = JSON.parse(json || '{}')
+    return v && typeof v === 'object' ? (v as Record<string, string>) : {}
+  } catch { return {} }
+}
+
+export async function saveRouteRules(applicationSlug: string, rules: RouteRule[], dry = false) {
+  const routes = rules.map((r, i) => ({
+    priority: (i + 1) * 10, path_pattern: r.path_pattern, host_pattern: r.host_pattern,
+    methods: r.methods, effect: r.effect,
+    permission: r.effect === 'require_permission' ? r.permission : '',
+    scope_bindings: r.effect === 'require_permission' ? r.scope_bindings : {},
+  }))
+  return applyManifest(applicationSlug, JSON.stringify({ routes }), dry, 'json')
 }

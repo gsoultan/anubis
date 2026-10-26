@@ -9,7 +9,8 @@ import {
 import { api } from '@/lib/api/client'
 import { qk } from '@/lib/query/keys'
 import { realmKindColor } from '@/lib/realmKind'
-import { axisReach, fmtDate, namesOf, reachWords, relDays, roleBlocked, type Until } from '@/lib/access'
+import { currentTenant, myTenants } from '@/lib/anubis'
+import { axisReach, fmtDate, namesOf, reachWords, relDays, roleBlocked, shortRoleName, type Until } from '@/lib/access'
 import { CreateShell, CancelSubmit } from '@/components/create/shell'
 import { IdentityPicker } from '@/components/ui/IdentityPicker'
 import { Initial } from '@/components/ui/Initial'
@@ -209,7 +210,13 @@ function ReadBack({ d }: { d: GrantDraft }) {
 
 function Review({ d }: { d: GrantDraft }) {
   const names = new Map(Object.values(d.places).flat().map((v) => [v.id, v.name]))
-  const given = d.what === 'features' ? (d.featKeys.length ? (d.featName.trim() || d.featDefaultName) : null) : d.role?.name
+  const given = d.what === 'features'
+    ? (d.featReuse ? shortRoleName(d.featReuse) : d.featKeys.length ? (d.featName.trim() || d.featDefaultName) : null)
+    : d.role?.name
+  /* The company this lands in, read from the same list the header's switcher
+     uses. Never editable here: access given in one company stays in it. */
+  const { data: tenants } = useQuery({ queryKey: ['my-tenants'], queryFn: myTenants, staleTime: 60_000, retry: false })
+  const company = tenants?.find((t) => t.slug === currentTenant())?.name
   const row = (label: string, value: ReactNode) => (
     <>
       <dt className="t-xs pt-px">{label}</dt>
@@ -221,6 +228,7 @@ function Review({ d }: { d: GrantDraft }) {
     <div className="review">
       <div className="t-label mb-2.5">Review</div>
       <dl className="review-grid">
+        {company && row('Organisation', <>{company} <span className="t-xs">· access stays in this company</span></>)}
         {row('Person', d.subject ? <b style={{ fontWeight: 600 }}>{d.subject.username}</b> : none)}
         {d.what === 'membership' ? (
           <>
@@ -261,9 +269,11 @@ function Review({ d }: { d: GrantDraft }) {
   )
 }
 
-export function GiveAccessSheet({ opened, onClose, identityId = null, pickSubject = false, membershipId = null }: {
+export function GiveAccessSheet({ opened, onClose, identityId = null, pickSubject = false, membershipId = null, roleId = null }: {
   opened: boolean
   onClose: () => void
+  /** Opened from a role: it is already chosen, the person is not. */
+  roleId?: string | null
   /** Opened from a membership: it is already chosen, the person is not. */
   membershipId?: string | null
   /** The person, when the sheet is opened from them. */
@@ -279,11 +289,12 @@ export function GiveAccessSheet({ opened, onClose, identityId = null, pickSubjec
      page it closes without onClose too — Back simply drops ?give — so a
      half-filled draft (a role picked for somebody else, even) would otherwise
      be waiting the next time it opened. */
-  const { reset, setWhat, setMembershipId } = d
+  const { reset, setWhat, setMembershipId, setRoleId } = d
   useEffect(() => {
     if (opened) {
       reset(); setPicked(null)
       if (membershipId) { setWhat('membership'); setMembershipId(membershipId) }
+      if (roleId) setRoleId(roleId)
     }
     // Only on opening: `reset` is a new function every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -348,10 +359,27 @@ export function GiveAccessSheet({ opened, onClose, identityId = null, pickSubjec
             <>
               <FeaturePicker perms={d.perms ?? []} apps={d.apps ?? []} appId={d.featApp} onApp={d.setFeatApp}
                 value={d.featKeys} onChange={d.setFeatKeys} />
-              {d.featKeys.length > 0 && (
-                <TextInput mt="sm" label="Saved as a role named" value={d.featName} placeholder={d.featDefaultName}
-                  onChange={(e) => d.setFeatName(e.currentTarget.value)}
-                  description="If a role already permits exactly these, that role is used instead, so the same picks never make two roles." />
+              {d.featKeys.length > 0 && d.featReuse && (
+                <div className="panel-inset mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2.5" role="status">
+                  <span className="t-body min-w-0 flex-1">
+                    This matches the role <b>{shortRoleName(d.featReuse)}</b>, so that role is used.
+                  </span>
+                  <UnstyledButton className="t-sm" style={{ color: 'var(--accent)' }} onClick={() => d.setFeatFresh(true)}>
+                    Use a new role instead
+                  </UnstyledButton>
+                </div>
+              )}
+              {d.featKeys.length > 0 && !d.featReuse && (
+                <>
+                  <TextInput mt="sm" label="Saved as a role named" value={d.featName} placeholder={d.featDefaultName}
+                    onChange={(e) => d.setFeatName(e.currentTarget.value)}
+                    description={d.featMatch ? undefined : 'No role allows exactly these yet, so a new one is made. The next person given the same picks shares it.'} />
+                  {d.featMatch && (
+                    <UnstyledButton mt={6} className="t-sm" style={{ color: 'var(--accent)' }} onClick={() => d.setFeatFresh(false)}>
+                      Use {shortRoleName(d.featMatch)} instead, it allows exactly these
+                    </UnstyledButton>
+                  )}
+                </>
               )}
             </>
           ) : d.what === 'role' ? (

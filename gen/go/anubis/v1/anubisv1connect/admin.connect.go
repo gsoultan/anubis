@@ -234,6 +234,18 @@ const (
 	// AuthzAdminServicePlaceReachProcedure is the fully-qualified name of the AuthzAdminService's
 	// PlaceReach RPC.
 	AuthzAdminServicePlaceReachProcedure = "/anubis.v1.AuthzAdminService/PlaceReach"
+	// AuthzAdminServiceRoleUsageProcedure is the fully-qualified name of the AuthzAdminService's
+	// RoleUsage RPC.
+	AuthzAdminServiceRoleUsageProcedure = "/anubis.v1.AuthzAdminService/RoleUsage"
+	// AuthzAdminServiceAppUsageProcedure is the fully-qualified name of the AuthzAdminService's
+	// AppUsage RPC.
+	AuthzAdminServiceAppUsageProcedure = "/anubis.v1.AuthzAdminService/AppUsage"
+	// AuthzAdminServiceHolderKindsProcedure is the fully-qualified name of the AuthzAdminService's
+	// HolderKinds RPC.
+	AuthzAdminServiceHolderKindsProcedure = "/anubis.v1.AuthzAdminService/HolderKinds"
+	// AuthzAdminServicePlaceHoldersProcedure is the fully-qualified name of the AuthzAdminService's
+	// PlaceHolders RPC.
+	AuthzAdminServicePlaceHoldersProcedure = "/anubis.v1.AuthzAdminService/PlaceHolders"
 	// AuthzAdminServiceApplyManifestProcedure is the fully-qualified name of the AuthzAdminService's
 	// ApplyManifest RPC.
 	AuthzAdminServiceApplyManifestProcedure = "/anubis.v1.AuthzAdminService/ApplyManifest"
@@ -1650,6 +1662,14 @@ type AuthzAdminServiceClient interface {
 	// PlaceReach answers, for one place: who already has it, and who holds a
 	// list naming all of its siblings and so might expect it too.
 	PlaceReach(context.Context, *connect.Request[v1.PlaceReachRequest]) (*connect.Response[v1.PlaceReachResponse], error)
+	// RoleUsage counts the people holding each role. Empty role_ids: every role.
+	RoleUsage(context.Context, *connect.Request[v1.RoleUsageRequest]) (*connect.Response[v1.RoleUsageResponse], error)
+	// AppUsage counts the people who hold any live role of one application.
+	AppUsage(context.Context, *connect.Request[v1.AppUsageRequest]) (*connect.Response[v1.AppUsageResponse], error)
+	// HolderKinds sorts one role's grants by their reach on one kind of place.
+	HolderKinds(context.Context, *connect.Request[v1.HolderKindsRequest]) (*connect.Response[v1.HolderKindsResponse], error)
+	// PlaceHolders lists who reaches a place by naming it or a place above it.
+	PlaceHolders(context.Context, *connect.Request[v1.PlaceHoldersRequest]) (*connect.Response[v1.PlaceHoldersResponse], error)
 	// Registers an application's permission/role/route catalog. Validates,
 	// diffs, applies. Removed permissions are deprecated, never deleted.
 	ApplyManifest(context.Context, *connect.Request[v1.ApplyManifestRequest]) (*connect.Response[v1.ApplyManifestResponse], error)
@@ -1813,6 +1833,30 @@ func NewAuthzAdminServiceClient(httpClient connect.HTTPClient, baseURL string, o
 			connect.WithSchema(authzAdminServiceMethods.ByName("PlaceReach")),
 			connect.WithClientOptions(opts...),
 		),
+		roleUsage: connect.NewClient[v1.RoleUsageRequest, v1.RoleUsageResponse](
+			httpClient,
+			baseURL+AuthzAdminServiceRoleUsageProcedure,
+			connect.WithSchema(authzAdminServiceMethods.ByName("RoleUsage")),
+			connect.WithClientOptions(opts...),
+		),
+		appUsage: connect.NewClient[v1.AppUsageRequest, v1.AppUsageResponse](
+			httpClient,
+			baseURL+AuthzAdminServiceAppUsageProcedure,
+			connect.WithSchema(authzAdminServiceMethods.ByName("AppUsage")),
+			connect.WithClientOptions(opts...),
+		),
+		holderKinds: connect.NewClient[v1.HolderKindsRequest, v1.HolderKindsResponse](
+			httpClient,
+			baseURL+AuthzAdminServiceHolderKindsProcedure,
+			connect.WithSchema(authzAdminServiceMethods.ByName("HolderKinds")),
+			connect.WithClientOptions(opts...),
+		),
+		placeHolders: connect.NewClient[v1.PlaceHoldersRequest, v1.PlaceHoldersResponse](
+			httpClient,
+			baseURL+AuthzAdminServicePlaceHoldersProcedure,
+			connect.WithSchema(authzAdminServiceMethods.ByName("PlaceHolders")),
+			connect.WithClientOptions(opts...),
+		),
 		applyManifest: connect.NewClient[v1.ApplyManifestRequest, v1.ApplyManifestResponse](
 			httpClient,
 			baseURL+AuthzAdminServiceApplyManifestProcedure,
@@ -1883,6 +1927,10 @@ type authzAdminServiceClient struct {
 	listGrantChanges          *connect.Client[v1.ListGrantChangesRequest, v1.ListGrantChangesResponse]
 	listFullLists             *connect.Client[v1.ListFullListsRequest, v1.ListFullListsResponse]
 	placeReach                *connect.Client[v1.PlaceReachRequest, v1.PlaceReachResponse]
+	roleUsage                 *connect.Client[v1.RoleUsageRequest, v1.RoleUsageResponse]
+	appUsage                  *connect.Client[v1.AppUsageRequest, v1.AppUsageResponse]
+	holderKinds               *connect.Client[v1.HolderKindsRequest, v1.HolderKindsResponse]
+	placeHolders              *connect.Client[v1.PlaceHoldersRequest, v1.PlaceHoldersResponse]
 	applyManifest             *connect.Client[v1.ApplyManifestRequest, v1.ApplyManifestResponse]
 	listCatalogSources        *connect.Client[v1.ListCatalogSourcesRequest, v1.ListCatalogSourcesResponse]
 	createCatalogSource       *connect.Client[v1.CreateCatalogSourceRequest, v1.CreateCatalogSourceResponse]
@@ -2007,6 +2055,26 @@ func (c *authzAdminServiceClient) PlaceReach(ctx context.Context, req *connect.R
 	return c.placeReach.CallUnary(ctx, req)
 }
 
+// RoleUsage calls anubis.v1.AuthzAdminService.RoleUsage.
+func (c *authzAdminServiceClient) RoleUsage(ctx context.Context, req *connect.Request[v1.RoleUsageRequest]) (*connect.Response[v1.RoleUsageResponse], error) {
+	return c.roleUsage.CallUnary(ctx, req)
+}
+
+// AppUsage calls anubis.v1.AuthzAdminService.AppUsage.
+func (c *authzAdminServiceClient) AppUsage(ctx context.Context, req *connect.Request[v1.AppUsageRequest]) (*connect.Response[v1.AppUsageResponse], error) {
+	return c.appUsage.CallUnary(ctx, req)
+}
+
+// HolderKinds calls anubis.v1.AuthzAdminService.HolderKinds.
+func (c *authzAdminServiceClient) HolderKinds(ctx context.Context, req *connect.Request[v1.HolderKindsRequest]) (*connect.Response[v1.HolderKindsResponse], error) {
+	return c.holderKinds.CallUnary(ctx, req)
+}
+
+// PlaceHolders calls anubis.v1.AuthzAdminService.PlaceHolders.
+func (c *authzAdminServiceClient) PlaceHolders(ctx context.Context, req *connect.Request[v1.PlaceHoldersRequest]) (*connect.Response[v1.PlaceHoldersResponse], error) {
+	return c.placeHolders.CallUnary(ctx, req)
+}
+
 // ApplyManifest calls anubis.v1.AuthzAdminService.ApplyManifest.
 func (c *authzAdminServiceClient) ApplyManifest(ctx context.Context, req *connect.Request[v1.ApplyManifestRequest]) (*connect.Response[v1.ApplyManifestResponse], error) {
 	return c.applyManifest.CallUnary(ctx, req)
@@ -2078,6 +2146,14 @@ type AuthzAdminServiceHandler interface {
 	// PlaceReach answers, for one place: who already has it, and who holds a
 	// list naming all of its siblings and so might expect it too.
 	PlaceReach(context.Context, *connect.Request[v1.PlaceReachRequest]) (*connect.Response[v1.PlaceReachResponse], error)
+	// RoleUsage counts the people holding each role. Empty role_ids: every role.
+	RoleUsage(context.Context, *connect.Request[v1.RoleUsageRequest]) (*connect.Response[v1.RoleUsageResponse], error)
+	// AppUsage counts the people who hold any live role of one application.
+	AppUsage(context.Context, *connect.Request[v1.AppUsageRequest]) (*connect.Response[v1.AppUsageResponse], error)
+	// HolderKinds sorts one role's grants by their reach on one kind of place.
+	HolderKinds(context.Context, *connect.Request[v1.HolderKindsRequest]) (*connect.Response[v1.HolderKindsResponse], error)
+	// PlaceHolders lists who reaches a place by naming it or a place above it.
+	PlaceHolders(context.Context, *connect.Request[v1.PlaceHoldersRequest]) (*connect.Response[v1.PlaceHoldersResponse], error)
 	// Registers an application's permission/role/route catalog. Validates,
 	// diffs, applies. Removed permissions are deprecated, never deleted.
 	ApplyManifest(context.Context, *connect.Request[v1.ApplyManifestRequest]) (*connect.Response[v1.ApplyManifestResponse], error)
@@ -2237,6 +2313,30 @@ func NewAuthzAdminServiceHandler(svc AuthzAdminServiceHandler, opts ...connect.H
 		connect.WithSchema(authzAdminServiceMethods.ByName("PlaceReach")),
 		connect.WithHandlerOptions(opts...),
 	)
+	authzAdminServiceRoleUsageHandler := connect.NewUnaryHandler(
+		AuthzAdminServiceRoleUsageProcedure,
+		svc.RoleUsage,
+		connect.WithSchema(authzAdminServiceMethods.ByName("RoleUsage")),
+		connect.WithHandlerOptions(opts...),
+	)
+	authzAdminServiceAppUsageHandler := connect.NewUnaryHandler(
+		AuthzAdminServiceAppUsageProcedure,
+		svc.AppUsage,
+		connect.WithSchema(authzAdminServiceMethods.ByName("AppUsage")),
+		connect.WithHandlerOptions(opts...),
+	)
+	authzAdminServiceHolderKindsHandler := connect.NewUnaryHandler(
+		AuthzAdminServiceHolderKindsProcedure,
+		svc.HolderKinds,
+		connect.WithSchema(authzAdminServiceMethods.ByName("HolderKinds")),
+		connect.WithHandlerOptions(opts...),
+	)
+	authzAdminServicePlaceHoldersHandler := connect.NewUnaryHandler(
+		AuthzAdminServicePlaceHoldersProcedure,
+		svc.PlaceHolders,
+		connect.WithSchema(authzAdminServiceMethods.ByName("PlaceHolders")),
+		connect.WithHandlerOptions(opts...),
+	)
 	authzAdminServiceApplyManifestHandler := connect.NewUnaryHandler(
 		AuthzAdminServiceApplyManifestProcedure,
 		svc.ApplyManifest,
@@ -2327,6 +2427,14 @@ func NewAuthzAdminServiceHandler(svc AuthzAdminServiceHandler, opts ...connect.H
 			authzAdminServiceListFullListsHandler.ServeHTTP(w, r)
 		case AuthzAdminServicePlaceReachProcedure:
 			authzAdminServicePlaceReachHandler.ServeHTTP(w, r)
+		case AuthzAdminServiceRoleUsageProcedure:
+			authzAdminServiceRoleUsageHandler.ServeHTTP(w, r)
+		case AuthzAdminServiceAppUsageProcedure:
+			authzAdminServiceAppUsageHandler.ServeHTTP(w, r)
+		case AuthzAdminServiceHolderKindsProcedure:
+			authzAdminServiceHolderKindsHandler.ServeHTTP(w, r)
+		case AuthzAdminServicePlaceHoldersProcedure:
+			authzAdminServicePlaceHoldersHandler.ServeHTTP(w, r)
 		case AuthzAdminServiceApplyManifestProcedure:
 			authzAdminServiceApplyManifestHandler.ServeHTTP(w, r)
 		case AuthzAdminServiceListCatalogSourcesProcedure:
@@ -2440,6 +2548,22 @@ func (UnimplementedAuthzAdminServiceHandler) ListFullLists(context.Context, *con
 
 func (UnimplementedAuthzAdminServiceHandler) PlaceReach(context.Context, *connect.Request[v1.PlaceReachRequest]) (*connect.Response[v1.PlaceReachResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.AuthzAdminService.PlaceReach is not implemented"))
+}
+
+func (UnimplementedAuthzAdminServiceHandler) RoleUsage(context.Context, *connect.Request[v1.RoleUsageRequest]) (*connect.Response[v1.RoleUsageResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.AuthzAdminService.RoleUsage is not implemented"))
+}
+
+func (UnimplementedAuthzAdminServiceHandler) AppUsage(context.Context, *connect.Request[v1.AppUsageRequest]) (*connect.Response[v1.AppUsageResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.AuthzAdminService.AppUsage is not implemented"))
+}
+
+func (UnimplementedAuthzAdminServiceHandler) HolderKinds(context.Context, *connect.Request[v1.HolderKindsRequest]) (*connect.Response[v1.HolderKindsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.AuthzAdminService.HolderKinds is not implemented"))
+}
+
+func (UnimplementedAuthzAdminServiceHandler) PlaceHolders(context.Context, *connect.Request[v1.PlaceHoldersRequest]) (*connect.Response[v1.PlaceHoldersResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.AuthzAdminService.PlaceHolders is not implemented"))
 }
 
 func (UnimplementedAuthzAdminServiceHandler) ApplyManifest(context.Context, *connect.Request[v1.ApplyManifestRequest]) (*connect.Response[v1.ApplyManifestResponse], error) {

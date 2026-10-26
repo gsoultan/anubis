@@ -1,12 +1,13 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import { Button, Modal, PasswordInput, Select, TextInput } from '@mantine/core'
-import { IconCrown, IconKey, IconPlus, IconShieldCog, IconShieldLock, IconTrash, IconUserPlus } from '@tabler/icons-react'
+import { IconBuildingBank, IconCrown, IconKey, IconPlus, IconShieldCog, IconShieldLock, IconTrash, IconUserPlus } from '@tabler/icons-react'
 import { useState } from 'react'
 import { Page } from '@/components/shell/Page'
 import { notifyCreated, notifyRejected } from '@/components/create/shell'
 import { api } from '@/lib/anubis'
 import { useWho } from '@/stores/auth'
+import { CompanyTicks } from '@/components/platform/CompanyTicks'
 
 export const Route = createFileRoute('/operators')({ component: Operators })
 
@@ -48,7 +49,7 @@ function useOperators(query: string, cursor: string) {
 /* An assignment with no tenant is authority over all of them. Showing that as
    an empty cell would read as "none", which is the opposite of what it is. */
 function scopeLabel(a: Assignment) {
-  return a.tenantSlug === '' ? 'every tenant' : a.tenantSlug
+  return a.tenantSlug === '' ? 'every company' : a.tenantSlug
 }
 
 /* Creating a platform administrator is NOT the same action as adding a person
@@ -286,6 +287,7 @@ function ApiKeys() {
 function Operators() {
   const who = useWho()
   const [resetting, setResetting] = useState<Operator | null>(null)
+  const [ticking, setTicking] = useState<Operator | null>(null)
   const [query, setQuery] = useState('')
   /* A stack, not a page number: keyset paging can go forward from a cursor
      and back to one it has already seen, but it cannot jump to page 7. */
@@ -304,7 +306,7 @@ function Operators() {
   return (
     <Page
       title="Platform users"
-      description="The people who operate this installation, and which tenants each of them may administer. These accounts live in the platform tenant — a separate population from any tenant's own people. The owner created during setup is here too."
+      description="The people who run this Anubis, and which companies each of them runs. They are not anyone's employees here: they sign in to the platform, not to a company."
       actions={
         <>
           <AssignDialog onDone={() => refetch()} />
@@ -368,6 +370,10 @@ function Operators() {
                     {/* Not offered for yourself: a change asks for the current
                         password and a reset does not, so the server refuses
                         this and the screen should not pretend otherwise. */}
+                    <Button variant="subtle" size="compact-xs" leftSection={<IconBuildingBank size={13} />}
+                      onClick={() => setTicking(o)}>
+                      Choose companies
+                    </Button>
                     {o.username !== who?.username && (
                       <Button variant="subtle" size="compact-xs"
                         leftSection={<IconKey size={13} />}
@@ -389,7 +395,7 @@ function Operators() {
                         <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
                           <IconShieldCog size={14} style={{ color: 'var(--ink-3)' }} />
                           <span className="t-body" style={{ fontWeight: 530 }}>{a.role}</span>
-                          <span className="t-xs">on {scopeLabel(a)}</span>
+                          <span className="t-xs">at {scopeLabel(a)}</span>
                           {a.reason && <span className="t-xs">· {a.reason}</span>}
                         </span>
                         <Button variant="subtle" size="compact-xs" color="red" className="shrink-0"
@@ -421,6 +427,8 @@ function Operators() {
       )}
 
       <ApiKeys />
+      <CompanyTicks username={ticking?.username ?? null} assignments={ticking?.assignments ?? []}
+        onClose={() => setTicking(null)} onSaved={() => { setTicking(null); void refetch() }} />
       <ResetPassword operator={resetting} onClose={() => { setResetting(null); void refetch() }} />
     </Page>
   )

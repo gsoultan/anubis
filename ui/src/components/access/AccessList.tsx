@@ -1,18 +1,19 @@
 import { useState, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { ActionIcon, Button, Menu, TextInput, Tooltip, UnstyledButton } from '@mantine/core'
+import { ActionIcon, Button, Menu, TextInput, Tooltip } from '@mantine/core'
 import { notifications } from '@mantine/notifications'
 import {
-  IconChevronRight, IconCirclePlus, IconCopy, IconDots, IconShield, IconShieldOff,
+  IconCirclePlus, IconCopy, IconDots, IconShield, IconShieldOff,
   IconUserMinus, IconUsersGroup,
 } from '@tabler/icons-react'
 import { api } from '@/lib/api/client'
 import { qk } from '@/lib/query/keys'
 import { queryClient } from '@/lib/query/client'
-import { daysFrom, fmtDate, missingRequired, namesOf, relDays } from '@/lib/access'
+import { daysFrom, fmtDate, missingRequired, namesOf, relDays, shortRoleName } from '@/lib/access'
 import { notifyRejected } from '@/components/create/shell'
 import { ConfirmModal } from '@/components/ui/ConfirmModal'
 import { GrantWhere } from './GrantWhere'
+import { GrantCan, GrantSentence } from './GrantCan'
 import type { Grant, Membership, MembershipAssignment, Role, ScopeAxis } from '@/lib/api/types'
 
 /* A person's access, where it can be changed.
@@ -28,38 +29,9 @@ import type { Grant, Membership, MembershipAssignment, Role, ScopeAxis } from '@
  * assignment with its own end date, and removing one leaves the others.
  */
 
-function Permits({ roleId }: { roleId: string }) {
-  const [open, setOpen] = useState(false)
-  /* Fetched when asked: eight grants would otherwise be eight role lookups to
-     render a list nobody has expanded. */
-  const { data, isLoading } = useQuery({
-    queryKey: qk.rolePermissions(roleId),
-    queryFn: () => api.rolePermissions(roleId),
-    enabled: open,
-  })
-  return (
-    <div className="mt-2">
-      <UnstyledButton className="t-xs inline-flex items-center gap-1" onClick={() => setOpen((o) => !o)}
-        aria-expanded={open}>
-        <IconChevronRight size={12}
-          style={{ transform: open ? 'rotate(90deg)' : undefined, transition: 'transform var(--t-fast)' }} />
-        What this role permits
-      </UnstyledButton>
-      {open && (
-        <div className="mt-1.5 flex flex-wrap gap-1">
-          {isLoading && <span className="t-xs">Loading…</span>}
-          {data?.length === 0 && (
-            <span className="t-xs" style={{ color: 'var(--warn)' }}>Nothing — this role permits nothing yet.</span>
-          )}
-          {data?.map((k) => <span key={k} className="chip">{k}</span>)}
-        </div>
-      )}
-    </div>
-  )
-}
-
-function Row({ g, role, axes, nodeName, onRevoke }: {
+function Row({ g, who, role, axes, nodeName, onRevoke }: {
   g: Grant
+  who: string
   role: Role | undefined
   axes: ScopeAxis[] | undefined
   nodeName: (id: string) => string
@@ -84,8 +56,8 @@ function Row({ g, role, axes, nodeName, onRevoke }: {
       <span className="access-icon" aria-hidden><IconShield size={15} /></span>
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-          <span className="t-body" style={{ fontWeight: 600 }}>{g.role_name}</span>
-          {role?.application_id && <span className="chip">{role.application_id}</span>}
+          <span className="t-body" style={{ fontWeight: 600 }}>{role ? shortRoleName(role) : g.role_name}</span>
+          {role?.application_id && <span className="chip">{role.application_id} app</span>}
           {expired && <span className="v-pill v-pill-idle">expired</span>}
           {dead.length > 0 && !expired && (
             <Tooltip label={`authorize() drops any grant that names no place in ${namesOf(dead)}.`}>
@@ -99,8 +71,14 @@ function Row({ g, role, axes, nodeName, onRevoke }: {
         <div className="access-when-inline t-xs tnum mt-1">
           <span style={endsTone}>{ends}</span> · {since}
         </div>
-        <div className="mt-2.5">
+        <div className="grant-block mt-2.5">
+          <span className="t-label">Can</span>
+          <GrantCan roleId={g.role_id} />
+          <span className="t-label">Where</span>
           <GrantWhere scopes={g.scopes} selfScoped={g.self_scoped} axes={axes} nodeName={nodeName} />
+        </div>
+        <div className="mt-2">
+          <GrantSentence who={who} roleId={g.role_id} scopes={g.scopes} selfScoped={g.self_scoped} axes={axes} nodeName={nodeName} />
         </div>
         {dead.length > 0 && !expired && (
           <div className="t-xs mt-2" style={{ color: 'var(--warn)' }}>
@@ -109,7 +87,6 @@ function Row({ g, role, axes, nodeName, onRevoke }: {
           </div>
         )}
         {g.reason && <div className="t-xs mt-2" style={{ fontStyle: 'italic' }}>“{g.reason}”</div>}
-        <Permits roleId={g.role_id} />
       </div>
 
       <div className="flex shrink-0 items-start gap-1.5">
@@ -313,7 +290,7 @@ export function AccessList({ identityId, username, grants, loading, axes, roles,
           {direct.length > 0 && (
             <Group icon={<IconShield size={14} />} title="Given directly" count={direct.length}>
               {direct.map((g) => (
-                <Row key={g.id} g={g} role={roleOf(g.role_id)} axes={axes} nodeName={nodeName}
+                <Row key={g.id} g={g} who={username} role={roleOf(g.role_id)} axes={axes} nodeName={nodeName}
                   onRevoke={() => setRevoking(g)} />
               ))}
             </Group>
@@ -337,7 +314,7 @@ export function AccessList({ identityId, username, grants, loading, axes, roles,
                   </div>
                 )}
                 {list.map((g) => (
-                  <Row key={g.id} g={g} role={roleOf(g.role_id)} axes={axes} nodeName={nodeName} />
+                  <Row key={g.id} g={g} who={username} role={roleOf(g.role_id)} axes={axes} nodeName={nodeName} />
                 ))}
               </Group>
             )
@@ -346,7 +323,7 @@ export function AccessList({ identityId, username, grants, loading, axes, roles,
             <Group icon={<IconUsersGroup size={14} />} title="Through a membership" count={unplaced.length}
               sub={[...new Set(unplaced.map((g) => membershipName(g.via_membership_id as string)))].join(', ')}>
               {unplaced.sort(order).map((g) => (
-                <Row key={g.id} g={g} role={roleOf(g.role_id)} axes={axes} nodeName={nodeName} />
+                <Row key={g.id} g={g} who={username} role={roleOf(g.role_id)} axes={axes} nodeName={nodeName} />
               ))}
             </Group>
           )}

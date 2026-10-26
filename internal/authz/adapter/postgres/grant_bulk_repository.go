@@ -308,3 +308,60 @@ func (s *Repository) PlaceReach(ctx context.Context, tenantID, nodeID string) (i
 	}
 	return out, nil
 }
+
+func (s *Repository) RoleUsage(ctx context.Context, tenantID string, roleIDs []string) ([]insight.RoleUsage, error) {
+	if roleIDs == nil {
+		roleIDs = []string{}
+	}
+	rows, err := authzrquery.RoleUsage.Query(ctx, s.rex(ctx), tenantID, roleIDs)
+	if err != nil {
+		return nil, database.MapErr(err)
+	}
+	out := make([]insight.RoleUsage, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, insight.RoleUsage{RoleID: r.RoleID, People: int(r.People), ViaGroups: int(r.ViaGroups)})
+	}
+	return out, nil
+}
+
+func (s *Repository) AppUsage(ctx context.Context, tenantID, applicationID string) (insight.AppUsage, error) {
+	r, _, err := authzrquery.AppUsage.One(ctx, s.rex(ctx), tenantID, applicationID)
+	if err != nil {
+		return insight.AppUsage{}, database.MapErr(err)
+	}
+	return insight.AppUsage{People: int(r.People), Direct: int(r.Direct), ViaGroups: int(r.ViaGroups)}, nil
+}
+
+func (s *Repository) HolderKinds(ctx context.Context, tenantID, roleID, axis string) (insight.HolderKinds, error) {
+	r, _, err := authzrquery.HolderKinds.One(ctx, s.rex(ctx), tenantID, roleID, axis)
+	if err != nil {
+		return insight.HolderKinds{}, database.MapErr(err)
+	}
+	out := insight.HolderKinds{
+		Total: int(r.Total), Everything: int(r.Everything), Branch: int(r.Branch),
+		Fixed: int(r.Fixed), Nothing: int(r.Nothing),
+	}
+	full, err := s.ListFullLists(ctx, tenantID, axis, roleID)
+	if err != nil {
+		return out, err
+	}
+	for _, f := range full {
+		out.Full += f.Grants
+	}
+	return out, nil
+}
+
+func (s *Repository) PlaceHolders(ctx context.Context, tenantID, nodeID string, limit int) ([]insight.PlaceHolder, error) {
+	rows, err := authzrquery.PlaceHolders.Query(ctx, s.rex(ctx), tenantID, nodeID, int32(limit))
+	if err != nil {
+		return nil, database.MapErr(err)
+	}
+	out := make([]insight.PlaceHolder, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, insight.PlaceHolder{
+			IdentityID: r.IdentityID, Username: r.Username, RoleName: r.RoleName,
+			GroupName: r.GroupName, OnlyHere: r.OnlyHere, FromAbove: r.FromAbove,
+		})
+	}
+	return out, nil
+}

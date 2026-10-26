@@ -43,6 +43,7 @@ func Queries() []storm.RawDecl {
 		// insight.go
 		SummarizeAccess, ListFullLists, PlaceReachCover, PlaceReachMightExpect,
 		PlaceReachGroupEntries,
+		RoleUsage, AppUsage, HolderKinds, PlaceHolders,
 		// membership.go
 		ListMemberships, GetMembership, CreateMembership,
 		ListMembershipEntries, ListMembershipEntryScopes,

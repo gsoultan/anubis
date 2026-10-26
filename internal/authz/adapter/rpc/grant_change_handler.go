@@ -217,3 +217,77 @@ func (h *AuthzAdminHandler) PlaceReach(ctx context.Context, req *connect.Request
 	}
 	return connect.NewResponse(out.(*anubisv1.PlaceReachResponse)), nil
 }
+
+func (h *AuthzAdminHandler) RoleUsage(ctx context.Context, req *connect.Request[anubisv1.RoleUsageRequest]) (*connect.Response[anubisv1.RoleUsageResponse], error) {
+	out, err := h.f.Do(ctx, "admin.access.role_usage", func(ctx context.Context) (any, error) {
+		rows, err := h.svc.RoleUsage(ctx, req.Msg.RoleIds)
+		if err != nil {
+			return nil, err
+		}
+		resp := &anubisv1.RoleUsageResponse{}
+		for _, r := range rows {
+			resp.Roles = append(resp.Roles, &anubisv1.RoleUsage{
+				RoleId: r.RoleID, People: int32(r.People), ViaGroups: int32(r.ViaGroups),
+			})
+		}
+		return resp, nil
+	})
+	if err != nil {
+		return nil, apiconnect.Err(ctx, err)
+	}
+	return connect.NewResponse(out.(*anubisv1.RoleUsageResponse)), nil
+}
+
+func (h *AuthzAdminHandler) AppUsage(ctx context.Context, req *connect.Request[anubisv1.AppUsageRequest]) (*connect.Response[anubisv1.AppUsageResponse], error) {
+	out, err := h.f.Do(ctx, "admin.access.app_usage", func(ctx context.Context) (any, error) {
+		r, err := h.svc.AppUsage(ctx, req.Msg.ApplicationId)
+		if err != nil {
+			return nil, err
+		}
+		return &anubisv1.AppUsageResponse{
+			People: int32(r.People), Direct: int32(r.Direct), ViaGroups: int32(r.ViaGroups),
+		}, nil
+	})
+	if err != nil {
+		return nil, apiconnect.Err(ctx, err)
+	}
+	return connect.NewResponse(out.(*anubisv1.AppUsageResponse)), nil
+}
+
+func (h *AuthzAdminHandler) HolderKinds(ctx context.Context, req *connect.Request[anubisv1.HolderKindsRequest]) (*connect.Response[anubisv1.HolderKindsResponse], error) {
+	out, err := h.f.Do(ctx, "admin.access.holder_kinds", func(ctx context.Context) (any, error) {
+		r, err := h.svc.HolderKinds(ctx, req.Msg.RoleId, req.Msg.Axis)
+		if err != nil {
+			return nil, err
+		}
+		return &anubisv1.HolderKindsResponse{
+			Total: int32(r.Total), Everything: int32(r.Everything), Branch: int32(r.Branch),
+			Fixed: int32(r.Fixed), Nothing: int32(r.Nothing), Full: int32(r.Full),
+		}, nil
+	})
+	if err != nil {
+		return nil, apiconnect.Err(ctx, err)
+	}
+	return connect.NewResponse(out.(*anubisv1.HolderKindsResponse)), nil
+}
+
+func (h *AuthzAdminHandler) PlaceHolders(ctx context.Context, req *connect.Request[anubisv1.PlaceHoldersRequest]) (*connect.Response[anubisv1.PlaceHoldersResponse], error) {
+	out, err := h.f.Do(ctx, "admin.access.place_holders", func(ctx context.Context) (any, error) {
+		rows, err := h.svc.PlaceHolders(ctx, req.Msg.NodeId, int(req.Msg.Limit))
+		if err != nil {
+			return nil, err
+		}
+		resp := &anubisv1.PlaceHoldersResponse{}
+		for _, r := range rows {
+			resp.Holders = append(resp.Holders, &anubisv1.PlaceHolder{
+				IdentityId: r.IdentityID, Username: r.Username, RoleName: r.RoleName,
+				GroupName: r.GroupName, OnlyHere: r.OnlyHere, FromAbove: r.FromAbove,
+			})
+		}
+		return resp, nil
+	})
+	if err != nil {
+		return nil, apiconnect.Err(ctx, err)
+	}
+	return connect.NewResponse(out.(*anubisv1.PlaceHoldersResponse)), nil
+}
