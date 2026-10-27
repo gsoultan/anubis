@@ -4,6 +4,7 @@ import (
 	"context"
 
 	authapp "github.com/gsoultan/anubis/internal/auth/app"
+	"github.com/gsoultan/anubis/internal/auth/app/accesslink"
 	"github.com/gsoultan/anubis/internal/auth/app/clientcreds"
 	"github.com/gsoultan/anubis/internal/auth/app/device"
 	"github.com/gsoultan/anubis/internal/auth/app/enroll"
@@ -19,6 +20,7 @@ import (
 // usecase, served through this door because it is where people type.
 type AuthService interface {
 	identityrecovery.RecoveryUsecase
+	accesslink.OpenUsecase
 
 	Login(ctx context.Context, in signin.LoginInput) (*signin.LoginOutput, error)
 	VerifyMfa(ctx context.Context, in mfa.VerifyMfaInput) (*authapp.TokenPair, error)

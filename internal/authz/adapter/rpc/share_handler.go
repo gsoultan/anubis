@@ -61,6 +61,14 @@ func (h *ShareHandler) ListSharedWithMe(ctx context.Context, _ *connect.Request[
 	return connect.NewResponse(&anubisv1.ListSharedWithMeResponse{Shares: sharesProto(out.([]share.Share))}), nil
 }
 
+func (h *ShareHandler) CreateAccessLink(ctx context.Context, req *connect.Request[anubisv1.CreateAccessLinkRequest]) (*connect.Response[anubisv1.CreateAccessLinkResponse], error) {
+	out, err := h.eps.CreateLink(ctx, req.Msg.ShareId)
+	if err != nil {
+		return nil, apiconnect.Err(ctx, err)
+	}
+	return connect.NewResponse(&anubisv1.CreateAccessLinkResponse{LinkToken: out.(string)}), nil
+}
+
 func sharesProto(in []share.Share) []*anubisv1.RecordShare {
 	out := make([]*anubisv1.RecordShare, 0, len(in))
 	for i := range in {

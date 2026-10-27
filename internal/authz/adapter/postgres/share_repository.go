@@ -81,3 +81,27 @@ func shareFromRow(r authzrquery.ShareRow) *share.Share {
 	_ = json.Unmarshal([]byte(r.RecordScopes), &sh.RecordScopes)
 	return sh
 }
+
+func (s *Repository) SetShareLink(ctx context.Context, tenantID, id string, hash []byte) (bool, error) {
+	n, err := authzrquery.SetShareLink.Exec(ctx, s.rex(ctx), id, tenantID, hash)
+	if err != nil {
+		return false, database.MapErr(err)
+	}
+	return n > 0, nil
+}
+
+func (s *Repository) ShareByLinkHash(ctx context.Context, hash []byte) (*share.Share, error) {
+	row, ok, err := authzrquery.ShareByLinkHash.One(ctx, s.rex(ctx), hash)
+	if err != nil {
+		return nil, database.MapErr(err)
+	}
+	if !ok {
+		return nil, apperr.ErrNotFound
+	}
+	return shareFromRow(row), nil
+}
+
+// TouchShareLink is bookkeeping; a failure must not refuse the open.
+func (s *Repository) TouchShareLink(ctx context.Context, id string) {
+	_, _ = authzrquery.TouchShareLink.Exec(ctx, s.rex(ctx), id)
+}

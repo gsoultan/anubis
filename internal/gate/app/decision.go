@@ -111,6 +111,14 @@ func (d *Decider) Decide(req Request) Decision {
 	if claims == nil {
 		return Decision{Outcome: Unauthenticated, Reason: "authentication required"}
 	}
+	// An access-link token opens one record through the decision endpoint
+	// and nothing through the gate: a route policy names places, not
+	// records, and a link must never become a way through the front door.
+	for _, m := range claims.AMR {
+		if m == "link" {
+			return Decision{Outcome: Denied, Reason: "an access link does not pass the gate"}
+		}
+	}
 
 	if route.Effect == "require_permission" {
 		targets := map[string]string{}

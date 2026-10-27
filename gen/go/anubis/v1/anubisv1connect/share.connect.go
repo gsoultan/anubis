@@ -43,6 +43,9 @@ const (
 	// ShareServiceListSharedWithMeProcedure is the fully-qualified name of the ShareService's
 	// ListSharedWithMe RPC.
 	ShareServiceListSharedWithMeProcedure = "/anubis.v1.ShareService/ListSharedWithMe"
+	// ShareServiceCreateAccessLinkProcedure is the fully-qualified name of the ShareService's
+	// CreateAccessLink RPC.
+	ShareServiceCreateAccessLinkProcedure = "/anubis.v1.ShareService/CreateAccessLink"
 )
 
 // ShareServiceClient is a client for the anubis.v1.ShareService service.
@@ -57,6 +60,11 @@ type ShareServiceClient interface {
 	// every permission they hold.
 	ListSharesOnRecord(context.Context, *connect.Request[v1.ListSharesOnRecordRequest]) (*connect.Response[v1.ListSharesOnRecordResponse], error)
 	ListSharedWithMe(context.Context, *connect.Request[v1.ListSharedWithMeRequest]) (*connect.Response[v1.ListSharedWithMeResponse], error)
+	// The link a recipient with no password opens the record with, returned
+	// ONCE (making another replaces it). Anubis mails nothing: the
+	// application owns the record's URL and puts the token in its own
+	// message. Exchanged for a record-bound token by AuthService/OpenAccessLink.
+	CreateAccessLink(context.Context, *connect.Request[v1.CreateAccessLinkRequest]) (*connect.Response[v1.CreateAccessLinkResponse], error)
 }
 
 // NewShareServiceClient constructs a client for the anubis.v1.ShareService service. By default, it
@@ -94,6 +102,12 @@ func NewShareServiceClient(httpClient connect.HTTPClient, baseURL string, opts .
 			connect.WithSchema(shareServiceMethods.ByName("ListSharedWithMe")),
 			connect.WithClientOptions(opts...),
 		),
+		createAccessLink: connect.NewClient[v1.CreateAccessLinkRequest, v1.CreateAccessLinkResponse](
+			httpClient,
+			baseURL+ShareServiceCreateAccessLinkProcedure,
+			connect.WithSchema(shareServiceMethods.ByName("CreateAccessLink")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -103,6 +117,7 @@ type shareServiceClient struct {
 	unshare            *connect.Client[v1.UnshareRequest, v1.UnshareResponse]
 	listSharesOnRecord *connect.Client[v1.ListSharesOnRecordRequest, v1.ListSharesOnRecordResponse]
 	listSharedWithMe   *connect.Client[v1.ListSharedWithMeRequest, v1.ListSharedWithMeResponse]
+	createAccessLink   *connect.Client[v1.CreateAccessLinkRequest, v1.CreateAccessLinkResponse]
 }
 
 // Share calls anubis.v1.ShareService.Share.
@@ -125,6 +140,11 @@ func (c *shareServiceClient) ListSharedWithMe(ctx context.Context, req *connect.
 	return c.listSharedWithMe.CallUnary(ctx, req)
 }
 
+// CreateAccessLink calls anubis.v1.ShareService.CreateAccessLink.
+func (c *shareServiceClient) CreateAccessLink(ctx context.Context, req *connect.Request[v1.CreateAccessLinkRequest]) (*connect.Response[v1.CreateAccessLinkResponse], error) {
+	return c.createAccessLink.CallUnary(ctx, req)
+}
+
 // ShareServiceHandler is an implementation of the anubis.v1.ShareService service.
 type ShareServiceHandler interface {
 	// You can only share what you can do: every permission is authorised for
@@ -137,6 +157,11 @@ type ShareServiceHandler interface {
 	// every permission they hold.
 	ListSharesOnRecord(context.Context, *connect.Request[v1.ListSharesOnRecordRequest]) (*connect.Response[v1.ListSharesOnRecordResponse], error)
 	ListSharedWithMe(context.Context, *connect.Request[v1.ListSharedWithMeRequest]) (*connect.Response[v1.ListSharedWithMeResponse], error)
+	// The link a recipient with no password opens the record with, returned
+	// ONCE (making another replaces it). Anubis mails nothing: the
+	// application owns the record's URL and puts the token in its own
+	// message. Exchanged for a record-bound token by AuthService/OpenAccessLink.
+	CreateAccessLink(context.Context, *connect.Request[v1.CreateAccessLinkRequest]) (*connect.Response[v1.CreateAccessLinkResponse], error)
 }
 
 // NewShareServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -170,6 +195,12 @@ func NewShareServiceHandler(svc ShareServiceHandler, opts ...connect.HandlerOpti
 		connect.WithSchema(shareServiceMethods.ByName("ListSharedWithMe")),
 		connect.WithHandlerOptions(opts...),
 	)
+	shareServiceCreateAccessLinkHandler := connect.NewUnaryHandler(
+		ShareServiceCreateAccessLinkProcedure,
+		svc.CreateAccessLink,
+		connect.WithSchema(shareServiceMethods.ByName("CreateAccessLink")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/anubis.v1.ShareService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case ShareServiceShareProcedure:
@@ -180,6 +211,8 @@ func NewShareServiceHandler(svc ShareServiceHandler, opts ...connect.HandlerOpti
 			shareServiceListSharesOnRecordHandler.ServeHTTP(w, r)
 		case ShareServiceListSharedWithMeProcedure:
 			shareServiceListSharedWithMeHandler.ServeHTTP(w, r)
+		case ShareServiceCreateAccessLinkProcedure:
+			shareServiceCreateAccessLinkHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -203,4 +236,8 @@ func (UnimplementedShareServiceHandler) ListSharesOnRecord(context.Context, *con
 
 func (UnimplementedShareServiceHandler) ListSharedWithMe(context.Context, *connect.Request[v1.ListSharedWithMeRequest]) (*connect.Response[v1.ListSharedWithMeResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.ShareService.ListSharedWithMe is not implemented"))
+}
+
+func (UnimplementedShareServiceHandler) CreateAccessLink(context.Context, *connect.Request[v1.CreateAccessLinkRequest]) (*connect.Response[v1.CreateAccessLinkResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.ShareService.CreateAccessLink is not implemented"))
 }

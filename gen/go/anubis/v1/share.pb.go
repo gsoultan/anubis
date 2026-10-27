@@ -21,6 +21,95 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type CreateAccessLinkRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ShareId       string                 `protobuf:"bytes,1,opt,name=share_id,json=shareId,proto3" json:"share_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateAccessLinkRequest) Reset() {
+	*x = CreateAccessLinkRequest{}
+	mi := &file_anubis_v1_share_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateAccessLinkRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateAccessLinkRequest) ProtoMessage() {}
+
+func (x *CreateAccessLinkRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_anubis_v1_share_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateAccessLinkRequest.ProtoReflect.Descriptor instead.
+func (*CreateAccessLinkRequest) Descriptor() ([]byte, []int) {
+	return file_anubis_v1_share_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *CreateAccessLinkRequest) GetShareId() string {
+	if x != nil {
+		return x.ShareId
+	}
+	return ""
+}
+
+type CreateAccessLinkResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// "anb_lk_…". Show it once; it is not stored in the clear.
+	LinkToken     string `protobuf:"bytes,1,opt,name=link_token,json=linkToken,proto3" json:"link_token,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateAccessLinkResponse) Reset() {
+	*x = CreateAccessLinkResponse{}
+	mi := &file_anubis_v1_share_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateAccessLinkResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateAccessLinkResponse) ProtoMessage() {}
+
+func (x *CreateAccessLinkResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_anubis_v1_share_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateAccessLinkResponse.ProtoReflect.Descriptor instead.
+func (*CreateAccessLinkResponse) Descriptor() ([]byte, []int) {
+	return file_anubis_v1_share_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *CreateAccessLinkResponse) GetLinkToken() string {
+	if x != nil {
+		return x.LinkToken
+	}
+	return ""
+}
+
 type RecordShare struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	Id             string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -39,7 +128,7 @@ type RecordShare struct {
 
 func (x *RecordShare) Reset() {
 	*x = RecordShare{}
-	mi := &file_anubis_v1_share_proto_msgTypes[0]
+	mi := &file_anubis_v1_share_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -51,7 +140,7 @@ func (x *RecordShare) String() string {
 func (*RecordShare) ProtoMessage() {}
 
 func (x *RecordShare) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_share_proto_msgTypes[0]
+	mi := &file_anubis_v1_share_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -64,7 +153,7 @@ func (x *RecordShare) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RecordShare.ProtoReflect.Descriptor instead.
 func (*RecordShare) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_share_proto_rawDescGZIP(), []int{0}
+	return file_anubis_v1_share_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *RecordShare) GetId() string {
@@ -152,7 +241,7 @@ type ShareRequest struct {
 
 func (x *ShareRequest) Reset() {
 	*x = ShareRequest{}
-	mi := &file_anubis_v1_share_proto_msgTypes[1]
+	mi := &file_anubis_v1_share_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -164,7 +253,7 @@ func (x *ShareRequest) String() string {
 func (*ShareRequest) ProtoMessage() {}
 
 func (x *ShareRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_share_proto_msgTypes[1]
+	mi := &file_anubis_v1_share_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -177,7 +266,7 @@ func (x *ShareRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ShareRequest.ProtoReflect.Descriptor instead.
 func (*ShareRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_share_proto_rawDescGZIP(), []int{1}
+	return file_anubis_v1_share_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *ShareRequest) GetRecordKind() string {
@@ -238,7 +327,7 @@ type ShareResponse struct {
 
 func (x *ShareResponse) Reset() {
 	*x = ShareResponse{}
-	mi := &file_anubis_v1_share_proto_msgTypes[2]
+	mi := &file_anubis_v1_share_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -250,7 +339,7 @@ func (x *ShareResponse) String() string {
 func (*ShareResponse) ProtoMessage() {}
 
 func (x *ShareResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_share_proto_msgTypes[2]
+	mi := &file_anubis_v1_share_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -263,7 +352,7 @@ func (x *ShareResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ShareResponse.ProtoReflect.Descriptor instead.
 func (*ShareResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_share_proto_rawDescGZIP(), []int{2}
+	return file_anubis_v1_share_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *ShareResponse) GetShare() *RecordShare {
@@ -283,7 +372,7 @@ type UnshareRequest struct {
 
 func (x *UnshareRequest) Reset() {
 	*x = UnshareRequest{}
-	mi := &file_anubis_v1_share_proto_msgTypes[3]
+	mi := &file_anubis_v1_share_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -295,7 +384,7 @@ func (x *UnshareRequest) String() string {
 func (*UnshareRequest) ProtoMessage() {}
 
 func (x *UnshareRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_share_proto_msgTypes[3]
+	mi := &file_anubis_v1_share_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -308,7 +397,7 @@ func (x *UnshareRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UnshareRequest.ProtoReflect.Descriptor instead.
 func (*UnshareRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_share_proto_rawDescGZIP(), []int{3}
+	return file_anubis_v1_share_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *UnshareRequest) GetShareId() string {
@@ -333,7 +422,7 @@ type UnshareResponse struct {
 
 func (x *UnshareResponse) Reset() {
 	*x = UnshareResponse{}
-	mi := &file_anubis_v1_share_proto_msgTypes[4]
+	mi := &file_anubis_v1_share_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -345,7 +434,7 @@ func (x *UnshareResponse) String() string {
 func (*UnshareResponse) ProtoMessage() {}
 
 func (x *UnshareResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_share_proto_msgTypes[4]
+	mi := &file_anubis_v1_share_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -358,7 +447,7 @@ func (x *UnshareResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UnshareResponse.ProtoReflect.Descriptor instead.
 func (*UnshareResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_share_proto_rawDescGZIP(), []int{4}
+	return file_anubis_v1_share_proto_rawDescGZIP(), []int{6}
 }
 
 type ListSharesOnRecordRequest struct {
@@ -372,7 +461,7 @@ type ListSharesOnRecordRequest struct {
 
 func (x *ListSharesOnRecordRequest) Reset() {
 	*x = ListSharesOnRecordRequest{}
-	mi := &file_anubis_v1_share_proto_msgTypes[5]
+	mi := &file_anubis_v1_share_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -384,7 +473,7 @@ func (x *ListSharesOnRecordRequest) String() string {
 func (*ListSharesOnRecordRequest) ProtoMessage() {}
 
 func (x *ListSharesOnRecordRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_share_proto_msgTypes[5]
+	mi := &file_anubis_v1_share_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -397,7 +486,7 @@ func (x *ListSharesOnRecordRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSharesOnRecordRequest.ProtoReflect.Descriptor instead.
 func (*ListSharesOnRecordRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_share_proto_rawDescGZIP(), []int{5}
+	return file_anubis_v1_share_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *ListSharesOnRecordRequest) GetRecordKind() string {
@@ -430,7 +519,7 @@ type ListSharesOnRecordResponse struct {
 
 func (x *ListSharesOnRecordResponse) Reset() {
 	*x = ListSharesOnRecordResponse{}
-	mi := &file_anubis_v1_share_proto_msgTypes[6]
+	mi := &file_anubis_v1_share_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -442,7 +531,7 @@ func (x *ListSharesOnRecordResponse) String() string {
 func (*ListSharesOnRecordResponse) ProtoMessage() {}
 
 func (x *ListSharesOnRecordResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_share_proto_msgTypes[6]
+	mi := &file_anubis_v1_share_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -455,7 +544,7 @@ func (x *ListSharesOnRecordResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSharesOnRecordResponse.ProtoReflect.Descriptor instead.
 func (*ListSharesOnRecordResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_share_proto_rawDescGZIP(), []int{6}
+	return file_anubis_v1_share_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *ListSharesOnRecordResponse) GetShares() []*RecordShare {
@@ -473,7 +562,7 @@ type ListSharedWithMeRequest struct {
 
 func (x *ListSharedWithMeRequest) Reset() {
 	*x = ListSharedWithMeRequest{}
-	mi := &file_anubis_v1_share_proto_msgTypes[7]
+	mi := &file_anubis_v1_share_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -485,7 +574,7 @@ func (x *ListSharedWithMeRequest) String() string {
 func (*ListSharedWithMeRequest) ProtoMessage() {}
 
 func (x *ListSharedWithMeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_share_proto_msgTypes[7]
+	mi := &file_anubis_v1_share_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -498,7 +587,7 @@ func (x *ListSharedWithMeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSharedWithMeRequest.ProtoReflect.Descriptor instead.
 func (*ListSharedWithMeRequest) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_share_proto_rawDescGZIP(), []int{7}
+	return file_anubis_v1_share_proto_rawDescGZIP(), []int{9}
 }
 
 type ListSharedWithMeResponse struct {
@@ -510,7 +599,7 @@ type ListSharedWithMeResponse struct {
 
 func (x *ListSharedWithMeResponse) Reset() {
 	*x = ListSharedWithMeResponse{}
-	mi := &file_anubis_v1_share_proto_msgTypes[8]
+	mi := &file_anubis_v1_share_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -522,7 +611,7 @@ func (x *ListSharedWithMeResponse) String() string {
 func (*ListSharedWithMeResponse) ProtoMessage() {}
 
 func (x *ListSharedWithMeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_anubis_v1_share_proto_msgTypes[8]
+	mi := &file_anubis_v1_share_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -535,7 +624,7 @@ func (x *ListSharedWithMeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListSharedWithMeResponse.ProtoReflect.Descriptor instead.
 func (*ListSharedWithMeResponse) Descriptor() ([]byte, []int) {
-	return file_anubis_v1_share_proto_rawDescGZIP(), []int{8}
+	return file_anubis_v1_share_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *ListSharedWithMeResponse) GetShares() []*RecordShare {
@@ -549,7 +638,12 @@ var File_anubis_v1_share_proto protoreflect.FileDescriptor
 
 const file_anubis_v1_share_proto_rawDesc = "" +
 	"\n" +
-	"\x15anubis/v1/share.proto\x12\tanubis.v1\"\xb3\x03\n" +
+	"\x15anubis/v1/share.proto\x12\tanubis.v1\"4\n" +
+	"\x17CreateAccessLinkRequest\x12\x19\n" +
+	"\bshare_id\x18\x01 \x01(\tR\ashareId\"9\n" +
+	"\x18CreateAccessLinkResponse\x12\x1d\n" +
+	"\n" +
+	"link_token\x18\x01 \x01(\tR\tlinkToken\"\xb3\x03\n" +
 	"\vRecordShare\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1f\n" +
 	"\vrecord_kind\x18\x02 \x01(\tR\n" +
@@ -602,12 +696,13 @@ const file_anubis_v1_share_proto_rawDesc = "" +
 	"\x06shares\x18\x01 \x03(\v2\x16.anubis.v1.RecordShareR\x06shares\"\x19\n" +
 	"\x17ListSharedWithMeRequest\"J\n" +
 	"\x18ListSharedWithMeResponse\x12.\n" +
-	"\x06shares\x18\x01 \x03(\v2\x16.anubis.v1.RecordShareR\x06shares2\xcc\x02\n" +
+	"\x06shares\x18\x01 \x03(\v2\x16.anubis.v1.RecordShareR\x06shares2\xa9\x03\n" +
 	"\fShareService\x12:\n" +
 	"\x05Share\x12\x17.anubis.v1.ShareRequest\x1a\x18.anubis.v1.ShareResponse\x12@\n" +
 	"\aUnshare\x12\x19.anubis.v1.UnshareRequest\x1a\x1a.anubis.v1.UnshareResponse\x12a\n" +
 	"\x12ListSharesOnRecord\x12$.anubis.v1.ListSharesOnRecordRequest\x1a%.anubis.v1.ListSharesOnRecordResponse\x12[\n" +
-	"\x10ListSharedWithMe\x12\".anubis.v1.ListSharedWithMeRequest\x1a#.anubis.v1.ListSharedWithMeResponseB6Z4github.com/gsoultan/anubis/gen/go/anubis/v1;anubisv1b\x06proto3"
+	"\x10ListSharedWithMe\x12\".anubis.v1.ListSharedWithMeRequest\x1a#.anubis.v1.ListSharedWithMeResponse\x12[\n" +
+	"\x10CreateAccessLink\x12\".anubis.v1.CreateAccessLinkRequest\x1a#.anubis.v1.CreateAccessLinkResponseB6Z4github.com/gsoultan/anubis/gen/go/anubis/v1;anubisv1b\x06proto3"
 
 var (
 	file_anubis_v1_share_proto_rawDescOnce sync.Once
@@ -621,38 +716,42 @@ func file_anubis_v1_share_proto_rawDescGZIP() []byte {
 	return file_anubis_v1_share_proto_rawDescData
 }
 
-var file_anubis_v1_share_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
+var file_anubis_v1_share_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
 var file_anubis_v1_share_proto_goTypes = []any{
-	(*RecordShare)(nil),                // 0: anubis.v1.RecordShare
-	(*ShareRequest)(nil),               // 1: anubis.v1.ShareRequest
-	(*ShareResponse)(nil),              // 2: anubis.v1.ShareResponse
-	(*UnshareRequest)(nil),             // 3: anubis.v1.UnshareRequest
-	(*UnshareResponse)(nil),            // 4: anubis.v1.UnshareResponse
-	(*ListSharesOnRecordRequest)(nil),  // 5: anubis.v1.ListSharesOnRecordRequest
-	(*ListSharesOnRecordResponse)(nil), // 6: anubis.v1.ListSharesOnRecordResponse
-	(*ListSharedWithMeRequest)(nil),    // 7: anubis.v1.ListSharedWithMeRequest
-	(*ListSharedWithMeResponse)(nil),   // 8: anubis.v1.ListSharedWithMeResponse
-	nil,                                // 9: anubis.v1.RecordShare.RecordScopesEntry
-	nil,                                // 10: anubis.v1.ShareRequest.RecordScopesEntry
-	nil,                                // 11: anubis.v1.ListSharesOnRecordRequest.RecordScopesEntry
+	(*CreateAccessLinkRequest)(nil),    // 0: anubis.v1.CreateAccessLinkRequest
+	(*CreateAccessLinkResponse)(nil),   // 1: anubis.v1.CreateAccessLinkResponse
+	(*RecordShare)(nil),                // 2: anubis.v1.RecordShare
+	(*ShareRequest)(nil),               // 3: anubis.v1.ShareRequest
+	(*ShareResponse)(nil),              // 4: anubis.v1.ShareResponse
+	(*UnshareRequest)(nil),             // 5: anubis.v1.UnshareRequest
+	(*UnshareResponse)(nil),            // 6: anubis.v1.UnshareResponse
+	(*ListSharesOnRecordRequest)(nil),  // 7: anubis.v1.ListSharesOnRecordRequest
+	(*ListSharesOnRecordResponse)(nil), // 8: anubis.v1.ListSharesOnRecordResponse
+	(*ListSharedWithMeRequest)(nil),    // 9: anubis.v1.ListSharedWithMeRequest
+	(*ListSharedWithMeResponse)(nil),   // 10: anubis.v1.ListSharedWithMeResponse
+	nil,                                // 11: anubis.v1.RecordShare.RecordScopesEntry
+	nil,                                // 12: anubis.v1.ShareRequest.RecordScopesEntry
+	nil,                                // 13: anubis.v1.ListSharesOnRecordRequest.RecordScopesEntry
 }
 var file_anubis_v1_share_proto_depIdxs = []int32{
-	9,  // 0: anubis.v1.RecordShare.record_scopes:type_name -> anubis.v1.RecordShare.RecordScopesEntry
-	10, // 1: anubis.v1.ShareRequest.record_scopes:type_name -> anubis.v1.ShareRequest.RecordScopesEntry
-	0,  // 2: anubis.v1.ShareResponse.share:type_name -> anubis.v1.RecordShare
-	11, // 3: anubis.v1.ListSharesOnRecordRequest.record_scopes:type_name -> anubis.v1.ListSharesOnRecordRequest.RecordScopesEntry
-	0,  // 4: anubis.v1.ListSharesOnRecordResponse.shares:type_name -> anubis.v1.RecordShare
-	0,  // 5: anubis.v1.ListSharedWithMeResponse.shares:type_name -> anubis.v1.RecordShare
-	1,  // 6: anubis.v1.ShareService.Share:input_type -> anubis.v1.ShareRequest
-	3,  // 7: anubis.v1.ShareService.Unshare:input_type -> anubis.v1.UnshareRequest
-	5,  // 8: anubis.v1.ShareService.ListSharesOnRecord:input_type -> anubis.v1.ListSharesOnRecordRequest
-	7,  // 9: anubis.v1.ShareService.ListSharedWithMe:input_type -> anubis.v1.ListSharedWithMeRequest
-	2,  // 10: anubis.v1.ShareService.Share:output_type -> anubis.v1.ShareResponse
-	4,  // 11: anubis.v1.ShareService.Unshare:output_type -> anubis.v1.UnshareResponse
-	6,  // 12: anubis.v1.ShareService.ListSharesOnRecord:output_type -> anubis.v1.ListSharesOnRecordResponse
-	8,  // 13: anubis.v1.ShareService.ListSharedWithMe:output_type -> anubis.v1.ListSharedWithMeResponse
-	10, // [10:14] is the sub-list for method output_type
-	6,  // [6:10] is the sub-list for method input_type
+	11, // 0: anubis.v1.RecordShare.record_scopes:type_name -> anubis.v1.RecordShare.RecordScopesEntry
+	12, // 1: anubis.v1.ShareRequest.record_scopes:type_name -> anubis.v1.ShareRequest.RecordScopesEntry
+	2,  // 2: anubis.v1.ShareResponse.share:type_name -> anubis.v1.RecordShare
+	13, // 3: anubis.v1.ListSharesOnRecordRequest.record_scopes:type_name -> anubis.v1.ListSharesOnRecordRequest.RecordScopesEntry
+	2,  // 4: anubis.v1.ListSharesOnRecordResponse.shares:type_name -> anubis.v1.RecordShare
+	2,  // 5: anubis.v1.ListSharedWithMeResponse.shares:type_name -> anubis.v1.RecordShare
+	3,  // 6: anubis.v1.ShareService.Share:input_type -> anubis.v1.ShareRequest
+	5,  // 7: anubis.v1.ShareService.Unshare:input_type -> anubis.v1.UnshareRequest
+	7,  // 8: anubis.v1.ShareService.ListSharesOnRecord:input_type -> anubis.v1.ListSharesOnRecordRequest
+	9,  // 9: anubis.v1.ShareService.ListSharedWithMe:input_type -> anubis.v1.ListSharedWithMeRequest
+	0,  // 10: anubis.v1.ShareService.CreateAccessLink:input_type -> anubis.v1.CreateAccessLinkRequest
+	4,  // 11: anubis.v1.ShareService.Share:output_type -> anubis.v1.ShareResponse
+	6,  // 12: anubis.v1.ShareService.Unshare:output_type -> anubis.v1.UnshareResponse
+	8,  // 13: anubis.v1.ShareService.ListSharesOnRecord:output_type -> anubis.v1.ListSharesOnRecordResponse
+	10, // 14: anubis.v1.ShareService.ListSharedWithMe:output_type -> anubis.v1.ListSharedWithMeResponse
+	1,  // 15: anubis.v1.ShareService.CreateAccessLink:output_type -> anubis.v1.CreateAccessLinkResponse
+	11, // [11:16] is the sub-list for method output_type
+	6,  // [6:11] is the sub-list for method input_type
 	6,  // [6:6] is the sub-list for extension type_name
 	6,  // [6:6] is the sub-list for extension extendee
 	0,  // [0:6] is the sub-list for field type_name
@@ -669,7 +768,7 @@ func file_anubis_v1_share_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_anubis_v1_share_proto_rawDesc), len(file_anubis_v1_share_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   12,
+			NumMessages:   14,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -11,6 +11,7 @@ import (
 	authzport "github.com/gsoultan/anubis/internal/authz/port"
 	authzshareport "github.com/gsoultan/anubis/internal/authz/port/share"
 	identityport "github.com/gsoultan/anubis/internal/identity/port"
+	"github.com/gsoultan/anubis/internal/platform/crypto/secret"
 	"github.com/gsoultan/anubis/internal/shared/apperr"
 	"github.com/gsoultan/anubis/internal/shared/authctx"
 	"github.com/gsoultan/anubis/internal/shared/clock"
@@ -151,6 +152,47 @@ func (u *shareInteractor) Unshare(ctx context.Context, shareID, reason string) e
 		"share_id": sh.ID, "record": sh.Record, "reason": strings.TrimSpace(reason),
 	})
 	return nil
+}
+
+// LinkPrefix is the auth context's accesslink.LinkPrefix, repeated here
+// rather than imported: authz must not depend on auth's application layer.
+const LinkPrefix = "anb_lk_"
+
+func (u *shareInteractor) CreateAccessLink(ctx context.Context, shareID string) (string, error) {
+	p, err := person(ctx)
+	if err != nil {
+		return "", err
+	}
+	sh, err := u.shares.Share(ctx, p.TenantID, shareID)
+	if err != nil {
+		return "", apperr.ErrNotFound
+	}
+	if !sh.Live(u.clock.Now()) {
+		return "", apperr.ErrInvalidArgument.With("share", "ended")
+	}
+	if sh.FromIdentityID != p.IdentityID {
+		if ok, err := u.holdsAll(ctx, p, sh); err != nil {
+			return "", err
+		} else if !ok {
+			return "", apperr.ErrPermissionDenied.With("hint", "only the sharer, or somebody who holds everything it gives, may make a link")
+		}
+	}
+	raw, err := secret.New(32)
+	if err != nil {
+		return "", apperr.ErrInternal.Wrap(err)
+	}
+	token := LinkPrefix + raw
+	ok, err := u.shares.SetShareLink(ctx, p.TenantID, sh.ID, secret.Hash(token))
+	if err != nil {
+		return "", err
+	}
+	if !ok {
+		return "", apperr.ErrInvalidArgument.With("share", "ended")
+	}
+	u.emit(ctx, p, "share.link_create", sh.ToIdentityID, "allow", map[string]string{
+		"share_id": sh.ID, "record": sh.Record,
+	})
+	return token, nil
 }
 
 func (u *shareInteractor) SharesOnRecord(ctx context.Context, kind, ref string, scopes map[string]string) ([]share.Share, error) {

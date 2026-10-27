@@ -41,6 +41,22 @@ const FirstPartyAudience = "anubis"
 // application does with a token it was handed. An application acting on such a
 // surface with a user's token is how a relying party turns "sign in" into
 // standing control of the account.
+// LinkBound reports a principal that arrived through an access link: a
+// token minted for one record, not a sign-in. Such a token authorises
+// nothing beyond the record it names — the decision endpoint refuses any
+// other target, and the gate refuses it outright.
+func (p *Principal) LinkBound() bool {
+	for _, m := range p.AMR {
+		if m == "link" {
+			return true
+		}
+	}
+	return false
+}
+
+// LinkRecord is the record an access-link token is bound to.
+func (p *Principal) LinkRecord() string { return p.Scopes["_record"] }
+
 func (p *Principal) FirstParty() bool {
 	for _, a := range p.Audience {
 		if a == FirstPartyAudience {

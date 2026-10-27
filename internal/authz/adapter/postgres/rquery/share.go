@@ -58,3 +58,19 @@ var RevokeShare = storm.SQLExec(`
 UPDATE record_shares
    SET revoked_at = now(), revoke_reason = nullif($3, '')
  WHERE id = $1 AND tenant_id = $2 AND revoked_at IS NULL`)
+
+// SetShareLink installs (or replaces) the access link on a live share.
+// Replacing resets the open count: the previous link is dead from here.
+var SetShareLink = storm.SQLExec(`
+UPDATE record_shares
+   SET link_hash = $3, link_opened = 0, link_last_opened_at = NULL
+ WHERE id = $1 AND tenant_id = $2 AND revoked_at IS NULL AND valid_until > now()`)
+
+// ShareByLinkHash finds the live share behind a presented link.
+var ShareByLinkHash = storm.SQL[ShareRow](shareColumns + `
+WHERE s.link_hash = $1 AND s.revoked_at IS NULL AND s.valid_until > now()`)
+
+var TouchShareLink = storm.SQLExec(`
+UPDATE record_shares
+   SET link_opened = link_opened + 1, link_last_opened_at = now()
+ WHERE id = $1`)

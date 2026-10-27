@@ -57,5 +57,6 @@ func Queries() []storm.RawDecl {
 		StartCatalogRun, FinishCatalogRun, ListCatalogRuns, LastAppliedDigest,
 		// share.go
 		CreateShare, GetShare, ListSharesOnRecord, ListSharesForRecipient, RevokeShare,
+		SetShareLink, ShareByLinkHash, TouchShareLink,
 	}
 }

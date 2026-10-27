@@ -248,6 +248,12 @@ body{padding:0;align-content:stretch;justify-items:stretch}
     {{end}}
     {{if $.Error}}<div class="err">{{$.Error}}</div>{{end}}
     <button type="submit">{{$.Cfg.Copy.SubmitLabel}}</button>
+    {{if $.EmailLink}}
+    {{/* A second submit on the SAME form: the username and the flow fields
+         travel with it, the password is not required for it, and the
+         one-time link that comes back finishes this very flow. */}}
+    <button type="submit" formaction="/v1/login/email" formnovalidate class="secondary">Email me a sign-in link</button>
+    {{end}}
     {{if $.ResetURL}}<p class="links"><a href="{{$.ResetURL}}">Forgot your password?</a></p>{{end}}
     {{end}}
     {{end}}

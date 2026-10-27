@@ -16,4 +16,10 @@ type ShareRepository interface {
 	// RevokeShare reports whether this call revoked it; false means it was
 	// already revoked, which the caller treats as done.
 	RevokeShare(ctx context.Context, tenantID, id, reason string) (bool, error)
+	// SetShareLink installs or replaces the access link on a live share;
+	// false means the share is not live.
+	SetShareLink(ctx context.Context, tenantID, id string, hash []byte) (bool, error)
+	// ShareByLinkHash is the live share behind a presented link, or not found.
+	ShareByLinkHash(ctx context.Context, hash []byte) (*share.Share, error)
+	TouchShareLink(ctx context.Context, id string)
 }

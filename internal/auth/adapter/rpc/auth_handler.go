@@ -9,6 +9,7 @@ import (
 	"github.com/gsoultan/anubis/gen/go/anubis/v1/anubisv1connect"
 	apiconnect "github.com/gsoultan/anubis/internal/api/connect"
 	authapp "github.com/gsoultan/anubis/internal/auth/app"
+	"github.com/gsoultan/anubis/internal/auth/app/accesslink"
 	"github.com/gsoultan/anubis/internal/auth/app/clientcreds"
 	"github.com/gsoultan/anubis/internal/auth/app/device"
 	"github.com/gsoultan/anubis/internal/auth/app/enroll"
@@ -202,6 +203,18 @@ func (h *AuthHandler) ChangePassword(ctx context.Context, req *connect.Request[a
 		return nil, apiconnect.Err(ctx, err)
 	}
 	return connect.NewResponse(&anubisv1.ChangePasswordResponse{}), nil
+}
+
+func (h *AuthHandler) OpenAccessLink(ctx context.Context, req *connect.Request[anubisv1.OpenAccessLinkRequest]) (*connect.Response[anubisv1.OpenAccessLinkResponse], error) {
+	out, err := h.eps.OpenAccessLink(ctx, authep.WrapOpenAccessLink(accesslink.OpenInput{
+		Tenant: req.Msg.Tenant, ClientID: req.Msg.ClientId, Token: req.Msg.LinkToken,
+	}))
+	if err != nil {
+		return nil, apiconnect.Err(ctx, err)
+	}
+	return connect.NewResponse(&anubisv1.OpenAccessLinkResponse{
+		Tokens: TokenPairProto(out.(*authapp.TokenPair)),
+	}), nil
 }
 
 func (h *AuthHandler) BeginTotpEnrollment(ctx context.Context, req *connect.Request[anubisv1.BeginTotpEnrollmentRequest]) (*connect.Response[anubisv1.BeginTotpEnrollmentResponse], error) {

@@ -31,4 +31,10 @@ type ShareUsecase interface {
 	SharesOnRecord(ctx context.Context, kind, ref string, scopes map[string]string) ([]share.Share, error)
 	// SharedWithMe lists live shares to the caller.
 	SharedWithMe(ctx context.Context) ([]share.Share, error)
+	// CreateAccessLink mints the link a recipient with no password opens
+	// the record with (AuthService/OpenAccessLink). Returned once; making
+	// another replaces it. The sharer may; so may anybody who could end
+	// the share. Anubis mails nothing — the application owns the record's
+	// URL and the message, and puts the token where it belongs.
+	CreateAccessLink(ctx context.Context, shareID string) (string, error)
 }

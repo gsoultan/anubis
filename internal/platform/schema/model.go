@@ -594,6 +594,12 @@ type RecordShare struct {
 	PermissionKeys []string
 	Note           string
 	RevokeReason   *string
+	// LinkHash is the access link, hashed: the one way a recipient with no
+	// password reaches the record. NULL until the sharer asks for a link;
+	// replaced, never appended, so the previous link stops working.
+	LinkHash         []byte
+	LinkOpened       int32
+	LinkLastOpenedAt *time.Time
 }
 
 func (m *RecordShare) Schema(t *storm.Table) {
@@ -613,6 +619,8 @@ func (m *RecordShare) Schema(t *storm.Table) {
 	t.Index(&m.Tenant, &m.ToIdentityID, &m.Record).Where("revoked_at IS NULL").Named("record_shares_recipient_live")
 	t.Index(&m.Tenant, &m.Record).Where("revoked_at IS NULL").Named("record_shares_record_live")
 	t.Index(&m.ValidUntil).Where("revoked_at IS NULL").Named("record_shares_expiring")
+	t.Col(&m.LinkOpened).Default("0")
+	t.Index(&m.LinkHash).Unique().Where("link_hash IS NOT NULL").Named("record_shares_link")
 	t.ForeignKey(&m.FromIdentityID, &m.Tenant).References(&ident, &ident.ID, &ident.Tenant).Named("record_shares_from_identity_id_tenant_id_fkey").OnDelete(storm.Cascade)
 	t.ForeignKey(&m.ToIdentityID, &m.Tenant).References(&ident, &ident.ID, &ident.Tenant).Named("record_shares_to_identity_id_tenant_id_fkey").OnDelete(storm.Cascade)
 }
@@ -873,7 +881,7 @@ func (m *OneTimeToken) Schema(t *storm.Table) {
 	t.Col(&m.TokenHash).NotNull()
 	t.Col(&m.Payload).Default("'{}'::jsonb")
 	t.UniqueNamed("one_time_tokens_token_hash_key", &m.TokenHash)
-	t.CheckNamed("one_time_tokens_kind_check", "kind = ANY (ARRAY['mfa'::text, 'browser_mfa'::text, 'browser_enrol'::text, 'auth_code'::text, 'device_challenge'::text, 'email_verify'::text, 'password_reset'::text])")
+	t.CheckNamed("one_time_tokens_kind_check", "kind = ANY (ARRAY['mfa'::text, 'browser_mfa'::text, 'browser_enrol'::text, 'auth_code'::text, 'device_challenge'::text, 'email_verify'::text, 'password_reset'::text, 'email_login'::text])")
 	t.Index(&m.ExpiresAt).Named("one_time_tokens_expiry")
 }
 

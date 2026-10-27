@@ -521,6 +521,13 @@ SELECT s.id::text AS id, s.tenant_id::text AS tenant_id,
        s.record, s.record_scopes, s.permission_keys, s.note,
        s.created_at, s.valid_until, s.revoked_at, s.revoke_reason
 FROM record_shares s
+WHERE s.link_hash = $1 AND s.revoked_at IS NULL AND s.valid_until > now()`)
+	storm.RegisterStatement(`
+SELECT s.id::text AS id, s.tenant_id::text AS tenant_id,
+       s.from_identity_id::text AS from_identity_id, s.to_identity_id::text AS to_identity_id,
+       s.record, s.record_scopes, s.permission_keys, s.note,
+       s.created_at, s.valid_until, s.revoked_at, s.revoke_reason
+FROM record_shares s
 WHERE s.tenant_id = $1 AND s.record = $2 AND s.revoked_at IS NULL AND s.valid_until > now()
 ORDER BY s.created_at DESC`)
 	storm.RegisterStatement(`
@@ -597,6 +604,14 @@ WHERE application_id = $1
   -- the only reason this has never bitten.
   AND NOT (id = ANY(COALESCE($2::uuid[], '{}')))
 RETURNING key`)
+	storm.RegisterStatement(`
+UPDATE record_shares
+   SET link_hash = $3, link_opened = 0, link_last_opened_at = NULL
+ WHERE id = $1 AND tenant_id = $2 AND revoked_at IS NULL AND valid_until > now()`)
+	storm.RegisterStatement(`
+UPDATE record_shares
+   SET link_opened = link_opened + 1, link_last_opened_at = now()
+ WHERE id = $1`)
 	storm.RegisterStatement(`
 UPDATE record_shares
    SET revoked_at = now(), revoke_reason = nullif($3, '')

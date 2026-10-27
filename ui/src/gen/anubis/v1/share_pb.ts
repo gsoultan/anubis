@@ -10,7 +10,43 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file anubis/v1/share.proto.
  */
 export const file_anubis_v1_share: GenFile = /*@__PURE__*/
-  fileDesc("ChVhbnViaXMvdjEvc2hhcmUucHJvdG8SCWFudWJpcy52MSK2AgoLUmVjb3JkU2hhcmUSCgoCaWQYASABKAkSEwoLcmVjb3JkX2tpbmQYAiABKAkSEgoKcmVjb3JkX3JlZhgDIAEoCRIYChBmcm9tX2lkZW50aXR5X2lkGAQgASgJEhYKDnRvX2lkZW50aXR5X2lkGAUgASgJEhMKC3Blcm1pc3Npb25zGAYgAygJEgwKBG5vdGUYByABKAkSEgoKY3JlYXRlZF9hdBgIIAEoAxITCgt2YWxpZF91bnRpbBgJIAEoAxI/Cg1yZWNvcmRfc2NvcGVzGAogAygLMiguYW51YmlzLnYxLlJlY29yZFNoYXJlLlJlY29yZFNjb3Blc0VudHJ5GjMKEVJlY29yZFNjb3Blc0VudHJ5EgsKA2tleRgBIAEoCRINCgV2YWx1ZRgCIAEoCToCOAEi/gEKDFNoYXJlUmVxdWVzdBITCgtyZWNvcmRfa2luZBgBIAEoCRISCgpyZWNvcmRfcmVmGAIgASgJEkAKDXJlY29yZF9zY29wZXMYAyADKAsyKS5hbnViaXMudjEuU2hhcmVSZXF1ZXN0LlJlY29yZFNjb3Blc0VudHJ5EhYKDnRvX2lkZW50aXR5X2lkGAQgASgJEhMKC3Blcm1pc3Npb25zGAUgAygJEhMKC3ZhbGlkX3VudGlsGAYgASgDEgwKBG5vdGUYByABKAkaMwoRUmVjb3JkU2NvcGVzRW50cnkSCwoDa2V5GAEgASgJEg0KBXZhbHVlGAIgASgJOgI4ASI2Cg1TaGFyZVJlc3BvbnNlEiUKBXNoYXJlGAEgASgLMhYuYW51YmlzLnYxLlJlY29yZFNoYXJlIjIKDlVuc2hhcmVSZXF1ZXN0EhAKCHNoYXJlX2lkGAEgASgJEg4KBnJlYXNvbhgCIAEoCSIRCg9VbnNoYXJlUmVzcG9uc2UiyAEKGUxpc3RTaGFyZXNPblJlY29yZFJlcXVlc3QSEwoLcmVjb3JkX2tpbmQYASABKAkSEgoKcmVjb3JkX3JlZhgCIAEoCRJNCg1yZWNvcmRfc2NvcGVzGAMgAygLMjYuYW51YmlzLnYxLkxpc3RTaGFyZXNPblJlY29yZFJlcXVlc3QuUmVjb3JkU2NvcGVzRW50cnkaMwoRUmVjb3JkU2NvcGVzRW50cnkSCwoDa2V5GAEgASgJEg0KBXZhbHVlGAIgASgJOgI4ASJEChpMaXN0U2hhcmVzT25SZWNvcmRSZXNwb25zZRImCgZzaGFyZXMYASADKAsyFi5hbnViaXMudjEuUmVjb3JkU2hhcmUiGQoXTGlzdFNoYXJlZFdpdGhNZVJlcXVlc3QiQgoYTGlzdFNoYXJlZFdpdGhNZVJlc3BvbnNlEiYKBnNoYXJlcxgBIAMoCzIWLmFudWJpcy52MS5SZWNvcmRTaGFyZTLMAgoMU2hhcmVTZXJ2aWNlEjoKBVNoYXJlEhcuYW51YmlzLnYxLlNoYXJlUmVxdWVzdBoYLmFudWJpcy52MS5TaGFyZVJlc3BvbnNlEkAKB1Vuc2hhcmUSGS5hbnViaXMudjEuVW5zaGFyZVJlcXVlc3QaGi5hbnViaXMudjEuVW5zaGFyZVJlc3BvbnNlEmEKEkxpc3RTaGFyZXNPblJlY29yZBIkLmFudWJpcy52MS5MaXN0U2hhcmVzT25SZWNvcmRSZXF1ZXN0GiUuYW51YmlzLnYxLkxpc3RTaGFyZXNPblJlY29yZFJlc3BvbnNlElsKEExpc3RTaGFyZWRXaXRoTWUSIi5hbnViaXMudjEuTGlzdFNoYXJlZFdpdGhNZVJlcXVlc3QaIy5hbnViaXMudjEuTGlzdFNoYXJlZFdpdGhNZVJlc3BvbnNlQjZaNGdpdGh1Yi5jb20vZ3NvdWx0YW4vYW51YmlzL2dlbi9nby9hbnViaXMvdjE7YW51YmlzdjFiBnByb3RvMw");
+  fileDesc("ChVhbnViaXMvdjEvc2hhcmUucHJvdG8SCWFudWJpcy52MSIrChdDcmVhdGVBY2Nlc3NMaW5rUmVxdWVzdBIQCghzaGFyZV9pZBgBIAEoCSIuChhDcmVhdGVBY2Nlc3NMaW5rUmVzcG9uc2USEgoKbGlua190b2tlbhgBIAEoCSK2AgoLUmVjb3JkU2hhcmUSCgoCaWQYASABKAkSEwoLcmVjb3JkX2tpbmQYAiABKAkSEgoKcmVjb3JkX3JlZhgDIAEoCRIYChBmcm9tX2lkZW50aXR5X2lkGAQgASgJEhYKDnRvX2lkZW50aXR5X2lkGAUgASgJEhMKC3Blcm1pc3Npb25zGAYgAygJEgwKBG5vdGUYByABKAkSEgoKY3JlYXRlZF9hdBgIIAEoAxITCgt2YWxpZF91bnRpbBgJIAEoAxI/Cg1yZWNvcmRfc2NvcGVzGAogAygLMiguYW51YmlzLnYxLlJlY29yZFNoYXJlLlJlY29yZFNjb3Blc0VudHJ5GjMKEVJlY29yZFNjb3Blc0VudHJ5EgsKA2tleRgBIAEoCRINCgV2YWx1ZRgCIAEoCToCOAEi/gEKDFNoYXJlUmVxdWVzdBITCgtyZWNvcmRfa2luZBgBIAEoCRISCgpyZWNvcmRfcmVmGAIgASgJEkAKDXJlY29yZF9zY29wZXMYAyADKAsyKS5hbnViaXMudjEuU2hhcmVSZXF1ZXN0LlJlY29yZFNjb3Blc0VudHJ5EhYKDnRvX2lkZW50aXR5X2lkGAQgASgJEhMKC3Blcm1pc3Npb25zGAUgAygJEhMKC3ZhbGlkX3VudGlsGAYgASgDEgwKBG5vdGUYByABKAkaMwoRUmVjb3JkU2NvcGVzRW50cnkSCwoDa2V5GAEgASgJEg0KBXZhbHVlGAIgASgJOgI4ASI2Cg1TaGFyZVJlc3BvbnNlEiUKBXNoYXJlGAEgASgLMhYuYW51YmlzLnYxLlJlY29yZFNoYXJlIjIKDlVuc2hhcmVSZXF1ZXN0EhAKCHNoYXJlX2lkGAEgASgJEg4KBnJlYXNvbhgCIAEoCSIRCg9VbnNoYXJlUmVzcG9uc2UiyAEKGUxpc3RTaGFyZXNPblJlY29yZFJlcXVlc3QSEwoLcmVjb3JkX2tpbmQYASABKAkSEgoKcmVjb3JkX3JlZhgCIAEoCRJNCg1yZWNvcmRfc2NvcGVzGAMgAygLMjYuYW51YmlzLnYxLkxpc3RTaGFyZXNPblJlY29yZFJlcXVlc3QuUmVjb3JkU2NvcGVzRW50cnkaMwoRUmVjb3JkU2NvcGVzRW50cnkSCwoDa2V5GAEgASgJEg0KBXZhbHVlGAIgASgJOgI4ASJEChpMaXN0U2hhcmVzT25SZWNvcmRSZXNwb25zZRImCgZzaGFyZXMYASADKAsyFi5hbnViaXMudjEuUmVjb3JkU2hhcmUiGQoXTGlzdFNoYXJlZFdpdGhNZVJlcXVlc3QiQgoYTGlzdFNoYXJlZFdpdGhNZVJlc3BvbnNlEiYKBnNoYXJlcxgBIAMoCzIWLmFudWJpcy52MS5SZWNvcmRTaGFyZTKpAwoMU2hhcmVTZXJ2aWNlEjoKBVNoYXJlEhcuYW51YmlzLnYxLlNoYXJlUmVxdWVzdBoYLmFudWJpcy52MS5TaGFyZVJlc3BvbnNlEkAKB1Vuc2hhcmUSGS5hbnViaXMudjEuVW5zaGFyZVJlcXVlc3QaGi5hbnViaXMudjEuVW5zaGFyZVJlc3BvbnNlEmEKEkxpc3RTaGFyZXNPblJlY29yZBIkLmFudWJpcy52MS5MaXN0U2hhcmVzT25SZWNvcmRSZXF1ZXN0GiUuYW51YmlzLnYxLkxpc3RTaGFyZXNPblJlY29yZFJlc3BvbnNlElsKEExpc3RTaGFyZWRXaXRoTWUSIi5hbnViaXMudjEuTGlzdFNoYXJlZFdpdGhNZVJlcXVlc3QaIy5hbnViaXMudjEuTGlzdFNoYXJlZFdpdGhNZVJlc3BvbnNlElsKEENyZWF0ZUFjY2Vzc0xpbmsSIi5hbnViaXMudjEuQ3JlYXRlQWNjZXNzTGlua1JlcXVlc3QaIy5hbnViaXMudjEuQ3JlYXRlQWNjZXNzTGlua1Jlc3BvbnNlQjZaNGdpdGh1Yi5jb20vZ3NvdWx0YW4vYW51YmlzL2dlbi9nby9hbnViaXMvdjE7YW51YmlzdjFiBnByb3RvMw");
+
+/**
+ * @generated from message anubis.v1.CreateAccessLinkRequest
+ */
+export type CreateAccessLinkRequest = Message<"anubis.v1.CreateAccessLinkRequest"> & {
+  /**
+   * @generated from field: string share_id = 1;
+   */
+  shareId: string;
+};
+
+/**
+ * Describes the message anubis.v1.CreateAccessLinkRequest.
+ * Use `create(CreateAccessLinkRequestSchema)` to create a new message.
+ */
+export const CreateAccessLinkRequestSchema: GenMessage<CreateAccessLinkRequest> = /*@__PURE__*/
+  messageDesc(file_anubis_v1_share, 0);
+
+/**
+ * @generated from message anubis.v1.CreateAccessLinkResponse
+ */
+export type CreateAccessLinkResponse = Message<"anubis.v1.CreateAccessLinkResponse"> & {
+  /**
+   * "anb_lk_…". Show it once; it is not stored in the clear.
+   *
+   * @generated from field: string link_token = 1;
+   */
+  linkToken: string;
+};
+
+/**
+ * Describes the message anubis.v1.CreateAccessLinkResponse.
+ * Use `create(CreateAccessLinkResponseSchema)` to create a new message.
+ */
+export const CreateAccessLinkResponseSchema: GenMessage<CreateAccessLinkResponse> = /*@__PURE__*/
+  messageDesc(file_anubis_v1_share, 1);
 
 /**
  * @generated from message anubis.v1.RecordShare
@@ -76,7 +112,7 @@ export type RecordShare = Message<"anubis.v1.RecordShare"> & {
  * Use `create(RecordShareSchema)` to create a new message.
  */
 export const RecordShareSchema: GenMessage<RecordShare> = /*@__PURE__*/
-  messageDesc(file_anubis_v1_share, 0);
+  messageDesc(file_anubis_v1_share, 2);
 
 /**
  * @generated from message anubis.v1.ShareRequest
@@ -133,7 +169,7 @@ export type ShareRequest = Message<"anubis.v1.ShareRequest"> & {
  * Use `create(ShareRequestSchema)` to create a new message.
  */
 export const ShareRequestSchema: GenMessage<ShareRequest> = /*@__PURE__*/
-  messageDesc(file_anubis_v1_share, 1);
+  messageDesc(file_anubis_v1_share, 3);
 
 /**
  * @generated from message anubis.v1.ShareResponse
@@ -150,7 +186,7 @@ export type ShareResponse = Message<"anubis.v1.ShareResponse"> & {
  * Use `create(ShareResponseSchema)` to create a new message.
  */
 export const ShareResponseSchema: GenMessage<ShareResponse> = /*@__PURE__*/
-  messageDesc(file_anubis_v1_share, 2);
+  messageDesc(file_anubis_v1_share, 4);
 
 /**
  * @generated from message anubis.v1.UnshareRequest
@@ -172,7 +208,7 @@ export type UnshareRequest = Message<"anubis.v1.UnshareRequest"> & {
  * Use `create(UnshareRequestSchema)` to create a new message.
  */
 export const UnshareRequestSchema: GenMessage<UnshareRequest> = /*@__PURE__*/
-  messageDesc(file_anubis_v1_share, 3);
+  messageDesc(file_anubis_v1_share, 5);
 
 /**
  * @generated from message anubis.v1.UnshareResponse
@@ -185,7 +221,7 @@ export type UnshareResponse = Message<"anubis.v1.UnshareResponse"> & {
  * Use `create(UnshareResponseSchema)` to create a new message.
  */
 export const UnshareResponseSchema: GenMessage<UnshareResponse> = /*@__PURE__*/
-  messageDesc(file_anubis_v1_share, 4);
+  messageDesc(file_anubis_v1_share, 6);
 
 /**
  * @generated from message anubis.v1.ListSharesOnRecordRequest
@@ -212,7 +248,7 @@ export type ListSharesOnRecordRequest = Message<"anubis.v1.ListSharesOnRecordReq
  * Use `create(ListSharesOnRecordRequestSchema)` to create a new message.
  */
 export const ListSharesOnRecordRequestSchema: GenMessage<ListSharesOnRecordRequest> = /*@__PURE__*/
-  messageDesc(file_anubis_v1_share, 5);
+  messageDesc(file_anubis_v1_share, 7);
 
 /**
  * @generated from message anubis.v1.ListSharesOnRecordResponse
@@ -229,7 +265,7 @@ export type ListSharesOnRecordResponse = Message<"anubis.v1.ListSharesOnRecordRe
  * Use `create(ListSharesOnRecordResponseSchema)` to create a new message.
  */
 export const ListSharesOnRecordResponseSchema: GenMessage<ListSharesOnRecordResponse> = /*@__PURE__*/
-  messageDesc(file_anubis_v1_share, 6);
+  messageDesc(file_anubis_v1_share, 8);
 
 /**
  * @generated from message anubis.v1.ListSharedWithMeRequest
@@ -242,7 +278,7 @@ export type ListSharedWithMeRequest = Message<"anubis.v1.ListSharedWithMeRequest
  * Use `create(ListSharedWithMeRequestSchema)` to create a new message.
  */
 export const ListSharedWithMeRequestSchema: GenMessage<ListSharedWithMeRequest> = /*@__PURE__*/
-  messageDesc(file_anubis_v1_share, 7);
+  messageDesc(file_anubis_v1_share, 9);
 
 /**
  * @generated from message anubis.v1.ListSharedWithMeResponse
@@ -259,7 +295,7 @@ export type ListSharedWithMeResponse = Message<"anubis.v1.ListSharedWithMeRespon
  * Use `create(ListSharedWithMeResponseSchema)` to create a new message.
  */
 export const ListSharedWithMeResponseSchema: GenMessage<ListSharedWithMeResponse> = /*@__PURE__*/
-  messageDesc(file_anubis_v1_share, 8);
+  messageDesc(file_anubis_v1_share, 10);
 
 /**
  * Record sharing: one person opening ONE record to another for a while, with
@@ -314,6 +350,19 @@ export const ShareService: GenService<{
     methodKind: "unary";
     input: typeof ListSharedWithMeRequestSchema;
     output: typeof ListSharedWithMeResponseSchema;
+  },
+  /**
+   * The link a recipient with no password opens the record with, returned
+   * ONCE (making another replaces it). Anubis mails nothing: the
+   * application owns the record's URL and puts the token in its own
+   * message. Exchanged for a record-bound token by AuthService/OpenAccessLink.
+   *
+   * @generated from rpc anubis.v1.ShareService.CreateAccessLink
+   */
+  createAccessLink: {
+    methodKind: "unary";
+    input: typeof CreateAccessLinkRequestSchema;
+    output: typeof CreateAccessLinkResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_anubis_v1_share, 0);

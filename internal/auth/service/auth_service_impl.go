@@ -4,6 +4,7 @@ import (
 	"context"
 
 	authapp "github.com/gsoultan/anubis/internal/auth/app"
+	"github.com/gsoultan/anubis/internal/auth/app/accesslink"
 	"github.com/gsoultan/anubis/internal/auth/app/clientcreds"
 	"github.com/gsoultan/anubis/internal/auth/app/device"
 	"github.com/gsoultan/anubis/internal/auth/app/enroll"
@@ -32,6 +33,7 @@ type authService struct {
 	// Embedded, so the three recovery calls are the interactor's own: a
 	// delegating method per call would be three places to forget one.
 	identityrecovery.RecoveryUsecase
+	accesslink.OpenUsecase
 }
 
 func NewAuthService(
@@ -48,6 +50,7 @@ func NewAuthService(
 	enrollment enroll.EnrollmentUsecase,
 	clientCreds clientcreds.ClientCredentialsUsecase,
 	recovery identityrecovery.RecoveryUsecase,
+	links accesslink.OpenUsecase,
 ) AuthService {
 	return &authService{
 		login: login, verifyMfa: verifyMfa, refresh: refresh,
@@ -55,7 +58,7 @@ func NewAuthService(
 		deviceCh: deviceCh, deviceVerify: deviceVerify,
 		register: register, verifyEmail: verifyEmail,
 		enrollment: enrollment, clientCreds: clientCreds,
-		RecoveryUsecase: recovery,
+		RecoveryUsecase: recovery, OpenUsecase: links,
 	}
 }
 

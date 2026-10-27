@@ -16,6 +16,7 @@ type ShareEndpoints struct {
 	Unshare        endpoint.Endpoint
 	SharesOnRecord endpoint.Endpoint
 	SharedWithMe   endpoint.Endpoint
+	CreateLink     endpoint.Endpoint
 }
 
 // sharesOnRecordReq carries the three arguments of one list call.
@@ -43,6 +44,9 @@ func NewShareEndpoints(svc authzsvc.ShareService, logger *slog.Logger) ShareEndp
 		}),
 		SharedWithMe: mw.Chain("share.list_mine", logger)(func(ctx context.Context, _ any) (any, error) {
 			return svc.SharedWithMe(ctx)
+		}),
+		CreateLink: mw.Chain("share.link_create", logger)(func(ctx context.Context, req any) (any, error) {
+			return svc.CreateAccessLink(ctx, req.(string))
 		}),
 	}
 }

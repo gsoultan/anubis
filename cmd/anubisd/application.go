@@ -18,8 +18,10 @@ import (
 	authpg "github.com/gsoultan/anubis/internal/auth/adapter/postgres"
 	authrpc "github.com/gsoultan/anubis/internal/auth/adapter/rpc"
 	authapp "github.com/gsoultan/anubis/internal/auth/app"
+	"github.com/gsoultan/anubis/internal/auth/app/accesslink"
 	"github.com/gsoultan/anubis/internal/auth/app/clientcreds"
 	"github.com/gsoultan/anubis/internal/auth/app/device"
+	"github.com/gsoultan/anubis/internal/auth/app/emaillink"
 	"github.com/gsoultan/anubis/internal/auth/app/enroll"
 	"github.com/gsoultan/anubis/internal/auth/app/mfa"
 	sessionapp "github.com/gsoultan/anubis/internal/auth/app/session"
@@ -33,6 +35,7 @@ import (
 	authzapp "github.com/gsoultan/anubis/internal/authz/app"
 	authzadmin "github.com/gsoultan/anubis/internal/authz/app/admin"
 	authzcatalog "github.com/gsoultan/anubis/internal/authz/app/catalog"
+	authzshare "github.com/gsoultan/anubis/internal/authz/app/share"
 	authzep "github.com/gsoultan/anubis/internal/authz/endpoint"
 	authzsvc "github.com/gsoultan/anubis/internal/authz/service"
 	controlpg "github.com/gsoultan/anubis/internal/control/adapter/postgres"
@@ -93,6 +96,7 @@ type application struct {
 	// recovery is built once and served by two doors: the AuthService RPCs
 	// and the hosted reset pages.
 	recovery  identityrecovery.RecoveryUsecase
+	emailLink emaillink.Usecase
 	snaps     *gateapp.Manager
 	masterKey []byte
 	// bootstrapTenantSlug is the FALLBACK tenant for the page URLs the console
@@ -188,6 +192,10 @@ func newApplication(ctx context.Context, cfg *config.Config, db *database.DB, lo
 	a.snaps = gateapp.NewManager(a.gate, a.gate, cfg.SnapshotMaxAge, logger)
 	a.snaps.PublishRevocationsTo(a.revocations)
 	go a.snaps.Run(ctx)
+	a.emailLink = emaillink.New(a.tenancy, a.identity, a.identity, a.auth, mailSender,
+		func(token string) string {
+			return cfg.Issuer + "/v1/login/email?" + url.Values{"token": {token}}.Encode()
+		}, a.clock, a.auditor, logger)
 	a.recovery = identityrecovery.NewRecoveryInteractor(a.tenancy, a.identity, a.identity,
 		a.identity, a.auth, a.auth, a.auth, mailSender, resetLink(cfg.Issuer),
 		a.auth, a.clock, a.auditor, logger)
@@ -258,7 +266,8 @@ func (a *application) registerRPC(rpc *http.ServeMux, opts connect.HandlerOption
 
 	authService := authsvc.NewAuthService(login, verifyMfa, refresh,
 		logout, logout.All(), logout.Session(), dev, dev.Verify(), reg, verifyEmail,
-		enrollment, clientCreds, a.recovery)
+		enrollment, clientCreds, a.recovery,
+		accesslink.NewOpenInteractor(a.issuerURL, a.ring, a.authz, a.tenancy, a.tenancy, a.identity, a.clock, a.auditor))
 	tokenService := authsvc.NewTokenService(introspect, revoke)
 	sessionService := authsvc.NewSessionService(getMe, listSessions, logout.Session())
 
@@ -381,9 +390,12 @@ func (a *application) registerHTTP(ctx context.Context, srv *apihttp.Server,
 	oidc := authhttp.NewOIDCHandler(cfg.Issuer, a.passwordAuth, a.enrolGranter,
 		a.enrolment, a.tenancy,
 		a.identity, a.identity, a.identity, a.identity, a.auth, a.auth, a.tenancy, a.tenancy, a.auth,
-		refresh, cfg.DefaultTenant, cfg.Env == "prod", a.issuer, a.ring, a.clock, a.auditor, limiter, logger)
+		refresh, a.emailLink, cfg.DefaultTenant, cfg.Env == "prod", a.issuer, a.ring, a.clock, a.auditor, limiter, logger)
 	srv.HandleFunc("GET /v1/authorize", oidc.Authorize)
 	srv.HandleFunc("POST /v1/login", oidc.LoginForm)
+	// The e-mail door: ask for a link, and the link itself.
+	srv.HandleFunc("POST /v1/login/email", oidc.EmailLinkRequest)
+	srv.HandleFunc("GET /v1/login/email", oidc.EmailLinkOpen)
 	srv.HandleFunc("POST /v1/token", oidc.Token)
 	// RP-initiated logout, OIDC-shaped: GET asks, POST performs.
 	srv.HandleFunc("GET /v1/logout", oidc.LogoutPage)

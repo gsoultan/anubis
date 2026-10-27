@@ -16,6 +16,7 @@ import (
 	auditdomain "github.com/gsoultan/anubis/internal/audit/domain"
 	auditport "github.com/gsoultan/anubis/internal/audit/port"
 	authapp "github.com/gsoultan/anubis/internal/auth/app"
+	"github.com/gsoultan/anubis/internal/auth/app/emaillink"
 	"github.com/gsoultan/anubis/internal/auth/app/enroll"
 	"github.com/gsoultan/anubis/internal/auth/app/signin"
 	tokenapp "github.com/gsoultan/anubis/internal/auth/app/token"
@@ -67,6 +68,7 @@ type OIDCHandler struct {
 	// family, and re-implementing rotation here is how theft detection ends
 	// up enforced in one place and not the other.
 	refreshUC     tokenapp.RefreshUsecase
+	emailLink     emaillink.Usecase
 	renderer      *PageRenderer
 	defaultTenant string
 	issuerUC      authapp.TokenIssuer
@@ -97,6 +99,7 @@ func NewOIDCHandler(
 	pages tenancyport.AuthPageRepository,
 	refresh authport.RefreshRepository,
 	refreshUC tokenapp.RefreshUsecase,
+	emailLink emaillink.Usecase,
 	defaultTenant string,
 	prod bool,
 	issuerUC authapp.TokenIssuer,
@@ -111,7 +114,7 @@ func NewOIDCHandler(
 		tenants: tenants, realms: realms,
 		realmsAdmin: realmsAdmin, ids: ids,
 		creds: creds, sessions: sessions, onetime: onetime, apps: apps,
-		pages: pages, refresh: refresh, refreshUC: refreshUC, renderer: NewPageRenderer(),
+		pages: pages, refresh: refresh, refreshUC: refreshUC, emailLink: emailLink, renderer: NewPageRenderer(),
 		defaultTenant: defaultTenant, issuerUC: issuerUC, ring: ring,
 		cookies: cookiePolicy{prod: prod}, clock: clock, audit: audit,
 		limiter: limiter, logger: logger,
@@ -719,6 +722,14 @@ func (h *OIDCHandler) renderLogin(w http.ResponseWriter, r *http.Request, tenant
 	if data.Tenant != "" && data.Realm != "" && data.MFAToken == "" && data.EnrolToken == "" {
 		view.ResetURL = "/p/" + data.Tenant + "/reset/request?realm=" + url.QueryEscape(data.Realm)
 	}
+	// The e-mail door is offered only where the realm allows the factor;
+	// a button that posts to a door that refuses is a worse page than none.
+	if tenantID != "" && data.Realm != "" && data.MFAToken == "" && data.EnrolToken == "" {
+		if realm, err := h.realms.RealmByCode(r.Context(), tenantID, data.Realm); err == nil && realm != nil &&
+			realm.AllowsFactor(emaillink.Factor) {
+			view.EmailLink = true
+		}
+	}
 	if tenantID != "" && cfg.Features.ShowRegistration && data.Realm != "" {
 		if realm, err := h.realms.RealmByCode(r.Context(), tenantID, data.Realm); err == nil &&
 			realm.SelfRegistration {
@@ -1058,4 +1069,94 @@ func (h *OIDCHandler) continueURL(r *http.Request, tenantSlug string) string {
 		q.Set("nonce", v)
 	}
 	return "/v1/authorize?" + q.Encode()
+}
+
+// EmailLinkRequest is the sign-in page's second button: mail me a link.
+// It answers "check your email" whatever it found, and carries the OIDC
+// request inside the link's one-time token so the click finishes the flow
+// the person started.
+func (h *OIDCHandler) EmailLinkRequest(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		apihttp.WriteError(w, r, apperr.ErrInvalidArgument)
+		return
+	}
+	tenantSlug := r.PostFormValue("tenant")
+	realmCode := r.PostFormValue("realm")
+	if realmCode == "" {
+		realmCode = "internal"
+	}
+	username := r.PostFormValue("username")
+	if !h.checkLoginCSRF(r, r.PostFormValue("csrf")) {
+		h.renderLogin(w, r, "", h.resubmit(r, tenantSlug, realmCode, "That form expired. Please try again."))
+		return
+	}
+	ip := authctx.ClientIP(r.Context())
+	if ok, retry := h.limiter.AllowAll(
+		ratelimit.KeyLimit{Key: "ip:" + ip, Limit: ratelimit.Limit{PerMinute: 10, Burst: 10}},
+		ratelimit.KeyLimit{Key: "acct:" + tenantSlug + "/" + realmCode + "/" + username,
+			Limit: ratelimit.Limit{PerMinute: 3, Burst: 3}},
+	); !ok {
+		w.Header().Set("Retry-After", retry.String())
+		apihttp.WriteError(w, r, apperr.ErrRateLimited)
+		return
+	}
+	flow := map[string]string{}
+	for _, k := range []string{"client_id", "redirect_uri", "state", "code_challenge", "code_challenge_method", "nonce"} {
+		if v := r.PostFormValue(k); v != "" {
+			flow[k] = v
+		}
+	}
+	err := h.emailLink.Request(r.Context(), emaillink.RequestInput{
+		Tenant: tenantSlug, Realm: realmCode, Username: username, Flow: flow,
+	})
+	var tid string
+	if tenant, terr := h.tenants.TenantBySlug(r.Context(), tenantSlug); terr == nil && tenant != nil {
+		tid = tenant.ID
+	}
+	cfg := h.resolvePageForRealm(r, tid, "signin", r.PostFormValue("page"), "", realmCode)
+	view := PageView{Cfg: cfg, Kind: "reset", Tenant: tenantSlug, Realm: realmCode,
+		SigninURL: "/p/" + tenantSlug + "/signin/default?realm=" + url.QueryEscape(realmCode)}
+	if err != nil {
+		view.Title, view.ResetStep, view.Error = "Sign-in links are unavailable", "expired",
+			"This server cannot send email right now. Please sign in another way or try later."
+		h.renderer.Render(w, http.StatusServiceUnavailable, view)
+		return
+	}
+	view.Title, view.ResetStep = "Check your email", "sent"
+	h.renderer.Render(w, http.StatusOK, view)
+}
+
+// EmailLinkOpen is the click. The token proves the person; the flow it
+// carried says where they were going; the session is an ordinary browser
+// session with amr email_link, and the code is issued exactly as after a
+// password.
+func (h *OIDCHandler) EmailLinkOpen(w http.ResponseWriter, r *http.Request) {
+	done, err := h.emailLink.Complete(r.Context(), r.URL.Query().Get("token"))
+	if err != nil {
+		tenantSlug := r.URL.Query().Get("tenant")
+		var tid string
+		if tenant, terr := h.tenants.TenantBySlug(r.Context(), tenantSlug); terr == nil && tenant != nil {
+			tid = tenant.ID
+		}
+		cfg := h.resolvePageForRealm(r, tid, "signin", "", "", "")
+		h.renderer.Render(w, http.StatusBadRequest, PageView{
+			Cfg: cfg, Kind: "reset", Tenant: tenantSlug, Title: "This link has expired", ResetStep: "expired",
+			Error:     "Sign-in links work once, within 15 minutes. Go back to the sign-in page and ask for a new one.",
+			SigninURL: "/p/" + tenantSlug + "/signin/default",
+		})
+		return
+	}
+	sessionID := h.openBrowserSession(w, r, done.Tenant, done.Realm, done.Identity, []string{emaillink.Factor}, emaillink.Factor)
+	if sessionID == "" {
+		return
+	}
+	f := done.Flow
+	if f["client_id"] == "" {
+		// Signed in with nowhere to go: the sign-in page will find the
+		// cookie and say so.
+		http.Redirect(w, r, "/p/"+done.Tenant.Slug+"/signin/default?realm="+url.QueryEscape(done.Realm.Code), http.StatusSeeOther)
+		return
+	}
+	h.issueCode(w, r, done.Tenant, done.Identity.ID, sessionID,
+		f["client_id"], f["redirect_uri"], f["state"], f["code_challenge"], f["code_challenge_method"], f["nonce"])
 }

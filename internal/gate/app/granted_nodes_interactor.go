@@ -35,6 +35,9 @@ func (u *GrantedNodesInteractor) Execute(ctx context.Context, in authzreach.Node
 	if !ok {
 		return nil, apperr.ErrUnauthenticated
 	}
+	if p.LinkBound() {
+		return nil, apperr.ErrPermissionDenied.With("hint", "an access link opens one record; it lists no places")
+	}
 	if in.Subject == "" || in.Permission == "" || !validate.ValidCode(in.Axis) {
 		return nil, apperr.ErrInvalidArgument.With("hint", "subject, permission and axis are required")
 	}

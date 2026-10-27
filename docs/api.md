@@ -300,6 +300,34 @@ place. `Explain` lists the matching shares under `shares`.
 Operators and services do not share; a share is one person's access handed
 to another. Audited as `share.create` / `share.revoke`.
 
+#### Access links — the door for a recipient with no password
+
+| Procedure | Bearer | Effect |
+| :--- | :--- | :--- |
+| `ShareService/CreateAccessLink {share_id}` | sharer, or anybody who could end the share | Returns `link_token` (`anb_lk_…`) **once**; making another replaces it. Anubis mails nothing: the application owns the record's URL and puts the token in its own message |
+| `AuthService/OpenAccessLink {tenant, client_id, link_token}` | none | Exchanges the link for a token that opens **that record** in **that application**: ten minutes (never past the share's end), no session, no refresh, `amr ["link"]`, `scopes {"_record": …}`. Rate limited per IP and per link |
+
+What the token is worth, enforced where the questions are asked rather
+than only in its claims: `Authorize` refuses it (`link_bound`) for any
+subject or record but its own; the gate refuses it outright; `ListGrantedNodes`
+refuses it; it has no session to switch or sign out. Revoking the share, or
+the share ending, ends every token minted from it at the next decision — the
+gate learns through the same catalog-version bump as grants. A disabled
+recipient's link stops working at once. Audited as `auth.link_open`.
+
+### Sign in by e-mail link
+
+For a population with no password (applicants, registrants): a realm that
+lists `email_link` in `allowed_factors` gets a second button on the hosted
+sign-in page, **Email me a sign-in link**. It posts the same form (username
+and the OIDC request) to `POST /v1/login/email`, which answers "check your
+email" for every username and mails a single-use link (15 minutes) only
+where there is an account that may sign in. Opening it (`GET
+/v1/login/email?token=…`) establishes an ordinary browser session with
+`amr ["email_link"]` and issues the authorization code for the flow the
+person started — exactly as after a password. Audited as `auth.email_link`
+and `auth.login`. Needs a mail relay (`ANUBIS_SMTP_*`).
+
 ### `POST /v1/gate/check` — forward-auth
 
 For nginx `auth_request` and Traefik `forwardAuth`. Envoy can use this too,

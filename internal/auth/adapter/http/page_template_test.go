@@ -147,3 +147,21 @@ func TestResetLinkAndPagesRenderOnTheSigninBrand(t *testing.T) {
 		}
 	}
 }
+
+// The e-mail door is a second submit on the SAME sign-in form, so the
+// username and the OIDC flow fields travel with it — and it is offered only
+// where the realm allows the factor.
+func TestTheEmailLinkButtonRidesTheSigninForm(t *testing.T) {
+	cfg := `{"brand":{"title":"Careers"}}`
+	with := render(t, pagecfg.KindSignin, cfg, func(v *PageView) { v.EmailLink = true })
+	if !strings.Contains(with, `formaction="/v1/login/email"`) || !strings.Contains(with, "formnovalidate") {
+		t.Fatal("the e-mail button does not post the same form to the e-mail door without requiring a password")
+	}
+	if strings.Count(with, "<form ") != 1 {
+		t.Fatalf("expected one form, found %d", strings.Count(with, "<form "))
+	}
+	without := render(t, pagecfg.KindSignin, cfg, nil)
+	if strings.Contains(without, "/v1/login/email") {
+		t.Fatal("a realm without the factor advertises the e-mail door")
+	}
+}

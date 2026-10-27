@@ -2018,6 +2018,110 @@ func (*ChangePasswordResponse) Descriptor() ([]byte, []int) {
 	return file_anubis_v1_auth_proto_rawDescGZIP(), []int{36}
 }
 
+type OpenAccessLinkRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Tenant        string                 `protobuf:"bytes,1,opt,name=tenant,proto3" json:"tenant,omitempty"`                        // tenant slug
+	ClientId      string                 `protobuf:"bytes,2,opt,name=client_id,json=clientId,proto3" json:"client_id,omitempty"`    // application the token is for
+	LinkToken     string                 `protobuf:"bytes,3,opt,name=link_token,json=linkToken,proto3" json:"link_token,omitempty"` // "anb_lk_…"
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *OpenAccessLinkRequest) Reset() {
+	*x = OpenAccessLinkRequest{}
+	mi := &file_anubis_v1_auth_proto_msgTypes[37]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *OpenAccessLinkRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*OpenAccessLinkRequest) ProtoMessage() {}
+
+func (x *OpenAccessLinkRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_anubis_v1_auth_proto_msgTypes[37]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use OpenAccessLinkRequest.ProtoReflect.Descriptor instead.
+func (*OpenAccessLinkRequest) Descriptor() ([]byte, []int) {
+	return file_anubis_v1_auth_proto_rawDescGZIP(), []int{37}
+}
+
+func (x *OpenAccessLinkRequest) GetTenant() string {
+	if x != nil {
+		return x.Tenant
+	}
+	return ""
+}
+
+func (x *OpenAccessLinkRequest) GetClientId() string {
+	if x != nil {
+		return x.ClientId
+	}
+	return ""
+}
+
+func (x *OpenAccessLinkRequest) GetLinkToken() string {
+	if x != nil {
+		return x.LinkToken
+	}
+	return ""
+}
+
+type OpenAccessLinkResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Tokens        *TokenPair             `protobuf:"bytes,1,opt,name=tokens,proto3" json:"tokens,omitempty"` // access only
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *OpenAccessLinkResponse) Reset() {
+	*x = OpenAccessLinkResponse{}
+	mi := &file_anubis_v1_auth_proto_msgTypes[38]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *OpenAccessLinkResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*OpenAccessLinkResponse) ProtoMessage() {}
+
+func (x *OpenAccessLinkResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_anubis_v1_auth_proto_msgTypes[38]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use OpenAccessLinkResponse.ProtoReflect.Descriptor instead.
+func (*OpenAccessLinkResponse) Descriptor() ([]byte, []int) {
+	return file_anubis_v1_auth_proto_rawDescGZIP(), []int{38}
+}
+
+func (x *OpenAccessLinkResponse) GetTokens() *TokenPair {
+	if x != nil {
+		return x.Tokens
+	}
+	return nil
+}
+
 var File_anubis_v1_auth_proto protoreflect.FileDescriptor
 
 const file_anubis_v1_auth_proto_rawDesc = "" +
@@ -2147,7 +2251,14 @@ const file_anubis_v1_auth_proto_rawDesc = "" +
 	"\x15ChangePasswordRequest\x12)\n" +
 	"\x10current_password\x18\x01 \x01(\tR\x0fcurrentPassword\x12!\n" +
 	"\fnew_password\x18\x02 \x01(\tR\vnewPassword\"\x18\n" +
-	"\x16ChangePasswordResponse2\xa4\v\n" +
+	"\x16ChangePasswordResponse\"k\n" +
+	"\x15OpenAccessLinkRequest\x12\x16\n" +
+	"\x06tenant\x18\x01 \x01(\tR\x06tenant\x12\x1b\n" +
+	"\tclient_id\x18\x02 \x01(\tR\bclientId\x12\x1d\n" +
+	"\n" +
+	"link_token\x18\x03 \x01(\tR\tlinkToken\"F\n" +
+	"\x16OpenAccessLinkResponse\x12,\n" +
+	"\x06tokens\x18\x01 \x01(\v2\x14.anubis.v1.TokenPairR\x06tokens2\xfb\v\n" +
 	"\vAuthService\x12:\n" +
 	"\x05Login\x12\x17.anubis.v1.LoginRequest\x1a\x18.anubis.v1.LoginResponse\x12F\n" +
 	"\tVerifyMfa\x12\x1b.anubis.v1.VerifyMfaRequest\x1a\x1c.anubis.v1.VerifyMfaResponse\x12@\n" +
@@ -2161,7 +2272,8 @@ const file_anubis_v1_auth_proto_rawDesc = "" +
 	"\vVerifyEmail\x12\x1d.anubis.v1.VerifyEmailRequest\x1a\x1e.anubis.v1.VerifyEmailResponse\x12g\n" +
 	"\x14RequestPasswordReset\x12&.anubis.v1.RequestPasswordResetRequest\x1a'.anubis.v1.RequestPasswordResetResponse\x12j\n" +
 	"\x15CompletePasswordReset\x12'.anubis.v1.CompletePasswordResetRequest\x1a(.anubis.v1.CompletePasswordResetResponse\x12U\n" +
-	"\x0eChangePassword\x12 .anubis.v1.ChangePasswordRequest\x1a!.anubis.v1.ChangePasswordResponse\x12d\n" +
+	"\x0eChangePassword\x12 .anubis.v1.ChangePasswordRequest\x1a!.anubis.v1.ChangePasswordResponse\x12U\n" +
+	"\x0eOpenAccessLink\x12 .anubis.v1.OpenAccessLinkRequest\x1a!.anubis.v1.OpenAccessLinkResponse\x12d\n" +
 	"\x13BeginTotpEnrollment\x12%.anubis.v1.BeginTotpEnrollmentRequest\x1a&.anubis.v1.BeginTotpEnrollmentResponse\x12j\n" +
 	"\x15ConfirmTotpEnrollment\x12'.anubis.v1.ConfirmTotpEnrollmentRequest\x1a(.anubis.v1.ConfirmTotpEnrollmentResponse\x12X\n" +
 	"\x0fEnrollDeviceKey\x12!.anubis.v1.EnrollDeviceKeyRequest\x1a\".anubis.v1.EnrollDeviceKeyResponse\x12^\n" +
@@ -2179,7 +2291,7 @@ func file_anubis_v1_auth_proto_rawDescGZIP() []byte {
 	return file_anubis_v1_auth_proto_rawDescData
 }
 
-var file_anubis_v1_auth_proto_msgTypes = make([]protoimpl.MessageInfo, 37)
+var file_anubis_v1_auth_proto_msgTypes = make([]protoimpl.MessageInfo, 39)
 var file_anubis_v1_auth_proto_goTypes = []any{
 	(*BeginTotpEnrollmentRequest)(nil),    // 0: anubis.v1.BeginTotpEnrollmentRequest
 	(*BeginTotpEnrollmentResponse)(nil),   // 1: anubis.v1.BeginTotpEnrollmentResponse
@@ -2218,56 +2330,61 @@ var file_anubis_v1_auth_proto_goTypes = []any{
 	(*CompletePasswordResetResponse)(nil), // 34: anubis.v1.CompletePasswordResetResponse
 	(*ChangePasswordRequest)(nil),         // 35: anubis.v1.ChangePasswordRequest
 	(*ChangePasswordResponse)(nil),        // 36: anubis.v1.ChangePasswordResponse
-	(*TokenPair)(nil),                     // 37: anubis.v1.TokenPair
+	(*OpenAccessLinkRequest)(nil),         // 37: anubis.v1.OpenAccessLinkRequest
+	(*OpenAccessLinkResponse)(nil),        // 38: anubis.v1.OpenAccessLinkResponse
+	(*TokenPair)(nil),                     // 39: anubis.v1.TokenPair
 }
 var file_anubis_v1_auth_proto_depIdxs = []int32{
-	37, // 0: anubis.v1.LoginResponse.tokens:type_name -> anubis.v1.TokenPair
+	39, // 0: anubis.v1.LoginResponse.tokens:type_name -> anubis.v1.TokenPair
 	9,  // 1: anubis.v1.LoginResponse.mfa:type_name -> anubis.v1.MfaChallenge
 	11, // 2: anubis.v1.LoginResponse.enrolment_required:type_name -> anubis.v1.EnrolmentChallenge
 	11, // 3: anubis.v1.LoginResponse.enrolment_due:type_name -> anubis.v1.EnrolmentChallenge
-	37, // 4: anubis.v1.VerifyMfaResponse.tokens:type_name -> anubis.v1.TokenPair
-	37, // 5: anubis.v1.RefreshResponse.tokens:type_name -> anubis.v1.TokenPair
-	37, // 6: anubis.v1.DeviceVerifyResponse.tokens:type_name -> anubis.v1.TokenPair
+	39, // 4: anubis.v1.VerifyMfaResponse.tokens:type_name -> anubis.v1.TokenPair
+	39, // 5: anubis.v1.RefreshResponse.tokens:type_name -> anubis.v1.TokenPair
+	39, // 6: anubis.v1.DeviceVerifyResponse.tokens:type_name -> anubis.v1.TokenPair
 	26, // 7: anubis.v1.RegisterRequest.consents:type_name -> anubis.v1.ConsentInput
-	8,  // 8: anubis.v1.AuthService.Login:input_type -> anubis.v1.LoginRequest
-	12, // 9: anubis.v1.AuthService.VerifyMfa:input_type -> anubis.v1.VerifyMfaRequest
-	14, // 10: anubis.v1.AuthService.Refresh:input_type -> anubis.v1.RefreshRequest
-	16, // 11: anubis.v1.AuthService.Logout:input_type -> anubis.v1.LogoutRequest
-	18, // 12: anubis.v1.AuthService.LogoutAll:input_type -> anubis.v1.LogoutAllRequest
-	20, // 13: anubis.v1.AuthService.LogoutSession:input_type -> anubis.v1.LogoutSessionRequest
-	22, // 14: anubis.v1.AuthService.DeviceChallenge:input_type -> anubis.v1.DeviceChallengeRequest
-	24, // 15: anubis.v1.AuthService.DeviceVerify:input_type -> anubis.v1.DeviceVerifyRequest
-	27, // 16: anubis.v1.AuthService.Register:input_type -> anubis.v1.RegisterRequest
-	29, // 17: anubis.v1.AuthService.VerifyEmail:input_type -> anubis.v1.VerifyEmailRequest
-	31, // 18: anubis.v1.AuthService.RequestPasswordReset:input_type -> anubis.v1.RequestPasswordResetRequest
-	33, // 19: anubis.v1.AuthService.CompletePasswordReset:input_type -> anubis.v1.CompletePasswordResetRequest
-	35, // 20: anubis.v1.AuthService.ChangePassword:input_type -> anubis.v1.ChangePasswordRequest
-	0,  // 21: anubis.v1.AuthService.BeginTotpEnrollment:input_type -> anubis.v1.BeginTotpEnrollmentRequest
-	2,  // 22: anubis.v1.AuthService.ConfirmTotpEnrollment:input_type -> anubis.v1.ConfirmTotpEnrollmentRequest
-	4,  // 23: anubis.v1.AuthService.EnrollDeviceKey:input_type -> anubis.v1.EnrollDeviceKeyRequest
-	6,  // 24: anubis.v1.AuthService.ClientCredentials:input_type -> anubis.v1.ClientCredentialsRequest
-	10, // 25: anubis.v1.AuthService.Login:output_type -> anubis.v1.LoginResponse
-	13, // 26: anubis.v1.AuthService.VerifyMfa:output_type -> anubis.v1.VerifyMfaResponse
-	15, // 27: anubis.v1.AuthService.Refresh:output_type -> anubis.v1.RefreshResponse
-	17, // 28: anubis.v1.AuthService.Logout:output_type -> anubis.v1.LogoutResponse
-	19, // 29: anubis.v1.AuthService.LogoutAll:output_type -> anubis.v1.LogoutAllResponse
-	21, // 30: anubis.v1.AuthService.LogoutSession:output_type -> anubis.v1.LogoutSessionResponse
-	23, // 31: anubis.v1.AuthService.DeviceChallenge:output_type -> anubis.v1.DeviceChallengeResponse
-	25, // 32: anubis.v1.AuthService.DeviceVerify:output_type -> anubis.v1.DeviceVerifyResponse
-	28, // 33: anubis.v1.AuthService.Register:output_type -> anubis.v1.RegisterResponse
-	30, // 34: anubis.v1.AuthService.VerifyEmail:output_type -> anubis.v1.VerifyEmailResponse
-	32, // 35: anubis.v1.AuthService.RequestPasswordReset:output_type -> anubis.v1.RequestPasswordResetResponse
-	34, // 36: anubis.v1.AuthService.CompletePasswordReset:output_type -> anubis.v1.CompletePasswordResetResponse
-	36, // 37: anubis.v1.AuthService.ChangePassword:output_type -> anubis.v1.ChangePasswordResponse
-	1,  // 38: anubis.v1.AuthService.BeginTotpEnrollment:output_type -> anubis.v1.BeginTotpEnrollmentResponse
-	3,  // 39: anubis.v1.AuthService.ConfirmTotpEnrollment:output_type -> anubis.v1.ConfirmTotpEnrollmentResponse
-	5,  // 40: anubis.v1.AuthService.EnrollDeviceKey:output_type -> anubis.v1.EnrollDeviceKeyResponse
-	7,  // 41: anubis.v1.AuthService.ClientCredentials:output_type -> anubis.v1.ClientCredentialsResponse
-	25, // [25:42] is the sub-list for method output_type
-	8,  // [8:25] is the sub-list for method input_type
-	8,  // [8:8] is the sub-list for extension type_name
-	8,  // [8:8] is the sub-list for extension extendee
-	0,  // [0:8] is the sub-list for field type_name
+	39, // 8: anubis.v1.OpenAccessLinkResponse.tokens:type_name -> anubis.v1.TokenPair
+	8,  // 9: anubis.v1.AuthService.Login:input_type -> anubis.v1.LoginRequest
+	12, // 10: anubis.v1.AuthService.VerifyMfa:input_type -> anubis.v1.VerifyMfaRequest
+	14, // 11: anubis.v1.AuthService.Refresh:input_type -> anubis.v1.RefreshRequest
+	16, // 12: anubis.v1.AuthService.Logout:input_type -> anubis.v1.LogoutRequest
+	18, // 13: anubis.v1.AuthService.LogoutAll:input_type -> anubis.v1.LogoutAllRequest
+	20, // 14: anubis.v1.AuthService.LogoutSession:input_type -> anubis.v1.LogoutSessionRequest
+	22, // 15: anubis.v1.AuthService.DeviceChallenge:input_type -> anubis.v1.DeviceChallengeRequest
+	24, // 16: anubis.v1.AuthService.DeviceVerify:input_type -> anubis.v1.DeviceVerifyRequest
+	27, // 17: anubis.v1.AuthService.Register:input_type -> anubis.v1.RegisterRequest
+	29, // 18: anubis.v1.AuthService.VerifyEmail:input_type -> anubis.v1.VerifyEmailRequest
+	31, // 19: anubis.v1.AuthService.RequestPasswordReset:input_type -> anubis.v1.RequestPasswordResetRequest
+	33, // 20: anubis.v1.AuthService.CompletePasswordReset:input_type -> anubis.v1.CompletePasswordResetRequest
+	35, // 21: anubis.v1.AuthService.ChangePassword:input_type -> anubis.v1.ChangePasswordRequest
+	37, // 22: anubis.v1.AuthService.OpenAccessLink:input_type -> anubis.v1.OpenAccessLinkRequest
+	0,  // 23: anubis.v1.AuthService.BeginTotpEnrollment:input_type -> anubis.v1.BeginTotpEnrollmentRequest
+	2,  // 24: anubis.v1.AuthService.ConfirmTotpEnrollment:input_type -> anubis.v1.ConfirmTotpEnrollmentRequest
+	4,  // 25: anubis.v1.AuthService.EnrollDeviceKey:input_type -> anubis.v1.EnrollDeviceKeyRequest
+	6,  // 26: anubis.v1.AuthService.ClientCredentials:input_type -> anubis.v1.ClientCredentialsRequest
+	10, // 27: anubis.v1.AuthService.Login:output_type -> anubis.v1.LoginResponse
+	13, // 28: anubis.v1.AuthService.VerifyMfa:output_type -> anubis.v1.VerifyMfaResponse
+	15, // 29: anubis.v1.AuthService.Refresh:output_type -> anubis.v1.RefreshResponse
+	17, // 30: anubis.v1.AuthService.Logout:output_type -> anubis.v1.LogoutResponse
+	19, // 31: anubis.v1.AuthService.LogoutAll:output_type -> anubis.v1.LogoutAllResponse
+	21, // 32: anubis.v1.AuthService.LogoutSession:output_type -> anubis.v1.LogoutSessionResponse
+	23, // 33: anubis.v1.AuthService.DeviceChallenge:output_type -> anubis.v1.DeviceChallengeResponse
+	25, // 34: anubis.v1.AuthService.DeviceVerify:output_type -> anubis.v1.DeviceVerifyResponse
+	28, // 35: anubis.v1.AuthService.Register:output_type -> anubis.v1.RegisterResponse
+	30, // 36: anubis.v1.AuthService.VerifyEmail:output_type -> anubis.v1.VerifyEmailResponse
+	32, // 37: anubis.v1.AuthService.RequestPasswordReset:output_type -> anubis.v1.RequestPasswordResetResponse
+	34, // 38: anubis.v1.AuthService.CompletePasswordReset:output_type -> anubis.v1.CompletePasswordResetResponse
+	36, // 39: anubis.v1.AuthService.ChangePassword:output_type -> anubis.v1.ChangePasswordResponse
+	38, // 40: anubis.v1.AuthService.OpenAccessLink:output_type -> anubis.v1.OpenAccessLinkResponse
+	1,  // 41: anubis.v1.AuthService.BeginTotpEnrollment:output_type -> anubis.v1.BeginTotpEnrollmentResponse
+	3,  // 42: anubis.v1.AuthService.ConfirmTotpEnrollment:output_type -> anubis.v1.ConfirmTotpEnrollmentResponse
+	5,  // 43: anubis.v1.AuthService.EnrollDeviceKey:output_type -> anubis.v1.EnrollDeviceKeyResponse
+	7,  // 44: anubis.v1.AuthService.ClientCredentials:output_type -> anubis.v1.ClientCredentialsResponse
+	27, // [27:45] is the sub-list for method output_type
+	9,  // [9:27] is the sub-list for method input_type
+	9,  // [9:9] is the sub-list for extension type_name
+	9,  // [9:9] is the sub-list for extension extendee
+	0,  // [0:9] is the sub-list for field type_name
 }
 
 func init() { file_anubis_v1_auth_proto_init() }
@@ -2287,7 +2404,7 @@ func file_anubis_v1_auth_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_anubis_v1_auth_proto_rawDesc), len(file_anubis_v1_auth_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   37,
+			NumMessages:   39,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

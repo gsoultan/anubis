@@ -23,6 +23,20 @@ service ShareService {
   // every permission they hold.
   rpc ListSharesOnRecord(ListSharesOnRecordRequest) returns (ListSharesOnRecordResponse);
   rpc ListSharedWithMe(ListSharedWithMeRequest) returns (ListSharedWithMeResponse);
+  // The link a recipient with no password opens the record with, returned
+  // ONCE (making another replaces it). Anubis mails nothing: the
+  // application owns the record's URL and puts the token in its own
+  // message. Exchanged for a record-bound token by AuthService/OpenAccessLink.
+  rpc CreateAccessLink(CreateAccessLinkRequest) returns (CreateAccessLinkResponse);
+}
+
+message CreateAccessLinkRequest {
+  string share_id = 1;
+}
+
+message CreateAccessLinkResponse {
+  // "anb_lk_…". Show it once; it is not stored in the clear.
+  string link_token = 1;
 }
 
 message RecordShare {
