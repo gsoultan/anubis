@@ -226,3 +226,10 @@ export function featureRoleName<P extends { resource: string; action: string }>(
   const name = `${app}: ${parts.join(', ')}`
   return name.length <= 100 ? name : `${name.slice(0, 97)}…`
 }
+
+/** A role's name where its app is already plain: a manifest names its roles
+    `<app>.<name>`, which reads as noise on that app's own page. */
+export function shortRoleName(r: { name: string; application_id: string | null }): string {
+  const prefix = r.application_id ? `${r.application_id}.` : ''
+  return prefix && r.name.startsWith(prefix) ? r.name.slice(prefix.length) : r.name
+}

@@ -83,8 +83,8 @@ function SyncCard({ axisCode }: { axisCode: string }) {
       await api.setSyncSchedule(source.id, secs)
       notifyCreated(secs > 0 ? 'Refresh scheduled' : 'Refresh turned off',
         secs > 0
-          ? `Anubis re-reads this structure every ${everyLabel(secs)}.`
-          : 'This structure now only syncs when somebody asks.')
+          ? `Anubis reads these places again every ${everyLabel(secs)}.`
+          : 'These places are now only read again when somebody asks.')
       await queryClient.invalidateQueries({ queryKey: qk.syncSources() })
     } catch (e) { notifyRejected(e) }
     setBusy(null)
@@ -112,7 +112,7 @@ function SyncCard({ axisCode }: { axisCode: string }) {
       <div className="p-4">
         <div className="t-label mb-1">Sync</div>
         <div className="t-xs mb-2.5">
-          This structure is maintained by hand. Connect the system that owns it — matched by
+          These places are kept by hand. Connect the system that owns it — matched by
           reference, vanished rows archived (never deleted), manual items untouched.
         </div>
         <Button size="xs" variant="light" leftSection={<IconPlugConnected size={13} />}
@@ -251,18 +251,18 @@ function Scope() {
 
   return (
     <Page
-      title="Structure"
-      description="The places and things access can be limited to — offices, product lines, customers. Each structure is its own tree, and new kinds are added here, never deployed."
+      title="Places"
+      description="The offices, product lines and customers that access can be limited to. Each kind of place is its own tree."
       wide
       actions={
         <>
           <Button size="xs" variant="default" leftSection={<IconSitemapFilled size={13} />}
             onClick={() => openCreate('node', active ? { axisCode: active } : undefined)}>
-            Add item
+            Add {axis ? `a place to ${axis.display_name}` : 'a place'}
           </Button>
           <Button size="xs" leftSection={<IconPlus size={13} />}
             onClick={() => openCreate('axis')}>
-            Add structure
+            New kind of place
           </Button>
         </>
       }
@@ -274,7 +274,7 @@ function Scope() {
             tree it selects. The code moved into Settings, where it is read
             once, rather than riding every tab. */}
         <div className="axis-rail-wrap">
-        <div className="axis-rail" role="tablist" aria-label="Structure">
+        <div className="axis-rail" role="tablist" aria-label="Kind of place">
           {axes?.map((a) => {
             const on = a.code === active
             return (
@@ -286,7 +286,7 @@ function Scope() {
                 </span>
                 {a.display_name}
                 {a.default_effect === 'deny' && (
-                  <Tooltip label="Strict: a grant that does not name this structure is denied.">
+                  <Tooltip label="Strict: access that names no place of this kind never applies.">
                     <span className="axis-tab-strict" />
                   </Tooltip>
                 )}
@@ -340,7 +340,7 @@ function Scope() {
                     style={{ width: 34, height: 34, background: 'var(--s-sunken)', border: '1px solid var(--line)' }}>
                     <AxisIcon name={axis.ui_schema.icon} size={15} />
                   </div>
-                  <div className="t-sm">Select an item in the tree to inspect it</div>
+                  <div className="t-sm">Pick a place to see what is inside it and who has access there</div>
                 </div>
               )}
 
@@ -353,9 +353,9 @@ function Scope() {
                     size="xs" fullWidth value={pane}
                     onChange={(v) => setPane(v as Pane)}
                     data={[
-                      { value: 'settings', label: 'Settings' },
+                      { value: 'settings', label: 'About this kind' },
                       { value: 'levels', label: 'Levels' },
-                      { value: 'source', label: 'Source' },
+                      { value: 'source', label: 'Kept in step' },
                     ]}
                   />
                 </div>
@@ -364,13 +364,13 @@ function Scope() {
                   <div className="p-4">
                     <div className="flex flex-col gap-2">
                       {[
-                        ['code', <span key="c" className="chip">{axis.code}</span>],
-                        ['default effect', <span key="d" className="chip" style={{
+                        ['Short code', <span key="c" className="chip">{axis.code}</span>],
+                        ['Access that names none of these', <span key="d" className="t-sm" style={{
                           color: axis.default_effect === 'deny' ? 'var(--deny)' : 'var(--ink-2)',
-                        }}>{axis.default_effect}</span>],
-                        ['resolution', <span key="r" className="chip">{axis.resolution.from === 'token'
-                          ? 'token' : `context.${axis.resolution.key}`}</span>],
-                        ['picker', <span key="p" className="chip">{axis.ui_schema.picker}</span>],
+                        }}>{axis.default_effect === 'deny' ? 'never applies' : 'applies to all of them'}</span>],
+                        ['The record’s place comes from', <span key="r" className="t-sm">{axis.resolution.from === 'token'
+                          ? 'the person’s sign-in' : `the request (${axis.resolution.key})`}</span>],
+                        ...(axis.ui_schema.picker ? [['Picked with', <span key="p" className="t-sm">{axis.ui_schema.picker === 'tree' ? 'a tree' : axis.ui_schema.picker}</span>]] : []),
                       ].map(([label, node]) => (
                         <div key={String(label)} className="flex items-center justify-between gap-3">
                           <span className="t-xs">{label as string}</span>
@@ -387,11 +387,11 @@ function Scope() {
 
                     <div className="mt-3.5" style={{ borderTop: '1px solid var(--line-soft)', paddingTop: 12 }}>
                       <div className="t-xs mb-2">
-                        Preview what would break if every access rule had to name this structure explicitly.
+                        See what would stop working if every piece of access had to name a place of this kind.
                       </div>
                       <Button size="xs" variant="default" fullWidth leftSection={<IconFlask size={13} />}
                         loading={dryRun.isPending} onClick={() => dryRun.mutate(axis.code)}>
-                        Strict dry run
+                        Check before making it strict
                       </Button>
                     </div>
                     {dryRun.data?.axis_code === axis.code && <DryRun r={dryRun.data} />}

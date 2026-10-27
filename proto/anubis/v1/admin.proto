@@ -605,6 +605,14 @@ service AuthzAdminService {
   // PlaceReach answers, for one place: who already has it, and who holds a
   // list naming all of its siblings and so might expect it too.
   rpc PlaceReach(PlaceReachRequest) returns (PlaceReachResponse);
+  // RoleUsage counts the people holding each role. Empty role_ids: every role.
+  rpc RoleUsage(RoleUsageRequest) returns (RoleUsageResponse);
+  // AppUsage counts the people who hold any live role of one application.
+  rpc AppUsage(AppUsageRequest) returns (AppUsageResponse);
+  // HolderKinds sorts one role's grants by their reach on one kind of place.
+  rpc HolderKinds(HolderKindsRequest) returns (HolderKindsResponse);
+  // PlaceHolders lists who reaches a place by naming it or a place above it.
+  rpc PlaceHolders(PlaceHoldersRequest) returns (PlaceHoldersResponse);
   // Registers an application's permission/role/route catalog. Validates,
   // diffs, applies. Removed permissions are deprecated, never deleted.
   rpc ApplyManifest(ApplyManifestRequest) returns (ApplyManifestResponse);
@@ -737,6 +745,8 @@ message Role {
   // grant that already names it keeps working. Set when a manifest stops
   // naming a role it owns; authorize() never reads it.
   bool deprecated = 10;
+  // What the role allows, counting the roles it includes.
+  int32 permission_count = 11;
 }
 
 message ListRolesRequest {
@@ -2169,4 +2179,68 @@ message PlaceReachResponse {
   repeated PlaceReachEntry group_entries = 4;
   // People with other hand-picked lists on this kind under the same parent.
   int32 other_fixed = 5;
+}
+
+message RoleUsageRequest {
+  repeated string role_ids = 1;
+}
+
+message RoleUsage {
+  string role_id = 1;
+  int32 people = 2;
+  // Of those, the people who have it from a group.
+  int32 via_groups = 3;
+}
+
+message RoleUsageResponse {
+  repeated RoleUsage roles = 1;
+}
+
+message AppUsageRequest {
+  string application_id = 1;
+}
+
+message AppUsageResponse {
+  int32 people = 1;
+  int32 direct = 2;
+  int32 via_groups = 3;
+}
+
+message HolderKindsRequest {
+  string role_id = 1;
+  string axis = 2;
+}
+
+message HolderKindsResponse {
+  int32 total = 1;
+  // No list kept: every place of the kind, new ones included.
+  int32 everything = 2;
+  // Every pick is a place with places inside it, taken with them.
+  int32 branch = 3;
+  int32 fixed = 4;
+  // A required kind the grant names nothing in: it never applies.
+  int32 nothing = 5;
+  // Fixed lists that name every place under some parent by hand.
+  int32 full = 6;
+}
+
+message PlaceHoldersRequest {
+  string node_id = 1;
+  int32 limit = 2;
+}
+
+message PlaceHolder {
+  string identity_id = 1;
+  string username = 2;
+  string role_name = 3;
+  // Set when the access comes from a group.
+  string group_name = 4;
+  // The pick is this place alone, not what is inside it.
+  bool only_here = 5;
+  // The pick is a place above this one, with everything inside.
+  bool from_above = 6;
+}
+
+message PlaceHoldersResponse {
+  repeated PlaceHolder holders = 1;
 }

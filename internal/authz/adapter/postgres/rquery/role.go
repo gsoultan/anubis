@@ -21,6 +21,8 @@ type RoleRow struct {
 	ApplicationSlug   runtime.Null[string]
 	// Retired from the catalog (0044). Live roles carry NULL.
 	DeprecatedAt runtime.Null[time.Time]
+	// Everything the role allows, through roles it includes too.
+	PermissionCount int32
 }
 
 // ListRoles is the TENANT's roles: what its own people can be given. Who may
@@ -31,7 +33,8 @@ var ListRoles = storm.SQL[RoleRow](`
 SELECT r.id::text AS id, r.tenant_id::text AS tenant_id, r.name, r.description,
        r.is_system, r.allowed_realm_kinds, r.assignable_at,
        r.application_id::text AS application_id,
-       a.slug AS application_slug, r.deprecated_at
+       a.slug AS application_slug, r.deprecated_at,
+       (SELECT count(*)::int FROM role_permissions_effective e WHERE e.role_id = r.id) AS permission_count
 FROM roles r
 LEFT JOIN applications a ON a.id = r.application_id
 WHERE r.tenant_id = $1
@@ -43,7 +46,8 @@ var GetRole = storm.SQL[RoleRow](`
 SELECT r.id::text AS id, r.tenant_id::text AS tenant_id, r.name, r.description,
        r.is_system, r.allowed_realm_kinds, r.assignable_at,
        r.application_id::text AS application_id,
-       a.slug AS application_slug, r.deprecated_at
+       a.slug AS application_slug, r.deprecated_at,
+       (SELECT count(*)::int FROM role_permissions_effective e WHERE e.role_id = r.id) AS permission_count
 FROM roles r
 LEFT JOIN applications a ON a.id = r.application_id
 WHERE r.id = $1 AND r.tenant_id = $2`)

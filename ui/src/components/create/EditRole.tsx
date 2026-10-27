@@ -86,7 +86,7 @@ export function EditRole({ opened }: { opened: boolean }) {
 
   return (
     <CreateShell
-      opened={opened} onClose={close} title={`Edit ${role?.name ?? 'role'}`}
+      opened={opened} onClose={close} title={`Edit ${role?.name ?? 'role'}`} size={620}
       description={<>Add or remove permissions and change who may hold it. Edits apply to
         <b> every holder immediately</b> — there is no per-person copy to drift.</>}
       footer={<CancelSubmit onCancel={close} onSubmit={() => void save()}
@@ -97,11 +97,11 @@ export function EditRole({ opened }: { opened: boolean }) {
         <TextInput label="Description" value={description}
           onChange={(e) => setDescription(e.currentTarget.value)} />
         <div>
-          <div className="t-body mb-1.5" style={{ fontWeight: 500 }}>Grantable to</div>
+          <div className="t-body mb-1.5" style={{ fontWeight: 500 }}>Who can get it</div>
           <div className="flex flex-col gap-2">
             {KINDS.map((k) => (
               <Checkbox key={k.value}
-                label={<span>{k.label} <span className="t-xs">— {k.hint}</span></span>}
+                label={<span>{k.label} <span className="t-xs">· {k.hint}</span></span>}
                 checked={kinds.includes(k.value)}
                 onChange={(e) => setKinds(e.currentTarget.checked
                   ? [...kinds, k.value] : kinds.filter((x) => x !== k.value))} />
@@ -109,9 +109,9 @@ export function EditRole({ opened }: { opened: boolean }) {
           </div>
         </div>
         <div>
-          <div className="t-body mb-0.5" style={{ fontWeight: 500 }}>What it permits</div>
-          <div className="t-xs mb-2">By app, part of the app and feature. Untick to remove; the role must keep at least one.</div>
-          <FeaturePicker perms={perms ?? []} apps={[]} appId={null} value={keys} onChange={setKeys} />
+          <div className="t-body mb-0.5" style={{ fontWeight: 500 }}>What it allows</div>
+          <div className="t-xs mb-2">Untick to take something away. The role must keep at least one.</div>
+          <FeaturePicker perms={perms ?? []} apps={[]} appId={role?.application_id ?? null} value={keys} onChange={setKeys} />
           <Patterns keys={keys} perms={perms ?? []} />
         </div>
         {(removed.length > 0 || added.length > 0) && (

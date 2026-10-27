@@ -5451,9 +5451,11 @@ type Role struct {
 	// Retired from the catalog: cannot be granted to anybody new, and every
 	// grant that already names it keeps working. Set when a manifest stops
 	// naming a role it owns; authorize() never reads it.
-	Deprecated    bool `protobuf:"varint,10,opt,name=deprecated,proto3" json:"deprecated,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Deprecated bool `protobuf:"varint,10,opt,name=deprecated,proto3" json:"deprecated,omitempty"`
+	// What the role allows, counting the roles it includes.
+	PermissionCount int32 `protobuf:"varint,11,opt,name=permission_count,json=permissionCount,proto3" json:"permission_count,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *Role) Reset() {
@@ -5554,6 +5556,13 @@ func (x *Role) GetDeprecated() bool {
 		return x.Deprecated
 	}
 	return false
+}
+
+func (x *Role) GetPermissionCount() int32 {
+	if x != nil {
+		return x.PermissionCount
+	}
+	return 0
 }
 
 type ListRolesRequest struct {
@@ -16775,6 +16784,582 @@ func (x *PlaceReachResponse) GetOtherFixed() int32 {
 	return 0
 }
 
+type RoleUsageRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RoleIds       []string               `protobuf:"bytes,1,rep,name=role_ids,json=roleIds,proto3" json:"role_ids,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RoleUsageRequest) Reset() {
+	*x = RoleUsageRequest{}
+	mi := &file_anubis_v1_admin_proto_msgTypes[293]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RoleUsageRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RoleUsageRequest) ProtoMessage() {}
+
+func (x *RoleUsageRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_anubis_v1_admin_proto_msgTypes[293]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RoleUsageRequest.ProtoReflect.Descriptor instead.
+func (*RoleUsageRequest) Descriptor() ([]byte, []int) {
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{293}
+}
+
+func (x *RoleUsageRequest) GetRoleIds() []string {
+	if x != nil {
+		return x.RoleIds
+	}
+	return nil
+}
+
+type RoleUsage struct {
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	RoleId string                 `protobuf:"bytes,1,opt,name=role_id,json=roleId,proto3" json:"role_id,omitempty"`
+	People int32                  `protobuf:"varint,2,opt,name=people,proto3" json:"people,omitempty"`
+	// Of those, the people who have it from a group.
+	ViaGroups     int32 `protobuf:"varint,3,opt,name=via_groups,json=viaGroups,proto3" json:"via_groups,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RoleUsage) Reset() {
+	*x = RoleUsage{}
+	mi := &file_anubis_v1_admin_proto_msgTypes[294]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RoleUsage) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RoleUsage) ProtoMessage() {}
+
+func (x *RoleUsage) ProtoReflect() protoreflect.Message {
+	mi := &file_anubis_v1_admin_proto_msgTypes[294]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RoleUsage.ProtoReflect.Descriptor instead.
+func (*RoleUsage) Descriptor() ([]byte, []int) {
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{294}
+}
+
+func (x *RoleUsage) GetRoleId() string {
+	if x != nil {
+		return x.RoleId
+	}
+	return ""
+}
+
+func (x *RoleUsage) GetPeople() int32 {
+	if x != nil {
+		return x.People
+	}
+	return 0
+}
+
+func (x *RoleUsage) GetViaGroups() int32 {
+	if x != nil {
+		return x.ViaGroups
+	}
+	return 0
+}
+
+type RoleUsageResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Roles         []*RoleUsage           `protobuf:"bytes,1,rep,name=roles,proto3" json:"roles,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RoleUsageResponse) Reset() {
+	*x = RoleUsageResponse{}
+	mi := &file_anubis_v1_admin_proto_msgTypes[295]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RoleUsageResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RoleUsageResponse) ProtoMessage() {}
+
+func (x *RoleUsageResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_anubis_v1_admin_proto_msgTypes[295]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RoleUsageResponse.ProtoReflect.Descriptor instead.
+func (*RoleUsageResponse) Descriptor() ([]byte, []int) {
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{295}
+}
+
+func (x *RoleUsageResponse) GetRoles() []*RoleUsage {
+	if x != nil {
+		return x.Roles
+	}
+	return nil
+}
+
+type AppUsageRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ApplicationId string                 `protobuf:"bytes,1,opt,name=application_id,json=applicationId,proto3" json:"application_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AppUsageRequest) Reset() {
+	*x = AppUsageRequest{}
+	mi := &file_anubis_v1_admin_proto_msgTypes[296]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AppUsageRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AppUsageRequest) ProtoMessage() {}
+
+func (x *AppUsageRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_anubis_v1_admin_proto_msgTypes[296]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AppUsageRequest.ProtoReflect.Descriptor instead.
+func (*AppUsageRequest) Descriptor() ([]byte, []int) {
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{296}
+}
+
+func (x *AppUsageRequest) GetApplicationId() string {
+	if x != nil {
+		return x.ApplicationId
+	}
+	return ""
+}
+
+type AppUsageResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	People        int32                  `protobuf:"varint,1,opt,name=people,proto3" json:"people,omitempty"`
+	Direct        int32                  `protobuf:"varint,2,opt,name=direct,proto3" json:"direct,omitempty"`
+	ViaGroups     int32                  `protobuf:"varint,3,opt,name=via_groups,json=viaGroups,proto3" json:"via_groups,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AppUsageResponse) Reset() {
+	*x = AppUsageResponse{}
+	mi := &file_anubis_v1_admin_proto_msgTypes[297]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AppUsageResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AppUsageResponse) ProtoMessage() {}
+
+func (x *AppUsageResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_anubis_v1_admin_proto_msgTypes[297]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AppUsageResponse.ProtoReflect.Descriptor instead.
+func (*AppUsageResponse) Descriptor() ([]byte, []int) {
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{297}
+}
+
+func (x *AppUsageResponse) GetPeople() int32 {
+	if x != nil {
+		return x.People
+	}
+	return 0
+}
+
+func (x *AppUsageResponse) GetDirect() int32 {
+	if x != nil {
+		return x.Direct
+	}
+	return 0
+}
+
+func (x *AppUsageResponse) GetViaGroups() int32 {
+	if x != nil {
+		return x.ViaGroups
+	}
+	return 0
+}
+
+type HolderKindsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RoleId        string                 `protobuf:"bytes,1,opt,name=role_id,json=roleId,proto3" json:"role_id,omitempty"`
+	Axis          string                 `protobuf:"bytes,2,opt,name=axis,proto3" json:"axis,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *HolderKindsRequest) Reset() {
+	*x = HolderKindsRequest{}
+	mi := &file_anubis_v1_admin_proto_msgTypes[298]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *HolderKindsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HolderKindsRequest) ProtoMessage() {}
+
+func (x *HolderKindsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_anubis_v1_admin_proto_msgTypes[298]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HolderKindsRequest.ProtoReflect.Descriptor instead.
+func (*HolderKindsRequest) Descriptor() ([]byte, []int) {
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{298}
+}
+
+func (x *HolderKindsRequest) GetRoleId() string {
+	if x != nil {
+		return x.RoleId
+	}
+	return ""
+}
+
+func (x *HolderKindsRequest) GetAxis() string {
+	if x != nil {
+		return x.Axis
+	}
+	return ""
+}
+
+type HolderKindsResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Total int32                  `protobuf:"varint,1,opt,name=total,proto3" json:"total,omitempty"`
+	// No list kept: every place of the kind, new ones included.
+	Everything int32 `protobuf:"varint,2,opt,name=everything,proto3" json:"everything,omitempty"`
+	// Every pick is a place with places inside it, taken with them.
+	Branch int32 `protobuf:"varint,3,opt,name=branch,proto3" json:"branch,omitempty"`
+	Fixed  int32 `protobuf:"varint,4,opt,name=fixed,proto3" json:"fixed,omitempty"`
+	// A required kind the grant names nothing in: it never applies.
+	Nothing int32 `protobuf:"varint,5,opt,name=nothing,proto3" json:"nothing,omitempty"`
+	// Fixed lists that name every place under some parent by hand.
+	Full          int32 `protobuf:"varint,6,opt,name=full,proto3" json:"full,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *HolderKindsResponse) Reset() {
+	*x = HolderKindsResponse{}
+	mi := &file_anubis_v1_admin_proto_msgTypes[299]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *HolderKindsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HolderKindsResponse) ProtoMessage() {}
+
+func (x *HolderKindsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_anubis_v1_admin_proto_msgTypes[299]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HolderKindsResponse.ProtoReflect.Descriptor instead.
+func (*HolderKindsResponse) Descriptor() ([]byte, []int) {
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{299}
+}
+
+func (x *HolderKindsResponse) GetTotal() int32 {
+	if x != nil {
+		return x.Total
+	}
+	return 0
+}
+
+func (x *HolderKindsResponse) GetEverything() int32 {
+	if x != nil {
+		return x.Everything
+	}
+	return 0
+}
+
+func (x *HolderKindsResponse) GetBranch() int32 {
+	if x != nil {
+		return x.Branch
+	}
+	return 0
+}
+
+func (x *HolderKindsResponse) GetFixed() int32 {
+	if x != nil {
+		return x.Fixed
+	}
+	return 0
+}
+
+func (x *HolderKindsResponse) GetNothing() int32 {
+	if x != nil {
+		return x.Nothing
+	}
+	return 0
+}
+
+func (x *HolderKindsResponse) GetFull() int32 {
+	if x != nil {
+		return x.Full
+	}
+	return 0
+}
+
+type PlaceHoldersRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	NodeId        string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	Limit         int32                  `protobuf:"varint,2,opt,name=limit,proto3" json:"limit,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PlaceHoldersRequest) Reset() {
+	*x = PlaceHoldersRequest{}
+	mi := &file_anubis_v1_admin_proto_msgTypes[300]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PlaceHoldersRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PlaceHoldersRequest) ProtoMessage() {}
+
+func (x *PlaceHoldersRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_anubis_v1_admin_proto_msgTypes[300]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PlaceHoldersRequest.ProtoReflect.Descriptor instead.
+func (*PlaceHoldersRequest) Descriptor() ([]byte, []int) {
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{300}
+}
+
+func (x *PlaceHoldersRequest) GetNodeId() string {
+	if x != nil {
+		return x.NodeId
+	}
+	return ""
+}
+
+func (x *PlaceHoldersRequest) GetLimit() int32 {
+	if x != nil {
+		return x.Limit
+	}
+	return 0
+}
+
+type PlaceHolder struct {
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	IdentityId string                 `protobuf:"bytes,1,opt,name=identity_id,json=identityId,proto3" json:"identity_id,omitempty"`
+	Username   string                 `protobuf:"bytes,2,opt,name=username,proto3" json:"username,omitempty"`
+	RoleName   string                 `protobuf:"bytes,3,opt,name=role_name,json=roleName,proto3" json:"role_name,omitempty"`
+	// Set when the access comes from a group.
+	GroupName string `protobuf:"bytes,4,opt,name=group_name,json=groupName,proto3" json:"group_name,omitempty"`
+	// The pick is this place alone, not what is inside it.
+	OnlyHere bool `protobuf:"varint,5,opt,name=only_here,json=onlyHere,proto3" json:"only_here,omitempty"`
+	// The pick is a place above this one, with everything inside.
+	FromAbove     bool `protobuf:"varint,6,opt,name=from_above,json=fromAbove,proto3" json:"from_above,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PlaceHolder) Reset() {
+	*x = PlaceHolder{}
+	mi := &file_anubis_v1_admin_proto_msgTypes[301]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PlaceHolder) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PlaceHolder) ProtoMessage() {}
+
+func (x *PlaceHolder) ProtoReflect() protoreflect.Message {
+	mi := &file_anubis_v1_admin_proto_msgTypes[301]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PlaceHolder.ProtoReflect.Descriptor instead.
+func (*PlaceHolder) Descriptor() ([]byte, []int) {
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{301}
+}
+
+func (x *PlaceHolder) GetIdentityId() string {
+	if x != nil {
+		return x.IdentityId
+	}
+	return ""
+}
+
+func (x *PlaceHolder) GetUsername() string {
+	if x != nil {
+		return x.Username
+	}
+	return ""
+}
+
+func (x *PlaceHolder) GetRoleName() string {
+	if x != nil {
+		return x.RoleName
+	}
+	return ""
+}
+
+func (x *PlaceHolder) GetGroupName() string {
+	if x != nil {
+		return x.GroupName
+	}
+	return ""
+}
+
+func (x *PlaceHolder) GetOnlyHere() bool {
+	if x != nil {
+		return x.OnlyHere
+	}
+	return false
+}
+
+func (x *PlaceHolder) GetFromAbove() bool {
+	if x != nil {
+		return x.FromAbove
+	}
+	return false
+}
+
+type PlaceHoldersResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Holders       []*PlaceHolder         `protobuf:"bytes,1,rep,name=holders,proto3" json:"holders,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PlaceHoldersResponse) Reset() {
+	*x = PlaceHoldersResponse{}
+	mi := &file_anubis_v1_admin_proto_msgTypes[302]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PlaceHoldersResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PlaceHoldersResponse) ProtoMessage() {}
+
+func (x *PlaceHoldersResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_anubis_v1_admin_proto_msgTypes[302]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PlaceHoldersResponse.ProtoReflect.Descriptor instead.
+func (*PlaceHoldersResponse) Descriptor() ([]byte, []int) {
+	return file_anubis_v1_admin_proto_rawDescGZIP(), []int{302}
+}
+
+func (x *PlaceHoldersResponse) GetHolders() []*PlaceHolder {
+	if x != nil {
+		return x.Holders
+	}
+	return nil
+}
+
 var File_anubis_v1_admin_proto protoreflect.FileDescriptor
 
 const file_anubis_v1_admin_proto_rawDesc = "" +
@@ -17159,7 +17744,7 @@ const file_anubis_v1_admin_proto_rawDesc = "" +
 	"\tsource_id\x18\x01 \x01(\tR\bsourceId\x12\x14\n" +
 	"\x05limit\x18\x02 \x01(\x05R\x05limit\"D\n" +
 	"\x17ListCatalogRunsResponse\x12)\n" +
-	"\x04runs\x18\x01 \x03(\v2\x15.anubis.v1.CatalogRunR\x04runs\"\xc4\x02\n" +
+	"\x04runs\x18\x01 \x03(\v2\x15.anubis.v1.CatalogRunR\x04runs\"\xef\x02\n" +
 	"\x04Role\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12 \n" +
@@ -17174,7 +17759,8 @@ const file_anubis_v1_admin_proto_rawDesc = "" +
 	"\n" +
 	"deprecated\x18\n" +
 	" \x01(\bR\n" +
-	"deprecated\"(\n" +
+	"deprecated\x12)\n" +
+	"\x10permission_count\x18\v \x01(\x05R\x0fpermissionCount\"(\n" +
 	"\x10ListRolesRequest\x12\x14\n" +
 	"\x05query\x18\x01 \x01(\tR\x05query\":\n" +
 	"\x11ListRolesResponse\x12%\n" +
@@ -17986,7 +18572,50 @@ const file_anubis_v1_admin_proto_rawDesc = "" +
 	"\fmight_expect\x18\x03 \x03(\v2\x1a.anubis.v1.PlaceReachGroupR\vmightExpect\x12?\n" +
 	"\rgroup_entries\x18\x04 \x03(\v2\x1a.anubis.v1.PlaceReachEntryR\fgroupEntries\x12\x1f\n" +
 	"\vother_fixed\x18\x05 \x01(\x05R\n" +
-	"otherFixed2\x87\f\n" +
+	"otherFixed\"-\n" +
+	"\x10RoleUsageRequest\x12\x19\n" +
+	"\brole_ids\x18\x01 \x03(\tR\aroleIds\"[\n" +
+	"\tRoleUsage\x12\x17\n" +
+	"\arole_id\x18\x01 \x01(\tR\x06roleId\x12\x16\n" +
+	"\x06people\x18\x02 \x01(\x05R\x06people\x12\x1d\n" +
+	"\n" +
+	"via_groups\x18\x03 \x01(\x05R\tviaGroups\"?\n" +
+	"\x11RoleUsageResponse\x12*\n" +
+	"\x05roles\x18\x01 \x03(\v2\x14.anubis.v1.RoleUsageR\x05roles\"8\n" +
+	"\x0fAppUsageRequest\x12%\n" +
+	"\x0eapplication_id\x18\x01 \x01(\tR\rapplicationId\"a\n" +
+	"\x10AppUsageResponse\x12\x16\n" +
+	"\x06people\x18\x01 \x01(\x05R\x06people\x12\x16\n" +
+	"\x06direct\x18\x02 \x01(\x05R\x06direct\x12\x1d\n" +
+	"\n" +
+	"via_groups\x18\x03 \x01(\x05R\tviaGroups\"A\n" +
+	"\x12HolderKindsRequest\x12\x17\n" +
+	"\arole_id\x18\x01 \x01(\tR\x06roleId\x12\x12\n" +
+	"\x04axis\x18\x02 \x01(\tR\x04axis\"\xa7\x01\n" +
+	"\x13HolderKindsResponse\x12\x14\n" +
+	"\x05total\x18\x01 \x01(\x05R\x05total\x12\x1e\n" +
+	"\n" +
+	"everything\x18\x02 \x01(\x05R\n" +
+	"everything\x12\x16\n" +
+	"\x06branch\x18\x03 \x01(\x05R\x06branch\x12\x14\n" +
+	"\x05fixed\x18\x04 \x01(\x05R\x05fixed\x12\x18\n" +
+	"\anothing\x18\x05 \x01(\x05R\anothing\x12\x12\n" +
+	"\x04full\x18\x06 \x01(\x05R\x04full\"D\n" +
+	"\x13PlaceHoldersRequest\x12\x17\n" +
+	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x14\n" +
+	"\x05limit\x18\x02 \x01(\x05R\x05limit\"\xc2\x01\n" +
+	"\vPlaceHolder\x12\x1f\n" +
+	"\videntity_id\x18\x01 \x01(\tR\n" +
+	"identityId\x12\x1a\n" +
+	"\busername\x18\x02 \x01(\tR\busername\x12\x1b\n" +
+	"\trole_name\x18\x03 \x01(\tR\broleName\x12\x1d\n" +
+	"\n" +
+	"group_name\x18\x04 \x01(\tR\tgroupName\x12\x1b\n" +
+	"\tonly_here\x18\x05 \x01(\bR\bonlyHere\x12\x1d\n" +
+	"\n" +
+	"from_above\x18\x06 \x01(\bR\tfromAbove\"H\n" +
+	"\x14PlaceHoldersResponse\x120\n" +
+	"\aholders\x18\x01 \x03(\v2\x16.anubis.v1.PlaceHolderR\aholders2\x87\f\n" +
 	"\x14IdentityAdminService\x12U\n" +
 	"\x0eListIdentities\x12 .anubis.v1.ListIdentitiesRequest\x1a!.anubis.v1.ListIdentitiesResponse\x12L\n" +
 	"\vGetIdentity\x12\x1d.anubis.v1.GetIdentityRequest\x1a\x1e.anubis.v1.GetIdentityResponse\x12U\n" +
@@ -18029,7 +18658,7 @@ const file_anubis_v1_admin_proto_rawDesc = "" +
 	"\x10UpdateSyncSource\x12\".anubis.v1.UpdateSyncSourceRequest\x1a#.anubis.v1.UpdateSyncSourceResponse\x12X\n" +
 	"\x0fSetSyncSchedule\x12!.anubis.v1.SetSyncScheduleRequest\x1a\".anubis.v1.SetSyncScheduleResponse\x12@\n" +
 	"\aRunSync\x12\x19.anubis.v1.RunSyncRequest\x1a\x1a.anubis.v1.RunSyncResponse\x12O\n" +
-	"\fListSyncRuns\x12\x1e.anubis.v1.ListSyncRunsRequest\x1a\x1f.anubis.v1.ListSyncRunsResponse2\xa5\x15\n" +
+	"\fListSyncRuns\x12\x1e.anubis.v1.ListSyncRunsRequest\x1a\x1f.anubis.v1.ListSyncRunsResponse2\xd1\x17\n" +
 	"\x11AuthzAdminService\x12F\n" +
 	"\tListRoles\x12\x1b.anubis.v1.ListRolesRequest\x1a\x1c.anubis.v1.ListRolesResponse\x12I\n" +
 	"\n" +
@@ -18057,7 +18686,11 @@ const file_anubis_v1_admin_proto_rawDesc = "" +
 	"\x10ListGrantChanges\x12\".anubis.v1.ListGrantChangesRequest\x1a#.anubis.v1.ListGrantChangesResponse\x12R\n" +
 	"\rListFullLists\x12\x1f.anubis.v1.ListFullListsRequest\x1a .anubis.v1.ListFullListsResponse\x12I\n" +
 	"\n" +
-	"PlaceReach\x12\x1c.anubis.v1.PlaceReachRequest\x1a\x1d.anubis.v1.PlaceReachResponse\x12R\n" +
+	"PlaceReach\x12\x1c.anubis.v1.PlaceReachRequest\x1a\x1d.anubis.v1.PlaceReachResponse\x12F\n" +
+	"\tRoleUsage\x12\x1b.anubis.v1.RoleUsageRequest\x1a\x1c.anubis.v1.RoleUsageResponse\x12C\n" +
+	"\bAppUsage\x12\x1a.anubis.v1.AppUsageRequest\x1a\x1b.anubis.v1.AppUsageResponse\x12L\n" +
+	"\vHolderKinds\x12\x1d.anubis.v1.HolderKindsRequest\x1a\x1e.anubis.v1.HolderKindsResponse\x12O\n" +
+	"\fPlaceHolders\x12\x1e.anubis.v1.PlaceHoldersRequest\x1a\x1f.anubis.v1.PlaceHoldersResponse\x12R\n" +
 	"\rApplyManifest\x12\x1f.anubis.v1.ApplyManifestRequest\x1a .anubis.v1.ApplyManifestResponse\x12a\n" +
 	"\x12ListCatalogSources\x12$.anubis.v1.ListCatalogSourcesRequest\x1a%.anubis.v1.ListCatalogSourcesResponse\x12d\n" +
 	"\x13CreateCatalogSource\x12%.anubis.v1.CreateCatalogSourceRequest\x1a&.anubis.v1.CreateCatalogSourceResponse\x12d\n" +
@@ -18138,7 +18771,7 @@ func file_anubis_v1_admin_proto_rawDescGZIP() []byte {
 	return file_anubis_v1_admin_proto_rawDescData
 }
 
-var file_anubis_v1_admin_proto_msgTypes = make([]protoimpl.MessageInfo, 295)
+var file_anubis_v1_admin_proto_msgTypes = make([]protoimpl.MessageInfo, 305)
 var file_anubis_v1_admin_proto_goTypes = []any{
 	(*Identity)(nil),                          // 0: anubis.v1.Identity
 	(*ListIdentitiesRequest)(nil),             // 1: anubis.v1.ListIdentitiesRequest
@@ -18433,16 +19066,26 @@ var file_anubis_v1_admin_proto_goTypes = []any{
 	(*PlaceReachGroup)(nil),                   // 290: anubis.v1.PlaceReachGroup
 	(*PlaceReachEntry)(nil),                   // 291: anubis.v1.PlaceReachEntry
 	(*PlaceReachResponse)(nil),                // 292: anubis.v1.PlaceReachResponse
-	nil,                                       // 293: anubis.v1.GetIdentityAttributesResponse.AttributesEntry
-	nil,                                       // 294: anubis.v1.SetIdentityAttributesRequest.AttributesEntry
+	(*RoleUsageRequest)(nil),                  // 293: anubis.v1.RoleUsageRequest
+	(*RoleUsage)(nil),                         // 294: anubis.v1.RoleUsage
+	(*RoleUsageResponse)(nil),                 // 295: anubis.v1.RoleUsageResponse
+	(*AppUsageRequest)(nil),                   // 296: anubis.v1.AppUsageRequest
+	(*AppUsageResponse)(nil),                  // 297: anubis.v1.AppUsageResponse
+	(*HolderKindsRequest)(nil),                // 298: anubis.v1.HolderKindsRequest
+	(*HolderKindsResponse)(nil),               // 299: anubis.v1.HolderKindsResponse
+	(*PlaceHoldersRequest)(nil),               // 300: anubis.v1.PlaceHoldersRequest
+	(*PlaceHolder)(nil),                       // 301: anubis.v1.PlaceHolder
+	(*PlaceHoldersResponse)(nil),              // 302: anubis.v1.PlaceHoldersResponse
+	nil,                                       // 303: anubis.v1.GetIdentityAttributesResponse.AttributesEntry
+	nil,                                       // 304: anubis.v1.SetIdentityAttributesRequest.AttributesEntry
 }
 var file_anubis_v1_admin_proto_depIdxs = []int32{
 	0,   // 0: anubis.v1.ListIdentitiesResponse.identities:type_name -> anubis.v1.Identity
 	0,   // 1: anubis.v1.GetIdentityResponse.identity:type_name -> anubis.v1.Identity
 	4,   // 2: anubis.v1.GetIdentityResponse.credentials:type_name -> anubis.v1.CredentialInfo
 	0,   // 3: anubis.v1.CreateIdentityResponse.identity:type_name -> anubis.v1.Identity
-	293, // 4: anubis.v1.GetIdentityAttributesResponse.attributes:type_name -> anubis.v1.GetIdentityAttributesResponse.AttributesEntry
-	294, // 5: anubis.v1.SetIdentityAttributesRequest.attributes:type_name -> anubis.v1.SetIdentityAttributesRequest.AttributesEntry
+	303, // 4: anubis.v1.GetIdentityAttributesResponse.attributes:type_name -> anubis.v1.GetIdentityAttributesResponse.AttributesEntry
+	304, // 5: anubis.v1.SetIdentityAttributesRequest.attributes:type_name -> anubis.v1.SetIdentityAttributesRequest.AttributesEntry
 	4,   // 6: anubis.v1.ListCredentialsResponse.credentials:type_name -> anubis.v1.CredentialInfo
 	30,  // 7: anubis.v1.ListConsentsResponse.consents:type_name -> anubis.v1.Consent
 	30,  // 8: anubis.v1.RecordConsentResponse.consent:type_name -> anubis.v1.Consent
@@ -18543,259 +19186,269 @@ var file_anubis_v1_admin_proto_depIdxs = []int32{
 	287, // 103: anubis.v1.ListFullListsResponse.lists:type_name -> anubis.v1.FullList
 	290, // 104: anubis.v1.PlaceReachResponse.might_expect:type_name -> anubis.v1.PlaceReachGroup
 	291, // 105: anubis.v1.PlaceReachResponse.group_entries:type_name -> anubis.v1.PlaceReachEntry
-	1,   // 106: anubis.v1.IdentityAdminService.ListIdentities:input_type -> anubis.v1.ListIdentitiesRequest
-	3,   // 107: anubis.v1.IdentityAdminService.GetIdentity:input_type -> anubis.v1.GetIdentityRequest
-	6,   // 108: anubis.v1.IdentityAdminService.CreateIdentity:input_type -> anubis.v1.CreateIdentityRequest
-	8,   // 109: anubis.v1.IdentityAdminService.DisableIdentity:input_type -> anubis.v1.DisableIdentityRequest
-	10,  // 110: anubis.v1.IdentityAdminService.EnableIdentity:input_type -> anubis.v1.EnableIdentityRequest
-	12,  // 111: anubis.v1.IdentityAdminService.BumpTokenEpoch:input_type -> anubis.v1.BumpTokenEpochRequest
-	14,  // 112: anubis.v1.IdentityAdminService.SetPassword:input_type -> anubis.v1.SetPasswordRequest
-	16,  // 113: anubis.v1.IdentityAdminService.ImportPasswordHash:input_type -> anubis.v1.ImportPasswordHashRequest
-	18,  // 114: anubis.v1.IdentityAdminService.LinkIdentities:input_type -> anubis.v1.LinkIdentitiesRequest
-	20,  // 115: anubis.v1.IdentityAdminService.RequestErasure:input_type -> anubis.v1.RequestErasureRequest
-	22,  // 116: anubis.v1.IdentityAdminService.GetIdentityAttributes:input_type -> anubis.v1.GetIdentityAttributesRequest
-	24,  // 117: anubis.v1.IdentityAdminService.SetIdentityAttributes:input_type -> anubis.v1.SetIdentityAttributesRequest
-	26,  // 118: anubis.v1.IdentityAdminService.ListCredentials:input_type -> anubis.v1.ListCredentialsRequest
-	28,  // 119: anubis.v1.IdentityAdminService.RevokeCredential:input_type -> anubis.v1.RevokeCredentialRequest
-	31,  // 120: anubis.v1.IdentityAdminService.ListConsents:input_type -> anubis.v1.ListConsentsRequest
-	33,  // 121: anubis.v1.IdentityAdminService.RecordConsent:input_type -> anubis.v1.RecordConsentRequest
-	35,  // 122: anubis.v1.IdentityAdminService.WithdrawConsent:input_type -> anubis.v1.WithdrawConsentRequest
-	38,  // 123: anubis.v1.ScopeAdminService.ListScopeAxes:input_type -> anubis.v1.ListScopeAxesRequest
-	40,  // 124: anubis.v1.ScopeAdminService.CreateScopeAxis:input_type -> anubis.v1.CreateScopeAxisRequest
-	42,  // 125: anubis.v1.ScopeAdminService.UpdateScopeAxis:input_type -> anubis.v1.UpdateScopeAxisRequest
-	44,  // 126: anubis.v1.ScopeAdminService.StrictDryRun:input_type -> anubis.v1.StrictDryRunRequest
-	47,  // 127: anubis.v1.ScopeAdminService.ListScopeNodeTypes:input_type -> anubis.v1.ListScopeNodeTypesRequest
-	49,  // 128: anubis.v1.ScopeAdminService.CreateScopeNodeType:input_type -> anubis.v1.CreateScopeNodeTypeRequest
-	51,  // 129: anubis.v1.ScopeAdminService.UpdateScopeNodeType:input_type -> anubis.v1.UpdateScopeNodeTypeRequest
-	54,  // 130: anubis.v1.ScopeAdminService.ListScopeNodes:input_type -> anubis.v1.ListScopeNodesRequest
-	252, // 131: anubis.v1.ScopeAdminService.GetScopeNode:input_type -> anubis.v1.GetScopeNodeRequest
-	253, // 132: anubis.v1.ScopeAdminService.GetScopeNodes:input_type -> anubis.v1.GetScopeNodesRequest
-	256, // 133: anubis.v1.ScopeAdminService.ScopeAncestors:input_type -> anubis.v1.ScopeAncestorsRequest
-	56,  // 134: anubis.v1.ScopeAdminService.CreateScopeNode:input_type -> anubis.v1.CreateScopeNodeRequest
-	58,  // 135: anubis.v1.ScopeAdminService.EnsureAxisRoot:input_type -> anubis.v1.EnsureAxisRootRequest
-	60,  // 136: anubis.v1.ScopeAdminService.MoveScopeNode:input_type -> anubis.v1.MoveScopeNodeRequest
-	62,  // 137: anubis.v1.ScopeAdminService.ArchiveScopeNode:input_type -> anubis.v1.ArchiveScopeNodeRequest
-	64,  // 138: anubis.v1.ScopeAdminService.RestoreScopeNode:input_type -> anubis.v1.RestoreScopeNodeRequest
-	66,  // 139: anubis.v1.ScopeAdminService.RenameScopeNode:input_type -> anubis.v1.RenameScopeNodeRequest
-	69,  // 140: anubis.v1.ScopeAdminService.UpsertScopeNodes:input_type -> anubis.v1.UpsertScopeNodesRequest
-	72,  // 141: anubis.v1.ScopeAdminService.ListSyncSources:input_type -> anubis.v1.ListSyncSourcesRequest
-	74,  // 142: anubis.v1.ScopeAdminService.CreateSyncSource:input_type -> anubis.v1.CreateSyncSourceRequest
-	76,  // 143: anubis.v1.ScopeAdminService.UpdateSyncSource:input_type -> anubis.v1.UpdateSyncSourceRequest
-	78,  // 144: anubis.v1.ScopeAdminService.SetSyncSchedule:input_type -> anubis.v1.SetSyncScheduleRequest
-	80,  // 145: anubis.v1.ScopeAdminService.RunSync:input_type -> anubis.v1.RunSyncRequest
-	82,  // 146: anubis.v1.ScopeAdminService.ListSyncRuns:input_type -> anubis.v1.ListSyncRunsRequest
-	100, // 147: anubis.v1.AuthzAdminService.ListRoles:input_type -> anubis.v1.ListRolesRequest
-	102, // 148: anubis.v1.AuthzAdminService.CreateRole:input_type -> anubis.v1.CreateRoleRequest
-	104, // 149: anubis.v1.AuthzAdminService.UpdateRole:input_type -> anubis.v1.UpdateRoleRequest
-	106, // 150: anubis.v1.AuthzAdminService.GetRoleEffective:input_type -> anubis.v1.GetRoleEffectiveRequest
-	110, // 151: anubis.v1.AuthzAdminService.ListPermissions:input_type -> anubis.v1.ListPermissionsRequest
-	114, // 152: anubis.v1.AuthzAdminService.ListGrants:input_type -> anubis.v1.ListGrantsRequest
-	259, // 153: anubis.v1.AuthzAdminService.SearchGrants:input_type -> anubis.v1.SearchGrantsRequest
-	116, // 154: anubis.v1.AuthzAdminService.CreateGrant:input_type -> anubis.v1.CreateGrantRequest
-	118, // 155: anubis.v1.AuthzAdminService.RevokeGrant:input_type -> anubis.v1.RevokeGrantRequest
-	122, // 156: anubis.v1.AuthzAdminService.ListMemberships:input_type -> anubis.v1.ListMembershipsRequest
-	124, // 157: anubis.v1.AuthzAdminService.CreateMembership:input_type -> anubis.v1.CreateMembershipRequest
-	126, // 158: anubis.v1.AuthzAdminService.SetMembershipEntries:input_type -> anubis.v1.SetMembershipEntriesRequest
-	128, // 159: anubis.v1.AuthzAdminService.AssignMembership:input_type -> anubis.v1.AssignMembershipRequest
-	130, // 160: anubis.v1.AuthzAdminService.UnassignMembership:input_type -> anubis.v1.UnassignMembershipRequest
-	132, // 161: anubis.v1.AuthzAdminService.ResyncMembership:input_type -> anubis.v1.ResyncMembershipRequest
-	135, // 162: anubis.v1.AuthzAdminService.ListMembershipAssignments:input_type -> anubis.v1.ListMembershipAssignmentsRequest
-	270, // 163: anubis.v1.AuthzAdminService.SummarizeAccess:input_type -> anubis.v1.SummarizeAccessRequest
-	275, // 164: anubis.v1.AuthzAdminService.PreviewGrantChange:input_type -> anubis.v1.PreviewGrantChangeRequest
-	276, // 165: anubis.v1.AuthzAdminService.ApplyGrantChange:input_type -> anubis.v1.ApplyGrantChangeRequest
-	281, // 166: anubis.v1.AuthzAdminService.UndoGrantChange:input_type -> anubis.v1.UndoGrantChangeRequest
-	284, // 167: anubis.v1.AuthzAdminService.ListGrantChanges:input_type -> anubis.v1.ListGrantChangesRequest
-	286, // 168: anubis.v1.AuthzAdminService.ListFullLists:input_type -> anubis.v1.ListFullListsRequest
-	289, // 169: anubis.v1.AuthzAdminService.PlaceReach:input_type -> anubis.v1.PlaceReachRequest
-	137, // 170: anubis.v1.AuthzAdminService.ApplyManifest:input_type -> anubis.v1.ApplyManifestRequest
-	87,  // 171: anubis.v1.AuthzAdminService.ListCatalogSources:input_type -> anubis.v1.ListCatalogSourcesRequest
-	89,  // 172: anubis.v1.AuthzAdminService.CreateCatalogSource:input_type -> anubis.v1.CreateCatalogSourceRequest
-	91,  // 173: anubis.v1.AuthzAdminService.UpdateCatalogSource:input_type -> anubis.v1.UpdateCatalogSourceRequest
-	93,  // 174: anubis.v1.AuthzAdminService.DeleteCatalogSource:input_type -> anubis.v1.DeleteCatalogSourceRequest
-	95,  // 175: anubis.v1.AuthzAdminService.RunCatalogSource:input_type -> anubis.v1.RunCatalogSourceRequest
-	97,  // 176: anubis.v1.AuthzAdminService.ListCatalogRuns:input_type -> anubis.v1.ListCatalogRunsRequest
-	155, // 177: anubis.v1.TenantAdminService.ListTenants:input_type -> anubis.v1.ListTenantsRequest
-	157, // 178: anubis.v1.TenantAdminService.CreateTenant:input_type -> anubis.v1.CreateTenantRequest
-	240, // 179: anubis.v1.TenantAdminService.UpdateTenant:input_type -> anubis.v1.UpdateTenantRequest
-	242, // 180: anubis.v1.TenantAdminService.MoveTenant:input_type -> anubis.v1.MoveTenantRequest
-	246, // 181: anubis.v1.TenantAdminService.GetTenantStats:input_type -> anubis.v1.GetTenantStatsRequest
-	248, // 182: anubis.v1.TenantAdminService.GetDashboard:input_type -> anubis.v1.GetDashboardRequest
-	264, // 183: anubis.v1.TenantAdminService.ListApiKeys:input_type -> anubis.v1.ListApiKeysRequest
-	266, // 184: anubis.v1.TenantAdminService.CreateApiKey:input_type -> anubis.v1.CreateApiKeyRequest
-	268, // 185: anubis.v1.TenantAdminService.RevokeApiKey:input_type -> anubis.v1.RevokeApiKeyRequest
-	244, // 186: anubis.v1.TenantAdminService.SetTenantStatus:input_type -> anubis.v1.SetTenantStatusRequest
-	160, // 187: anubis.v1.TenantAdminService.ListRealms:input_type -> anubis.v1.ListRealmsRequest
-	162, // 188: anubis.v1.TenantAdminService.CreateRealm:input_type -> anubis.v1.CreateRealmRequest
-	164, // 189: anubis.v1.TenantAdminService.UpdateRealm:input_type -> anubis.v1.UpdateRealmRequest
-	167, // 190: anubis.v1.TenantAdminService.ListRealmCategories:input_type -> anubis.v1.ListRealmCategoriesRequest
-	169, // 191: anubis.v1.TenantAdminService.CreateRealmCategory:input_type -> anubis.v1.CreateRealmCategoryRequest
-	172, // 192: anubis.v1.TenantAdminService.ListApplications:input_type -> anubis.v1.ListApplicationsRequest
-	174, // 193: anubis.v1.TenantAdminService.CreateApplication:input_type -> anubis.v1.CreateApplicationRequest
-	176, // 194: anubis.v1.TenantAdminService.UpdateApplication:input_type -> anubis.v1.UpdateApplicationRequest
-	178, // 195: anubis.v1.TenantAdminService.RotateClientSecret:input_type -> anubis.v1.RotateClientSecretRequest
-	181, // 196: anubis.v1.TenantAdminService.ListRoutePolicies:input_type -> anubis.v1.ListRoutePoliciesRequest
-	184, // 197: anubis.v1.TenantAdminService.QueryAudit:input_type -> anubis.v1.QueryAuditRequest
-	186, // 198: anubis.v1.TenantAdminService.VerifyAuditChain:input_type -> anubis.v1.VerifyAuditChainRequest
-	189, // 199: anubis.v1.TenantAdminService.ListSigningKeys:input_type -> anubis.v1.ListSigningKeysRequest
-	191, // 200: anubis.v1.TenantAdminService.RotateSigningKey:input_type -> anubis.v1.RotateSigningKeyRequest
-	193, // 201: anubis.v1.TenantAdminService.GetCatalogVersion:input_type -> anubis.v1.GetCatalogVersionRequest
-	195, // 202: anubis.v1.TenantAdminService.GetSigninPage:input_type -> anubis.v1.GetSigninPageRequest
-	197, // 203: anubis.v1.TenantAdminService.PutSigninPage:input_type -> anubis.v1.PutSigninPageRequest
-	140, // 204: anubis.v1.TenantAdminService.ListAuthPages:input_type -> anubis.v1.ListAuthPagesRequest
-	142, // 205: anubis.v1.TenantAdminService.GetAuthPage:input_type -> anubis.v1.GetAuthPageRequest
-	144, // 206: anubis.v1.TenantAdminService.CreateAuthPage:input_type -> anubis.v1.CreateAuthPageRequest
-	146, // 207: anubis.v1.TenantAdminService.UpdateAuthPage:input_type -> anubis.v1.UpdateAuthPageRequest
-	148, // 208: anubis.v1.TenantAdminService.DeleteAuthPage:input_type -> anubis.v1.DeleteAuthPageRequest
-	150, // 209: anubis.v1.TenantAdminService.SetDefaultAuthPage:input_type -> anubis.v1.SetDefaultAuthPageRequest
-	152, // 210: anubis.v1.TenantAdminService.PreviewAuthPage:input_type -> anubis.v1.PreviewAuthPageRequest
-	199, // 211: anubis.v1.ProvisioningService.DownloadImportTemplate:input_type -> anubis.v1.DownloadImportTemplateRequest
-	201, // 212: anubis.v1.ProvisioningService.ImportWorkbook:input_type -> anubis.v1.ImportWorkbookRequest
-	215, // 213: anubis.v1.PlatformAdminService.ListOperators:input_type -> anubis.v1.ListOperatorsRequest
-	209, // 214: anubis.v1.PlatformAdminService.CreatePlatformApiKey:input_type -> anubis.v1.CreatePlatformApiKeyRequest
-	211, // 215: anubis.v1.PlatformAdminService.ListPlatformApiKeys:input_type -> anubis.v1.ListPlatformApiKeysRequest
-	213, // 216: anubis.v1.PlatformAdminService.RevokePlatformApiKey:input_type -> anubis.v1.RevokePlatformApiKeyRequest
-	221, // 217: anubis.v1.PlatformAdminService.CreateOperator:input_type -> anubis.v1.CreateOperatorRequest
-	217, // 218: anubis.v1.PlatformAdminService.AssignOperator:input_type -> anubis.v1.AssignOperatorRequest
-	219, // 219: anubis.v1.PlatformAdminService.RevokeAssignment:input_type -> anubis.v1.RevokeAssignmentRequest
-	261, // 220: anubis.v1.PlatformAdminService.SetOperatorStatus:input_type -> anubis.v1.SetOperatorStatusRequest
-	204, // 221: anubis.v1.PlatformAdminService.ResetOperatorPassword:input_type -> anubis.v1.ResetOperatorPasswordRequest
-	225, // 222: anubis.v1.PlatformAuthService.PlatformLogin:input_type -> anubis.v1.PlatformLoginRequest
-	231, // 223: anubis.v1.PlatformAuthService.PlatformVerifyMfa:input_type -> anubis.v1.PlatformVerifyMfaRequest
-	227, // 224: anubis.v1.PlatformAuthService.PlatformRefresh:input_type -> anubis.v1.PlatformRefreshRequest
-	229, // 225: anubis.v1.PlatformAuthService.PlatformLogout:input_type -> anubis.v1.PlatformLogoutRequest
-	233, // 226: anubis.v1.PlatformAuthService.BeginTotpEnrolment:input_type -> anubis.v1.BeginTotpEnrolmentRequest
-	235, // 227: anubis.v1.PlatformAuthService.ConfirmTotpEnrolment:input_type -> anubis.v1.ConfirmTotpEnrolmentRequest
-	237, // 228: anubis.v1.PlatformAuthService.MyTenants:input_type -> anubis.v1.MyTenantsRequest
-	223, // 229: anubis.v1.PlatformAuthService.ChangePlatformPassword:input_type -> anubis.v1.ChangePlatformPasswordRequest
-	2,   // 230: anubis.v1.IdentityAdminService.ListIdentities:output_type -> anubis.v1.ListIdentitiesResponse
-	5,   // 231: anubis.v1.IdentityAdminService.GetIdentity:output_type -> anubis.v1.GetIdentityResponse
-	7,   // 232: anubis.v1.IdentityAdminService.CreateIdentity:output_type -> anubis.v1.CreateIdentityResponse
-	9,   // 233: anubis.v1.IdentityAdminService.DisableIdentity:output_type -> anubis.v1.DisableIdentityResponse
-	11,  // 234: anubis.v1.IdentityAdminService.EnableIdentity:output_type -> anubis.v1.EnableIdentityResponse
-	13,  // 235: anubis.v1.IdentityAdminService.BumpTokenEpoch:output_type -> anubis.v1.BumpTokenEpochResponse
-	15,  // 236: anubis.v1.IdentityAdminService.SetPassword:output_type -> anubis.v1.SetPasswordResponse
-	17,  // 237: anubis.v1.IdentityAdminService.ImportPasswordHash:output_type -> anubis.v1.ImportPasswordHashResponse
-	19,  // 238: anubis.v1.IdentityAdminService.LinkIdentities:output_type -> anubis.v1.LinkIdentitiesResponse
-	21,  // 239: anubis.v1.IdentityAdminService.RequestErasure:output_type -> anubis.v1.RequestErasureResponse
-	23,  // 240: anubis.v1.IdentityAdminService.GetIdentityAttributes:output_type -> anubis.v1.GetIdentityAttributesResponse
-	25,  // 241: anubis.v1.IdentityAdminService.SetIdentityAttributes:output_type -> anubis.v1.SetIdentityAttributesResponse
-	27,  // 242: anubis.v1.IdentityAdminService.ListCredentials:output_type -> anubis.v1.ListCredentialsResponse
-	29,  // 243: anubis.v1.IdentityAdminService.RevokeCredential:output_type -> anubis.v1.RevokeCredentialResponse
-	32,  // 244: anubis.v1.IdentityAdminService.ListConsents:output_type -> anubis.v1.ListConsentsResponse
-	34,  // 245: anubis.v1.IdentityAdminService.RecordConsent:output_type -> anubis.v1.RecordConsentResponse
-	36,  // 246: anubis.v1.IdentityAdminService.WithdrawConsent:output_type -> anubis.v1.WithdrawConsentResponse
-	39,  // 247: anubis.v1.ScopeAdminService.ListScopeAxes:output_type -> anubis.v1.ListScopeAxesResponse
-	41,  // 248: anubis.v1.ScopeAdminService.CreateScopeAxis:output_type -> anubis.v1.CreateScopeAxisResponse
-	43,  // 249: anubis.v1.ScopeAdminService.UpdateScopeAxis:output_type -> anubis.v1.UpdateScopeAxisResponse
-	45,  // 250: anubis.v1.ScopeAdminService.StrictDryRun:output_type -> anubis.v1.StrictDryRunResponse
-	48,  // 251: anubis.v1.ScopeAdminService.ListScopeNodeTypes:output_type -> anubis.v1.ListScopeNodeTypesResponse
-	50,  // 252: anubis.v1.ScopeAdminService.CreateScopeNodeType:output_type -> anubis.v1.CreateScopeNodeTypeResponse
-	52,  // 253: anubis.v1.ScopeAdminService.UpdateScopeNodeType:output_type -> anubis.v1.UpdateScopeNodeTypeResponse
-	55,  // 254: anubis.v1.ScopeAdminService.ListScopeNodes:output_type -> anubis.v1.ListScopeNodesResponse
-	255, // 255: anubis.v1.ScopeAdminService.GetScopeNode:output_type -> anubis.v1.GetScopeNodeResponse
-	254, // 256: anubis.v1.ScopeAdminService.GetScopeNodes:output_type -> anubis.v1.GetScopeNodesResponse
-	258, // 257: anubis.v1.ScopeAdminService.ScopeAncestors:output_type -> anubis.v1.ScopeAncestorsResponse
-	57,  // 258: anubis.v1.ScopeAdminService.CreateScopeNode:output_type -> anubis.v1.CreateScopeNodeResponse
-	59,  // 259: anubis.v1.ScopeAdminService.EnsureAxisRoot:output_type -> anubis.v1.EnsureAxisRootResponse
-	61,  // 260: anubis.v1.ScopeAdminService.MoveScopeNode:output_type -> anubis.v1.MoveScopeNodeResponse
-	63,  // 261: anubis.v1.ScopeAdminService.ArchiveScopeNode:output_type -> anubis.v1.ArchiveScopeNodeResponse
-	65,  // 262: anubis.v1.ScopeAdminService.RestoreScopeNode:output_type -> anubis.v1.RestoreScopeNodeResponse
-	67,  // 263: anubis.v1.ScopeAdminService.RenameScopeNode:output_type -> anubis.v1.RenameScopeNodeResponse
-	70,  // 264: anubis.v1.ScopeAdminService.UpsertScopeNodes:output_type -> anubis.v1.UpsertScopeNodesResponse
-	73,  // 265: anubis.v1.ScopeAdminService.ListSyncSources:output_type -> anubis.v1.ListSyncSourcesResponse
-	75,  // 266: anubis.v1.ScopeAdminService.CreateSyncSource:output_type -> anubis.v1.CreateSyncSourceResponse
-	77,  // 267: anubis.v1.ScopeAdminService.UpdateSyncSource:output_type -> anubis.v1.UpdateSyncSourceResponse
-	79,  // 268: anubis.v1.ScopeAdminService.SetSyncSchedule:output_type -> anubis.v1.SetSyncScheduleResponse
-	81,  // 269: anubis.v1.ScopeAdminService.RunSync:output_type -> anubis.v1.RunSyncResponse
-	84,  // 270: anubis.v1.ScopeAdminService.ListSyncRuns:output_type -> anubis.v1.ListSyncRunsResponse
-	101, // 271: anubis.v1.AuthzAdminService.ListRoles:output_type -> anubis.v1.ListRolesResponse
-	103, // 272: anubis.v1.AuthzAdminService.CreateRole:output_type -> anubis.v1.CreateRoleResponse
-	105, // 273: anubis.v1.AuthzAdminService.UpdateRole:output_type -> anubis.v1.UpdateRoleResponse
-	108, // 274: anubis.v1.AuthzAdminService.GetRoleEffective:output_type -> anubis.v1.GetRoleEffectiveResponse
-	111, // 275: anubis.v1.AuthzAdminService.ListPermissions:output_type -> anubis.v1.ListPermissionsResponse
-	115, // 276: anubis.v1.AuthzAdminService.ListGrants:output_type -> anubis.v1.ListGrantsResponse
-	260, // 277: anubis.v1.AuthzAdminService.SearchGrants:output_type -> anubis.v1.SearchGrantsResponse
-	117, // 278: anubis.v1.AuthzAdminService.CreateGrant:output_type -> anubis.v1.CreateGrantResponse
-	119, // 279: anubis.v1.AuthzAdminService.RevokeGrant:output_type -> anubis.v1.RevokeGrantResponse
-	123, // 280: anubis.v1.AuthzAdminService.ListMemberships:output_type -> anubis.v1.ListMembershipsResponse
-	125, // 281: anubis.v1.AuthzAdminService.CreateMembership:output_type -> anubis.v1.CreateMembershipResponse
-	127, // 282: anubis.v1.AuthzAdminService.SetMembershipEntries:output_type -> anubis.v1.SetMembershipEntriesResponse
-	129, // 283: anubis.v1.AuthzAdminService.AssignMembership:output_type -> anubis.v1.AssignMembershipResponse
-	131, // 284: anubis.v1.AuthzAdminService.UnassignMembership:output_type -> anubis.v1.UnassignMembershipResponse
-	133, // 285: anubis.v1.AuthzAdminService.ResyncMembership:output_type -> anubis.v1.ResyncMembershipResponse
-	136, // 286: anubis.v1.AuthzAdminService.ListMembershipAssignments:output_type -> anubis.v1.ListMembershipAssignmentsResponse
-	272, // 287: anubis.v1.AuthzAdminService.SummarizeAccess:output_type -> anubis.v1.SummarizeAccessResponse
-	279, // 288: anubis.v1.AuthzAdminService.PreviewGrantChange:output_type -> anubis.v1.PreviewGrantChangeResponse
-	280, // 289: anubis.v1.AuthzAdminService.ApplyGrantChange:output_type -> anubis.v1.ApplyGrantChangeResponse
-	282, // 290: anubis.v1.AuthzAdminService.UndoGrantChange:output_type -> anubis.v1.UndoGrantChangeResponse
-	285, // 291: anubis.v1.AuthzAdminService.ListGrantChanges:output_type -> anubis.v1.ListGrantChangesResponse
-	288, // 292: anubis.v1.AuthzAdminService.ListFullLists:output_type -> anubis.v1.ListFullListsResponse
-	292, // 293: anubis.v1.AuthzAdminService.PlaceReach:output_type -> anubis.v1.PlaceReachResponse
-	138, // 294: anubis.v1.AuthzAdminService.ApplyManifest:output_type -> anubis.v1.ApplyManifestResponse
-	88,  // 295: anubis.v1.AuthzAdminService.ListCatalogSources:output_type -> anubis.v1.ListCatalogSourcesResponse
-	90,  // 296: anubis.v1.AuthzAdminService.CreateCatalogSource:output_type -> anubis.v1.CreateCatalogSourceResponse
-	92,  // 297: anubis.v1.AuthzAdminService.UpdateCatalogSource:output_type -> anubis.v1.UpdateCatalogSourceResponse
-	94,  // 298: anubis.v1.AuthzAdminService.DeleteCatalogSource:output_type -> anubis.v1.DeleteCatalogSourceResponse
-	96,  // 299: anubis.v1.AuthzAdminService.RunCatalogSource:output_type -> anubis.v1.RunCatalogSourceResponse
-	98,  // 300: anubis.v1.AuthzAdminService.ListCatalogRuns:output_type -> anubis.v1.ListCatalogRunsResponse
-	156, // 301: anubis.v1.TenantAdminService.ListTenants:output_type -> anubis.v1.ListTenantsResponse
-	158, // 302: anubis.v1.TenantAdminService.CreateTenant:output_type -> anubis.v1.CreateTenantResponse
-	241, // 303: anubis.v1.TenantAdminService.UpdateTenant:output_type -> anubis.v1.UpdateTenantResponse
-	243, // 304: anubis.v1.TenantAdminService.MoveTenant:output_type -> anubis.v1.MoveTenantResponse
-	247, // 305: anubis.v1.TenantAdminService.GetTenantStats:output_type -> anubis.v1.GetTenantStatsResponse
-	251, // 306: anubis.v1.TenantAdminService.GetDashboard:output_type -> anubis.v1.GetDashboardResponse
-	265, // 307: anubis.v1.TenantAdminService.ListApiKeys:output_type -> anubis.v1.ListApiKeysResponse
-	267, // 308: anubis.v1.TenantAdminService.CreateApiKey:output_type -> anubis.v1.CreateApiKeyResponse
-	269, // 309: anubis.v1.TenantAdminService.RevokeApiKey:output_type -> anubis.v1.RevokeApiKeyResponse
-	245, // 310: anubis.v1.TenantAdminService.SetTenantStatus:output_type -> anubis.v1.SetTenantStatusResponse
-	161, // 311: anubis.v1.TenantAdminService.ListRealms:output_type -> anubis.v1.ListRealmsResponse
-	163, // 312: anubis.v1.TenantAdminService.CreateRealm:output_type -> anubis.v1.CreateRealmResponse
-	165, // 313: anubis.v1.TenantAdminService.UpdateRealm:output_type -> anubis.v1.UpdateRealmResponse
-	168, // 314: anubis.v1.TenantAdminService.ListRealmCategories:output_type -> anubis.v1.ListRealmCategoriesResponse
-	170, // 315: anubis.v1.TenantAdminService.CreateRealmCategory:output_type -> anubis.v1.CreateRealmCategoryResponse
-	173, // 316: anubis.v1.TenantAdminService.ListApplications:output_type -> anubis.v1.ListApplicationsResponse
-	175, // 317: anubis.v1.TenantAdminService.CreateApplication:output_type -> anubis.v1.CreateApplicationResponse
-	177, // 318: anubis.v1.TenantAdminService.UpdateApplication:output_type -> anubis.v1.UpdateApplicationResponse
-	179, // 319: anubis.v1.TenantAdminService.RotateClientSecret:output_type -> anubis.v1.RotateClientSecretResponse
-	182, // 320: anubis.v1.TenantAdminService.ListRoutePolicies:output_type -> anubis.v1.ListRoutePoliciesResponse
-	185, // 321: anubis.v1.TenantAdminService.QueryAudit:output_type -> anubis.v1.QueryAuditResponse
-	187, // 322: anubis.v1.TenantAdminService.VerifyAuditChain:output_type -> anubis.v1.VerifyAuditChainResponse
-	190, // 323: anubis.v1.TenantAdminService.ListSigningKeys:output_type -> anubis.v1.ListSigningKeysResponse
-	192, // 324: anubis.v1.TenantAdminService.RotateSigningKey:output_type -> anubis.v1.RotateSigningKeyResponse
-	194, // 325: anubis.v1.TenantAdminService.GetCatalogVersion:output_type -> anubis.v1.GetCatalogVersionResponse
-	196, // 326: anubis.v1.TenantAdminService.GetSigninPage:output_type -> anubis.v1.GetSigninPageResponse
-	198, // 327: anubis.v1.TenantAdminService.PutSigninPage:output_type -> anubis.v1.PutSigninPageResponse
-	141, // 328: anubis.v1.TenantAdminService.ListAuthPages:output_type -> anubis.v1.ListAuthPagesResponse
-	143, // 329: anubis.v1.TenantAdminService.GetAuthPage:output_type -> anubis.v1.GetAuthPageResponse
-	145, // 330: anubis.v1.TenantAdminService.CreateAuthPage:output_type -> anubis.v1.CreateAuthPageResponse
-	147, // 331: anubis.v1.TenantAdminService.UpdateAuthPage:output_type -> anubis.v1.UpdateAuthPageResponse
-	149, // 332: anubis.v1.TenantAdminService.DeleteAuthPage:output_type -> anubis.v1.DeleteAuthPageResponse
-	151, // 333: anubis.v1.TenantAdminService.SetDefaultAuthPage:output_type -> anubis.v1.SetDefaultAuthPageResponse
-	153, // 334: anubis.v1.TenantAdminService.PreviewAuthPage:output_type -> anubis.v1.PreviewAuthPageResponse
-	200, // 335: anubis.v1.ProvisioningService.DownloadImportTemplate:output_type -> anubis.v1.DownloadImportTemplateResponse
-	203, // 336: anubis.v1.ProvisioningService.ImportWorkbook:output_type -> anubis.v1.ImportWorkbookResponse
-	216, // 337: anubis.v1.PlatformAdminService.ListOperators:output_type -> anubis.v1.ListOperatorsResponse
-	210, // 338: anubis.v1.PlatformAdminService.CreatePlatformApiKey:output_type -> anubis.v1.CreatePlatformApiKeyResponse
-	212, // 339: anubis.v1.PlatformAdminService.ListPlatformApiKeys:output_type -> anubis.v1.ListPlatformApiKeysResponse
-	214, // 340: anubis.v1.PlatformAdminService.RevokePlatformApiKey:output_type -> anubis.v1.RevokePlatformApiKeyResponse
-	222, // 341: anubis.v1.PlatformAdminService.CreateOperator:output_type -> anubis.v1.CreateOperatorResponse
-	218, // 342: anubis.v1.PlatformAdminService.AssignOperator:output_type -> anubis.v1.AssignOperatorResponse
-	220, // 343: anubis.v1.PlatformAdminService.RevokeAssignment:output_type -> anubis.v1.RevokeAssignmentResponse
-	262, // 344: anubis.v1.PlatformAdminService.SetOperatorStatus:output_type -> anubis.v1.SetOperatorStatusResponse
-	205, // 345: anubis.v1.PlatformAdminService.ResetOperatorPassword:output_type -> anubis.v1.ResetOperatorPasswordResponse
-	226, // 346: anubis.v1.PlatformAuthService.PlatformLogin:output_type -> anubis.v1.PlatformLoginResponse
-	232, // 347: anubis.v1.PlatformAuthService.PlatformVerifyMfa:output_type -> anubis.v1.PlatformVerifyMfaResponse
-	228, // 348: anubis.v1.PlatformAuthService.PlatformRefresh:output_type -> anubis.v1.PlatformRefreshResponse
-	230, // 349: anubis.v1.PlatformAuthService.PlatformLogout:output_type -> anubis.v1.PlatformLogoutResponse
-	234, // 350: anubis.v1.PlatformAuthService.BeginTotpEnrolment:output_type -> anubis.v1.BeginTotpEnrolmentResponse
-	236, // 351: anubis.v1.PlatformAuthService.ConfirmTotpEnrolment:output_type -> anubis.v1.ConfirmTotpEnrolmentResponse
-	239, // 352: anubis.v1.PlatformAuthService.MyTenants:output_type -> anubis.v1.MyTenantsResponse
-	224, // 353: anubis.v1.PlatformAuthService.ChangePlatformPassword:output_type -> anubis.v1.ChangePlatformPasswordResponse
-	230, // [230:354] is the sub-list for method output_type
-	106, // [106:230] is the sub-list for method input_type
-	106, // [106:106] is the sub-list for extension type_name
-	106, // [106:106] is the sub-list for extension extendee
-	0,   // [0:106] is the sub-list for field type_name
+	294, // 106: anubis.v1.RoleUsageResponse.roles:type_name -> anubis.v1.RoleUsage
+	301, // 107: anubis.v1.PlaceHoldersResponse.holders:type_name -> anubis.v1.PlaceHolder
+	1,   // 108: anubis.v1.IdentityAdminService.ListIdentities:input_type -> anubis.v1.ListIdentitiesRequest
+	3,   // 109: anubis.v1.IdentityAdminService.GetIdentity:input_type -> anubis.v1.GetIdentityRequest
+	6,   // 110: anubis.v1.IdentityAdminService.CreateIdentity:input_type -> anubis.v1.CreateIdentityRequest
+	8,   // 111: anubis.v1.IdentityAdminService.DisableIdentity:input_type -> anubis.v1.DisableIdentityRequest
+	10,  // 112: anubis.v1.IdentityAdminService.EnableIdentity:input_type -> anubis.v1.EnableIdentityRequest
+	12,  // 113: anubis.v1.IdentityAdminService.BumpTokenEpoch:input_type -> anubis.v1.BumpTokenEpochRequest
+	14,  // 114: anubis.v1.IdentityAdminService.SetPassword:input_type -> anubis.v1.SetPasswordRequest
+	16,  // 115: anubis.v1.IdentityAdminService.ImportPasswordHash:input_type -> anubis.v1.ImportPasswordHashRequest
+	18,  // 116: anubis.v1.IdentityAdminService.LinkIdentities:input_type -> anubis.v1.LinkIdentitiesRequest
+	20,  // 117: anubis.v1.IdentityAdminService.RequestErasure:input_type -> anubis.v1.RequestErasureRequest
+	22,  // 118: anubis.v1.IdentityAdminService.GetIdentityAttributes:input_type -> anubis.v1.GetIdentityAttributesRequest
+	24,  // 119: anubis.v1.IdentityAdminService.SetIdentityAttributes:input_type -> anubis.v1.SetIdentityAttributesRequest
+	26,  // 120: anubis.v1.IdentityAdminService.ListCredentials:input_type -> anubis.v1.ListCredentialsRequest
+	28,  // 121: anubis.v1.IdentityAdminService.RevokeCredential:input_type -> anubis.v1.RevokeCredentialRequest
+	31,  // 122: anubis.v1.IdentityAdminService.ListConsents:input_type -> anubis.v1.ListConsentsRequest
+	33,  // 123: anubis.v1.IdentityAdminService.RecordConsent:input_type -> anubis.v1.RecordConsentRequest
+	35,  // 124: anubis.v1.IdentityAdminService.WithdrawConsent:input_type -> anubis.v1.WithdrawConsentRequest
+	38,  // 125: anubis.v1.ScopeAdminService.ListScopeAxes:input_type -> anubis.v1.ListScopeAxesRequest
+	40,  // 126: anubis.v1.ScopeAdminService.CreateScopeAxis:input_type -> anubis.v1.CreateScopeAxisRequest
+	42,  // 127: anubis.v1.ScopeAdminService.UpdateScopeAxis:input_type -> anubis.v1.UpdateScopeAxisRequest
+	44,  // 128: anubis.v1.ScopeAdminService.StrictDryRun:input_type -> anubis.v1.StrictDryRunRequest
+	47,  // 129: anubis.v1.ScopeAdminService.ListScopeNodeTypes:input_type -> anubis.v1.ListScopeNodeTypesRequest
+	49,  // 130: anubis.v1.ScopeAdminService.CreateScopeNodeType:input_type -> anubis.v1.CreateScopeNodeTypeRequest
+	51,  // 131: anubis.v1.ScopeAdminService.UpdateScopeNodeType:input_type -> anubis.v1.UpdateScopeNodeTypeRequest
+	54,  // 132: anubis.v1.ScopeAdminService.ListScopeNodes:input_type -> anubis.v1.ListScopeNodesRequest
+	252, // 133: anubis.v1.ScopeAdminService.GetScopeNode:input_type -> anubis.v1.GetScopeNodeRequest
+	253, // 134: anubis.v1.ScopeAdminService.GetScopeNodes:input_type -> anubis.v1.GetScopeNodesRequest
+	256, // 135: anubis.v1.ScopeAdminService.ScopeAncestors:input_type -> anubis.v1.ScopeAncestorsRequest
+	56,  // 136: anubis.v1.ScopeAdminService.CreateScopeNode:input_type -> anubis.v1.CreateScopeNodeRequest
+	58,  // 137: anubis.v1.ScopeAdminService.EnsureAxisRoot:input_type -> anubis.v1.EnsureAxisRootRequest
+	60,  // 138: anubis.v1.ScopeAdminService.MoveScopeNode:input_type -> anubis.v1.MoveScopeNodeRequest
+	62,  // 139: anubis.v1.ScopeAdminService.ArchiveScopeNode:input_type -> anubis.v1.ArchiveScopeNodeRequest
+	64,  // 140: anubis.v1.ScopeAdminService.RestoreScopeNode:input_type -> anubis.v1.RestoreScopeNodeRequest
+	66,  // 141: anubis.v1.ScopeAdminService.RenameScopeNode:input_type -> anubis.v1.RenameScopeNodeRequest
+	69,  // 142: anubis.v1.ScopeAdminService.UpsertScopeNodes:input_type -> anubis.v1.UpsertScopeNodesRequest
+	72,  // 143: anubis.v1.ScopeAdminService.ListSyncSources:input_type -> anubis.v1.ListSyncSourcesRequest
+	74,  // 144: anubis.v1.ScopeAdminService.CreateSyncSource:input_type -> anubis.v1.CreateSyncSourceRequest
+	76,  // 145: anubis.v1.ScopeAdminService.UpdateSyncSource:input_type -> anubis.v1.UpdateSyncSourceRequest
+	78,  // 146: anubis.v1.ScopeAdminService.SetSyncSchedule:input_type -> anubis.v1.SetSyncScheduleRequest
+	80,  // 147: anubis.v1.ScopeAdminService.RunSync:input_type -> anubis.v1.RunSyncRequest
+	82,  // 148: anubis.v1.ScopeAdminService.ListSyncRuns:input_type -> anubis.v1.ListSyncRunsRequest
+	100, // 149: anubis.v1.AuthzAdminService.ListRoles:input_type -> anubis.v1.ListRolesRequest
+	102, // 150: anubis.v1.AuthzAdminService.CreateRole:input_type -> anubis.v1.CreateRoleRequest
+	104, // 151: anubis.v1.AuthzAdminService.UpdateRole:input_type -> anubis.v1.UpdateRoleRequest
+	106, // 152: anubis.v1.AuthzAdminService.GetRoleEffective:input_type -> anubis.v1.GetRoleEffectiveRequest
+	110, // 153: anubis.v1.AuthzAdminService.ListPermissions:input_type -> anubis.v1.ListPermissionsRequest
+	114, // 154: anubis.v1.AuthzAdminService.ListGrants:input_type -> anubis.v1.ListGrantsRequest
+	259, // 155: anubis.v1.AuthzAdminService.SearchGrants:input_type -> anubis.v1.SearchGrantsRequest
+	116, // 156: anubis.v1.AuthzAdminService.CreateGrant:input_type -> anubis.v1.CreateGrantRequest
+	118, // 157: anubis.v1.AuthzAdminService.RevokeGrant:input_type -> anubis.v1.RevokeGrantRequest
+	122, // 158: anubis.v1.AuthzAdminService.ListMemberships:input_type -> anubis.v1.ListMembershipsRequest
+	124, // 159: anubis.v1.AuthzAdminService.CreateMembership:input_type -> anubis.v1.CreateMembershipRequest
+	126, // 160: anubis.v1.AuthzAdminService.SetMembershipEntries:input_type -> anubis.v1.SetMembershipEntriesRequest
+	128, // 161: anubis.v1.AuthzAdminService.AssignMembership:input_type -> anubis.v1.AssignMembershipRequest
+	130, // 162: anubis.v1.AuthzAdminService.UnassignMembership:input_type -> anubis.v1.UnassignMembershipRequest
+	132, // 163: anubis.v1.AuthzAdminService.ResyncMembership:input_type -> anubis.v1.ResyncMembershipRequest
+	135, // 164: anubis.v1.AuthzAdminService.ListMembershipAssignments:input_type -> anubis.v1.ListMembershipAssignmentsRequest
+	270, // 165: anubis.v1.AuthzAdminService.SummarizeAccess:input_type -> anubis.v1.SummarizeAccessRequest
+	275, // 166: anubis.v1.AuthzAdminService.PreviewGrantChange:input_type -> anubis.v1.PreviewGrantChangeRequest
+	276, // 167: anubis.v1.AuthzAdminService.ApplyGrantChange:input_type -> anubis.v1.ApplyGrantChangeRequest
+	281, // 168: anubis.v1.AuthzAdminService.UndoGrantChange:input_type -> anubis.v1.UndoGrantChangeRequest
+	284, // 169: anubis.v1.AuthzAdminService.ListGrantChanges:input_type -> anubis.v1.ListGrantChangesRequest
+	286, // 170: anubis.v1.AuthzAdminService.ListFullLists:input_type -> anubis.v1.ListFullListsRequest
+	289, // 171: anubis.v1.AuthzAdminService.PlaceReach:input_type -> anubis.v1.PlaceReachRequest
+	293, // 172: anubis.v1.AuthzAdminService.RoleUsage:input_type -> anubis.v1.RoleUsageRequest
+	296, // 173: anubis.v1.AuthzAdminService.AppUsage:input_type -> anubis.v1.AppUsageRequest
+	298, // 174: anubis.v1.AuthzAdminService.HolderKinds:input_type -> anubis.v1.HolderKindsRequest
+	300, // 175: anubis.v1.AuthzAdminService.PlaceHolders:input_type -> anubis.v1.PlaceHoldersRequest
+	137, // 176: anubis.v1.AuthzAdminService.ApplyManifest:input_type -> anubis.v1.ApplyManifestRequest
+	87,  // 177: anubis.v1.AuthzAdminService.ListCatalogSources:input_type -> anubis.v1.ListCatalogSourcesRequest
+	89,  // 178: anubis.v1.AuthzAdminService.CreateCatalogSource:input_type -> anubis.v1.CreateCatalogSourceRequest
+	91,  // 179: anubis.v1.AuthzAdminService.UpdateCatalogSource:input_type -> anubis.v1.UpdateCatalogSourceRequest
+	93,  // 180: anubis.v1.AuthzAdminService.DeleteCatalogSource:input_type -> anubis.v1.DeleteCatalogSourceRequest
+	95,  // 181: anubis.v1.AuthzAdminService.RunCatalogSource:input_type -> anubis.v1.RunCatalogSourceRequest
+	97,  // 182: anubis.v1.AuthzAdminService.ListCatalogRuns:input_type -> anubis.v1.ListCatalogRunsRequest
+	155, // 183: anubis.v1.TenantAdminService.ListTenants:input_type -> anubis.v1.ListTenantsRequest
+	157, // 184: anubis.v1.TenantAdminService.CreateTenant:input_type -> anubis.v1.CreateTenantRequest
+	240, // 185: anubis.v1.TenantAdminService.UpdateTenant:input_type -> anubis.v1.UpdateTenantRequest
+	242, // 186: anubis.v1.TenantAdminService.MoveTenant:input_type -> anubis.v1.MoveTenantRequest
+	246, // 187: anubis.v1.TenantAdminService.GetTenantStats:input_type -> anubis.v1.GetTenantStatsRequest
+	248, // 188: anubis.v1.TenantAdminService.GetDashboard:input_type -> anubis.v1.GetDashboardRequest
+	264, // 189: anubis.v1.TenantAdminService.ListApiKeys:input_type -> anubis.v1.ListApiKeysRequest
+	266, // 190: anubis.v1.TenantAdminService.CreateApiKey:input_type -> anubis.v1.CreateApiKeyRequest
+	268, // 191: anubis.v1.TenantAdminService.RevokeApiKey:input_type -> anubis.v1.RevokeApiKeyRequest
+	244, // 192: anubis.v1.TenantAdminService.SetTenantStatus:input_type -> anubis.v1.SetTenantStatusRequest
+	160, // 193: anubis.v1.TenantAdminService.ListRealms:input_type -> anubis.v1.ListRealmsRequest
+	162, // 194: anubis.v1.TenantAdminService.CreateRealm:input_type -> anubis.v1.CreateRealmRequest
+	164, // 195: anubis.v1.TenantAdminService.UpdateRealm:input_type -> anubis.v1.UpdateRealmRequest
+	167, // 196: anubis.v1.TenantAdminService.ListRealmCategories:input_type -> anubis.v1.ListRealmCategoriesRequest
+	169, // 197: anubis.v1.TenantAdminService.CreateRealmCategory:input_type -> anubis.v1.CreateRealmCategoryRequest
+	172, // 198: anubis.v1.TenantAdminService.ListApplications:input_type -> anubis.v1.ListApplicationsRequest
+	174, // 199: anubis.v1.TenantAdminService.CreateApplication:input_type -> anubis.v1.CreateApplicationRequest
+	176, // 200: anubis.v1.TenantAdminService.UpdateApplication:input_type -> anubis.v1.UpdateApplicationRequest
+	178, // 201: anubis.v1.TenantAdminService.RotateClientSecret:input_type -> anubis.v1.RotateClientSecretRequest
+	181, // 202: anubis.v1.TenantAdminService.ListRoutePolicies:input_type -> anubis.v1.ListRoutePoliciesRequest
+	184, // 203: anubis.v1.TenantAdminService.QueryAudit:input_type -> anubis.v1.QueryAuditRequest
+	186, // 204: anubis.v1.TenantAdminService.VerifyAuditChain:input_type -> anubis.v1.VerifyAuditChainRequest
+	189, // 205: anubis.v1.TenantAdminService.ListSigningKeys:input_type -> anubis.v1.ListSigningKeysRequest
+	191, // 206: anubis.v1.TenantAdminService.RotateSigningKey:input_type -> anubis.v1.RotateSigningKeyRequest
+	193, // 207: anubis.v1.TenantAdminService.GetCatalogVersion:input_type -> anubis.v1.GetCatalogVersionRequest
+	195, // 208: anubis.v1.TenantAdminService.GetSigninPage:input_type -> anubis.v1.GetSigninPageRequest
+	197, // 209: anubis.v1.TenantAdminService.PutSigninPage:input_type -> anubis.v1.PutSigninPageRequest
+	140, // 210: anubis.v1.TenantAdminService.ListAuthPages:input_type -> anubis.v1.ListAuthPagesRequest
+	142, // 211: anubis.v1.TenantAdminService.GetAuthPage:input_type -> anubis.v1.GetAuthPageRequest
+	144, // 212: anubis.v1.TenantAdminService.CreateAuthPage:input_type -> anubis.v1.CreateAuthPageRequest
+	146, // 213: anubis.v1.TenantAdminService.UpdateAuthPage:input_type -> anubis.v1.UpdateAuthPageRequest
+	148, // 214: anubis.v1.TenantAdminService.DeleteAuthPage:input_type -> anubis.v1.DeleteAuthPageRequest
+	150, // 215: anubis.v1.TenantAdminService.SetDefaultAuthPage:input_type -> anubis.v1.SetDefaultAuthPageRequest
+	152, // 216: anubis.v1.TenantAdminService.PreviewAuthPage:input_type -> anubis.v1.PreviewAuthPageRequest
+	199, // 217: anubis.v1.ProvisioningService.DownloadImportTemplate:input_type -> anubis.v1.DownloadImportTemplateRequest
+	201, // 218: anubis.v1.ProvisioningService.ImportWorkbook:input_type -> anubis.v1.ImportWorkbookRequest
+	215, // 219: anubis.v1.PlatformAdminService.ListOperators:input_type -> anubis.v1.ListOperatorsRequest
+	209, // 220: anubis.v1.PlatformAdminService.CreatePlatformApiKey:input_type -> anubis.v1.CreatePlatformApiKeyRequest
+	211, // 221: anubis.v1.PlatformAdminService.ListPlatformApiKeys:input_type -> anubis.v1.ListPlatformApiKeysRequest
+	213, // 222: anubis.v1.PlatformAdminService.RevokePlatformApiKey:input_type -> anubis.v1.RevokePlatformApiKeyRequest
+	221, // 223: anubis.v1.PlatformAdminService.CreateOperator:input_type -> anubis.v1.CreateOperatorRequest
+	217, // 224: anubis.v1.PlatformAdminService.AssignOperator:input_type -> anubis.v1.AssignOperatorRequest
+	219, // 225: anubis.v1.PlatformAdminService.RevokeAssignment:input_type -> anubis.v1.RevokeAssignmentRequest
+	261, // 226: anubis.v1.PlatformAdminService.SetOperatorStatus:input_type -> anubis.v1.SetOperatorStatusRequest
+	204, // 227: anubis.v1.PlatformAdminService.ResetOperatorPassword:input_type -> anubis.v1.ResetOperatorPasswordRequest
+	225, // 228: anubis.v1.PlatformAuthService.PlatformLogin:input_type -> anubis.v1.PlatformLoginRequest
+	231, // 229: anubis.v1.PlatformAuthService.PlatformVerifyMfa:input_type -> anubis.v1.PlatformVerifyMfaRequest
+	227, // 230: anubis.v1.PlatformAuthService.PlatformRefresh:input_type -> anubis.v1.PlatformRefreshRequest
+	229, // 231: anubis.v1.PlatformAuthService.PlatformLogout:input_type -> anubis.v1.PlatformLogoutRequest
+	233, // 232: anubis.v1.PlatformAuthService.BeginTotpEnrolment:input_type -> anubis.v1.BeginTotpEnrolmentRequest
+	235, // 233: anubis.v1.PlatformAuthService.ConfirmTotpEnrolment:input_type -> anubis.v1.ConfirmTotpEnrolmentRequest
+	237, // 234: anubis.v1.PlatformAuthService.MyTenants:input_type -> anubis.v1.MyTenantsRequest
+	223, // 235: anubis.v1.PlatformAuthService.ChangePlatformPassword:input_type -> anubis.v1.ChangePlatformPasswordRequest
+	2,   // 236: anubis.v1.IdentityAdminService.ListIdentities:output_type -> anubis.v1.ListIdentitiesResponse
+	5,   // 237: anubis.v1.IdentityAdminService.GetIdentity:output_type -> anubis.v1.GetIdentityResponse
+	7,   // 238: anubis.v1.IdentityAdminService.CreateIdentity:output_type -> anubis.v1.CreateIdentityResponse
+	9,   // 239: anubis.v1.IdentityAdminService.DisableIdentity:output_type -> anubis.v1.DisableIdentityResponse
+	11,  // 240: anubis.v1.IdentityAdminService.EnableIdentity:output_type -> anubis.v1.EnableIdentityResponse
+	13,  // 241: anubis.v1.IdentityAdminService.BumpTokenEpoch:output_type -> anubis.v1.BumpTokenEpochResponse
+	15,  // 242: anubis.v1.IdentityAdminService.SetPassword:output_type -> anubis.v1.SetPasswordResponse
+	17,  // 243: anubis.v1.IdentityAdminService.ImportPasswordHash:output_type -> anubis.v1.ImportPasswordHashResponse
+	19,  // 244: anubis.v1.IdentityAdminService.LinkIdentities:output_type -> anubis.v1.LinkIdentitiesResponse
+	21,  // 245: anubis.v1.IdentityAdminService.RequestErasure:output_type -> anubis.v1.RequestErasureResponse
+	23,  // 246: anubis.v1.IdentityAdminService.GetIdentityAttributes:output_type -> anubis.v1.GetIdentityAttributesResponse
+	25,  // 247: anubis.v1.IdentityAdminService.SetIdentityAttributes:output_type -> anubis.v1.SetIdentityAttributesResponse
+	27,  // 248: anubis.v1.IdentityAdminService.ListCredentials:output_type -> anubis.v1.ListCredentialsResponse
+	29,  // 249: anubis.v1.IdentityAdminService.RevokeCredential:output_type -> anubis.v1.RevokeCredentialResponse
+	32,  // 250: anubis.v1.IdentityAdminService.ListConsents:output_type -> anubis.v1.ListConsentsResponse
+	34,  // 251: anubis.v1.IdentityAdminService.RecordConsent:output_type -> anubis.v1.RecordConsentResponse
+	36,  // 252: anubis.v1.IdentityAdminService.WithdrawConsent:output_type -> anubis.v1.WithdrawConsentResponse
+	39,  // 253: anubis.v1.ScopeAdminService.ListScopeAxes:output_type -> anubis.v1.ListScopeAxesResponse
+	41,  // 254: anubis.v1.ScopeAdminService.CreateScopeAxis:output_type -> anubis.v1.CreateScopeAxisResponse
+	43,  // 255: anubis.v1.ScopeAdminService.UpdateScopeAxis:output_type -> anubis.v1.UpdateScopeAxisResponse
+	45,  // 256: anubis.v1.ScopeAdminService.StrictDryRun:output_type -> anubis.v1.StrictDryRunResponse
+	48,  // 257: anubis.v1.ScopeAdminService.ListScopeNodeTypes:output_type -> anubis.v1.ListScopeNodeTypesResponse
+	50,  // 258: anubis.v1.ScopeAdminService.CreateScopeNodeType:output_type -> anubis.v1.CreateScopeNodeTypeResponse
+	52,  // 259: anubis.v1.ScopeAdminService.UpdateScopeNodeType:output_type -> anubis.v1.UpdateScopeNodeTypeResponse
+	55,  // 260: anubis.v1.ScopeAdminService.ListScopeNodes:output_type -> anubis.v1.ListScopeNodesResponse
+	255, // 261: anubis.v1.ScopeAdminService.GetScopeNode:output_type -> anubis.v1.GetScopeNodeResponse
+	254, // 262: anubis.v1.ScopeAdminService.GetScopeNodes:output_type -> anubis.v1.GetScopeNodesResponse
+	258, // 263: anubis.v1.ScopeAdminService.ScopeAncestors:output_type -> anubis.v1.ScopeAncestorsResponse
+	57,  // 264: anubis.v1.ScopeAdminService.CreateScopeNode:output_type -> anubis.v1.CreateScopeNodeResponse
+	59,  // 265: anubis.v1.ScopeAdminService.EnsureAxisRoot:output_type -> anubis.v1.EnsureAxisRootResponse
+	61,  // 266: anubis.v1.ScopeAdminService.MoveScopeNode:output_type -> anubis.v1.MoveScopeNodeResponse
+	63,  // 267: anubis.v1.ScopeAdminService.ArchiveScopeNode:output_type -> anubis.v1.ArchiveScopeNodeResponse
+	65,  // 268: anubis.v1.ScopeAdminService.RestoreScopeNode:output_type -> anubis.v1.RestoreScopeNodeResponse
+	67,  // 269: anubis.v1.ScopeAdminService.RenameScopeNode:output_type -> anubis.v1.RenameScopeNodeResponse
+	70,  // 270: anubis.v1.ScopeAdminService.UpsertScopeNodes:output_type -> anubis.v1.UpsertScopeNodesResponse
+	73,  // 271: anubis.v1.ScopeAdminService.ListSyncSources:output_type -> anubis.v1.ListSyncSourcesResponse
+	75,  // 272: anubis.v1.ScopeAdminService.CreateSyncSource:output_type -> anubis.v1.CreateSyncSourceResponse
+	77,  // 273: anubis.v1.ScopeAdminService.UpdateSyncSource:output_type -> anubis.v1.UpdateSyncSourceResponse
+	79,  // 274: anubis.v1.ScopeAdminService.SetSyncSchedule:output_type -> anubis.v1.SetSyncScheduleResponse
+	81,  // 275: anubis.v1.ScopeAdminService.RunSync:output_type -> anubis.v1.RunSyncResponse
+	84,  // 276: anubis.v1.ScopeAdminService.ListSyncRuns:output_type -> anubis.v1.ListSyncRunsResponse
+	101, // 277: anubis.v1.AuthzAdminService.ListRoles:output_type -> anubis.v1.ListRolesResponse
+	103, // 278: anubis.v1.AuthzAdminService.CreateRole:output_type -> anubis.v1.CreateRoleResponse
+	105, // 279: anubis.v1.AuthzAdminService.UpdateRole:output_type -> anubis.v1.UpdateRoleResponse
+	108, // 280: anubis.v1.AuthzAdminService.GetRoleEffective:output_type -> anubis.v1.GetRoleEffectiveResponse
+	111, // 281: anubis.v1.AuthzAdminService.ListPermissions:output_type -> anubis.v1.ListPermissionsResponse
+	115, // 282: anubis.v1.AuthzAdminService.ListGrants:output_type -> anubis.v1.ListGrantsResponse
+	260, // 283: anubis.v1.AuthzAdminService.SearchGrants:output_type -> anubis.v1.SearchGrantsResponse
+	117, // 284: anubis.v1.AuthzAdminService.CreateGrant:output_type -> anubis.v1.CreateGrantResponse
+	119, // 285: anubis.v1.AuthzAdminService.RevokeGrant:output_type -> anubis.v1.RevokeGrantResponse
+	123, // 286: anubis.v1.AuthzAdminService.ListMemberships:output_type -> anubis.v1.ListMembershipsResponse
+	125, // 287: anubis.v1.AuthzAdminService.CreateMembership:output_type -> anubis.v1.CreateMembershipResponse
+	127, // 288: anubis.v1.AuthzAdminService.SetMembershipEntries:output_type -> anubis.v1.SetMembershipEntriesResponse
+	129, // 289: anubis.v1.AuthzAdminService.AssignMembership:output_type -> anubis.v1.AssignMembershipResponse
+	131, // 290: anubis.v1.AuthzAdminService.UnassignMembership:output_type -> anubis.v1.UnassignMembershipResponse
+	133, // 291: anubis.v1.AuthzAdminService.ResyncMembership:output_type -> anubis.v1.ResyncMembershipResponse
+	136, // 292: anubis.v1.AuthzAdminService.ListMembershipAssignments:output_type -> anubis.v1.ListMembershipAssignmentsResponse
+	272, // 293: anubis.v1.AuthzAdminService.SummarizeAccess:output_type -> anubis.v1.SummarizeAccessResponse
+	279, // 294: anubis.v1.AuthzAdminService.PreviewGrantChange:output_type -> anubis.v1.PreviewGrantChangeResponse
+	280, // 295: anubis.v1.AuthzAdminService.ApplyGrantChange:output_type -> anubis.v1.ApplyGrantChangeResponse
+	282, // 296: anubis.v1.AuthzAdminService.UndoGrantChange:output_type -> anubis.v1.UndoGrantChangeResponse
+	285, // 297: anubis.v1.AuthzAdminService.ListGrantChanges:output_type -> anubis.v1.ListGrantChangesResponse
+	288, // 298: anubis.v1.AuthzAdminService.ListFullLists:output_type -> anubis.v1.ListFullListsResponse
+	292, // 299: anubis.v1.AuthzAdminService.PlaceReach:output_type -> anubis.v1.PlaceReachResponse
+	295, // 300: anubis.v1.AuthzAdminService.RoleUsage:output_type -> anubis.v1.RoleUsageResponse
+	297, // 301: anubis.v1.AuthzAdminService.AppUsage:output_type -> anubis.v1.AppUsageResponse
+	299, // 302: anubis.v1.AuthzAdminService.HolderKinds:output_type -> anubis.v1.HolderKindsResponse
+	302, // 303: anubis.v1.AuthzAdminService.PlaceHolders:output_type -> anubis.v1.PlaceHoldersResponse
+	138, // 304: anubis.v1.AuthzAdminService.ApplyManifest:output_type -> anubis.v1.ApplyManifestResponse
+	88,  // 305: anubis.v1.AuthzAdminService.ListCatalogSources:output_type -> anubis.v1.ListCatalogSourcesResponse
+	90,  // 306: anubis.v1.AuthzAdminService.CreateCatalogSource:output_type -> anubis.v1.CreateCatalogSourceResponse
+	92,  // 307: anubis.v1.AuthzAdminService.UpdateCatalogSource:output_type -> anubis.v1.UpdateCatalogSourceResponse
+	94,  // 308: anubis.v1.AuthzAdminService.DeleteCatalogSource:output_type -> anubis.v1.DeleteCatalogSourceResponse
+	96,  // 309: anubis.v1.AuthzAdminService.RunCatalogSource:output_type -> anubis.v1.RunCatalogSourceResponse
+	98,  // 310: anubis.v1.AuthzAdminService.ListCatalogRuns:output_type -> anubis.v1.ListCatalogRunsResponse
+	156, // 311: anubis.v1.TenantAdminService.ListTenants:output_type -> anubis.v1.ListTenantsResponse
+	158, // 312: anubis.v1.TenantAdminService.CreateTenant:output_type -> anubis.v1.CreateTenantResponse
+	241, // 313: anubis.v1.TenantAdminService.UpdateTenant:output_type -> anubis.v1.UpdateTenantResponse
+	243, // 314: anubis.v1.TenantAdminService.MoveTenant:output_type -> anubis.v1.MoveTenantResponse
+	247, // 315: anubis.v1.TenantAdminService.GetTenantStats:output_type -> anubis.v1.GetTenantStatsResponse
+	251, // 316: anubis.v1.TenantAdminService.GetDashboard:output_type -> anubis.v1.GetDashboardResponse
+	265, // 317: anubis.v1.TenantAdminService.ListApiKeys:output_type -> anubis.v1.ListApiKeysResponse
+	267, // 318: anubis.v1.TenantAdminService.CreateApiKey:output_type -> anubis.v1.CreateApiKeyResponse
+	269, // 319: anubis.v1.TenantAdminService.RevokeApiKey:output_type -> anubis.v1.RevokeApiKeyResponse
+	245, // 320: anubis.v1.TenantAdminService.SetTenantStatus:output_type -> anubis.v1.SetTenantStatusResponse
+	161, // 321: anubis.v1.TenantAdminService.ListRealms:output_type -> anubis.v1.ListRealmsResponse
+	163, // 322: anubis.v1.TenantAdminService.CreateRealm:output_type -> anubis.v1.CreateRealmResponse
+	165, // 323: anubis.v1.TenantAdminService.UpdateRealm:output_type -> anubis.v1.UpdateRealmResponse
+	168, // 324: anubis.v1.TenantAdminService.ListRealmCategories:output_type -> anubis.v1.ListRealmCategoriesResponse
+	170, // 325: anubis.v1.TenantAdminService.CreateRealmCategory:output_type -> anubis.v1.CreateRealmCategoryResponse
+	173, // 326: anubis.v1.TenantAdminService.ListApplications:output_type -> anubis.v1.ListApplicationsResponse
+	175, // 327: anubis.v1.TenantAdminService.CreateApplication:output_type -> anubis.v1.CreateApplicationResponse
+	177, // 328: anubis.v1.TenantAdminService.UpdateApplication:output_type -> anubis.v1.UpdateApplicationResponse
+	179, // 329: anubis.v1.TenantAdminService.RotateClientSecret:output_type -> anubis.v1.RotateClientSecretResponse
+	182, // 330: anubis.v1.TenantAdminService.ListRoutePolicies:output_type -> anubis.v1.ListRoutePoliciesResponse
+	185, // 331: anubis.v1.TenantAdminService.QueryAudit:output_type -> anubis.v1.QueryAuditResponse
+	187, // 332: anubis.v1.TenantAdminService.VerifyAuditChain:output_type -> anubis.v1.VerifyAuditChainResponse
+	190, // 333: anubis.v1.TenantAdminService.ListSigningKeys:output_type -> anubis.v1.ListSigningKeysResponse
+	192, // 334: anubis.v1.TenantAdminService.RotateSigningKey:output_type -> anubis.v1.RotateSigningKeyResponse
+	194, // 335: anubis.v1.TenantAdminService.GetCatalogVersion:output_type -> anubis.v1.GetCatalogVersionResponse
+	196, // 336: anubis.v1.TenantAdminService.GetSigninPage:output_type -> anubis.v1.GetSigninPageResponse
+	198, // 337: anubis.v1.TenantAdminService.PutSigninPage:output_type -> anubis.v1.PutSigninPageResponse
+	141, // 338: anubis.v1.TenantAdminService.ListAuthPages:output_type -> anubis.v1.ListAuthPagesResponse
+	143, // 339: anubis.v1.TenantAdminService.GetAuthPage:output_type -> anubis.v1.GetAuthPageResponse
+	145, // 340: anubis.v1.TenantAdminService.CreateAuthPage:output_type -> anubis.v1.CreateAuthPageResponse
+	147, // 341: anubis.v1.TenantAdminService.UpdateAuthPage:output_type -> anubis.v1.UpdateAuthPageResponse
+	149, // 342: anubis.v1.TenantAdminService.DeleteAuthPage:output_type -> anubis.v1.DeleteAuthPageResponse
+	151, // 343: anubis.v1.TenantAdminService.SetDefaultAuthPage:output_type -> anubis.v1.SetDefaultAuthPageResponse
+	153, // 344: anubis.v1.TenantAdminService.PreviewAuthPage:output_type -> anubis.v1.PreviewAuthPageResponse
+	200, // 345: anubis.v1.ProvisioningService.DownloadImportTemplate:output_type -> anubis.v1.DownloadImportTemplateResponse
+	203, // 346: anubis.v1.ProvisioningService.ImportWorkbook:output_type -> anubis.v1.ImportWorkbookResponse
+	216, // 347: anubis.v1.PlatformAdminService.ListOperators:output_type -> anubis.v1.ListOperatorsResponse
+	210, // 348: anubis.v1.PlatformAdminService.CreatePlatformApiKey:output_type -> anubis.v1.CreatePlatformApiKeyResponse
+	212, // 349: anubis.v1.PlatformAdminService.ListPlatformApiKeys:output_type -> anubis.v1.ListPlatformApiKeysResponse
+	214, // 350: anubis.v1.PlatformAdminService.RevokePlatformApiKey:output_type -> anubis.v1.RevokePlatformApiKeyResponse
+	222, // 351: anubis.v1.PlatformAdminService.CreateOperator:output_type -> anubis.v1.CreateOperatorResponse
+	218, // 352: anubis.v1.PlatformAdminService.AssignOperator:output_type -> anubis.v1.AssignOperatorResponse
+	220, // 353: anubis.v1.PlatformAdminService.RevokeAssignment:output_type -> anubis.v1.RevokeAssignmentResponse
+	262, // 354: anubis.v1.PlatformAdminService.SetOperatorStatus:output_type -> anubis.v1.SetOperatorStatusResponse
+	205, // 355: anubis.v1.PlatformAdminService.ResetOperatorPassword:output_type -> anubis.v1.ResetOperatorPasswordResponse
+	226, // 356: anubis.v1.PlatformAuthService.PlatformLogin:output_type -> anubis.v1.PlatformLoginResponse
+	232, // 357: anubis.v1.PlatformAuthService.PlatformVerifyMfa:output_type -> anubis.v1.PlatformVerifyMfaResponse
+	228, // 358: anubis.v1.PlatformAuthService.PlatformRefresh:output_type -> anubis.v1.PlatformRefreshResponse
+	230, // 359: anubis.v1.PlatformAuthService.PlatformLogout:output_type -> anubis.v1.PlatformLogoutResponse
+	234, // 360: anubis.v1.PlatformAuthService.BeginTotpEnrolment:output_type -> anubis.v1.BeginTotpEnrolmentResponse
+	236, // 361: anubis.v1.PlatformAuthService.ConfirmTotpEnrolment:output_type -> anubis.v1.ConfirmTotpEnrolmentResponse
+	239, // 362: anubis.v1.PlatformAuthService.MyTenants:output_type -> anubis.v1.MyTenantsResponse
+	224, // 363: anubis.v1.PlatformAuthService.ChangePlatformPassword:output_type -> anubis.v1.ChangePlatformPasswordResponse
+	236, // [236:364] is the sub-list for method output_type
+	108, // [108:236] is the sub-list for method input_type
+	108, // [108:108] is the sub-list for extension type_name
+	108, // [108:108] is the sub-list for extension extendee
+	0,   // [0:108] is the sub-list for field type_name
 }
 
 func init() { file_anubis_v1_admin_proto_init() }
@@ -18809,7 +19462,7 @@ func file_anubis_v1_admin_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_anubis_v1_admin_proto_rawDesc), len(file_anubis_v1_admin_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   295,
+			NumMessages:   305,
 			NumExtensions: 0,
 			NumServices:   7,
 		},

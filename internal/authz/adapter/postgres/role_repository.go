@@ -15,7 +15,7 @@ func roleRecordOf(r authzrquery.RoleRow) authzdomain.RoleRecord {
 		ID: r.ID, Name: r.Name, Description: r.Description,
 		ApplicationSlug: r.ApplicationSlug.V, IsSystem: r.IsSystem,
 		AllowedRealmKinds: r.AllowedRealmKinds, AssignableAt: r.AssignableAt,
-		Deprecated: r.DeprecatedAt.Valid,
+		Deprecated: r.DeprecatedAt.Valid, PermissionCount: int(r.PermissionCount),
 	}
 }
 

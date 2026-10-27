@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate, useSearch } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
-import { Button, Select, Tooltip, Loader } from '@mantine/core'
+import { Button, Loader, SegmentedControl, Select, Tooltip } from '@mantine/core'
 import {
   IconCheck, IconX, IconPlayerPlayFilled, IconRefresh, IconShieldLock,
   IconPointFilled, IconBolt, IconChevronRight,
@@ -10,6 +10,7 @@ import { Page } from '@/components/shell/Page'
 import { AxisTargetPicker } from '@/components/scope/AxisTargetPicker'
 import { api } from '@/lib/api/client'
 import { IdentityPicker } from '@/components/ui/IdentityPicker'
+import { SeesWhat } from '@/components/access/SeesWhat'
 import { qk } from '@/lib/query/keys'
 import { usePlayground } from '@/stores/session'
 import type { AuthorizeResponse, AxisVerdict, GrantEvaluation } from '@/lib/api/types'
@@ -220,6 +221,10 @@ function Playground() {
   const search = useSearch({ from: '/playground' })
   const navigate = useNavigate({ from: '/playground' })
   const [hydrated, setHydrated] = useState(false)
+  /* Two questions: what can this person do in an app (the usual one), and
+     can they do this one thing to this one record (the debugging one). A
+     shared link with a permission in it opens on the second. */
+  const [view, setView] = useState<'app' | 'one'>(() => (search.permission ? 'one' : 'app'))
 
   // Hydrate once from the URL, then let the store own it. A link arriving with
   // a full scenario evaluates immediately: a shared decision link that shows an
@@ -288,10 +293,12 @@ function Playground() {
   return (
     <Page
       title="Check access"
-      description="Ask “can this person do this, here?” and see exactly why."
+      description={view === 'app'
+        ? 'Pick a person and an app to see what they can do, and which data they can reach.'
+        : 'Ask “can this person do this, here?” and see exactly why.'}
       help="Pick a person, a permission and, if it matters, the places the record belongs to. The answer lists every check it went through. A kind of place you leave unset counts against access, never for it."
       wide
-      actions={
+      actions={view === 'app' ? undefined :
         <>
           <Button size="xs" variant="default" leftSection={<IconRefresh size={13} />}
             onClick={() => { reset(); setResult(null) }}>Reset</Button>
@@ -308,8 +315,11 @@ function Playground() {
         </>
       }
     >
-      {/* Side by side needs ~640px of content, which the sidebar leaves only
-          from lg up; below that the result goes under the composer. */}
+      <SegmentedControl size="xs" mb="md" value={view} onChange={(v) => setView(v as 'app' | 'one')}
+        data={[{ value: 'app', label: 'What can they do in an app' }, { value: 'one', label: 'One request, step by step' }]} />
+      {view === 'app' ? <SeesWhat subject={subject} onSubject={(v) => { setSubject(v); setResult(null) }} /> : (
+      /* Side by side needs ~640px of content, which the sidebar leaves only
+          from lg up; below that the result goes under the composer. */
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(320px,400px)_minmax(0,1fr)]">
         {/* ---------------- composer ---------------- */}
         <div className="flex flex-col gap-4">
@@ -527,6 +537,7 @@ function Playground() {
           )}
         </div>
       </div>
+      )}
     </Page>
   )
 }
