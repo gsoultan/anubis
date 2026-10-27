@@ -5,6 +5,7 @@ import (
 	"github.com/gsoultan/anubis/cmd/anubisd/keyload"
 	"log/slog"
 	"net/http"
+	"net/url"
 
 	"connectrpc.com/connect"
 
@@ -13,11 +14,14 @@ import (
 	apihttp "github.com/gsoultan/anubis/internal/api/http"
 	auditpg "github.com/gsoultan/anubis/internal/audit/adapter/postgres"
 	authhttp "github.com/gsoultan/anubis/internal/auth/adapter/http"
+	authhttprecovery "github.com/gsoultan/anubis/internal/auth/adapter/http/recovery"
 	authpg "github.com/gsoultan/anubis/internal/auth/adapter/postgres"
 	authrpc "github.com/gsoultan/anubis/internal/auth/adapter/rpc"
 	authapp "github.com/gsoultan/anubis/internal/auth/app"
+	"github.com/gsoultan/anubis/internal/auth/app/accesslink"
 	"github.com/gsoultan/anubis/internal/auth/app/clientcreds"
 	"github.com/gsoultan/anubis/internal/auth/app/device"
+	"github.com/gsoultan/anubis/internal/auth/app/emaillink"
 	"github.com/gsoultan/anubis/internal/auth/app/enroll"
 	"github.com/gsoultan/anubis/internal/auth/app/mfa"
 	sessionapp "github.com/gsoultan/anubis/internal/auth/app/session"
@@ -31,6 +35,7 @@ import (
 	authzapp "github.com/gsoultan/anubis/internal/authz/app"
 	authzadmin "github.com/gsoultan/anubis/internal/authz/app/admin"
 	authzcatalog "github.com/gsoultan/anubis/internal/authz/app/catalog"
+	authzshare "github.com/gsoultan/anubis/internal/authz/app/share"
 	authzep "github.com/gsoultan/anubis/internal/authz/endpoint"
 	authzsvc "github.com/gsoultan/anubis/internal/authz/service"
 	controlpg "github.com/gsoultan/anubis/internal/control/adapter/postgres"
@@ -41,15 +46,20 @@ import (
 	gatehttp "github.com/gsoultan/anubis/internal/gate/adapter/http"
 	gatepg "github.com/gsoultan/anubis/internal/gate/adapter/postgres"
 	gateapp "github.com/gsoultan/anubis/internal/gate/app"
+	identitymail "github.com/gsoultan/anubis/internal/identity/adapter/mail"
 	identitypg "github.com/gsoultan/anubis/internal/identity/adapter/postgres"
 	identityrpc "github.com/gsoultan/anubis/internal/identity/adapter/rpc"
 	identityapp "github.com/gsoultan/anubis/internal/identity/app"
+	identityrecovery "github.com/gsoultan/anubis/internal/identity/app/recovery"
 	"github.com/gsoultan/anubis/internal/identity/app/registration"
+	identityretention "github.com/gsoultan/anubis/internal/identity/app/retention"
+	identityport "github.com/gsoultan/anubis/internal/identity/port"
 	identitysvc "github.com/gsoultan/anubis/internal/identity/service"
 	"github.com/gsoultan/anubis/internal/platform/config"
 	"github.com/gsoultan/anubis/internal/platform/crypto/keyring"
 	"github.com/gsoultan/anubis/internal/platform/database"
 	"github.com/gsoultan/anubis/internal/platform/jobs"
+	"github.com/gsoultan/anubis/internal/platform/mail"
 	"github.com/gsoultan/anubis/internal/platform/mw"
 	"github.com/gsoultan/anubis/internal/platform/ratelimit"
 	"github.com/gsoultan/anubis/internal/platform/revocation"
@@ -83,7 +93,12 @@ type application struct {
 	auditor     *auditpg.ChainedAuditor
 	issuer      authapp.TokenIssuer
 	issuerURL   string
-	masterKey   []byte
+	// recovery is built once and served by two doors: the AuthService RPCs
+	// and the hosted reset pages.
+	recovery  identityrecovery.RecoveryUsecase
+	emailLink emaillink.Usecase
+	snaps     *gateapp.Manager
+	masterKey []byte
 	// bootstrapTenantSlug is the FALLBACK tenant for the page URLs the console
 	// shows: a caller carrying a tenant on its principal gets that one instead,
 	// because it is the tenant they are administering. Page lookup itself
@@ -152,6 +167,38 @@ func newApplication(ctx context.Context, cfg *config.Config, db *database.DB, lo
 	a.passwordAuth = signin.NewPasswordAuthenticator(a.tenancy, a.identity,
 		a.identity, a.identity, a.clock, a.auditor)
 	a.enrolGranter = signin.NewEnrolmentGranter(a.ring, a.clock)
+	// Mail: a relay when one is configured; the log on a development
+	// machine; nothing in production — the reset flow then refuses, the
+	// same way for every username, rather than claiming a mail was sent.
+	var mailSender identityport.MailSender
+	switch {
+	case cfg.SMTP.Configured():
+		relay, err := mail.New(cfg.SMTP.Host, cfg.SMTP.Port, cfg.SMTP.Username,
+			cfg.SMTP.Password, cfg.SMTP.From, mail.Security(cfg.SMTP.Security))
+		if err != nil {
+			return nil, err
+		}
+		mailSender = identitymail.NewSMTPSender(relay)
+	case cfg.Env != "prod":
+		mailSender = identitymail.NewLogSender(logger)
+	default:
+		logger.Warn("no ANUBIS_SMTP_HOST configured: password reset links cannot be sent")
+	}
+	// The gate snapshot is built here rather than where the gate mounts,
+	// because authz serves two questions from it too (ListGrantedNodes and
+	// SwitchScope's entitlement check) and those are wired before the gate.
+	// Before Run: the manager announces deltas on every swap, and the first
+	// swap happens inside Run.
+	a.snaps = gateapp.NewManager(a.gate, a.gate, cfg.SnapshotMaxAge, logger)
+	a.snaps.PublishRevocationsTo(a.revocations)
+	go a.snaps.Run(ctx)
+	a.emailLink = emaillink.New(a.tenancy, a.identity, a.identity, a.auth, mailSender,
+		func(token string) string {
+			return cfg.Issuer + "/v1/login/email?" + url.Values{"token": {token}}.Encode()
+		}, a.clock, a.auditor, logger)
+	a.recovery = identityrecovery.NewRecoveryInteractor(a.tenancy, a.identity, a.identity,
+		a.identity, a.auth, a.auth, a.auth, mailSender, resetLink(cfg.Issuer),
+		a.auth, a.clock, a.auditor, logger)
 	a.enrolment = enroll.NewEnrollmentInteractor(a.issuerURL, a.ring, a.identity,
 		a.identity, a.auth, a.auth, a.clock, a.auditor)
 	return a, nil
@@ -183,7 +230,7 @@ func (a *application) scopeSync(logger *slog.Logger) scopeapp.ScopeAdmin {
 // needs. Replicas coordinate through advisory locks, so this is safe to run
 // on every instance.
 func (a *application) runMaintenance(ctx context.Context, db *database.DB, logger *slog.Logger) {
-	retention := identityapp.NewRetentionInteractor(a.identity, a.identity, db, a.auditor)
+	retention := identityretention.NewRetentionInteractor(a.identity, a.identity, db, a.auditor)
 	sched := jobs.NewScheduler(db, logger,
 		maintenanceJobs(a.audit, a.auth, retention, a.auth, a.control,
 			a.catalogSync(logger), a.scopeSync(logger),
@@ -219,7 +266,8 @@ func (a *application) registerRPC(rpc *http.ServeMux, opts connect.HandlerOption
 
 	authService := authsvc.NewAuthService(login, verifyMfa, refresh,
 		logout, logout.All(), logout.Session(), dev, dev.Verify(), reg, verifyEmail,
-		enrollment, clientCreds)
+		enrollment, clientCreds, a.recovery,
+		accesslink.NewOpenInteractor(a.issuerURL, a.ring, a.authz, a.tenancy, a.tenancy, a.identity, a.clock, a.auditor))
 	tokenService := authsvc.NewTokenService(introspect, revoke)
 	sessionService := authsvc.NewSessionService(getMe, listSessions, logout.Session())
 
@@ -233,10 +281,17 @@ func (a *application) registerRPC(rpc *http.ServeMux, opts connect.HandlerOption
 	// --- authz context ------------------------------------------------------
 	authorize := authzapp.NewAuthorizeInteractor(a.authz, a.clock, a.auditor)
 	explain := authzapp.NewExplainInteractor(a.authz)
-	switchScope := authzapp.NewSwitchScopeInteractor(a.auth, a.scope, a.tenancy, a.issuer, a.auth, a.auditor)
-	authzService := authzsvc.NewAuthzService(authorize, explain, switchScope)
+	granted := gateapp.NewGrantedNodesInteractor(a.snaps, a.clock)
+	switchScope := authzapp.NewSwitchScopeInteractor(a.auth, a.scope, a.tenancy, a.issuer, a.auth, a.auditor, granted)
+	authzService := authzsvc.NewAuthzService(authorize, explain, switchScope, granted)
 	rpc.Handle(anubisv1connect.NewAuthzServiceHandler(
 		authzrpc.NewAuthzHandler(authzep.NewAuthzEndpoints(authzService, logger)), opts))
+	// Record sharing: a person opening one record to another. Authorised
+	// through the same authorize() the decision uses, so "you can only share
+	// what you can do" is the engine's answer, not a second one.
+	shares := authzshare.NewShareInteractor(a.authz, a.authz, a.identity, a.clock, a.auditor)
+	rpc.Handle(anubisv1connect.NewShareServiceHandler(
+		authzrpc.NewShareHandler(authzep.NewShareEndpoints(authzsvc.NewShareService(shares), logger)), opts))
 
 	// --- admin planes -------------------------------------------------------
 	f := mw.NewFactory(logger)
@@ -335,21 +390,21 @@ func (a *application) registerHTTP(ctx context.Context, srv *apihttp.Server,
 	oidc := authhttp.NewOIDCHandler(cfg.Issuer, a.passwordAuth, a.enrolGranter,
 		a.enrolment, a.tenancy,
 		a.identity, a.identity, a.identity, a.identity, a.auth, a.auth, a.tenancy, a.tenancy, a.auth,
-		refresh, cfg.DefaultTenant, cfg.Env == "prod", a.issuer, a.ring, a.clock, a.auditor, limiter, logger)
+		refresh, a.emailLink, cfg.DefaultTenant, cfg.Env == "prod", a.issuer, a.ring, a.clock, a.auditor, limiter, logger)
 	srv.HandleFunc("GET /v1/authorize", oidc.Authorize)
 	srv.HandleFunc("POST /v1/login", oidc.LoginForm)
+	// The e-mail door: ask for a link, and the link itself.
+	srv.HandleFunc("POST /v1/login/email", oidc.EmailLinkRequest)
+	srv.HandleFunc("GET /v1/login/email", oidc.EmailLinkOpen)
 	srv.HandleFunc("POST /v1/token", oidc.Token)
 	// RP-initiated logout, OIDC-shaped: GET asks, POST performs.
 	srv.HandleFunc("GET /v1/logout", oidc.LogoutPage)
 	srv.HandleFunc("POST /v1/logout", oidc.LogoutSubmit)
 	// Each page has its own URL, which is the point of having many of them.
 	srv.HandleFunc("GET /p/{tenant}/{kind}/{slug}", oidc.ServePage)
+	authhttprecovery.NewHandler(a.recovery, a.tenancy, a.identity, a.tenancy, limiter, logger).Mount(srv.HandleFunc)
 
-	snaps := gateapp.NewManager(a.gate, a.gate, cfg.SnapshotMaxAge, logger)
-	// Before Run: the manager announces deltas on every swap, and the first
-	// swap happens inside Run.
-	snaps.PublishRevocationsTo(a.revocations)
-	go snaps.Run(ctx)
+	snaps := a.snaps
 	// Readiness must fail while the snapshot is too stale to serve from:
 	// past that age the gate fails closed, so this instance is denying
 	// traffic and should leave the load balancer.
@@ -372,4 +427,14 @@ func (a *application) registerHTTP(ctx context.Context, srv *apihttp.Server,
 	extAuthzPath, extAuthz := authv3connect.NewAuthorizationHandler(
 		gategrpc.New(decider, cfg.Issuer+"/v1/authorize"))
 	srv.Handle(extAuthzPath, extAuthz)
+}
+
+// resetLink is the URL a reset mail carries: the hosted completion page on
+// this issuer, with the token in the query where the page moves it into the
+// form before anything consumes it.
+func resetLink(issuer string) identityrecovery.LinkBuilder {
+	return func(tenantSlug, realmCode, token string) string {
+		q := url.Values{"realm": {realmCode}, "token": {token}}
+		return issuer + "/p/" + tenantSlug + "/reset/complete?" + q.Encode()
+	}
 }

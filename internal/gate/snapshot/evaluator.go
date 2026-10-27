@@ -10,6 +10,8 @@ import "time"
 //   - fail-closed: a constrained axis without a target is unsatisfied; a
 //     strict axis a grant does not address denies the grant
 //   - self-scope: reserved "_owner" target must equal the subject
+//   - record share: a live share to this identity on the "_record" target
+//     that confers the permission (0058)
 //
 // The integration suite differentially tests this against the SQL engine on
 // seeded data — the two implementations must never disagree.
@@ -48,6 +50,11 @@ func (d *Data) Evaluate(identityID, permission string, targets map[string]string
 			continue
 		}
 		return true
+	}
+	// No grant reached it. A share might: the narrowest allow there is,
+	// bound to one record and only asked about when the caller names it.
+	if record, named := targets["_record"]; named {
+		return d.sharedRecordAllows(identityID, permission, record, now)
 	}
 	return false
 }

@@ -21,6 +21,7 @@ func (s *Repository) PasswordCredential(ctx context.Context, identityID string) 
 	return &credentialdomain.Credential{
 		ID: row.ID, IdentityID: row.IdentityID, TenantID: row.TenantID,
 		Kind: "password", Secret: nstr(row.Secret), Params: []byte(row.Params),
+		ExpiresAt: tptr(row.ExpiresAt),
 	}, nil
 }
 

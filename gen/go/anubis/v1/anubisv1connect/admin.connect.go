@@ -66,6 +66,9 @@ const (
 	// IdentityAdminServiceSetPasswordProcedure is the fully-qualified name of the
 	// IdentityAdminService's SetPassword RPC.
 	IdentityAdminServiceSetPasswordProcedure = "/anubis.v1.IdentityAdminService/SetPassword"
+	// IdentityAdminServiceImportPasswordHashProcedure is the fully-qualified name of the
+	// IdentityAdminService's ImportPasswordHash RPC.
+	IdentityAdminServiceImportPasswordHashProcedure = "/anubis.v1.IdentityAdminService/ImportPasswordHash"
 	// IdentityAdminServiceLinkIdentitiesProcedure is the fully-qualified name of the
 	// IdentityAdminService's LinkIdentities RPC.
 	IdentityAdminServiceLinkIdentitiesProcedure = "/anubis.v1.IdentityAdminService/LinkIdentities"
@@ -440,6 +443,11 @@ type IdentityAdminServiceClient interface {
 	// Global kill switch: invalidates every outstanding token for the identity.
 	BumpTokenEpoch(context.Context, *connect.Request[v1.BumpTokenEpochRequest]) (*connect.Response[v1.BumpTokenEpochResponse], error)
 	SetPassword(context.Context, *connect.Request[v1.SetPasswordRequest]) (*connect.Response[v1.SetPasswordResponse], error)
+	// Install a password hash made by ANOTHER system (a migration), so the
+	// person keeps the password they know. Verified once at their next
+	// sign-in and replaced by a hash at this installation's cost. A legacy
+	// format must carry an expiry; after it the person needs a reset.
+	ImportPasswordHash(context.Context, *connect.Request[v1.ImportPasswordHashRequest]) (*connect.Response[v1.ImportPasswordHashResponse], error)
 	// Same human across realms. Records method and evidence; never merges grants.
 	LinkIdentities(context.Context, *connect.Request[v1.LinkIdentitiesRequest]) (*connect.Response[v1.LinkIdentitiesResponse], error)
 	// Right-to-erasure: sets deletion_requested_at; the retention sweeper and
@@ -511,6 +519,12 @@ func NewIdentityAdminServiceClient(httpClient connect.HTTPClient, baseURL string
 			connect.WithSchema(identityAdminServiceMethods.ByName("SetPassword")),
 			connect.WithClientOptions(opts...),
 		),
+		importPasswordHash: connect.NewClient[v1.ImportPasswordHashRequest, v1.ImportPasswordHashResponse](
+			httpClient,
+			baseURL+IdentityAdminServiceImportPasswordHashProcedure,
+			connect.WithSchema(identityAdminServiceMethods.ByName("ImportPasswordHash")),
+			connect.WithClientOptions(opts...),
+		),
 		linkIdentities: connect.NewClient[v1.LinkIdentitiesRequest, v1.LinkIdentitiesResponse](
 			httpClient,
 			baseURL+IdentityAdminServiceLinkIdentitiesProcedure,
@@ -577,6 +591,7 @@ type identityAdminServiceClient struct {
 	enableIdentity        *connect.Client[v1.EnableIdentityRequest, v1.EnableIdentityResponse]
 	bumpTokenEpoch        *connect.Client[v1.BumpTokenEpochRequest, v1.BumpTokenEpochResponse]
 	setPassword           *connect.Client[v1.SetPasswordRequest, v1.SetPasswordResponse]
+	importPasswordHash    *connect.Client[v1.ImportPasswordHashRequest, v1.ImportPasswordHashResponse]
 	linkIdentities        *connect.Client[v1.LinkIdentitiesRequest, v1.LinkIdentitiesResponse]
 	requestErasure        *connect.Client[v1.RequestErasureRequest, v1.RequestErasureResponse]
 	getIdentityAttributes *connect.Client[v1.GetIdentityAttributesRequest, v1.GetIdentityAttributesResponse]
@@ -621,6 +636,11 @@ func (c *identityAdminServiceClient) BumpTokenEpoch(ctx context.Context, req *co
 // SetPassword calls anubis.v1.IdentityAdminService.SetPassword.
 func (c *identityAdminServiceClient) SetPassword(ctx context.Context, req *connect.Request[v1.SetPasswordRequest]) (*connect.Response[v1.SetPasswordResponse], error) {
 	return c.setPassword.CallUnary(ctx, req)
+}
+
+// ImportPasswordHash calls anubis.v1.IdentityAdminService.ImportPasswordHash.
+func (c *identityAdminServiceClient) ImportPasswordHash(ctx context.Context, req *connect.Request[v1.ImportPasswordHashRequest]) (*connect.Response[v1.ImportPasswordHashResponse], error) {
+	return c.importPasswordHash.CallUnary(ctx, req)
 }
 
 // LinkIdentities calls anubis.v1.IdentityAdminService.LinkIdentities.
@@ -680,6 +700,11 @@ type IdentityAdminServiceHandler interface {
 	// Global kill switch: invalidates every outstanding token for the identity.
 	BumpTokenEpoch(context.Context, *connect.Request[v1.BumpTokenEpochRequest]) (*connect.Response[v1.BumpTokenEpochResponse], error)
 	SetPassword(context.Context, *connect.Request[v1.SetPasswordRequest]) (*connect.Response[v1.SetPasswordResponse], error)
+	// Install a password hash made by ANOTHER system (a migration), so the
+	// person keeps the password they know. Verified once at their next
+	// sign-in and replaced by a hash at this installation's cost. A legacy
+	// format must carry an expiry; after it the person needs a reset.
+	ImportPasswordHash(context.Context, *connect.Request[v1.ImportPasswordHashRequest]) (*connect.Response[v1.ImportPasswordHashResponse], error)
 	// Same human across realms. Records method and evidence; never merges grants.
 	LinkIdentities(context.Context, *connect.Request[v1.LinkIdentitiesRequest]) (*connect.Response[v1.LinkIdentitiesResponse], error)
 	// Right-to-erasure: sets deletion_requested_at; the retention sweeper and
@@ -745,6 +770,12 @@ func NewIdentityAdminServiceHandler(svc IdentityAdminServiceHandler, opts ...con
 		IdentityAdminServiceSetPasswordProcedure,
 		svc.SetPassword,
 		connect.WithSchema(identityAdminServiceMethods.ByName("SetPassword")),
+		connect.WithHandlerOptions(opts...),
+	)
+	identityAdminServiceImportPasswordHashHandler := connect.NewUnaryHandler(
+		IdentityAdminServiceImportPasswordHashProcedure,
+		svc.ImportPasswordHash,
+		connect.WithSchema(identityAdminServiceMethods.ByName("ImportPasswordHash")),
 		connect.WithHandlerOptions(opts...),
 	)
 	identityAdminServiceLinkIdentitiesHandler := connect.NewUnaryHandler(
@@ -817,6 +848,8 @@ func NewIdentityAdminServiceHandler(svc IdentityAdminServiceHandler, opts ...con
 			identityAdminServiceBumpTokenEpochHandler.ServeHTTP(w, r)
 		case IdentityAdminServiceSetPasswordProcedure:
 			identityAdminServiceSetPasswordHandler.ServeHTTP(w, r)
+		case IdentityAdminServiceImportPasswordHashProcedure:
+			identityAdminServiceImportPasswordHashHandler.ServeHTTP(w, r)
 		case IdentityAdminServiceLinkIdentitiesProcedure:
 			identityAdminServiceLinkIdentitiesHandler.ServeHTTP(w, r)
 		case IdentityAdminServiceRequestErasureProcedure:
@@ -870,6 +903,10 @@ func (UnimplementedIdentityAdminServiceHandler) BumpTokenEpoch(context.Context, 
 
 func (UnimplementedIdentityAdminServiceHandler) SetPassword(context.Context, *connect.Request[v1.SetPasswordRequest]) (*connect.Response[v1.SetPasswordResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.IdentityAdminService.SetPassword is not implemented"))
+}
+
+func (UnimplementedIdentityAdminServiceHandler) ImportPasswordHash(context.Context, *connect.Request[v1.ImportPasswordHashRequest]) (*connect.Response[v1.ImportPasswordHashResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.IdentityAdminService.ImportPasswordHash is not implemented"))
 }
 
 func (UnimplementedIdentityAdminServiceHandler) LinkIdentities(context.Context, *connect.Request[v1.LinkIdentitiesRequest]) (*connect.Response[v1.LinkIdentitiesResponse], error) {

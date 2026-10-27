@@ -1,0 +1,612 @@
+<!doctype html>
+<html lang="en" data-scheme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Anubis — Osiris parity · UI samples</title>
+<!--
+  Design samples for the five capabilities Anubis needs before Osiris can move onto it:
+  legacy passwords + reset, "where can they", shared records / access links,
+  passwordless applicant sign-in, and the Osiris import. Tokens are copied from
+  ui/src/styles/index.css. Every name, id and count here is invented sample data.
+-->
+<style>
+:root{
+  --r-sm:6px;--r-md:8px;--r-lg:12px;--row-h:44px;--nav-w:216px;--header-h:56px;
+  --s-nav:#0a0d12;--s-sunken:#0a0d12;--s-base:#11151c;--s-raised:#1a1f29;--s-overlay:#232936;--s-hover:#2c3342;
+  --line:#2a3140;--line-soft:#1f2530;--line-strong:#3a4356;
+  --ink:#eef1f6;--ink-2:#a9b2c3;--ink-3:#77808f;--ink-4:#525a69;
+  --accent:#7590fb;--accent-solid:#4361ee;--accent-hover:#5a76f5;--accent-bg:#7590fb1f;--accent-line:#7590fb52;
+  --brand:#e0b458;
+  --allow:#34d399;--allow-bg:#34d39918;--deny:#f87171;--deny-bg:#f8717118;
+  --warn:#fbbf24;--warn-bg:#fbbf2418;--info:#38bdf8;--info-bg:#38bdf818;
+  --kind-internal:#d9a32f;--kind-public:#c084fc;
+  --shadow-sm:0 1px 2px rgb(0 0 0/.40);--shadow-lg:0 12px 32px -8px rgb(0 0 0/.65);
+  --mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+[data-scheme=light]{
+  --s-nav:#fff;--s-sunken:#eef1f5;--s-base:#f6f8fa;--s-raised:#fff;--s-overlay:#f1f4f8;--s-hover:#e8ecf2;
+  --line:#dfe3ea;--line-soft:#eaedf2;--line-strong:#c3cad6;
+  --ink:#0f1626;--ink-2:#4b5566;--ink-3:#656f7f;--ink-4:#99a2b0;
+  --accent:#3b5bdc;--accent-solid:#3b5bdc;--accent-hover:#2f49b4;--accent-bg:#3b5bdc14;--accent-line:#3b5bdc3d;
+  --brand:#a8801c;
+  --allow:#047857;--allow-bg:#04785712;--deny:#b91c1c;--deny-bg:#b91c1c10;
+  --warn:#b45309;--warn-bg:#b4530912;--info:#0369a1;--info-bg:#0369a112;
+  --kind-internal:#a8801c;--kind-public:#6d28d9;
+  --shadow-sm:0 1px 2px rgb(16 24 40/.05),0 1px 3px rgb(16 24 40/.04);--shadow-lg:0 12px 32px -8px rgb(16 24 40/.18);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--s-base);color:var(--ink);font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif}
+button{font:inherit;cursor:pointer}
+code,.mono{font-family:var(--mono);font-size:12px}
+
+/* the mock's own switcher — not part of the product */
+.bar{position:sticky;top:0;z-index:20;display:flex;gap:6px;align-items:center;padding:8px 14px;background:var(--s-overlay);border-bottom:1px solid var(--line-strong);flex-wrap:wrap}
+.bar b{font-size:12px;color:var(--ink-3);margin-right:6px;text-transform:uppercase;letter-spacing:.06em}
+.bar button{border:1px solid var(--line);background:var(--s-raised);color:var(--ink-2);border-radius:999px;padding:4px 12px;font-size:13px}
+.bar button.on{background:var(--accent-bg);border-color:var(--accent-line);color:var(--accent)}
+.bar .sp{flex:1}
+.ribbon{font-size:12px;color:var(--ink-3)}
+
+.shell{display:grid;grid-template-columns:var(--nav-w) 1fr;min-height:calc(100vh - 45px)}
+nav{background:var(--s-nav);border-right:1px solid var(--line);padding:14px 10px}
+.logo{display:flex;gap:8px;align-items:center;padding:4px 8px 16px;font-weight:650;color:var(--brand);letter-spacing:.02em}
+.navi{display:block;padding:7px 10px;border-radius:var(--r-md);color:var(--ink-2);font-size:13.5px}
+.navi.on{background:var(--accent-bg);color:var(--accent);font-weight:550}
+.navh{font-size:11px;color:var(--ink-3);text-transform:uppercase;letter-spacing:.07em;padding:14px 10px 4px}
+main{min-width:0}
+header{height:var(--header-h);display:flex;align-items:center;gap:10px;padding:0 24px;border-bottom:1px solid var(--line);color:var(--ink-3);font-size:13px}
+header .crumb{color:var(--ink)}
+.page{padding:22px 24px 48px;max-width:1240px}
+
+.panel{background:var(--s-raised);border:1px solid var(--line);border-radius:var(--r-lg);box-shadow:var(--shadow-sm)}
+.panel>.hd{padding:14px 16px 10px;display:flex;align-items:baseline;gap:10px}
+.panel>.hd h3{margin:0;font-size:14.5px;font-weight:620}
+.panel>.hd p{margin:2px 0 0;color:var(--ink-3);font-size:12.5px}
+.panel>.bd{padding:0 16px 14px}
+.grid2{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:18px;align-items:start}
+.stack{display:grid;gap:18px}
+h1{margin:0;font-size:21px;font-weight:650}
+.sub{color:var(--ink-3);font-size:13px}
+.btn{border:1px solid var(--line-strong);background:var(--s-raised);color:var(--ink);border-radius:var(--r-md);padding:7px 13px;font-size:13.5px}
+.btn.primary{background:var(--accent-solid);border-color:var(--accent-solid);color:#fff}
+.btn.ghost{border-color:transparent;background:transparent;color:var(--accent)}
+.btn.danger{color:var(--deny);border-color:var(--line)}
+.btn.sm{padding:4px 9px;font-size:12.5px}
+.chip{display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:2px 9px;font-size:12px;font-weight:550;border:1px solid transparent;white-space:nowrap}
+.chip.allow{color:var(--allow);background:var(--allow-bg)}
+.chip.deny{color:var(--deny);background:var(--deny-bg)}
+.chip.warn{color:var(--warn);background:var(--warn-bg)}
+.chip.info{color:var(--info);background:var(--info-bg)}
+.chip.mute{color:var(--ink-2);background:var(--s-overlay);border-color:var(--line)}
+.chip.kind{color:var(--kind-internal);border-color:currentColor;background:transparent}
+.chip.pub{color:var(--kind-public);border-color:currentColor;background:transparent}
+.dot{width:7px;height:7px;border-radius:50%;background:currentColor}
+
+.banner{display:flex;gap:12px;align-items:flex-start;padding:12px 14px;border-radius:var(--r-lg);border:1px solid;margin-bottom:18px}
+.banner.info{background:var(--info-bg);border-color:color-mix(in srgb,var(--info) 35%,transparent)}
+.banner.warn{background:var(--warn-bg);border-color:color-mix(in srgb,var(--warn) 35%,transparent)}
+.banner .ic{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:13px;flex:none}
+.banner.info .ic{color:var(--info);border:1.5px solid var(--info)}
+.banner.warn .ic{color:var(--warn);border:1.5px solid var(--warn)}
+.banner .tx{flex:1}
+.banner .tx>b{display:block;margin-bottom:2px}
+.banner .tx span{color:var(--ink-2);font-size:13px}
+
+table{width:100%;border-collapse:collapse}
+th{font-size:11.5px;font-weight:600;color:var(--ink-3);text-transform:uppercase;letter-spacing:.05em;text-align:left;padding:8px 10px;background:var(--s-sunken);border-bottom:1px solid var(--line)}
+td{height:var(--row-h);padding:6px 10px;border-bottom:1px solid var(--line-soft);vertical-align:middle;font-size:13.5px}
+tr:last-child td{border-bottom:0}
+td .q{color:var(--ink-3);font-size:12.5px;margin-left:6px}
+td .st,dd .st{display:block;color:var(--ink-3);font-size:12.5px}
+tr.past td{color:var(--ink-3)}
+.grp{font-size:12px;color:var(--ink-3);padding:12px 2px 6px;display:flex;gap:8px;align-items:center}
+.grp b{color:var(--ink-2);font-weight:600}
+
+.kv{display:grid;grid-template-columns:118px 1fr;gap:8px 12px;font-size:13px}
+.kv dt{color:var(--ink-3)}
+.kv dd{margin:0}
+.sep{height:1px;background:var(--line-soft);margin:12px 0}
+
+.avatar{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;background:var(--accent-bg);color:var(--accent);font-weight:650}
+.phead{display:flex;gap:14px;align-items:center;margin-bottom:18px}
+.phead .grow{flex:1}
+.actions{display:flex;gap:8px}
+
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);margin-bottom:16px}
+.tabs span{padding:9px 14px;color:var(--ink-3);border-bottom:2px solid transparent;margin-bottom:-1px;font-size:13.5px}
+.tabs span.on{color:var(--ink);border-color:var(--accent);font-weight:560}
+.field{display:grid;gap:5px}
+.field label{font-size:12.5px;color:var(--ink-2);font-weight:550}
+.input{border:1px solid var(--line-strong);background:var(--s-base);border-radius:var(--r-md);padding:8px 11px;color:var(--ink);font-size:13.5px;display:flex;align-items:center;gap:8px;min-height:36px}
+.input .ph{color:var(--ink-3)}
+.row{display:flex;gap:12px;align-items:end}
+.row>*{flex:1}
+
+.verdict{display:flex;gap:12px;align-items:center;padding:14px 16px;border-radius:var(--r-lg);background:var(--allow-bg);border:1px solid color-mix(in srgb,var(--allow) 30%,transparent);margin:16px 0}
+.verdict .big{font-size:16px;font-weight:620}
+.verdict .big em{font-style:normal;color:var(--allow)}
+.tree{list-style:none;margin:0;padding:0}
+.tree li{display:grid;grid-template-columns:minmax(0,1fr) 210px 230px;gap:12px;align-items:center;min-height:var(--row-h);border-bottom:1px solid var(--line-soft);padding:6px 4px}
+.tree li:last-child{border-bottom:0}
+.path{color:var(--ink-3)}
+.path b{color:var(--ink);font-weight:560}
+.ind1{padding-left:26px!important;position:relative}
+.ind1:before{content:"";position:absolute;left:10px;top:0;bottom:50%;width:10px;border-left:1px solid var(--line-strong);border-bottom:1px solid var(--line-strong)}
+pre{margin:0;background:var(--s-sunken);border:1px solid var(--line);border-radius:var(--r-md);padding:12px;overflow:auto;font-family:var(--mono);font-size:12px;color:var(--ink-2);line-height:1.55}
+
+/* share sheet */
+.overlay{position:relative;border-radius:var(--r-lg);background:color-mix(in srgb,var(--s-base) 60%,#000 40%);padding:26px;display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:22px;align-items:start}
+.sheet{background:var(--s-raised);border:1px solid var(--line);border-radius:var(--r-lg);box-shadow:var(--shadow-lg);max-width:620px}
+.sheet .hd{padding:16px 20px;border-bottom:1px solid var(--line)}
+.sheet .hd h2{margin:0;font-size:16.5px}
+.sheet .bd{padding:18px 20px;display:grid;gap:20px}
+.sheet .ft{padding:12px 20px;border-top:1px solid var(--line);display:flex;align-items:center;gap:10px}
+.sheet .ft .status{flex:1;font-size:12.5px;color:var(--ink-3)}
+.q{display:grid;gap:8px}
+.qn{display:flex;gap:9px;align-items:center;font-weight:600;font-size:13.5px}
+.qn i{font-style:normal;width:20px;height:20px;border-radius:50%;display:grid;place-items:center;font-size:11.5px;background:var(--s-overlay);color:var(--ink-2);border:1px solid var(--line)}
+.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.card{border:1px solid var(--line);border-radius:var(--r-md);padding:10px 11px;background:var(--s-base)}
+.card b{display:block;font-size:13.5px}
+.card span{display:block;font-size:12px;color:var(--ink-3);margin-top:3px}
+.card.on{border-color:var(--accent);background:var(--accent-bg);box-shadow:0 0 0 1px var(--accent) inset}
+.card.off{opacity:.45}
+.seg{display:flex;gap:6px;flex-wrap:wrap}
+.seg span{border:1px solid var(--line);border-radius:999px;padding:5px 12px;font-size:13px;color:var(--ink-2);background:var(--s-base)}
+.seg span.on{border-color:var(--accent);color:var(--accent);background:var(--accent-bg)}
+.review{background:var(--s-sunken);border:1px solid var(--line);border-radius:var(--r-md);padding:12px 14px;font-size:13.5px}
+.review p{margin:0 0 6px}
+.review p:last-child{margin:0;color:var(--ink-2);font-size:12.5px}
+.toggle{display:inline-block;width:30px;height:17px;border-radius:999px;background:var(--accent-solid);position:relative;vertical-align:middle}
+.toggle:after{content:"";position:absolute;right:2px;top:2px;width:13px;height:13px;border-radius:50%;background:#fff}
+.note{font-size:12.5px;color:var(--ink-3)}
+.side h4{margin:0 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:#fff9}
+
+/* hosted pages */
+.phones{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:18px}
+.hosted{background:var(--s-raised);border:1px solid var(--line);border-radius:18px;padding:26px 22px;box-shadow:var(--shadow-sm);display:grid;gap:14px;align-content:start;min-height:440px}
+.hosted .co{display:flex;gap:8px;align-items:center;font-weight:650}
+.hosted .co i{width:26px;height:26px;border-radius:7px;background:var(--accent-bg);display:inline-block}
+.hosted h2{margin:4px 0 0;font-size:19px}
+.hosted p{margin:0;color:var(--ink-2);font-size:13.5px}
+.hosted .btn.primary{width:100%;padding:10px}
+.hosted .lnk{color:var(--accent);font-size:13px}
+.cap{font-size:12px;color:var(--ink-3);text-align:center;margin-top:8px}
+.check{display:flex;gap:8px;align-items:center;font-size:13px;color:var(--ink-2)}
+.box{width:16px;height:16px;border-radius:4px;background:var(--accent-solid);display:grid;place-items:center;color:#fff;font-size:11px}
+.meter{height:5px;border-radius:9px;background:var(--s-overlay);overflow:hidden}
+.meter i{display:block;height:100%;width:72%;background:var(--allow)}
+
+/* import */
+.wiz{display:grid;grid-template-columns:220px minmax(0,1fr);gap:22px;align-items:start}
+.steps{list-style:none;margin:0;padding:0;display:grid;gap:2px}
+.steps li{display:flex;gap:10px;align-items:center;padding:8px 10px;border-radius:var(--r-md);font-size:13.5px;color:var(--ink-2)}
+.steps li i{font-style:normal;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:12px;border:1px solid var(--line-strong);color:var(--ink-3);flex:none}
+.steps li.done i{background:var(--allow-bg);border-color:transparent;color:var(--allow)}
+.steps li.on{background:var(--accent-bg);color:var(--accent);font-weight:560}
+.steps li.on i{border-color:var(--accent);color:var(--accent)}
+.steps li small{display:block;color:var(--ink-3);font-size:12px;font-weight:400}
+.opt{border:1px solid var(--line);border-radius:var(--r-md);padding:12px 14px;display:flex;gap:12px;background:var(--s-base)}
+.opt.on{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset;background:var(--accent-bg)}
+.radio{width:16px;height:16px;border-radius:50%;border:1.5px solid var(--line-strong);flex:none;margin-top:2px}
+.opt.on .radio{border:5px solid var(--accent)}
+.opt>div>b{display:block;font-size:13.5px}
+.opt span{display:block;font-size:12.5px;color:var(--ink-2);margin-top:2px}
+.drop{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.drop li{display:flex;gap:10px;font-size:13px;color:var(--ink-2)}
+.drop li:before{content:"✕";color:var(--deny);font-weight:700;font-size:11px;margin-top:3px}
+.foot{display:flex;align-items:center;gap:10px;margin-top:18px;padding:12px 16px;border:1px solid var(--line);border-radius:var(--r-lg);background:var(--s-raised)}
+.foot .status{flex:1;font-size:13px;color:var(--ink-2)}
+
+.screen{display:none}.screen.on{display:block}
+.why{font-size:12.5px;color:var(--ink-2)}
+.why small{display:block;color:var(--ink-3)}
+</style>
+</head>
+<body>
+
+<div class="bar">
+  <b>Sample</b>
+  <button data-s="person" class="on">1 · Person page</button>
+  <button data-s="where">2 · Where can they?</button>
+  <button data-s="share">3 · Share a record</button>
+  <button data-s="hosted">4 · Sign-in pages</button>
+  <button data-s="import">5 · Import from Osiris</button>
+  <span class="sp"></span>
+  <span class="ribbon">All names, ids and counts are invented</span>
+  <button id="scheme">Light / dark</button>
+</div>
+
+<div class="shell">
+<nav>
+  <div class="logo">◆ ANUBIS</div>
+  <a class="navi" data-n="overview">Overview</a>
+  <div class="navh">People &amp; access</div>
+  <a class="navi" data-n="person">People</a>
+  <a class="navi">Memberships</a>
+  <a class="navi">Roles</a>
+  <a class="navi">Permissions</a>
+  <a class="navi">Structures</a>
+  <a class="navi" data-n="where">Test access</a>
+  <div class="navh">Setup</div>
+  <a class="navi">Applications</a>
+  <a class="navi" data-n="hosted">Sign-in pages</a>
+  <a class="navi" data-n="import">Import</a>
+  <a class="navi">Audit</a>
+</nav>
+
+<main>
+<header><span>PT Impack Pratama</span> › <span class="crumb" id="crumb">People</span></header>
+<div class="page">
+
+<!-- ============================================================ 1 PERSON -->
+<section class="screen on" id="s-person">
+  <div class="phead">
+    <button class="btn sm ghost">← People</button>
+  </div>
+  <div class="phead">
+    <div class="avatar">DP</div>
+    <div class="grow">
+      <div style="display:flex;gap:10px;align-items:center"><h1>Dewi Pratama</h1><span class="chip allow"><span class="dot"></span>Active</span></div>
+      <div class="sub">dewi.pratama@impack.example · <span class="chip kind">Employees</span> · Finance staff</div>
+    </div>
+    <div class="actions">
+      <button class="btn">Test access</button>
+      <button class="btn primary">Give access</button>
+      <button class="btn">⋯</button>
+    </div>
+  </div>
+
+  <div class="banner info">
+    <div class="ic">i</div>
+    <div class="tx">
+      <b>Her password came over from Osiris</b>
+      <span>It still works. The next time she signs in, Anubis swaps it for a stronger one and this note goes away.
+      If she hasn't signed in by <b style="display:inline">30 Nov 2026</b> it stops working and she'll need a reset link.</span>
+    </div>
+    <button class="btn sm">Send reset link</button>
+  </div>
+
+  <div class="grid2">
+    <div class="stack">
+      <div class="panel">
+        <div class="hd"><div><h3>What she can do</h3><p>Grouped by how she got it.</p></div></div>
+        <div class="bd">
+          <div class="grp"><b>Given directly</b></div>
+          <table>
+            <tr><td style="width:44%">Training approver<span class="st">training · approve, view requests</span></td>
+                <td>Finance <span class="q">and everything inside</span></td>
+                <td style="width:120px" class="sub">until 31 Dec</td>
+                <td style="width:70px;text-align:right"><button class="btn sm danger">Revoke</button></td></tr>
+          </table>
+          <div class="grp"><b>Through Employee basics</b><span>· membership</span></div>
+          <table>
+            <tr><td style="width:44%">Employee self-service<span class="st">profile, leave, payslips</span></td>
+                <td>Her own records</td><td style="width:120px" class="sub">no end date</td>
+                <td style="width:70px;text-align:right"><button class="btn sm">Leave</button></td></tr>
+          </table>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="hd"><div><h3>Shared with her</h3><p>Single records other people opened to her. Each one works on that record only, and ends by itself.</p></div></div>
+        <div class="bd">
+          <table>
+            <thead><tr><th>Record</th><th>She can</th><th>From</th><th>Ends</th><th></th></tr></thead>
+            <tr><td>Job requisition<span class="st mono">JR-0142 · Finance Analyst</span></td><td>View, comment</td><td>Rudi Hartono</td><td>in 6 days</td><td style="text-align:right"><button class="btn sm danger">Stop sharing</button></td></tr>
+            <tr><td>Interview<span class="st mono">INT-0388</span></td><td>View, give feedback</td><td>Recruitment <span class="q">automatic</span></td><td><span class="chip warn">tomorrow</span></td><td style="text-align:right"><button class="btn sm danger">Stop sharing</button></td></tr>
+            <tr class="past"><td>Application form<span class="st mono">AF-1201</span></td><td>View</td><td>Sari Wulandari</td><td>ended 12 Oct</td><td></td></tr>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="stack">
+      <div class="panel">
+        <div class="hd"><h3>Sign-in</h3></div>
+        <div class="bd">
+          <dl class="kv">
+            <dt>Password</dt><dd><span class="chip info">From Osiris</span><span class="st sub">upgrades at next sign-in</span></dd>
+            <dt>Reset link</dt><dd>None active <button class="btn sm ghost">Send</button></dd>
+            <dt>Two-step</dt><dd class="sub">Not set up</dd>
+            <dt>Sessions</dt><dd>1 active <button class="btn sm ghost">Sign out everywhere</button></dd>
+          </dl>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="hd"><h3>Profile</h3></div>
+        <div class="bd">
+          <dl class="kv">
+            <dt>Employee no.</dt><dd class="mono">EMP-00412</dd>
+            <dt>Works in</dt><dd>Finance › Jakarta HQ</dd>
+            <dt>Came from</dt><dd>Osiris import · 26 Oct 2026</dd>
+          </dl>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ 2 WHERE -->
+<section class="screen" id="s-where">
+  <h1>Test access</h1>
+  <div class="sub" style="margin:4px 0 16px">Ask what someone can do, or where — before you change anything.</div>
+  <div class="tabs"><span>Can they?</span><span class="on">Where can they?</span><span>Why not?</span></div>
+
+  <div class="panel"><div class="bd" style="padding-top:14px">
+    <div class="row">
+      <div class="field"><label>Person</label><div class="input"><span class="avatar" style="width:22px;height:22px;font-size:10px">DP</span>Dewi Pratama</div></div>
+      <div class="field"><label>Can do</label><div class="input">Approve training requests <span class="ph mono" style="margin-left:auto">training:request:approve</span></div></div>
+      <div class="field" style="flex:.55"><label>In structure</label><div class="input">Organisation ▾</div></div>
+      <div style="flex:none"><button class="btn primary">Ask</button></div>
+    </div>
+  </div></div>
+
+  <div class="verdict">
+    <div>
+      <div class="big">Dewi can approve training requests in <em>3 places</em>, plus her own records</div>
+      <div class="sub">This is the list an app filters with — asked once per screen, not once per row.</div>
+    </div>
+  </div>
+
+  <div class="grid2">
+    <div class="panel">
+      <div class="hd"><div><h3>Places</h3><p>Exceptions are shown under the place they cut out of.</p></div></div>
+      <div class="bd">
+        <ul class="tree">
+          <li><div class="path">Impack Pratama › <b>Finance</b> <span class="q">and everything inside · 12 places</span></div>
+              <div><span class="chip allow">Allowed</span></div>
+              <div class="why">Given directly<small>Training approver · until 31 Dec</small></div></li>
+          <li class="ind1"><div class="path">Finance › <b>Surabaya branch</b></div>
+              <div><span class="chip deny">Except here</span></div>
+              <div class="why">Exception on the same grant<small>“audit team handles Surabaya”</small></div></li>
+          <li><div class="path">Impack Pratama › HR › <b>Jakarta HQ</b> <span class="q">this place only</span></div>
+              <div><span class="chip allow">Allowed</span></div>
+              <div class="why">Through HR Business Partner<small>placed where she works</small></div></li>
+          <li><div class="path">Impack Pratama › <b>Mitra Logistik</b> <span class="q">and everything inside</span></div>
+              <div><span class="chip allow">Allowed</span></div>
+              <div class="why">Shared with her<small>from Rudi Hartono · ends in 6 days</small></div></li>
+          <li><div class="path"><b>Her own records</b> <span class="q">anywhere</span></div>
+              <div><span class="chip mute">Own records</span></div>
+              <div class="why">Through Employee basics<small>membership</small></div></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="stack">
+      <div class="panel">
+        <div class="hd"><div><h3>What the app receives</h3><p>One call. Replaces Osiris's scope pickers and hand-written scope queries.</p></div></div>
+        <div class="bd"><pre>ListGrantedNodes {
+  subject:    "dewi…"
+  permission: "training:request:approve"
+  axis:       "org"
+}
+→ {
+  everywhere: false,
+  own_records: true,
+  nodes: [
+    { id: "finance",  inherit: true,
+      except: ["surabaya"] },
+    { id: "jkt-hq",   inherit: false },
+    { id: "mitra",    inherit: true }
+  ],
+  as_of: "snapshot 14:02:11"
+}</pre></div>
+      </div>
+      <div class="panel">
+        <div class="hd"><h3>The other two answers</h3></div>
+        <div class="bd note">
+          <p style="margin:0 0 8px"><span class="chip allow">Everywhere</span> — no list at all; the app skips the filter. This is what Osiris's “full scope” rules become.</p>
+          <p style="margin:0"><span class="chip mute">Nowhere</span> — the screen shows the empty state, not every row.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ 3 SHARE -->
+<section class="screen" id="s-share">
+  <h1>Share a record</h1>
+  <div class="sub" style="margin:4px 0 16px">A component apps embed (Osiris recruitment, training). Anubis decides; the app only shows it.</div>
+
+  <div class="overlay">
+    <div class="sheet">
+      <div class="hd"><h2>Share JR-0142 · Finance Analyst</h2><div class="sub">Job requisition</div></div>
+      <div class="bd">
+        <div class="q">
+          <div class="qn"><i>1</i>With whom</div>
+          <div class="input"><span class="chip mute">Rudi Hartono ✕</span><span class="ph">Add another person…</span></div>
+          <div class="note">People in PT Impack Pratama. To give a candidate a link, use “Invite candidate” instead.</div>
+        </div>
+        <div class="q">
+          <div class="qn"><i>2</i>What they can do</div>
+          <div class="cards">
+            <div class="card"><b>View</b><span>open and read</span></div>
+            <div class="card on"><b>View &amp; comment</b><span>read, add notes</span></div>
+            <div class="card off"><b>Edit</b><span>you can't edit this, so you can't share editing</span></div>
+          </div>
+        </div>
+        <div class="q">
+          <div class="qn"><i>3</i>For how long</div>
+          <div class="seg"><span>1 day</span><span class="on">7 days</span><span>14 days</span><span>Pick a date…</span></div>
+          <div class="note">Ends Mon 2 Nov 2026, 23:59</div>
+        </div>
+        <div class="q">
+          <div class="qn"><i>4</i>Tell them</div>
+          <div class="check"><span class="toggle"></span> Email Rudi a link to this record</div>
+        </div>
+        <div class="review">
+          <p><b>Rudi</b> will be able to <b>view and comment on JR-0142</b> until <b>2 Nov, 23:59</b>. Nothing else changes for him.</p>
+          <p>The emailed link opens this record only. It can't be used to sign in, and stops working the moment you stop sharing.</p>
+        </div>
+      </div>
+      <div class="ft">
+        <div class="status">✓ You can share this because you can comment on it.</div>
+        <button class="btn">Cancel</button><button class="btn primary">Share</button>
+      </div>
+    </div>
+
+    <div class="side" style="color:#fff">
+      <h4>Rules the sheet enforces</h4>
+      <div class="panel" style="padding:12px 14px;font-size:13px;display:grid;gap:10px">
+        <div><b>You can only share what you can do.</b><div class="note">Osiris let anyone with the SHARE rule share any record.</div></div>
+        <div><b>The access is tied to this record.</b><div class="note">In Osiris, shared rules applied to every record of that kind.</div></div>
+        <div><b>Stopping sharing stops it.</b><div class="note">The link and the access end together. In Osiris both survived.</div></div>
+        <div><b>A link never becomes a login.</b><div class="note">Osiris could turn a share link into a full session.</div></div>
+        <div><b>It always ends.</b><div class="note">No “forever” option; the longest is a date you pick.</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ 4 HOSTED -->
+<section class="screen" id="s-hosted">
+  <h1>Sign-in pages</h1>
+  <div class="sub" style="margin:4px 0 16px">What people see. Employees keep passwords; candidates get a link instead.</div>
+  <div class="phones">
+    <div>
+      <div class="hosted">
+        <div class="co"><i></i>Impack Pratama</div>
+        <h2>Sign in</h2>
+        <div class="field"><label>Work email</label><div class="input">dewi.pratama@impack.example</div></div>
+        <div class="field"><label>Password</label><div class="input">••••••••••••</div></div>
+        <button class="btn primary">Sign in</button>
+        <a class="lnk">Forgot your password?</a>
+      </div>
+      <div class="cap">Employees · new link only</div>
+    </div>
+    <div>
+      <div class="hosted">
+        <div class="co"><i></i>Impack Careers</div>
+        <h2>Continue your application</h2>
+        <p>No password needed — we'll email you a link.</p>
+        <div class="field"><label>Email</label><div class="input">ayu.k@mail.example</div></div>
+        <button class="btn primary">Email me a sign-in link</button>
+        <p class="note">The link works once, for 15 minutes, on this device.</p>
+      </div>
+      <div class="cap">Candidates · public population</div>
+    </div>
+    <div>
+      <div class="hosted">
+        <div class="co"><i></i>Impack Pratama</div>
+        <h2>Check your email</h2>
+        <p>If an account uses <b>d•••@impack.example</b>, a link is on its way.</p>
+        <p class="note">It works once, within 30 minutes. Nothing about your account has changed yet.</p>
+        <button class="btn" disabled style="opacity:.55">Send again in 0:48</button>
+        <a class="lnk">Use a different email</a>
+      </div>
+      <div class="cap">Same answer whether or not the account exists</div>
+    </div>
+    <div>
+      <div class="hosted">
+        <div class="co"><i></i>Impack Pratama</div>
+        <h2>Choose a new password</h2>
+        <div class="field"><label>New password</label><div class="input">••••••••••••••••</div></div>
+        <div class="meter"><i></i></div>
+        <p class="note" style="color:var(--allow)">✓ At least 12 characters</p>
+        <div class="check"><span class="box">✓</span>Sign me out on other devices</div>
+        <button class="btn primary">Save and sign in</button>
+      </div>
+      <div class="cap">Opened from the emailed link</div>
+    </div>
+  </div>
+  <div class="panel" style="margin-top:18px"><div class="bd" style="padding-top:14px">
+    <b>Why not Osiris's reset?</b>
+    <span class="note">Osiris reset by username alone, with no sign-in, and emailed a new password in plain text. Here the reset only
+    sends a link; the password changes when the owner opens it and chooses one — so nobody can lock someone else out.</span>
+  </div></div>
+</section>
+
+<!-- ============================================================ 5 IMPORT -->
+<section class="screen" id="s-import">
+  <h1>Import from Osiris</h1>
+  <div class="sub" style="margin:4px 0 16px">Read-only connection to Osiris. Nothing is written until you apply, and apply is all or nothing.</div>
+  <div class="wiz">
+    <ol class="steps">
+      <li class="done"><i>✓</i><div>Source<small>Osiris database, read-only</small></div></li>
+      <li class="done"><i>✓</i><div>Catalog<small>rules → permissions</small></div></li>
+      <li class="done"><i>✓</i><div>People<small>1 choice made</small></div></li>
+      <li class="done"><i>✓</i><div>Places<small>org, unit, workplace feeds</small></div></li>
+      <li class="done"><i>✓</i><div>Access<small>groups → memberships</small></div></li>
+      <li class="done"><i>✓</i><div>Passwords</div></li>
+      <li class="on"><i>7</i><div>Review &amp; apply</div></li>
+    </ol>
+
+    <div class="stack">
+      <div class="panel">
+        <div class="hd"><div><h3>Catalog</h3><p>Osiris names keep answering, so Osiris code that asks for <code>LIST_TRAINING</code> doesn't change.</p></div></div>
+        <div class="bd">
+          <table>
+            <thead><tr><th>Osiris rule</th><th>Becomes</th><th>App</th><th></th></tr></thead>
+            <tr><td class="mono">LIST_TRAINING</td><td class="mono">training:training:list</td><td>Training</td><td><span class="chip allow">Mapped</span></td></tr>
+            <tr><td class="mono">ADD_NEW_TRAINING</td><td class="mono">training:training:create</td><td>Training</td><td><span class="chip allow">Mapped</span></td></tr>
+            <tr><td class="mono">APPROVE_TRAINING_REQUEST</td><td class="mono">training:request:approve</td><td>Training</td><td><span class="chip allow">Mapped</span></td></tr>
+            <tr><td class="mono">TRAINING_FULL_SCOPE</td><td>Not a permission — the grants that had it become <b>Everywhere</b></td><td>Training</td><td><span class="chip info">Converted</span></td></tr>
+            <tr><td class="mono">EXPORT_LEGACY_REPORT</td><td class="sub">No group gives it</td><td>—</td><td><span class="chip mute">Skipped</span></td></tr>
+          </table>
+          <div style="margin-top:10px"><button class="btn sm ghost">See all 700 rules →</button></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="hd"><div><h3>People</h3></div></div>
+        <div class="bd">
+          <div class="banner warn" style="margin-bottom:12px">
+            <div class="ic">!</div>
+            <div class="tx"><b>Some candidate emails differ only by capital letters</b>
+              <span>Anubis treats <span class="mono">Ayu.K@mail.example</span> and <span class="mono">ayu.k@mail.example</span> as one person. None of them has a password.</span></div>
+          </div>
+          <div class="opt on"><span class="radio"></span><div><b>Merge each pair into one person</b><span>Keeps every application; recommended.</span></div></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="hd"><div><h3>Passwords</h3></div></div>
+        <div class="bd" style="display:grid;gap:8px">
+          <div class="opt on"><span class="radio"></span><div><b>Bring passwords over</b><span>Employees sign in exactly as before. Each password is replaced with a stronger one at their next sign-in.
+            Any not used by <b>30 Nov 2026</b> stop working, and those people get a reset link.</span></div></div>
+          <div class="opt"><span class="radio"></span><div><b>Send everyone a reset link</b><span>Cleaner, but every employee has to act on cut-over day.</span></div></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="hd"><div><h3>Not brought over, on purpose</h3><p>Osiris behaviour Anubis does not copy. Apps relying on it change in the same release.</p></div></div>
+        <div class="bd">
+          <ul class="drop">
+            <li>A refresh token being accepted as a sign-in</li>
+            <li>An expired sign-in still working for up to three days</li>
+            <li>Password changes blocked between 02:00 and 05:00</li>
+            <li>Shared access applying beyond the shared record, and surviving “unshare”</li>
+            <li>Signing in somewhere else silently ending your other session</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="foot">
+        <div class="status"><span class="chip allow">Dry run passed</span> &nbsp;Nothing written yet · 8 sample changes would be made</div>
+        <button class="btn">Back</button><button class="btn primary">Apply import</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+</div>
+</main>
+</div>
+
+<script>
+const crumbs={person:'People › Dewi Pratama',where:'Test access',share:'Share a record (app component)',hosted:'Sign-in pages',import:'Import'};
+function go(s){
+  document.querySelectorAll('.screen').forEach(e=>e.classList.toggle("on",e.id==="s-"+s));
+  document.querySelectorAll('.bar [data-s]').forEach(b=>b.classList.toggle('on',b.dataset.s===s));
+  document.querySelectorAll('.navi').forEach(n=>n.classList.toggle('on',n.dataset.n===s||(s==='share'&&n.dataset.n==='person')));
+  document.getElementById('crumb').textContent=crumbs[s];
+  history.replaceState(null,'','#'+s);
+}
+document.querySelectorAll('.bar [data-s]').forEach(b=>b.onclick=()=>go(b.dataset.s));
+document.getElementById('scheme').onclick=()=>{const h=document.documentElement;h.dataset.scheme=h.dataset.scheme==='dark'?'light':'dark'};
+go(location.hash.slice(1)||'person');
+</script>
+</body>
+</html>

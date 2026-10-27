@@ -264,6 +264,63 @@ func (u *identityAdminInteractor) SetPassword(ctx context.Context, id, password 
 	return nil
 }
 
+// legacyHashMaxLife bounds how long an imported hash may stay usable. The
+// hash arrived at whatever cost the source chose — the one being migrated
+// from used bcrypt at its minimum — and a weak hash with no end date is a
+// weak hash forever. Ninety days is the same fuse a platform key gets.
+const legacyHashMaxLife = 90 * 24 * time.Hour
+
+func (u *identityAdminInteractor) ImportPasswordHash(ctx context.Context, id, hash string, expiresAt time.Time) error {
+	p, err := u.guard.Require(ctx, "anubis:credential:write")
+	if err != nil {
+		return err
+	}
+	alg, legacy, err := kdf.Describe(hash)
+	if err != nil {
+		// Named plainly: the one mistake this call will see is somebody
+		// pasting the password instead of its hash, and that must never be
+		// stored as a credential — a plaintext in the secret column is a
+		// hash nobody can verify and everybody can read.
+		return apperr.ErrInvalidArgument.With("password_hash", "not a recognised hash format")
+	}
+	now := u.clock.Now()
+	var expires *time.Time
+	switch {
+	case legacy && expiresAt.IsZero():
+		return apperr.ErrInvalidArgument.With("expires_at", "required for a legacy hash")
+	case !expiresAt.IsZero() && !expiresAt.After(now):
+		return apperr.ErrInvalidArgument.With("expires_at", "must be in the future")
+	case legacy && expiresAt.After(now.Add(legacyHashMaxLife)):
+		return apperr.ErrInvalidArgument.With("expires_at", "a legacy hash may live at most 90 days")
+	case !expiresAt.IsZero():
+		t := expiresAt
+		expires = &t
+	}
+	identity, err := u.ids.Identity(ctx, p.TenantID, id)
+	if err != nil {
+		return apperr.ErrNotFound
+	}
+	err = u.tx.WithinTx(ctx, func(ctx context.Context) error {
+		if _, err := u.creds.RevokeCredentialsOfKind(ctx, identity.ID, "password"); err != nil {
+			return err
+		}
+		_, err := u.creds.CreateCredential(ctx, credential.CredentialInput{
+			IdentityID: identity.ID, TenantID: p.TenantID, Kind: "password",
+			Secret: hash, ExpiresAt: expires,
+		})
+		return err
+	})
+	if err != nil {
+		return err
+	}
+	detail := map[string]string{"algorithm": alg}
+	if expires != nil {
+		detail["expires_at"] = expires.UTC().Format(time.RFC3339)
+	}
+	u.emit(ctx, p, "credential.password_imported", id, detail)
+	return nil
+}
+
 func (u *identityAdminInteractor) LinkIdentities(ctx context.Context, primaryID, secondaryID, method, evidenceJSON string) error {
 	p, err := u.guard.Require(ctx, "anubis:identity:write")
 	if err != nil {

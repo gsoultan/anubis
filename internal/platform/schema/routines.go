@@ -78,7 +78,29 @@ SELECT EXISTS (
                           AND NOT EXISTS (SELECT 1 FROM grant_scopes gs2
                                            WHERE gs2.grant_id = cd.id
                                              AND gs2.axis_code = a.code))
-);
+)
+OR (p_targets ? '_record' AND EXISTS (
+    -- A record share: the recipient was given these permissions on THIS
+    -- record by somebody, for a while. Places do not apply — the share names
+    -- the record, not where it lives — but every identity and permission
+    -- gate above still does.
+    SELECT 1
+      FROM record_shares s
+      JOIN identities i
+        ON i.id = s.to_identity_id AND i.tenant_id = s.tenant_id
+      JOIN permissions p
+        ON p.tenant_id = s.tenant_id AND p.key = p_permission
+     WHERE s.tenant_id      = p_tenant
+       AND s.to_identity_id = p_identity
+       AND s.record         = p_targets->>'_record'
+       AND s.revoked_at IS NULL
+       AND s.valid_until > now()
+       AND p_permission = ANY (s.permission_keys)
+       AND p.deprecated_at IS NULL
+       AND p.min_assurance <= i.assurance_level
+       AND i.status = 'active'
+       AND i.disabled_at IS NULL
+       AND i.anonymized_at IS NULL));
 `),
 		storm.Function("authorize_explain", "p_identity uuid, p_tenant uuid, p_permission text, p_targets jsonb", "jsonb").Language("sql").Stable().Body(`
 WITH targets AS MATERIALIZED (
@@ -203,6 +225,20 @@ SELECT jsonb_build_object(
         'allowed', (pg.self_ok AND pg.axes_ok
                     AND pg.strict_missing = '[]'::jsonb))
         ORDER BY pg.role_name) FROM per_grant pg), '[]'::jsonb),
+    'shares', COALESCE((SELECT jsonb_agg(jsonb_build_object(
+        'share_id',    s.id,
+        'from',        s.from_identity_id,
+        'valid_until', s.valid_until,
+        'permissions', to_jsonb(s.permission_keys),
+        'allowed',     p_permission = ANY (s.permission_keys))
+        ORDER BY s.created_at)
+        FROM record_shares s
+       WHERE p_targets ? '_record'
+         AND s.tenant_id      = p_tenant
+         AND s.to_identity_id = p_identity
+         AND s.record         = p_targets->>'_record'
+         AND s.revoked_at IS NULL
+         AND s.valid_until > now()), '[]'::jsonb),
     'reason', CASE
         WHEN (SELECT allow FROM verdict) THEN NULL
         WHEN NOT (SELECT identity_found FROM gates) THEN 'identity_not_found'
@@ -1064,6 +1100,9 @@ END;
 		storm.Trigger("grant_scopes_bump_del", "grant_scopes", `CREATE TRIGGER grant_scopes_bump_del AFTER DELETE ON grant_scopes REFERENCING OLD TABLE AS oldtab FOR EACH STATEMENT EXECUTE FUNCTION trg_bump_catalog_stmt()`),
 		storm.Trigger("grant_scopes_bump_ins", "grant_scopes", `CREATE TRIGGER grant_scopes_bump_ins AFTER INSERT ON grant_scopes REFERENCING NEW TABLE AS newtab FOR EACH STATEMENT EXECUTE FUNCTION trg_bump_catalog_stmt()`),
 		storm.Trigger("grant_scopes_bump_upd", "grant_scopes", `CREATE TRIGGER grant_scopes_bump_upd AFTER UPDATE ON grant_scopes REFERENCING NEW TABLE AS newtab FOR EACH STATEMENT EXECUTE FUNCTION trg_bump_catalog_stmt()`),
+		storm.Trigger("record_shares_bump_del", "record_shares", `CREATE TRIGGER record_shares_bump_del AFTER DELETE ON record_shares REFERENCING OLD TABLE AS oldtab FOR EACH STATEMENT EXECUTE FUNCTION trg_bump_catalog_stmt()`),
+		storm.Trigger("record_shares_bump_ins", "record_shares", `CREATE TRIGGER record_shares_bump_ins AFTER INSERT ON record_shares REFERENCING NEW TABLE AS newtab FOR EACH STATEMENT EXECUTE FUNCTION trg_bump_catalog_stmt()`),
+		storm.Trigger("record_shares_bump_upd", "record_shares", `CREATE TRIGGER record_shares_bump_upd AFTER UPDATE ON record_shares REFERENCING NEW TABLE AS newtab FOR EACH STATEMENT EXECUTE FUNCTION trg_bump_catalog_stmt()`),
 		storm.Trigger("grant_scopes_exclusion_guard", "grant_scopes", `CREATE CONSTRAINT TRIGGER grant_scopes_exclusion_guard AFTER INSERT OR UPDATE ON grant_scopes DEFERRABLE INITIALLY DEFERRED FOR EACH ROW WHEN ((new.mode = 'exclude'::text)) EXECUTE FUNCTION trg_exclusion_needs_include()`),
 		storm.Trigger("grant_scopes_self_guard", "grant_scopes", `CREATE CONSTRAINT TRIGGER grant_scopes_self_guard AFTER INSERT OR UPDATE ON grant_scopes DEFERRABLE INITIALLY IMMEDIATE FOR EACH ROW EXECUTE FUNCTION trg_self_scope_guard()`),
 		storm.Trigger("grants_bump_del", "grants", `CREATE TRIGGER grants_bump_del AFTER DELETE ON grants REFERENCING OLD TABLE AS oldtab FOR EACH STATEMENT EXECUTE FUNCTION trg_bump_catalog_stmt()`),

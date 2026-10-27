@@ -28,6 +28,23 @@ names*, not a document.
 
 ---
 
+## The reset pages borrow the sign-in page
+
+`/p/{tenant}/reset/request` and `/p/{tenant}/reset/complete` have no
+configuration of their own. They resolve the sign-in page the same way the
+sign-in form does (realm binding, then tenant default) and render its brand,
+layout and username label with their own headings and copy. The sign-in page
+links to the first as "Forgot your password?" whenever it knows which realm
+it is for. Endpoints and behaviour are in [api.md](api.md#password-reset-and-change).
+
+## The e-mail door
+
+A realm whose `allowed_factors` includes `email_link` gets a second submit on
+the sign-in form, **Email me a sign-in link**, for people who have no
+password. It is the same form — the username and the OIDC request travel
+with it — posted to `/v1/login/email`; the link that comes back finishes that
+very flow. Nothing to configure on the page; the realm decides.
+
 ## Which page renders
 
 Most specific match wins:

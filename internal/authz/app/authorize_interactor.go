@@ -47,6 +47,16 @@ func (u *authorizeInteractor) Execute(ctx context.Context, in AuthorizeInput) (*
 	if in.Scopes == nil {
 		in.Scopes = map[string]string{}
 	}
+	// A token minted from an access link is bound to one record. It may ask
+	// about its own subject and that record, and nothing else: "a link never
+	// becomes a login" is enforced here, where the question is asked, not
+	// only in what the token's claims happen to say.
+	if p.LinkBound() && (in.Subject != p.IdentityID || in.Scopes["_record"] == "" || in.Scopes["_record"] != p.LinkRecord()) {
+		d := &authzdomain.Decision{Allow: false, Reason: "link_bound",
+			Message: "This token opens one record and decides nothing else"}
+		u.auditDecision(ctx, p, in, d)
+		return d, nil
+	}
 	targets, err := json.Marshal(in.Scopes)
 	if err != nil {
 		return nil, apperr.ErrInvalidArgument.Wrap(err)

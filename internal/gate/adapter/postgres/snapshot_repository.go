@@ -47,6 +47,7 @@ func (s *Repository) LoadSnapshot(ctx context.Context, tenantID, tenantSlug stri
 		BuiltAt:          time.Now(),
 		StrictAxes:       map[string]bool{},
 		GrantsByIdentity: map[string][]snapshot.Grant{},
+		SharesByIdentity: map[string][]snapshot.Share{},
 		RolePermissions:  map[string]map[string]bool{},
 		Permissions:      map[string]snapshot.Permission{},
 		Identities:       map[string]snapshot.Identity{},
@@ -121,6 +122,20 @@ func (s *Repository) LoadSnapshot(ctx context.Context, tenantID, tenantSlug stri
 	// resolved to dense indices. Skipping this denies everything (by design —
 	// see ScopeConstraint.node), so it must not move above either load.
 	d.InternGrantScopes()
+
+	shares, err := gaterquery.SnapshotShares.Query(ctx, ex, tenantID)
+	if err != nil {
+		return nil, database.MapErr(err)
+	}
+	for _, sh := range shares {
+		perms := make(map[string]bool, len(sh.PermissionKeys))
+		for _, k := range sh.PermissionKeys {
+			perms[k] = true
+		}
+		d.SharesByIdentity[sh.ToIdentityID] = append(d.SharesByIdentity[sh.ToIdentityID], snapshot.Share{
+			Record: sh.Record, Permissions: perms, ValidUntil: sh.ValidUntil,
+		})
+	}
 
 	rps, err := gaterquery.SnapshotRolePermissions.Query(ctx, ex, tenantID)
 	if err != nil {

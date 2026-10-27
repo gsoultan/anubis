@@ -82,6 +82,23 @@ type PageView struct {
 	// self-registration: a page must not advertise a door that will not open.
 	RegistrationURL string
 
+	// EmailLink offers "Email me a sign-in link" under the form: the door
+	// for a population with no password, shown only where the realm allows
+	// the email_link factor.
+	EmailLink bool
+	// ResetURL is the "Forgot your password?" link under the sign-in form.
+	// Empty when there is no realm to reset in.
+	ResetURL string
+
+	// Password-reset pages render through the sign-in page's configuration
+	// with copy of their own: Title replaces the configured heading, and
+	// ResetStep picks the body — request · sent · complete · done · expired.
+	Title      string
+	ResetStep  string
+	ResetToken string
+	MinLength  int
+	SigninURL  string
+
 	// Sign-out state.
 	Confirm             bool
 	ReturnURL           string

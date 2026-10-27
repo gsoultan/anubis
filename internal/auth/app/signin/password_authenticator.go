@@ -117,11 +117,18 @@ func (a *PasswordAuthenticator) Authenticate(ctx context.Context, in LoginInput,
 		a.AuditLogin(ctx, tenant, identity, surface, "deny", apperr.AsError(aerr).Code, "")
 		return Decision{Step: StepDeny, Tenant: tenant, Realm: realm, Identity: identity, Err: aerr}
 	}
+	if cred.Expired(a.clock.Now()) {
+		// Checked AFTER the verify so that an expired credential costs what
+		// a live one costs, and reported to the person as a wrong password:
+		// "your imported password has lapsed" is also "this account exists
+		// and came from the old system". The audit record says which.
+		a.AuditLogin(ctx, tenant, identity, surface, "deny", "credential_expired", "")
+		return Decision{Step: StepDeny, Tenant: tenant, Realm: realm, Identity: identity, Err: apperr.ErrInvalidCredentials}
+	}
 
 	if needsRehash {
 		if newHash, herr := kdf.Hash(in.Password); herr == nil {
-			// No kid: a password is hashed, not sealed, so no key opens it.
-			_ = a.creds.UpdateCredentialSecret(ctx, cred.ID, newHash, "")
+			a.replaceHash(ctx, tenant.ID, cred, newHash)
 		}
 	}
 
@@ -181,6 +188,30 @@ func (a *PasswordAuthenticator) MissingFactors(ctx context.Context, realm *ident
 
 // AuditLogin writes one auth.login event. Both doors call it so the record
 // has one shape whichever was used, and the surface says which.
+// replaceHash writes the upgraded hash back. Two shapes, because an imported
+// credential carries an expiry that belongs to the OLD hash: editing the
+// secret in place would leave a PBKDF2 hash that stops working on the day
+// the bcrypt one was meant to, so that row is retired and a fresh one with
+// no expiry takes its place. A native credential is a cost upgrade on the
+// same row, as before.
+//
+// Create before revoke: if the second write fails the person holds two live
+// passwords that verify the same plaintext, and the next sign-in finishes the
+// job. Revoke-then-create failing halfway leaves them with none.
+func (a *PasswordAuthenticator) replaceHash(ctx context.Context, tenantID string, cred *credential.Credential, newHash string) {
+	if cred.ExpiresAt == nil {
+		// No kid: a password is hashed, not sealed, so no key opens it.
+		_ = a.creds.UpdateCredentialSecret(ctx, cred.ID, newHash, "")
+		return
+	}
+	if _, err := a.creds.CreateCredential(ctx, credential.CredentialInput{
+		IdentityID: cred.IdentityID, TenantID: tenantID, Kind: "password", Secret: newHash,
+	}); err != nil {
+		return
+	}
+	_ = a.creds.RevokeCredential(ctx, tenantID, cred.ID)
+}
+
 func (a *PasswordAuthenticator) AuditLogin(
 	ctx context.Context,
 	tenant *tenancydomain.TenantRef, identity *identitydomain.Identity,

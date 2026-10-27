@@ -98,6 +98,11 @@ says how to get the real one.
 | `ANUBIS_SETUP_TOKEN` | *(random per boot)* | Guards the first-run installer. Supply it for an unattended install; otherwise it is printed once and dies with the process |
 | `ANUBIS_DEFAULT_TENANT` | `impack` | The tenant assumed when a request carries none. **Single-tenant installs should set this**; the default is a development fixture name |
 | `ANUBIS_SYNC_DENY_HOSTS` | *(none)* | CIDRs a structure feed may not reach. Link-local is always refused |
+| `ANUBIS_SMTP_HOST` | *(none)* | Relay for password-reset mail. **Unset in prod means reset links cannot be sent** and the flow says so (the same way for every username); outside prod the mail goes to the log instead |
+| `ANUBIS_SMTP_PORT` | `587` | |
+| `ANUBIS_SMTP_SECURITY` | `starttls` | `starttls` (refuses a relay that cannot upgrade) · `implicit` (TLS from the first byte, usually 465) · `none` (loopback relays only; credentials are refused in the clear) |
+| `ANUBIS_SMTP_USERNAME` / `ANUBIS_SMTP_PASSWORD` | *(none)* | Together or not at all. `ANUBIS_SMTP_PASSWORD_FILE` is preferred for the same reason `ANUBIS_KEY_FILE` is |
+| `ANUBIS_SMTP_FROM` | *required with a host* | The sender address |
 | `ANUBIS_SYNC_ALLOW_LOOPBACK` | `0` | Let a feed reach 127.0.0.1 — development only |
 
 **Rate limits are per instance.** Counters live in the process
@@ -304,6 +309,41 @@ balancer yet. Roll instances one at a time.
 If a tenant's snapshot no longer fits comfortably, shard tenants across
 instances before reaching for anything cleverer — the gate is deliberately
 share-nothing, so that is a routing change and no code.
+
+## Migrating from Osiris
+
+`cmd/osiris2anubis` reads the Osiris IAM tables (read-only) and writes what
+Anubis imports. It applies nothing: every output goes through a step that has
+a dry run.
+
+```sh
+go run ./cmd/osiris2anubis -dsn "$OSIRIS_DB_URL" -out osiris-export \
+  -app osiris -realms EMPLOYEE=internal,DEVICE=internal,APPLICANT=public,REGISTRANT=public
+```
+
+| Output | Goes through | What it is |
+| :--- | :--- | :--- |
+| `manifest.json` | `AuthzAdminService/ApplyManifest` (dry run first) | One permission per Osiris rule (`LIST_TRAINING` → `osiris:training:list`), one role per policy (`osiris.training-admin`), module labels from Osiris features |
+| `rules.csv` | the Osiris side's `CheckRule` adapter | rule name → permission key; `*_FULL_SCOPE` rules are marked `scope_marker` and have no key |
+| `people-and-access.xlsx` | `ProvisioningService/ImportWorkbook` (dry run first) | People per realm, external_ref = Osiris user id; one grant row per (person, role, axis) from group membership at a placement |
+| `report.txt` | you | counts and every decision made: key conflicts, rules no policy confers, usernames that collide once lowercased, people with no place |
+
+Order of operations, because each step depends on the one before:
+
+1. **Structures first.** Sync Osiris's organisations, units and workplaces as
+   three structures (`db_table` feeds on Osiris's own tables, external_ref =
+   the Osiris id). The grant rows name places by that id.
+2. **Manifest**, dry run, then apply.
+3. **Workbook**, dry run — it resolves every role and place before writing —
+   then apply. People with no org/unit/workplace are *skipped* unless you pass
+   `-unplaced-everywhere`; in Osiris they see everything, and that is the one
+   outcome to decide on purpose.
+4. **Passwords** move at cut-over through `IdentityAdminService/ImportPasswordHash`
+   with an expiry; the tool never writes a hash to disk.
+
+Grade and job type are dropped (a position is not a place; scoping to a grade
+revokes access on promotion). Osiris's shared records and SHARE links are not
+exported: Anubis has no record-bound sharing yet.
 
 ## Connecting a structure feed to another system
 
@@ -563,6 +603,11 @@ Each tenant publishes as many as it needs; each has its own URL
 `/v1/authorize` and `/v1/logout` fall back to — it cannot be deleted or
 disabled without promoting another first, because those endpoints must always
 have something to render.
+
+Password-reset pages live beside them at `/p/{tenant}/reset/request` and
+`/p/{tenant}/reset/complete`, rendered on the sign-in page's configuration
+(the realm's page if it has one, else the tenant default). They need a mail
+relay — see `ANUBIS_SMTP_HOST` above.
 
 **Browser flows need TLS.** The SSO and sign-out cookies use the `__Host-`
 prefix, which browsers only accept over HTTPS. Outside `ANUBIS_ENV=prod`, and

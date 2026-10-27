@@ -139,6 +139,32 @@ Global logout triggers **back-channel logout**: Anubis POSTs a signed logout
 token to each application's `backchannel_logout_uri`. Without it, an application
 with its own session cookie keeps the user logged in after they signed out.
 
+### Password reset and change
+
+Three `AuthService` procedures, and hosted pages for the two that need no
+bearer. All three end by revoking **every** session and refresh family and
+bumping `token_epoch`: a password is changed because the old one is
+forgotten, suspected or inherited, and no session opened with it should
+outlive the change. Sign in again afterwards.
+
+| Procedure | Bearer | Effect |
+| :--- | :--- | :--- |
+| `RequestPasswordReset {tenant, realm, username}` | none | Mails a single-use link to the address on file. **Answers the same whether or not the account exists**, is disabled, or has no address — the difference is in the audit log (`credential.reset_requested`, `credential.reset_mail`). Rate limited 10/min per IP, 3/min per account. The only error it returns is `mail_not_configured`, which is true for every username at once and is checked before any lookup |
+| `CompletePasswordReset {token, password}` | none | Consumes the token (single use, 30 minutes) and sets the password under the realm's policy. A refused password **burns the token**: ask for a new link |
+| `ChangePassword {current_password, new_password}` | tenant person | Needs the current password, not merely a session — a token left in a browser must not be enough to re-key the account. Platform operators use `ChangePlatformPassword` |
+
+The hosted pages render on the tenant's sign-in page configuration:
+
+| Page | What it does |
+| :--- | :--- |
+| `GET /p/{tenant}/reset/request?realm=` | Asks for a username; the sign-in page links here as "Forgot your password?" |
+| `POST /p/{tenant}/reset/request` | Always answers "check your email" |
+| `GET /p/{tenant}/reset/complete?realm=&token=` | The page the mail opens. It moves the token into the form and **consumes nothing**, so a mail client that prefetches links does not burn the reset |
+| `POST /p/{tenant}/reset/complete` | Sets the password; links back to sign-in |
+
+Mail needs a relay (`ANUBIS_SMTP_*`, [operations.md](operations.md#configuration)).
+Outside `prod` with no relay, the message — link included — goes to the log.
+
 ---
 
 ## Tokens
@@ -205,6 +231,102 @@ option.
 Not optional once more than two axes exist. Returns which grant matched, which
 role conferred the permission, and — on denial — exactly which axis failed and
 why.
+
+### `AuthzService/ListGrantedNodes` — where can they?
+
+The question an application asks **once per screen** so it can filter a
+list, instead of asking `Authorize` once per row.
+
+```json
+{ "subject": "<identity id>", "permission": "training:request:approve",
+  "axis": "org", "scopes": { "unit": "<node id>" } }
+```
+
+`axis` is left open; `scopes` fixes the others (usually the session's active
+scope). A grant limited on an axis that is neither open nor fixed is dropped —
+the same fail-closed rule `Authorize` applies — so the list can never name a
+place `Authorize` would deny.
+
+```json
+{ "everywhere": false, "own_records": true,
+  "nodes": [ { "node_id": "finance", "inherit": true,
+               "except": [ { "node_id": "surabaya", "inherit": true } ] },
+             { "node_id": "jkt-hq", "inherit": false } ],
+  "as_of": 1761470531 }
+```
+
+| Field | Meaning for a filter |
+| :--- | :--- |
+| `everywhere` | Some qualifying grant puts no limit on the axis: apply **no** filter. `nodes` is empty when this is set |
+| `own_records` | A self-scoped grant qualifies: rows the subject owns pass regardless of place |
+| `nodes` | The places, each with its reach (`inherit`) and the exceptions the *same grant* carves out |
+| all three unset | Nowhere: show the empty state, not every row |
+
+Served from the gate's per-tenant snapshot — `as_of` is when it was current
+— and refused as `snapshot_unavailable` rather than answered from a stale
+one. An unknown subject or permission is `not_found`, not an empty list.
+
+`SwitchScope` uses the same snapshot to refuse a place the caller holds no
+grant at (`permission_denied`); a node that merely exists is not a node the
+caller may stand at.
+
+### `ShareService` — one person opens one record to another
+
+The narrowest way Anubis says yes. A share names a **record** — not a place —
+hands over a subset of what the sharer may do on it, and always ends.
+
+| Procedure | Who | Effect |
+| :--- | :--- | :--- |
+| `Share {record_kind, record_ref, record_scopes, to_identity_id, permissions[], valid_until, note}` | a tenant person | **You can only share what you can do**: every permission is authorised for the caller at `record_scopes` (the targets `Authorize` gets for that record, `_owner` included) through their grants — a share the caller holds does not count, so a share cannot beget a share. `valid_until` is required, at most 90 days out. The recipient must be able to sign in |
+| `Unshare {share_id, reason}` | the sharer, or anybody holding every permission the share confers at the record's places | Ends it now: the catalog version bumps, the gate snapshot rebuilds |
+| `ListSharesOnRecord {record_kind, record_ref, record_scopes}` | the two parties, or anybody who could have made it | Live shares on the record |
+| `ListSharedWithMe` | the recipient | Live shares to the caller |
+
+**How a share is checked.** `Authorize` and the gate consult shares only when
+the targets name the record:
+
+```json
+{ "subject": "<recipient>", "permission": "ats:requisition:comment",
+  "scopes": { "org": "<node>", "_record": "job_requisition/JR-0142" } }
+```
+
+Grants are tried first, exactly as before; if none reaches the target, a live
+share to the subject on `_record` that names the permission allows. Every
+identity and permission gate still applies (a disabled recipient is refused).
+A share confers nothing where the record is not named, nothing on any other
+record, and nothing to `ListGrantedNodes` or `SwitchScope` — it is not a
+place. `Explain` lists the matching shares under `shares`.
+
+Operators and services do not share; a share is one person's access handed
+to another. Audited as `share.create` / `share.revoke`.
+
+#### Access links — the door for a recipient with no password
+
+| Procedure | Bearer | Effect |
+| :--- | :--- | :--- |
+| `ShareService/CreateAccessLink {share_id}` | sharer, or anybody who could end the share | Returns `link_token` (`anb_lk_…`) **once**; making another replaces it. Anubis mails nothing: the application owns the record's URL and puts the token in its own message |
+| `AuthService/OpenAccessLink {tenant, client_id, link_token}` | none | Exchanges the link for a token that opens **that record** in **that application**: ten minutes (never past the share's end), no session, no refresh, `amr ["link"]`, `scopes {"_record": …}`. Rate limited per IP and per link |
+
+What the token is worth, enforced where the questions are asked rather
+than only in its claims: `Authorize` refuses it (`link_bound`) for any
+subject or record but its own; the gate refuses it outright; `ListGrantedNodes`
+refuses it; it has no session to switch or sign out. Revoking the share, or
+the share ending, ends every token minted from it at the next decision — the
+gate learns through the same catalog-version bump as grants. A disabled
+recipient's link stops working at once. Audited as `auth.link_open`.
+
+### Sign in by e-mail link
+
+For a population with no password (applicants, registrants): a realm that
+lists `email_link` in `allowed_factors` gets a second button on the hosted
+sign-in page, **Email me a sign-in link**. It posts the same form (username
+and the OIDC request) to `POST /v1/login/email`, which answers "check your
+email" for every username and mails a single-use link (15 minutes) only
+where there is an account that may sign in. Opening it (`GET
+/v1/login/email?token=…`) establishes an ordinary browser session with
+`amr ["email_link"]` and issues the authorization code for the flow the
+person started — exactly as after a password. Audited as `auth.email_link`
+and `auth.login`. Needs a mail relay (`ANUBIS_SMTP_*`).
 
 ### `POST /v1/gate/check` — forward-auth
 

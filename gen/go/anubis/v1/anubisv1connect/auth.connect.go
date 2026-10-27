@@ -56,6 +56,18 @@ const (
 	AuthServiceRegisterProcedure = "/anubis.v1.AuthService/Register"
 	// AuthServiceVerifyEmailProcedure is the fully-qualified name of the AuthService's VerifyEmail RPC.
 	AuthServiceVerifyEmailProcedure = "/anubis.v1.AuthService/VerifyEmail"
+	// AuthServiceRequestPasswordResetProcedure is the fully-qualified name of the AuthService's
+	// RequestPasswordReset RPC.
+	AuthServiceRequestPasswordResetProcedure = "/anubis.v1.AuthService/RequestPasswordReset"
+	// AuthServiceCompletePasswordResetProcedure is the fully-qualified name of the AuthService's
+	// CompletePasswordReset RPC.
+	AuthServiceCompletePasswordResetProcedure = "/anubis.v1.AuthService/CompletePasswordReset"
+	// AuthServiceChangePasswordProcedure is the fully-qualified name of the AuthService's
+	// ChangePassword RPC.
+	AuthServiceChangePasswordProcedure = "/anubis.v1.AuthService/ChangePassword"
+	// AuthServiceOpenAccessLinkProcedure is the fully-qualified name of the AuthService's
+	// OpenAccessLink RPC.
+	AuthServiceOpenAccessLinkProcedure = "/anubis.v1.AuthService/OpenAccessLink"
 	// AuthServiceBeginTotpEnrollmentProcedure is the fully-qualified name of the AuthService's
 	// BeginTotpEnrollment RPC.
 	AuthServiceBeginTotpEnrollmentProcedure = "/anubis.v1.AuthService/BeginTotpEnrollment"
@@ -85,6 +97,24 @@ type AuthServiceClient interface {
 	// Self-registration; public realms with self_registration=true only.
 	Register(context.Context, *connect.Request[v1.RegisterRequest]) (*connect.Response[v1.RegisterResponse], error)
 	VerifyEmail(context.Context, *connect.Request[v1.VerifyEmailRequest]) (*connect.Response[v1.VerifyEmailResponse], error)
+	// --- password recovery (no bearer) and change (bearer) -----------------
+	// Answers the same whether or not the account exists: a link is mailed
+	// to the address on file, if there is one. Rate limited per IP and per
+	// account.
+	RequestPasswordReset(context.Context, *connect.Request[v1.RequestPasswordResetRequest]) (*connect.Response[v1.RequestPasswordResetResponse], error)
+	// Consumes the emailed token (single use) and sets the password. Every
+	// session is revoked and the token epoch bumped: sign in again.
+	CompletePasswordReset(context.Context, *connect.Request[v1.CompletePasswordResetRequest]) (*connect.Response[v1.CompletePasswordResetResponse], error)
+	// Needs the CURRENT password, not merely the session. Revokes every
+	// session, including this one — a changed password is a new start.
+	ChangePassword(context.Context, *connect.Request[v1.ChangePasswordRequest]) (*connect.Response[v1.ChangePasswordResponse], error)
+	// --- access links (no bearer) -------------------------------------------
+	// Exchange a share's link for a token that opens THAT record in the named
+	// application: ten minutes, no session, no refresh, amr ["link"],
+	// scopes {"_record": …}. Authorize refuses it for any other subject or
+	// record; the gate refuses it outright; it lists no places. A link is
+	// never a sign-in.
+	OpenAccessLink(context.Context, *connect.Request[v1.OpenAccessLinkRequest]) (*connect.Response[v1.OpenAccessLinkResponse], error)
 	// --- second-factor enrolment (bearer token required) --------------------
 	// Two steps on purpose: the secret is only committed once the user proves
 	// they can generate a code from it, so a mistyped transfer to the
@@ -171,6 +201,30 @@ func NewAuthServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(authServiceMethods.ByName("VerifyEmail")),
 			connect.WithClientOptions(opts...),
 		),
+		requestPasswordReset: connect.NewClient[v1.RequestPasswordResetRequest, v1.RequestPasswordResetResponse](
+			httpClient,
+			baseURL+AuthServiceRequestPasswordResetProcedure,
+			connect.WithSchema(authServiceMethods.ByName("RequestPasswordReset")),
+			connect.WithClientOptions(opts...),
+		),
+		completePasswordReset: connect.NewClient[v1.CompletePasswordResetRequest, v1.CompletePasswordResetResponse](
+			httpClient,
+			baseURL+AuthServiceCompletePasswordResetProcedure,
+			connect.WithSchema(authServiceMethods.ByName("CompletePasswordReset")),
+			connect.WithClientOptions(opts...),
+		),
+		changePassword: connect.NewClient[v1.ChangePasswordRequest, v1.ChangePasswordResponse](
+			httpClient,
+			baseURL+AuthServiceChangePasswordProcedure,
+			connect.WithSchema(authServiceMethods.ByName("ChangePassword")),
+			connect.WithClientOptions(opts...),
+		),
+		openAccessLink: connect.NewClient[v1.OpenAccessLinkRequest, v1.OpenAccessLinkResponse](
+			httpClient,
+			baseURL+AuthServiceOpenAccessLinkProcedure,
+			connect.WithSchema(authServiceMethods.ByName("OpenAccessLink")),
+			connect.WithClientOptions(opts...),
+		),
 		beginTotpEnrollment: connect.NewClient[v1.BeginTotpEnrollmentRequest, v1.BeginTotpEnrollmentResponse](
 			httpClient,
 			baseURL+AuthServiceBeginTotpEnrollmentProcedure,
@@ -210,6 +264,10 @@ type authServiceClient struct {
 	deviceVerify          *connect.Client[v1.DeviceVerifyRequest, v1.DeviceVerifyResponse]
 	register              *connect.Client[v1.RegisterRequest, v1.RegisterResponse]
 	verifyEmail           *connect.Client[v1.VerifyEmailRequest, v1.VerifyEmailResponse]
+	requestPasswordReset  *connect.Client[v1.RequestPasswordResetRequest, v1.RequestPasswordResetResponse]
+	completePasswordReset *connect.Client[v1.CompletePasswordResetRequest, v1.CompletePasswordResetResponse]
+	changePassword        *connect.Client[v1.ChangePasswordRequest, v1.ChangePasswordResponse]
+	openAccessLink        *connect.Client[v1.OpenAccessLinkRequest, v1.OpenAccessLinkResponse]
 	beginTotpEnrollment   *connect.Client[v1.BeginTotpEnrollmentRequest, v1.BeginTotpEnrollmentResponse]
 	confirmTotpEnrollment *connect.Client[v1.ConfirmTotpEnrollmentRequest, v1.ConfirmTotpEnrollmentResponse]
 	enrollDeviceKey       *connect.Client[v1.EnrollDeviceKeyRequest, v1.EnrollDeviceKeyResponse]
@@ -266,6 +324,26 @@ func (c *authServiceClient) VerifyEmail(ctx context.Context, req *connect.Reques
 	return c.verifyEmail.CallUnary(ctx, req)
 }
 
+// RequestPasswordReset calls anubis.v1.AuthService.RequestPasswordReset.
+func (c *authServiceClient) RequestPasswordReset(ctx context.Context, req *connect.Request[v1.RequestPasswordResetRequest]) (*connect.Response[v1.RequestPasswordResetResponse], error) {
+	return c.requestPasswordReset.CallUnary(ctx, req)
+}
+
+// CompletePasswordReset calls anubis.v1.AuthService.CompletePasswordReset.
+func (c *authServiceClient) CompletePasswordReset(ctx context.Context, req *connect.Request[v1.CompletePasswordResetRequest]) (*connect.Response[v1.CompletePasswordResetResponse], error) {
+	return c.completePasswordReset.CallUnary(ctx, req)
+}
+
+// ChangePassword calls anubis.v1.AuthService.ChangePassword.
+func (c *authServiceClient) ChangePassword(ctx context.Context, req *connect.Request[v1.ChangePasswordRequest]) (*connect.Response[v1.ChangePasswordResponse], error) {
+	return c.changePassword.CallUnary(ctx, req)
+}
+
+// OpenAccessLink calls anubis.v1.AuthService.OpenAccessLink.
+func (c *authServiceClient) OpenAccessLink(ctx context.Context, req *connect.Request[v1.OpenAccessLinkRequest]) (*connect.Response[v1.OpenAccessLinkResponse], error) {
+	return c.openAccessLink.CallUnary(ctx, req)
+}
+
 // BeginTotpEnrollment calls anubis.v1.AuthService.BeginTotpEnrollment.
 func (c *authServiceClient) BeginTotpEnrollment(ctx context.Context, req *connect.Request[v1.BeginTotpEnrollmentRequest]) (*connect.Response[v1.BeginTotpEnrollmentResponse], error) {
 	return c.beginTotpEnrollment.CallUnary(ctx, req)
@@ -301,6 +379,24 @@ type AuthServiceHandler interface {
 	// Self-registration; public realms with self_registration=true only.
 	Register(context.Context, *connect.Request[v1.RegisterRequest]) (*connect.Response[v1.RegisterResponse], error)
 	VerifyEmail(context.Context, *connect.Request[v1.VerifyEmailRequest]) (*connect.Response[v1.VerifyEmailResponse], error)
+	// --- password recovery (no bearer) and change (bearer) -----------------
+	// Answers the same whether or not the account exists: a link is mailed
+	// to the address on file, if there is one. Rate limited per IP and per
+	// account.
+	RequestPasswordReset(context.Context, *connect.Request[v1.RequestPasswordResetRequest]) (*connect.Response[v1.RequestPasswordResetResponse], error)
+	// Consumes the emailed token (single use) and sets the password. Every
+	// session is revoked and the token epoch bumped: sign in again.
+	CompletePasswordReset(context.Context, *connect.Request[v1.CompletePasswordResetRequest]) (*connect.Response[v1.CompletePasswordResetResponse], error)
+	// Needs the CURRENT password, not merely the session. Revokes every
+	// session, including this one — a changed password is a new start.
+	ChangePassword(context.Context, *connect.Request[v1.ChangePasswordRequest]) (*connect.Response[v1.ChangePasswordResponse], error)
+	// --- access links (no bearer) -------------------------------------------
+	// Exchange a share's link for a token that opens THAT record in the named
+	// application: ten minutes, no session, no refresh, amr ["link"],
+	// scopes {"_record": …}. Authorize refuses it for any other subject or
+	// record; the gate refuses it outright; it lists no places. A link is
+	// never a sign-in.
+	OpenAccessLink(context.Context, *connect.Request[v1.OpenAccessLinkRequest]) (*connect.Response[v1.OpenAccessLinkResponse], error)
 	// --- second-factor enrolment (bearer token required) --------------------
 	// Two steps on purpose: the secret is only committed once the user proves
 	// they can generate a code from it, so a mistyped transfer to the
@@ -383,6 +479,30 @@ func NewAuthServiceHandler(svc AuthServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(authServiceMethods.ByName("VerifyEmail")),
 		connect.WithHandlerOptions(opts...),
 	)
+	authServiceRequestPasswordResetHandler := connect.NewUnaryHandler(
+		AuthServiceRequestPasswordResetProcedure,
+		svc.RequestPasswordReset,
+		connect.WithSchema(authServiceMethods.ByName("RequestPasswordReset")),
+		connect.WithHandlerOptions(opts...),
+	)
+	authServiceCompletePasswordResetHandler := connect.NewUnaryHandler(
+		AuthServiceCompletePasswordResetProcedure,
+		svc.CompletePasswordReset,
+		connect.WithSchema(authServiceMethods.ByName("CompletePasswordReset")),
+		connect.WithHandlerOptions(opts...),
+	)
+	authServiceChangePasswordHandler := connect.NewUnaryHandler(
+		AuthServiceChangePasswordProcedure,
+		svc.ChangePassword,
+		connect.WithSchema(authServiceMethods.ByName("ChangePassword")),
+		connect.WithHandlerOptions(opts...),
+	)
+	authServiceOpenAccessLinkHandler := connect.NewUnaryHandler(
+		AuthServiceOpenAccessLinkProcedure,
+		svc.OpenAccessLink,
+		connect.WithSchema(authServiceMethods.ByName("OpenAccessLink")),
+		connect.WithHandlerOptions(opts...),
+	)
 	authServiceBeginTotpEnrollmentHandler := connect.NewUnaryHandler(
 		AuthServiceBeginTotpEnrollmentProcedure,
 		svc.BeginTotpEnrollment,
@@ -429,6 +549,14 @@ func NewAuthServiceHandler(svc AuthServiceHandler, opts ...connect.HandlerOption
 			authServiceRegisterHandler.ServeHTTP(w, r)
 		case AuthServiceVerifyEmailProcedure:
 			authServiceVerifyEmailHandler.ServeHTTP(w, r)
+		case AuthServiceRequestPasswordResetProcedure:
+			authServiceRequestPasswordResetHandler.ServeHTTP(w, r)
+		case AuthServiceCompletePasswordResetProcedure:
+			authServiceCompletePasswordResetHandler.ServeHTTP(w, r)
+		case AuthServiceChangePasswordProcedure:
+			authServiceChangePasswordHandler.ServeHTTP(w, r)
+		case AuthServiceOpenAccessLinkProcedure:
+			authServiceOpenAccessLinkHandler.ServeHTTP(w, r)
 		case AuthServiceBeginTotpEnrollmentProcedure:
 			authServiceBeginTotpEnrollmentHandler.ServeHTTP(w, r)
 		case AuthServiceConfirmTotpEnrollmentProcedure:
@@ -484,6 +612,22 @@ func (UnimplementedAuthServiceHandler) Register(context.Context, *connect.Reques
 
 func (UnimplementedAuthServiceHandler) VerifyEmail(context.Context, *connect.Request[v1.VerifyEmailRequest]) (*connect.Response[v1.VerifyEmailResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.AuthService.VerifyEmail is not implemented"))
+}
+
+func (UnimplementedAuthServiceHandler) RequestPasswordReset(context.Context, *connect.Request[v1.RequestPasswordResetRequest]) (*connect.Response[v1.RequestPasswordResetResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.AuthService.RequestPasswordReset is not implemented"))
+}
+
+func (UnimplementedAuthServiceHandler) CompletePasswordReset(context.Context, *connect.Request[v1.CompletePasswordResetRequest]) (*connect.Response[v1.CompletePasswordResetResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.AuthService.CompletePasswordReset is not implemented"))
+}
+
+func (UnimplementedAuthServiceHandler) ChangePassword(context.Context, *connect.Request[v1.ChangePasswordRequest]) (*connect.Response[v1.ChangePasswordResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.AuthService.ChangePassword is not implemented"))
+}
+
+func (UnimplementedAuthServiceHandler) OpenAccessLink(context.Context, *connect.Request[v1.OpenAccessLinkRequest]) (*connect.Response[v1.OpenAccessLinkResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("anubis.v1.AuthService.OpenAccessLink is not implemented"))
 }
 
 func (UnimplementedAuthServiceHandler) BeginTotpEnrollment(context.Context, *connect.Request[v1.BeginTotpEnrollmentRequest]) (*connect.Response[v1.BeginTotpEnrollmentResponse], error) {

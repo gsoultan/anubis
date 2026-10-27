@@ -18,12 +18,17 @@ cd "$(dirname "$0")/../.."
 #   github.com/jackc/pgx/v5     Postgres driver — the storage engine
 #   github.com/go-sql-driver/mysql   a sync SOURCE driver (ADR: any engine)
 #   google.golang.org/protobuf  generated-code runtime
+#   golang.org/x/crypto         bcrypt ONLY, verify-only, from the one package
+#                               internal/platform/crypto/legacyhash — imported
+#                               password hashes from the system being replaced
+#                               (ADR-0002 amendment, 2026-10-26)
 ALLOWED='connectrpc.com/connect
 github.com/go-kit/kit
 github.com/gsoultan/storm
 github.com/jackc/pgx/v5
 github.com/go-sql-driver/mysql
-google.golang.org/protobuf'
+google.golang.org/protobuf
+golang.org/x/crypto'
 
 fail=0
 
@@ -52,9 +57,15 @@ done
 # catch it after somebody has already built on it.
 # Anubis's own paseto and kdf packages are the stdlib implementations this
 # rule exists to require, so they are not what it is looking for.
+#
+# One exemption, by path: internal/platform/crypto/legacyhash verifies bcrypt
+# hashes imported from the system being replaced, and bcrypt is Blowfish,
+# which the standard library does not have. Verify only, one package, named
+# here so a second importer of x/crypto anywhere else still fails.
 crypto_hits="$(grep -rn --include='*.go' -E '"(golang\.org/x/crypto|github\.com/[^"]*/(bcrypt|scrypt|argon2|jwt|jose|paseto))' \
   cmd internal pkg 2>/dev/null \
-  | grep -v '"github.com/gsoultan/anubis/' || true)"
+  | grep -v '"github.com/gsoultan/anubis/' \
+  | grep -v '^internal/platform/crypto/legacyhash/' || true)"
 if [ -n "$crypto_hits" ]; then
   echo "FAIL: third-party cryptography imported (ADR-0002: stdlib only):" >&2
   echo "$crypto_hits" >&2

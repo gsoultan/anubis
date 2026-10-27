@@ -11,7 +11,9 @@ import (
 	authrpc "github.com/gsoultan/anubis/internal/auth/adapter/rpc"
 	authapp "github.com/gsoultan/anubis/internal/auth/app"
 	authzapp "github.com/gsoultan/anubis/internal/authz/app"
+	authzreach "github.com/gsoultan/anubis/internal/authz/app/reach"
 	authzdomain "github.com/gsoultan/anubis/internal/authz/domain"
+	"github.com/gsoultan/anubis/internal/authz/domain/granted"
 	authzep "github.com/gsoultan/anubis/internal/authz/endpoint"
 )
 
@@ -62,4 +64,32 @@ func (h *AuthzHandler) SwitchScope(ctx context.Context, req *connect.Request[anu
 	return connect.NewResponse(&anubisv1.SwitchScopeResponse{
 		Tokens: authrpc.TokenPairProto(out.(*authapp.TokenPair)),
 	}), nil
+}
+
+func (h *AuthzHandler) ListGrantedNodes(ctx context.Context, req *connect.Request[anubisv1.ListGrantedNodesRequest]) (*connect.Response[anubisv1.ListGrantedNodesResponse], error) {
+	out, err := h.eps.GrantedNodes(ctx, authzreach.NodesInput{
+		Subject: req.Msg.Subject, Permission: req.Msg.Permission,
+		Axis: req.Msg.Axis, Scopes: req.Msg.Scopes,
+	})
+	if err != nil {
+		return nil, apiconnect.Err(ctx, err)
+	}
+	g := out.(*granted.Nodes)
+	return connect.NewResponse(&anubisv1.ListGrantedNodesResponse{
+		Everywhere: g.Everywhere, OwnRecords: g.OwnRecords,
+		Nodes: grantedNodesProto(g.Nodes), AsOf: g.AsOf.Unix(),
+	}), nil
+}
+
+func grantedNodesProto(nodes []granted.Node) []*anubisv1.GrantedNode {
+	if len(nodes) == 0 {
+		return nil
+	}
+	out := make([]*anubisv1.GrantedNode, 0, len(nodes))
+	for _, n := range nodes {
+		out = append(out, &anubisv1.GrantedNode{
+			NodeId: n.NodeID, Inherit: n.Inherit, Except: grantedNodesProto(n.Except),
+		})
+	}
+	return out
 }

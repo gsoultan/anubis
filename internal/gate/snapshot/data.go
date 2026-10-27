@@ -28,6 +28,9 @@ type Data struct {
 	Scope ScopeIndex
 	// GrantsByIdentity holds live grants with their per-axis constraints.
 	GrantsByIdentity map[string][]Grant
+	// SharesByIdentity holds live record shares, by recipient. Consulted
+	// only when a target names "_record".
+	SharesByIdentity map[string][]Share
 	// RolePermissions[roleID][permissionKey] = true (effective, flattened).
 	RolePermissions map[string]map[string]bool
 	// Permissions by key.

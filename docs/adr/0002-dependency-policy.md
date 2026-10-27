@@ -105,3 +105,34 @@ some wheels reinvented.
 **Accepted** — the reinvented wheels are format layers, where bugs are
 discoverable by testing. The primitives, where bugs are silent, are not
 reinvented.
+
+## Amendment 2026-10-26 — one bcrypt exception, for imported passwords
+
+The people moving onto Anubis from the system it replaces already have
+passwords, stored as bcrypt. Asking every one of them to choose a new password
+on cut-over day is the migration that gets postponed; keeping the hash and
+verifying it once is the one that happens. bcrypt is Blowfish, which the
+standard library does not have, and the tier-one rule above says never to
+hand-roll a primitive — which rules out writing it.
+
+So the allowlist gains a seventh module, under the narrowest terms that work:
+
+| Module | Tier | Why |
+| :--- | :--- | :--- |
+| `golang.org/x/crypto` | primitive | **bcrypt verification only**, from the one package `internal/platform/crypto/legacyhash` |
+
+What bounds it:
+
+- **Verify only.** Nothing in the tree can *make* a bcrypt hash. The package
+  exposes `IsLegacy`, `Describe` and `Verify`, and that is all.
+- **One package.** `scripts/check/deps.sh` exempts that path by name and still
+  fails any other import of `golang.org/x/crypto`.
+- **Rehash on first use, always.** `kdf.Verify` reports a legacy hash as
+  `needsRehash` unconditionally; the sign-in path replaces it with PBKDF2 at
+  the installation's cost while the plaintext is in hand.
+- **An expiry, always.** `ImportPasswordHash` refuses a legacy hash without
+  one, and caps it at 90 days — the same fuse a platform key gets. A hash at
+  the source's cost with no end date is a weak hash forever.
+
+When the last imported hash has either been replaced or expired, the package
+and the exemption can go, and this amendment with them.

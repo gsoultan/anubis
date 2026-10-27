@@ -142,7 +142,9 @@ body{padding:0;align-content:stretch;justify-items:stretch}
 {{end}}
 
 {{if eq . "heading"}}
-  {{if and (eq $.Kind "signout") (not $.SignedOut)}}
+  {{if $.Title}}
+    <h1>{{$.Title}}</h1>
+  {{else if and (eq $.Kind "signout") (not $.SignedOut)}}
     <h1>{{$.Cfg.Copy.ConfirmHeading}}</h1>
   {{else}}
     <h1>{{$.Cfg.Copy.Heading}}</h1>
@@ -150,7 +152,7 @@ body{padding:0;align-content:stretch;justify-items:stretch}
 {{end}}
 
 {{if eq . "subheading"}}
-  {{if $.Cfg.Copy.Subheading}}<p class="sub">{{$.Cfg.Copy.Subheading}}</p>{{end}}
+  {{if and $.Cfg.Copy.Subheading (ne $.Kind "reset")}}<p class="sub">{{$.Cfg.Copy.Subheading}}</p>{{end}}
 {{end}}
 
 {{if eq . "form"}}
@@ -246,9 +248,56 @@ body{padding:0;align-content:stretch;justify-items:stretch}
     {{end}}
     {{if $.Error}}<div class="err">{{$.Error}}</div>{{end}}
     <button type="submit">{{$.Cfg.Copy.SubmitLabel}}</button>
+    {{if $.EmailLink}}
+    {{/* A second submit on the SAME form: the username and the flow fields
+         travel with it, the password is not required for it, and the
+         one-time link that comes back finishes this very flow. */}}
+    <button type="submit" formaction="/v1/login/email" formnovalidate class="secondary">Email me a sign-in link</button>
+    {{end}}
+    {{if $.ResetURL}}<p class="links"><a href="{{$.ResetURL}}">Forgot your password?</a></p>{{end}}
     {{end}}
     {{end}}
   </form>
+{{else if eq $.Kind "reset"}}
+  {{/* Password reset. Four pages and one failure, all on the sign-in
+       page's brand. The completion form carries the emailed token and
+       nothing else identifies the account — the token IS the account. */}}
+  {{if eq $.ResetStep "request"}}
+  <form method="post" action="/p/{{$.Tenant}}/reset/request">
+    <input type="hidden" name="realm" value="{{$.Realm}}">
+    <p class="sub">Enter your username and we will email you a link to choose a new password.</p>
+    <label for="u">{{$.Cfg.Copy.UsernameLabel}}</label>
+    <input id="u" name="username" autocomplete="username" required autofocus
+           autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="go">
+    {{if $.Error}}<div class="err">{{$.Error}}</div>{{end}}
+    <button type="submit">Email me a link</button>
+  </form>
+  {{else if eq $.ResetStep "sent"}}
+  <p class="sub">If that account exists and has an email address, a link is on
+     its way. It works once, within 30 minutes. Nothing about the account has
+     changed yet.</p>
+  {{else if eq $.ResetStep "complete"}}
+  <form method="post" action="/p/{{$.Tenant}}/reset/complete">
+    <input type="hidden" name="token" value="{{$.ResetToken}}">
+    <input type="hidden" name="realm" value="{{$.Realm}}">
+    <label for="p">New password</label>
+    <input id="p" name="password" type="password" autocomplete="new-password"
+           required autofocus minlength="{{$.MinLength}}" enterkeyhint="go">
+    <p class="sub">At least {{$.MinLength}} characters. Saving signs you out everywhere.</p>
+    {{if $.Error}}<div class="err">{{$.Error}}</div>{{end}}
+    <button type="submit">Save new password</button>
+  </form>
+  {{else if eq $.ResetStep "done"}}
+  <p class="sub">Your password is set, and every session has been signed out.</p>
+  {{else}}
+  {{if $.Error}}<div class="err">{{$.Error}}</div>{{end}}
+  {{end}}
+  {{if and $.SigninURL (ne $.ResetStep "request") (ne $.ResetStep "complete")}}
+  <p class="links"><a href="{{$.SigninURL}}">Sign in</a></p>
+  {{end}}
+  {{if and $.ResetURL (eq $.ResetStep "expired")}}
+  <p class="links"><a href="{{$.ResetURL}}">Request a new link</a></p>
+  {{end}}
 {{else}}
   {{if $.SignedOut}}
     <p class="sub">{{$.Cfg.Copy.Body}}</p>
