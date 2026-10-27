@@ -74,16 +74,32 @@ for it; merge back if the limit ever moves.
    at a placement; grade/job type dropped; `*_FULL_SCOPE` → everywhere),
    and a report of every decision. Applies nothing; never writes a hash.
 
+7. **Access links** (migration 0059) — `ShareService/CreateAccessLink` puts
+   a hashed link on a live share; `AuthService/OpenAccessLink` exchanges it
+   for a record-bound token: ten minutes, never past the share, no session,
+   amr `link`, scopes `{_record}`. Worth exactly one record, enforced where
+   questions are asked: `Authorize` refuses it (`link_bound`) for any other
+   subject/record (`internal/authz/app/authorize_interactor.go`), the gate
+   refuses it outright (`internal/gate/app/decision.go`), `ListGrantedNodes`
+   refuses it. `Principal.LinkBound()`. Anubis mails nothing — the app owns
+   the record URL.
+8. **Sign-in by e-mail link** — `internal/auth/app/emaillink`; realm factor
+   `email_link`; second submit on the hosted sign-in form posts the same
+   form to `POST /v1/login/email`; `GET /v1/login/email?token=` opens an
+   ordinary browser session (amr `email_link`) and issues the code for the
+   flow carried in the one-time token (`email_login` kind). Same
+   no-enumeration rules as the reset flow.
+9. SDK (`anubis-sdk` branch `feat/granted-nodes`): `GrantedNodes`,
+   `Share`/`Unshare`/`SharesOnRecord`/`SharedWithMe`, `CreateAccessLink`,
+   `OpenAccessLink`, `RecordTarget`.
+
 ## Not built, and why
 
-- **Access links** (an emailed link that opens one record without a
-  password — Osiris's SHARE sessions for applicants and registrants) and
-  **passwordless e-mail sign-in** for public realms. A share needs a signed-in
-  recipient; the link half is a token exchange that mints a record-bound
-  access token, not yet designed.
-- Console screens for shares and for "password came from Osiris"; SDK
-  wrappers for ShareService.
-- The dev database on :7449 was migrated to 0058 while building this;
-  `stormddl -check` agrees with the model.
+- Console screens for shares, access links and "password came from Osiris".
+- An API (non-hosted) e-mail sign-in door: the hosted one carries the OIDC
+  request inside the link; an API door would need an application-owned
+  landing URL to be configured, which is a product decision.
+- The dev database on :7449 is at 0059; `stormddl -check` agrees with the
+  model.
 
 Related: [[core]], [[login-doors]], [[scope-exclusions]].
