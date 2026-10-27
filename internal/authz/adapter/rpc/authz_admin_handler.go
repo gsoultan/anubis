@@ -44,7 +44,7 @@ func (h *AuthzAdminHandler) ListRoles(ctx context.Context, req *connect.Request[
 				ApplicationSlug: r.ApplicationSlug, IsSystem: r.IsSystem,
 				AllowedRealmKinds: r.AllowedRealmKinds, AssignableAt: r.AssignableAt,
 				ParentIds: parents[r.ID], Patterns: patterns[r.ID],
-				Deprecated: r.Deprecated,
+				Deprecated: r.Deprecated, PermissionCount: int32(r.PermissionCount),
 			})
 		}
 		return resp, nil
@@ -69,6 +69,7 @@ func roleProto(r *authzdomain.RoleRecord, parents, patterns []string) *anubisv1.
 		ApplicationSlug: r.ApplicationSlug, IsSystem: r.IsSystem,
 		AllowedRealmKinds: r.AllowedRealmKinds, AssignableAt: r.AssignableAt,
 		ParentIds: parents, Patterns: patterns, Deprecated: r.Deprecated,
+		PermissionCount: int32(r.PermissionCount),
 	}
 }
 

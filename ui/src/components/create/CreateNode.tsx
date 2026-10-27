@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Popover, Select, TextInput } from '@mantine/core'
+import { Button, Modal, Popover, Select, TextInput } from '@mantine/core'
 import { IconChevronDown } from '@tabler/icons-react'
 import { api } from '@/lib/api/client'
 import { qk } from '@/lib/query/keys'
 import { queryClient } from '@/lib/query/client'
 import { useCreate } from '@/stores/create'
 import { ScopeTree } from '@/components/scope/ScopeTree'
+import { PlaceReachPanel } from '@/components/scope/PlaceReachPanel'
+import type { ScopeNode } from '@/lib/api/types'
 import { CreateShell, CancelSubmit, notifyCreated, notifyRejected } from './shell'
 
 const slugify = (s: string) =>
@@ -29,6 +31,9 @@ export function CreateNode({ opened }: { opened: boolean }) {
   const [slugTouched, setSlugTouched] = useState(false)
   const [externalRef, setExternalRef] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  /* The place just added, kept after the drawer closes: who should get it
+     is the next question, and the moment to ask it is now. */
+  const [added, setAdded] = useState<{ node: ScopeNode; parent: string } | null>(null)
 
   // Preload from the scope page: "add a child under THIS node".
   useEffect(() => {
@@ -79,7 +84,7 @@ export function CreateNode({ opened }: { opened: boolean }) {
     if (!axisCode || !parentId || !nodeType || !name) return
     setSubmitting(true)
     try {
-      await api.createScopeNode({
+      const made = await api.createScopeNode({
         axis_code: axisCode, parent_id: parentId, node_type: nodeType,
         name, slug: slug || slugify(name), external_ref: externalRef || null,
       })
@@ -87,11 +92,25 @@ export function CreateNode({ opened }: { opened: boolean }) {
       await queryClient.invalidateQueries({ queryKey: qk.scope() })
       await queryClient.invalidateQueries({ queryKey: qk.dashboard() })
       reset(); close()
+      if (made) setAdded({ node: made, parent: parent?.name ?? '' })
     } catch (e) { notifyRejected(e) }
     setSubmitting(false)
   }
 
   return (
+    <>
+    <Modal opened={!!added} onClose={() => setAdded(null)} centered size="lg"
+      title={added ? `${added.node.name} added${added.parent ? ` under ${added.parent}` : ''}` : ''}>
+      {added && (
+        <div className="flex flex-col gap-3">
+          <div className="t-h2">Who can work with {added.node.name}?</div>
+          <PlaceReachPanel node={added.node} bare />
+          <div className="flex justify-end">
+            <Button size="xs" variant="default" onClick={() => setAdded(null)}>Not now</Button>
+          </div>
+        </div>
+      )}
+    </Modal>
     <CreateShell
       opened={opened} onClose={close} title="Add a structure item"
       description={<>An office, a product line, a customer — the things access gets limited to. In production these usually arrive by ERP/CRM sync keyed on <b>external_ref</b>; this is the manual path.</>}
@@ -161,5 +180,6 @@ export function CreateNode({ opened }: { opened: boolean }) {
           value={externalRef} onChange={(e) => setExternalRef(e.currentTarget.value)} />
       </div>
     </CreateShell>
+    </>
   )
 }

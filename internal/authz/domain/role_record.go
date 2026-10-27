@@ -12,4 +12,6 @@ type RoleRecord struct {
 	// new; every grant that already names it keeps working, because
 	// authorize() does not look at this (migration 0044).
 	Deprecated bool
+	// PermissionCount is what the role allows, counting included roles.
+	PermissionCount int
 }

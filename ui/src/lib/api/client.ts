@@ -95,6 +95,12 @@ export const api = {
   grantChanges: (limit?: number) => live.grantChanges(limit),
   fullLists: (axis?: string, roleId?: string) => live.fullLists(axis, roleId),
   placeReach: (nodeId: Uuid) => live.placeReach(nodeId),
+  roleUsage: (roleIds?: Uuid[]) => live.roleUsage(roleIds),
+  appUsage: (applicationId: Uuid) => live.appUsage(applicationId),
+  holderKinds: (roleId: Uuid, axis: string) => live.holderKinds(roleId, axis),
+  placeHolders: (nodeId: Uuid, limit?: number) => live.placeHolders(nodeId, limit),
+  routeRules: (slug: string) => live.routeRules(slug),
+  saveRouteRules: (slug: string, rules: import('./types').RouteRule[], dry?: boolean) => live.saveRouteRules(slug, rules, dry),
 
   authorize: (req: AuthorizeRequest) => live.authorize(req),
   applications: () => live.applicationChoices(),

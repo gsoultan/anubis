@@ -6,7 +6,7 @@ import {
 import {
   IconSearch, IconInfoCircle, IconDots, IconUserPlus, IconCirclePlus,
   IconUserOff, IconUserCheck, IconCopy, IconKey, IconLock, IconUser, IconX,
-  IconTableImport, IconTestPipe, IconStack2,
+  IconTableImport, IconTestPipe, IconStack2, IconAlertTriangle,
 } from '@tabler/icons-react'
 import { notifications } from '@mantine/notifications'
 import { queryClient } from '@/lib/query/client'
@@ -146,8 +146,8 @@ function Identities() {
     queryFn: () => live.identitiesPage(realmFilter ?? undefined, q || undefined, cursor, 50),
     placeholderData: (prev) => prev,
   })
-  const rows = page?.rows
-  const ids = (rows ?? []).map((r) => r.id)
+  const pageRows = page?.rows
+  const ids = (pageRows ?? []).map((r) => r.id)
   const { data: summaries } = useQuery({
     queryKey: ['identities', 'can-do', ids],
     queryFn: async () => new Map((await api.summarizeAccess(ids)).map((x) => [x.identity_id, x])),
@@ -158,6 +158,13 @@ function Identities() {
     queryKey: qk.realmCategories(), queryFn: () => api.realmCategories(),
   })
 
+  /* Worth a look: switched off, never used, or holding nothing. Read off the
+     page in hand: the listing cannot be asked for it, and saying "on this
+     page" is better than a count that is quietly a sample. */
+  const [attention, setAttention] = useState(false)
+  const needs = (pageRows ?? []).filter((i) =>
+    i.status !== 'active' || !i.last_login_at || (summaries !== undefined && !summaries.has(i.id)))
+  const rows = attention ? needs : pageRows
   const realmOf = (id: string) => realms?.find((r) => r.id === id)
   const filtered = q.trim() !== '' || realmFilter !== null
   function clearFilters() {
@@ -314,29 +321,41 @@ function Identities() {
         onChange={(e) => setQ(e.currentTarget.value)}
         aria-label="Search people"
       />
-      <Select
-        size="xs"
-        w={230}
-        searchable
-        allowDeselect={false}
-        data={realmOptions}
-        value={realmFilter ?? ''}
-        onChange={(v) => { setRealmFilter(v || null); resetPaging() }}
-        comboboxProps={{ width: 280, position: 'bottom-start' }}
-        aria-label="Population"
-        renderOption={({ option }) => {
-          const r = realms?.find((x) => x.id === option.value)
-          return (
-            <span className="flex min-w-0 items-center gap-2">
-              <span style={{
-                width: 6, height: 6, borderRadius: 99, flexShrink: 0,
-                background: option.value ? realmKindColor(r?.kind) : 'var(--ink-4)',
-              }} />
-              <span className="truncate">{option.label}</span>
-            </span>
-          )
-        }}
-      />
+      {(realms?.length ?? 0) <= 5 ? (
+        <div className="flex flex-wrap gap-1" role="tablist" aria-label="Population">
+          {[{ id: '', name: 'Everyone', kind: '' }, ...(realms ?? []).map((r) => ({ id: r.id, name: r.display_name, kind: r.kind }))].map((t) => {
+            const on = (realmFilter ?? '') === t.id
+            return (
+              <UnstyledButton key={t.id || 'all'} role="tab" aria-selected={on}
+                onClick={() => { setRealmFilter(t.id || null); resetPaging() }}
+                className="t-sm inline-flex items-center gap-1.5 rounded-full px-3 py-1"
+                style={on ? { background: 'var(--accent-bg)', color: 'var(--accent)', fontWeight: 550 } : { color: 'var(--ink-2)' }}>
+                {t.kind && <span style={{ width: 6, height: 6, borderRadius: 99, background: realmKindColor(t.kind) }} />}
+                {t.name}
+              </UnstyledButton>
+            )
+          })}
+        </div>
+      ) : (
+        <Select
+          size="xs"
+          w={230}
+          searchable
+          allowDeselect={false}
+          data={realmOptions}
+          value={realmFilter ?? ''}
+          onChange={(v) => { setRealmFilter(v || null); resetPaging() }}
+          comboboxProps={{ width: 280, position: 'bottom-start' }}
+          aria-label="Population"
+        />
+      )}
+      <Tooltip label="On this page: accounts that are switched off, have never signed in, or can do nothing yet.">
+        <UnstyledButton onClick={() => setAttention((a) => !a)} aria-pressed={attention}
+          className="t-sm inline-flex items-center gap-1.5 rounded-full px-3 py-1"
+          style={attention ? { background: 'var(--warn-bg)', color: 'var(--warn)', fontWeight: 550 } : { color: 'var(--ink-2)' }}>
+          <IconAlertTriangle size={13} />Needs attention · {needs.length}
+        </UnstyledButton>
+      </Tooltip>
       {filtered && (
         <Button size="compact-xs" variant="subtle" color="gray"
           leftSection={<IconX size={12} />} onClick={clearFilters}>

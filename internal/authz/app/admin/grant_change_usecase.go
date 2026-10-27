@@ -18,4 +18,8 @@ type GrantChangeUsecase interface {
 	ListGrantChanges(ctx context.Context, limit int) ([]grantchange.Record, error)
 	ListFullLists(ctx context.Context, axis, roleID string) ([]insight.FullList, error)
 	PlaceReach(ctx context.Context, nodeID string) (insight.PlaceReach, error)
+	RoleUsage(ctx context.Context, roleIDs []string) ([]insight.RoleUsage, error)
+	AppUsage(ctx context.Context, applicationID string) (insight.AppUsage, error)
+	HolderKinds(ctx context.Context, roleID, axis string) (insight.HolderKinds, error)
+	PlaceHolders(ctx context.Context, nodeID string, limit int) ([]insight.PlaceHolder, error)
 }

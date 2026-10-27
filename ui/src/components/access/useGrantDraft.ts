@@ -76,6 +76,7 @@ export function useGrantDraft({ identityId, onDone }: {
   const [modes, setModes] = useState<Record<string, LineMode>>({})
   const [featApp, setFeatApp] = useState<string | null>(null)
   const [featKeys, setFeatKeys] = useState<string[]>([])
+  const [featFresh, setFeatFresh] = useState(false)
   const [featName, setFeatName] = useState('')
   const [until, setUntil] = useState<Until>('')
   const [pickedDate, setPickedDate] = useState<string | null>(null)
@@ -114,7 +115,7 @@ export function useGrantDraft({ identityId, onDone }: {
   const { data: apps } = useQuery({ queryKey: ['app-choices'], queryFn: () => api.applications(), enabled: what === 'features' })
   const featPerms = (perms ?? []).filter((p) => featKeys.includes(p.key))
   const featDefaultName = featKeys.length
-    ? featureRoleName(apps?.find((a) => a.id === featApp)?.name ?? 'App', featPerms) : ''
+    ? featureRoleName(apps?.find((a) => a.slug === featApp)?.name ?? 'App', featPerms) : ''
 
   /* Everything on a required structure: its top place, and all inside. */
   const top = (a: { code: string }): GrantScope[] => {
@@ -202,18 +203,30 @@ export function useGrantDraft({ identityId, onDone }: {
 
   /* The role for picked features: one with exactly these permissions if it
      exists, so a second person given the same picks shares the first one's
-     role, and a new one otherwise. Only roles with the same count are read. */
+     role, and a new one otherwise. Only roles with the same count are read,
+     and the match is looked up as the ticks change so the sheet can say so
+     before anything is written. */
+  const featSorted = [...new Set(featKeys)].sort()
+  const { data: featMatch } = useQuery({
+    queryKey: ['roles', 'exact-match', featSorted],
+    enabled: featSorted.length > 0 && !!roles,
+    queryFn: async () => {
+      const same = (roles ?? []).filter((r) => !r.deprecated && r.permission_count === featSorted.length)
+      const lists = await Promise.all(same.slice(0, 40).map(async (r) => [r.id, await api.rolePermissions(r.id)] as const))
+      const byId = new Map(lists)
+      return roleWithExactly(featSorted, same, (r) => byId.get(r.id)) ?? null
+    },
+  })
+  const featReuse = what === 'features' && !featFresh && featSorted.length > 0 ? featMatch ?? null : null
+
   async function featureRole(): Promise<{ id: string; name: string }> {
-    const same = (roles ?? []).filter((r) => !r.deprecated && r.permission_count === new Set(featKeys).size)
-    const lists = await Promise.all(same.slice(0, 40).map(async (r) => [r.id, await api.rolePermissions(r.id)] as const))
-    const byId = new Map(lists)
-    const found = roleWithExactly(featKeys, same, (r) => byId.get(r.id))
-    if (found) return found
+    if (featReuse) return featReuse
     const name = featName.trim() || featDefaultName
     const kinds: RealmKind[] = subjectKind ? [subjectKind] : ['internal', 'partner', 'public', 'service']
     const id = await api.createRole({
       name, description: 'Made when access was given by picking features.',
       allowed_realm_kinds: kinds, permission_keys: featKeys,
+      ...(featApp ? { application_slug: featApp } : {}),
     })
     await queryClient.invalidateQueries({ queryKey: qk.roles() })
     return { id, name }
@@ -271,7 +284,7 @@ export function useGrantDraft({ identityId, onDone }: {
     what, setWhat, roleId, setRoleId, role, membershipId, setMembershipId, membership,
     seat, setSeat, seatExact, setSeatExact, heldHere,
     reach, setReach, places, setPlaces, modes, setModes, rootOf, scopes,
-    perms, apps, featApp, setFeatApp, featKeys, setFeatKeys, featName, setFeatName, featDefaultName,
+    perms, apps, featApp, setFeatApp, featKeys, setFeatKeys, featMatch: featMatch ?? null, featReuse, featFresh, setFeatFresh, featName, setFeatName, featDefaultName,
     until, setUntil, pickedDate, setPickedDate, ends,
     reason, setReason,
     alreadyHeld, heldMemberships, problems, ready,

@@ -30,6 +30,7 @@ import { Route as SetupRouteImport } from './routes/setup'
 import { Route as SigninRouteImport } from './routes/signin'
 import { Route as SigninPageRouteImport } from './routes/signin-page'
 import { Route as TenantsRouteImport } from './routes/tenants'
+import { Route as ApplicationsSlugRouteImport } from './routes/applications_.$slug'
 import { Route as IdentitiesIdRouteImport } from './routes/identities_.$id'
 
 const IndexRoute = IndexRouteImport.update({
@@ -137,6 +138,11 @@ const TenantsRoute = TenantsRouteImport.update({
   path: '/tenants',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApplicationsSlugRoute = ApplicationsSlugRouteImport.update({
+  id: '/applications_/$slug',
+  path: '/applications/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IdentitiesIdRoute = IdentitiesIdRouteImport.update({
   id: '/identities_/$id',
   path: '/identities/$id',
@@ -165,6 +171,7 @@ export interface FileRoutesByFullPath {
   '/signin': typeof SigninRoute
   '/signin-page': typeof SigninPageRoute
   '/tenants': typeof TenantsRoute
+  '/applications/$slug': typeof ApplicationsSlugRoute
   '/identities/$id': typeof IdentitiesIdRoute
 }
 export interface FileRoutesByTo {
@@ -189,6 +196,7 @@ export interface FileRoutesByTo {
   '/signin': typeof SigninRoute
   '/signin-page': typeof SigninPageRoute
   '/tenants': typeof TenantsRoute
+  '/applications/$slug': typeof ApplicationsSlugRoute
   '/identities/$id': typeof IdentitiesIdRoute
 }
 export interface FileRoutesById {
@@ -214,6 +222,7 @@ export interface FileRoutesById {
   '/signin': typeof SigninRoute
   '/signin-page': typeof SigninPageRoute
   '/tenants': typeof TenantsRoute
+  '/applications_/$slug': typeof ApplicationsSlugRoute
   '/identities_/$id': typeof IdentitiesIdRoute
 }
 export interface FileRouteTypes {
@@ -240,6 +249,7 @@ export interface FileRouteTypes {
     | '/signin'
     | '/signin-page'
     | '/tenants'
+    | '/applications/$slug'
     | '/identities/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -264,6 +274,7 @@ export interface FileRouteTypes {
     | '/signin'
     | '/signin-page'
     | '/tenants'
+    | '/applications/$slug'
     | '/identities/$id'
   id:
     | '__root__'
@@ -288,6 +299,7 @@ export interface FileRouteTypes {
     | '/signin'
     | '/signin-page'
     | '/tenants'
+    | '/applications_/$slug'
     | '/identities_/$id'
   fileRoutesById: FileRoutesById
 }
@@ -313,6 +325,7 @@ export interface RootRouteChildren {
   SigninRoute: typeof SigninRoute
   SigninPageRoute: typeof SigninPageRoute
   TenantsRoute: typeof TenantsRoute
+  ApplicationsSlugRoute: typeof ApplicationsSlugRoute
   IdentitiesIdRoute: typeof IdentitiesIdRoute
 }
 
@@ -465,6 +478,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TenantsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/applications_/$slug': {
+      id: '/applications_/$slug'
+      path: '/applications/$slug'
+      fullPath: '/applications/$slug'
+      preLoaderRoute: typeof ApplicationsSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/identities_/$id': {
       id: '/identities_/$id'
       path: '/identities/$id'
@@ -497,6 +517,7 @@ const rootRouteChildren: RootRouteChildren = {
   SigninRoute: SigninRoute,
   SigninPageRoute: SigninPageRoute,
   TenantsRoute: TenantsRoute,
+  ApplicationsSlugRoute: ApplicationsSlugRoute,
   IdentitiesIdRoute: IdentitiesIdRoute,
 }
 export const routeTree = rootRouteImport
