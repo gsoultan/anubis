@@ -8,6 +8,113 @@ Pre-1.0, a minor bump carries deliberate behaviour changes and a patch does
 not. Releases are built and signed by tag and published by hand, so a tag
 existing does not mean a release was ever meant to be installed.
 
+## v0.6.0 — 2026-10-28
+
+A person can open one record to another for a while, a recipient with no
+password gets in through an access link, people can sign in by e-mail link
+and reset their own password, applications can ask once where a person may
+act, and the console's access screens were rebuilt around bulk changes and
+companies that nest. Three migrations, `0057`–`0059`, forward-only — **a
+v0.5.0 database upgrades with `applied: 3, drifted: 0`**. A minor bump:
+behaviour changes below.
+
+- **Record shares** (`0058`). A third way to say yes beside grants and
+  memberships, and the narrowest: one person opens one record to another,
+  with a subset of what they may do on it, for at most 90 days. You can only
+  share what you can do — the engine checks the sharer's own grants at the
+  record's places — and a share cannot beget a share. `authorize()` and the
+  gate consult shares only when the targets name the reserved `_record`
+  (`kind/ref`). `ShareService`: `Share`, `Unshare`, `ListSharesOnRecord`,
+  `ListSharedWithMe`.
+- **Access links** (`0059`). `CreateAccessLink` puts a link on a live share;
+  `AuthService/OpenAccessLink` exchanges it for a ten-minute token that opens
+  that record in that application and nothing else — no session, no refresh,
+  never past the share's end. The token authenticates the decision endpoint
+  for its own subject and record, and no other procedure.
+- **Sign-in by e-mail link** for realms that allow the `email_link` factor: a
+  second button on the hosted sign-in form mails a single-use 15-minute link
+  that finishes the flow the person started. It is a first factor like a
+  password: an enrolled authenticator is still asked for, and a realm's
+  enrolment deadline still applies. Opening the link shows a button; only the
+  button spends it, so a mail scanner that fetches links cannot.
+- **Password reset and change.** `RequestPasswordReset` answers the same for
+  every username and mails a 30-minute link; `CompletePasswordReset` and
+  `ChangePassword` (which needs the current password) revoke every session
+  and refresh family and bump the token epoch. Hosted pages at
+  `/p/{tenant}/reset/…`; the sign-in form links to them.
+- **Mail.** An SMTP relay configured by `ANUBIS_SMTP_*` (STARTTLS by default,
+  refusing to downgrade). Without a host nothing is sent in production, and
+  the reset and e-mail-link doors say mail is unavailable — the same answer
+  for every username.
+- **Imported passwords.** `ImportPasswordHash` stores a bcrypt hash from the
+  system Anubis replaces, with an expiry of at most 90 days; the first
+  sign-in replaces it with Anubis's own hash. `golang.org/x/crypto` is allowed
+  for this alone, verify-only, from one package (ADR-0002 amendment).
+- **`ListGrantedNodes`** answers "where, on this axis, may this person do
+  this?" once per screen — everywhere, these places with their reach and
+  exceptions, or only their own records — so an application filters its own
+  query instead of calling `Authorize` per row. Served from the gate's
+  snapshot and pinned to agree with `Authorize` on every place.
+- **`SwitchScope` refuses a place the caller holds no grant at.** It checked
+  only that the place existed.
+- **Bulk access changes** (`0057`). One role at a time: add, remove or swap
+  a place, make a list grow, change the end date or take access away —
+  previewed, applied as one change with one reason, undone as one
+  (`PreviewGrantChange`, `ApplyGrantChange`, `UndoGrantChange`,
+  `ListGrantChanges`).
+- **Companies nest** (`0057`). A tenant can sit inside another; an operator
+  who runs a company runs the ones inside it, and access never crosses
+  companies (`MoveTenant`). Existing tenants have no parent, so nobody's
+  authority changes on upgrade.
+- **Who may sign in to an app** (`0057`): anyone, as before, or only people
+  holding a role in it, enforced on sign-in and on refresh. Every existing
+  application stays open to anyone.
+- **Permissions can be filed under a module** in a manifest, and the console
+  groups permissions by app, module and feature.
+- **The console.** Access says, for every kind of place, whether it is
+  Everything (new places included the day they exist) or Only these; bulk
+  changes; each app has its own page (who can use it, roles, modules, page
+  rules, connection and sync); roles are built by ticking modules, features
+  and actions; adding a person is three short steps; places say who works
+  there; Check access answers what a person can do in an app.
+- **`osiris2anubis`** exports Osiris's catalog and people as a manifest and
+  an import workbook. It writes no password hashes and applies nothing.
+
+Security fixes made before release (none of these shipped):
+
+- An access-link token was accepted as the recipient on every procedure, so
+  whoever held a link could share any record the recipient could reach, end
+  their sessions, or bind an authenticator to their account. It now
+  authenticates the decision endpoint only, and a link cannot be opened in
+  Anubis's own applications.
+- Sign-in by e-mail link skipped an enrolled second factor and the realm's
+  enrolment deadline, and opening the link spent it.
+
+**Action required:**
+
+- A caller that relied on `SwitchScope` succeeding for any existing place now
+  gets `permission_denied` where the person holds no live grant.
+- To send password-reset and sign-in links, set `ANUBIS_SMTP_HOST` and
+  `ANUBIS_SMTP_FROM` (plus credentials). Until then those doors answer that
+  mail is unavailable.
+- An application may now be set to "only people with a role in it"; once it
+  is, a person without one gets `permission_denied` from `Login` and from
+  `Refresh`.
+
+New, all additive (`buf breaking` is clean): `ShareService`;
+`AuthService` `OpenAccessLink`, `RequestPasswordReset`,
+`CompletePasswordReset`, `ChangePassword`; `AuthzService.ListGrantedNodes`;
+`ImportPasswordHash`; `SummarizeAccess`, `PreviewGrantChange`,
+`ApplyGrantChange`, `UndoGrantChange`, `ListGrantChanges`, `ListFullLists`,
+`PlaceReach`, `RoleUsage`, `AppUsage`, `HolderKinds`, `PlaceHolders`,
+`MoveTenant`.
+
+Upgrade, measured: a v0.5.0 database seeded with 150,000 grants across 2
+tenants upgrades with `applied: 3, skipped: 55, drifted: 0`, and 8,000
+sampled `authorize()` decisions (4,003 allow, 3,997 deny) are identical
+before and after. storm moves from v1.4.0 to v1.6.0 (additive; faster array
+parameters).
+
 ## v0.5.0 — 2026-10-03
 
 Each tenant owns its structures, memberships can apply where each member is
