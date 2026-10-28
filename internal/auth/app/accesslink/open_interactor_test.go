@@ -38,10 +38,13 @@ type stubApps struct {
 }
 
 func (stubApps) ApplicationBySlug(_ context.Context, _, slug string) (*tenancydomain.ApplicationRecord, error) {
-	if slug != "ats" {
-		return nil, errors.New("no")
+	switch slug {
+	case "ats":
+		return &tenancydomain.ApplicationRecord{ID: "app-1", Slug: "ats", Status: "active"}, nil
+	case "anubis", "console":
+		return &tenancydomain.ApplicationRecord{ID: "app-" + slug, Slug: slug, Status: "active", IsSystem: true}, nil
 	}
-	return &tenancydomain.ApplicationRecord{ID: "app-1", Slug: "ats", Status: "active"}, nil
+	return nil, errors.New("no")
 }
 
 type stubIdentities struct {
@@ -177,10 +180,14 @@ func TestEveryWrongLinkIsTheSameRefusal(t *testing.T) {
 		share *share.Share
 		in    OpenInput
 	}{
-		"no such link":       {nil, OpenInput{Tenant: "acme", ClientID: "ats", Token: LinkPrefix + "a-link-only-the-recipient-was-sent"}},
-		"wrong prefix":       {liveShare("rudi"), OpenInput{Tenant: "acme", ClientID: "ats", Token: "anb_rt_not-a-link"}},
-		"wrong tenant":       {liveShare("rudi"), OpenInput{Tenant: "other", ClientID: "ats", Token: LinkPrefix + "a-link-only-the-recipient-was-sent"}},
-		"unknown app":        {liveShare("rudi"), OpenInput{Tenant: "acme", ClientID: "nope", Token: LinkPrefix + "a-link-only-the-recipient-was-sent"}},
+		"no such link": {nil, OpenInput{Tenant: "acme", ClientID: "ats", Token: LinkPrefix + "a-link-only-the-recipient-was-sent"}},
+		"wrong prefix": {liveShare("rudi"), OpenInput{Tenant: "acme", ClientID: "ats", Token: "anb_rt_not-a-link"}},
+		"wrong tenant": {liveShare("rudi"), OpenInput{Tenant: "other", ClientID: "ats", Token: LinkPrefix + "a-link-only-the-recipient-was-sent"}},
+		"unknown app":  {liveShare("rudi"), OpenInput{Tenant: "acme", ClientID: "nope", Token: LinkPrefix + "a-link-only-the-recipient-was-sent"}},
+		// A link opened "in" Anubis itself minted a first-party token for the
+		// recipient, the audience the self-service surfaces trust.
+		"anubis itself":      {liveShare("rudi"), OpenInput{Tenant: "acme", ClientID: "anubis", Token: LinkPrefix + "a-link-only-the-recipient-was-sent"}},
+		"the console":        {liveShare("rudi"), OpenInput{Tenant: "acme", ClientID: "console", Token: LinkPrefix + "a-link-only-the-recipient-was-sent"}},
 		"disabled recipient": {liveShare("gone"), OpenInput{Tenant: "acme", ClientID: "ats", Token: LinkPrefix + "a-link-only-the-recipient-was-sent"}},
 	}
 	for name, c := range cases {

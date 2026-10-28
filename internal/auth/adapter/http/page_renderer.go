@@ -92,7 +92,8 @@ type PageView struct {
 
 	// Password-reset pages render through the sign-in page's configuration
 	// with copy of their own: Title replaces the configured heading, and
-	// ResetStep picks the body — request · sent · complete · done · expired.
+	// ResetStep picks the body — request · sent · complete · done · expired,
+	// and link: the e-mail sign-in link's confirm step.
 	Title      string
 	ResetStep  string
 	ResetToken string

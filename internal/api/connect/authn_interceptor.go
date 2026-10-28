@@ -3,10 +3,13 @@ package apiconnect
 import (
 	"context"
 	"encoding/json"
+	"net/http"
 	"strings"
 	"time"
 
 	"connectrpc.com/connect"
+
+	"github.com/gsoultan/anubis/gen/go/anubis/v1/anubisv1connect"
 
 	authport "github.com/gsoultan/anubis/internal/auth/port"
 	controlport "github.com/gsoultan/anubis/internal/control/port"
@@ -43,30 +46,45 @@ func NewAuthnInterceptor(issuer string, ring *keyring.Manager, tenants tenancypo
 
 func (i *AuthnInterceptor) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
 	return func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
-		auth := req.Header().Get("Authorization")
-		// Which tenant an operator is working in. It is only ever a request
-		// for one — the guard decides whether they may.
-		wanted := req.Header().Get(TenantHeader)
-		const bearer = "Bearer "
-		if len(auth) > len(bearer) && strings.EqualFold(auth[:len(bearer)], bearer) {
-			cred := auth[len(bearer):]
-			switch {
-			case strings.HasPrefix(cred, "v4.public."):
-				if p := i.principalFromToken(ctx, cred, wanted); p != nil {
-					ctx = authctx.With(ctx, p)
-				}
-			case strings.HasPrefix(cred, "anb_live_"):
-				// An operator's key first: the two share a wire format, and
-				// only one of the two lookups can match a given key.
-				if p := i.principalFromPlatformKey(ctx, cred, wanted); p != nil {
-					ctx = authctx.With(ctx, p)
-				} else if p := i.principalFromAPIKey(ctx, cred); p != nil {
-					ctx = authctx.With(ctx, p)
-				}
+		return next(i.authenticate(ctx, req.Spec().Procedure, req.Header()), req)
+	}
+}
+
+// authenticate attaches the principal the request's credentials prove, if
+// any, for the procedure being called.
+func (i *AuthnInterceptor) authenticate(ctx context.Context, procedure string, header http.Header) context.Context {
+	auth := header.Get("Authorization")
+	// Which tenant an operator is working in. It is only ever a request
+	// for one — the guard decides whether they may.
+	wanted := header.Get(TenantHeader)
+	const bearer = "Bearer "
+	if len(auth) > len(bearer) && strings.EqualFold(auth[:len(bearer)], bearer) {
+		cred := auth[len(bearer):]
+		switch {
+		case strings.HasPrefix(cred, "v4.public."):
+			if p := i.principalFromToken(ctx, cred, wanted); p != nil && linkMayReach(p, procedure) {
+				ctx = authctx.With(ctx, p)
+			}
+		case strings.HasPrefix(cred, "anb_live_"):
+			// An operator's key first: the two share a wire format, and
+			// only one of the two lookups can match a given key.
+			if p := i.principalFromPlatformKey(ctx, cred, wanted); p != nil {
+				ctx = authctx.With(ctx, p)
+			} else if p := i.principalFromAPIKey(ctx, cred); p != nil {
+				ctx = authctx.With(ctx, p)
 			}
 		}
-		return next(ctx, req)
 	}
+	return ctx
+}
+
+// linkMayReach is the one place an access-link token is told apart from a
+// sign-in. Such a token stands for one record (accesslink), and the decision
+// endpoint is where that record is asked about; on any other procedure it
+// authenticates nobody. Leaving the check to each usecase is how Share,
+// ListSessions and authenticator binding all accepted it as the recipient.
+func linkMayReach(p *authctx.Principal, procedure string) bool {
+	return !p.LinkBound() || procedure == anubisv1connect.AuthzServiceAuthorizeProcedure
 }
 
 func (i *AuthnInterceptor) WrapStreamingClient(next connect.StreamingClientFunc) connect.StreamingClientFunc {

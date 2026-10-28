@@ -132,6 +132,19 @@ func (a *PasswordAuthenticator) Authenticate(ctx context.Context, in LoginInput,
 		}
 	}
 
+	return a.FactorPolicy(ctx, tenant, realm, identity, surface)
+}
+
+// FactorPolicy decides what an identity that has proved its first factor
+// must do next: give an enrolled second factor, enrol a required one, or
+// nothing. A password reaches it through Authenticate; every other first
+// factor (the e-mail link) calls it directly, because a door that skips it
+// signs in somebody who registered an authenticator without asking for it.
+func (a *PasswordAuthenticator) FactorPolicy(
+	ctx context.Context,
+	tenant *tenancydomain.TenantRef, realm *identitydomain.Realm,
+	identity *identitydomain.Identity, surface string,
+) Decision {
 	d := Decision{
 		Tenant: tenant, Realm: realm, Identity: identity,
 		Deadline: realm.FactorEnrolmentDeadline,

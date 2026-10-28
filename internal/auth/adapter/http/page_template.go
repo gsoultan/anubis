@@ -287,6 +287,16 @@ body{padding:0;align-content:stretch;justify-items:stretch}
     {{if $.Error}}<div class="err">{{$.Error}}</div>{{end}}
     <button type="submit">Save new password</button>
   </form>
+  {{else if eq $.ResetStep "link"}}
+  {{/* The e-mail sign-in link lands here and spends nothing: a mail scanner
+       that fetches the link sees this page, and only the button signs in. */}}
+  <form method="post" action="/v1/login/email/open">
+    <input type="hidden" name="tenant" value="{{$.Tenant}}">
+    <input type="hidden" name="token" value="{{$.ResetToken}}">
+    <input type="hidden" name="csrf" value="{{$.LoginCSRF}}">
+    <p class="sub">Continue to sign in with the link from your email. It works once.</p>
+    <button type="submit" autofocus>Sign in</button>
+  </form>
   {{else if eq $.ResetStep "done"}}
   <p class="sub">Your password is set, and every session has been signed out.</p>
   {{else}}
