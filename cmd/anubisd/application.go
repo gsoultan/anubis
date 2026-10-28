@@ -396,6 +396,7 @@ func (a *application) registerHTTP(ctx context.Context, srv *apihttp.Server,
 	// The e-mail door: ask for a link, and the link itself.
 	srv.HandleFunc("POST /v1/login/email", oidc.EmailLinkRequest)
 	srv.HandleFunc("GET /v1/login/email", oidc.EmailLinkOpen)
+	srv.HandleFunc("POST /v1/login/email/open", oidc.EmailLinkConfirm)
 	srv.HandleFunc("POST /v1/token", oidc.Token)
 	// RP-initiated logout, OIDC-shaped: GET asks, POST performs.
 	srv.HandleFunc("GET /v1/logout", oidc.LogoutPage)

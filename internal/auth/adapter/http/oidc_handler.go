@@ -285,7 +285,7 @@ func (h *OIDCHandler) LoginForm(w http.ResponseWriter, r *http.Request) {
 	// same sign-in — a factor belongs to the IDENTITY, not to the door, and
 	// now neither door decides that for itself.
 	if d.Step == signin.StepFactor {
-		h.promptForFactor(w, r, d.Tenant, d.Identity, d.Realm, "")
+		h.promptForFactor(w, r, d.Tenant, d.Identity, d.Realm, primaryPassword, "")
 		return
 	}
 
@@ -295,7 +295,7 @@ func (h *OIDCHandler) LoginForm(w http.ResponseWriter, r *http.Request) {
 		// to the application, which is why a member who only uses SSO used to
 		// meet an enrol-or-deny policy for the first time on the day it
 		// refused them.
-		h.warnEnrolmentDue(w, r, tenantSlug, realmCode, d)
+		h.warnEnrolmentDue(w, r, tenantSlug, realmCode, d, []string{primaryPassword}, "password")
 		return
 	}
 	h.establishBrowserSession(w, r, d.Tenant, d.Realm, d.Identity, []string{"pwd"}, "password")
@@ -323,7 +323,7 @@ func (h *OIDCHandler) completeSecondFactor(w http.ResponseWriter, r *http.Reques
 		restart("Please sign in again.")
 		return
 	}
-	identityID, err := h.consumeFactorToken(r, token)
+	identityID, primary, err := h.consumeFactorToken(r, token)
 	if err != nil {
 		// Expired, already spent, or never ours. There is nothing left to
 		// retry against, so the only honest answer is to start over.
@@ -351,10 +351,10 @@ func (h *OIDCHandler) completeSecondFactor(w http.ResponseWriter, r *http.Reques
 		})
 		// A rejected code must leave a way to try again, or one typo means
 		// restarting the whole sign-in.
-		h.promptForFactor(w, r, tenant, identity, realm, "That code was not accepted.")
+		h.promptForFactor(w, r, tenant, identity, realm, primary, "That code was not accepted.")
 		return
 	}
-	h.establishBrowserSession(w, r, tenant, realm, identity, []string{"pwd", "otp"}, "mfa")
+	h.establishBrowserSession(w, r, tenant, realm, identity, []string{primary, "otp"}, "mfa")
 }
 
 // establishBrowserSession is the end of every successful hosted sign-in:
@@ -760,8 +760,12 @@ func firstNonEmpty(a, b string) string {
 // browser tab is not a standing credential.
 const browserFactorTTL = 5 * time.Minute
 
+// primaryPassword is the amr of a password sign-in.
+const primaryPassword = "pwd"
+
 // promptForFactor mints the single-use token standing for the verified
-// password and re-renders the page asking for a code.
+// first factor and re-renders the page asking for a code. primary is that
+// factor's amr, carried so the session records what was actually presented.
 //
 // The token carries the identity, so the second submit cannot name a
 // different one: everything the second step needs is inside a value only
@@ -769,7 +773,7 @@ const browserFactorTTL = 5 * time.Minute
 func (h *OIDCHandler) promptForFactor(
 	w http.ResponseWriter, r *http.Request,
 	tenant *tenancydomain.TenantRef, identity *identitydomain.Identity,
-	realm *identitydomain.Realm, msg string,
+	realm *identitydomain.Realm, primary, msg string,
 ) {
 	raw, err := secret.New(32)
 	if err != nil {
@@ -779,7 +783,7 @@ func (h *OIDCHandler) promptForFactor(
 	// payload is jsonb, so it has to BE json — a bare uuid is not, and the
 	// insert fails with a 500 that says nothing about why.
 	if _, err := h.onetime.CreateOneTime(r.Context(), tenant.ID, "browser_mfa",
-		secret.Hash(raw), jsonx.Must(map[string]string{"identity_id": identity.ID}),
+		secret.Hash(raw), jsonx.Must(map[string]string{"identity_id": identity.ID, "primary": primary}),
 		h.clock.Now().Add(browserFactorTTL)); err != nil {
 		apihttp.WriteError(w, r, apperr.ErrInternal.Wrap(err))
 		return
@@ -800,18 +804,24 @@ func (h *OIDCHandler) promptForFactor(
 // comes from the token's payload rather than from the form: the token names
 // the identity whose password was checked, and a submission arriving with
 // somebody else's username must not be able to borrow it.
-func (h *OIDCHandler) consumeFactorToken(r *http.Request, token string) (string, error) {
+func (h *OIDCHandler) consumeFactorToken(r *http.Request, token string) (identityID, primary string, err error) {
 	_, payload, err := h.onetime.ConsumeOneTime(r.Context(), "browser_mfa", secret.Hash(token))
 	if err != nil {
-		return "", apperr.ErrMfaInvalid
+		return "", "", apperr.ErrMfaInvalid
 	}
 	var claim struct {
 		IdentityID string `json:"identity_id"`
+		Primary    string `json:"primary"`
 	}
 	if err := json.Unmarshal(payload, &claim); err != nil || claim.IdentityID == "" {
-		return "", apperr.ErrMfaInvalid
+		return "", "", apperr.ErrMfaInvalid
 	}
-	return claim.IdentityID, nil
+	// A token minted before the first factor was recorded stood for a
+	// password, the only door there was.
+	if claim.Primary == "" {
+		claim.Primary = primaryPassword
+	}
+	return claim.IdentityID, claim.Primary, nil
 }
 
 // verifyFactorCode checks a TOTP code for an identity.
@@ -998,8 +1008,8 @@ func (h *OIDCHandler) completeEnrolment(w http.ResponseWriter, r *http.Request, 
 // It is shown on every sign-in during the grace period, and it is always
 // skippable. A grace period that blocks is not a grace period; one that stays
 // quiet is not a warning.
-func (h *OIDCHandler) warnEnrolmentDue(w http.ResponseWriter, r *http.Request, tenantSlug, realmCode string, d signin.Decision) {
-	if h.openBrowserSession(w, r, d.Tenant, d.Realm, d.Identity, []string{"pwd"}, "password") == "" {
+func (h *OIDCHandler) warnEnrolmentDue(w http.ResponseWriter, r *http.Request, tenantSlug, realmCode string, d signin.Decision, amr []string, detail string) {
+	if h.openBrowserSession(w, r, d.Tenant, d.Realm, d.Identity, amr, detail) == "" {
 		return
 	}
 	data := h.resubmit(r, tenantSlug, realmCode, "")
@@ -1126,37 +1136,107 @@ func (h *OIDCHandler) EmailLinkRequest(w http.ResponseWriter, r *http.Request) {
 	h.renderer.Render(w, http.StatusOK, view)
 }
 
-// EmailLinkOpen is the click. The token proves the person; the flow it
-// carried says where they were going; the session is an ordinary browser
-// session with amr email_link, and the code is issued exactly as after a
-// password.
+// EmailLinkOpen is the click, and it changes nothing. Mail clients and
+// security scanners fetch every link in a message; a GET that consumed the
+// token spent it, and signed the scanner in, before the person saw it. The
+// page it shows carries the token on to EmailLinkConfirm, as the password
+// reset page does.
 func (h *OIDCHandler) EmailLinkOpen(w http.ResponseWriter, r *http.Request) {
-	done, err := h.emailLink.Complete(r.Context(), r.URL.Query().Get("token"))
+	h.renderEmailLinkConfirm(w, r, r.URL.Query().Get("tenant"), r.URL.Query().Get("token"))
+}
+
+func (h *OIDCHandler) renderEmailLinkConfirm(w http.ResponseWriter, r *http.Request, tenantSlug, token string) {
+	if token == "" || len(token) > 128 {
+		h.renderEmailLinkExpired(w, r, tenantSlug)
+		return
+	}
+	var tid string
+	if tenant, terr := h.tenants.TenantBySlug(r.Context(), tenantSlug); terr == nil && tenant != nil {
+		tid = tenant.ID
+	}
+	// The confirming POST must come from this page, or a cross-site form
+	// could sign a visitor in to the attacker's own account with the
+	// attacker's own link.
+	csrf, err := secret.New(16)
 	if err != nil {
-		tenantSlug := r.URL.Query().Get("tenant")
-		var tid string
-		if tenant, terr := h.tenants.TenantBySlug(r.Context(), tenantSlug); terr == nil && tenant != nil {
-			tid = tenant.ID
-		}
-		cfg := h.resolvePageForRealm(r, tid, "signin", "", "", "")
-		h.renderer.Render(w, http.StatusBadRequest, PageView{
-			Cfg: cfg, Kind: "reset", Tenant: tenantSlug, Title: "This link has expired", ResetStep: "expired",
-			Error:     "Sign-in links work once, within 15 minutes. Go back to the sign-in page and ask for a new one.",
-			SigninURL: "/p/" + tenantSlug + "/signin/default",
-		})
+		apihttp.WriteError(w, r, apperr.ErrInternal.Wrap(err))
 		return
 	}
-	sessionID := h.openBrowserSession(w, r, done.Tenant, done.Realm, done.Identity, []string{emaillink.Factor}, emaillink.Factor)
-	if sessionID == "" {
+	h.cookies.set(w, r, loginCSRFBase, csrf, int(loginCSRFTTL/time.Second))
+	cfg := h.resolvePageForRealm(r, tid, "signin", "", "", "")
+	h.renderer.Render(w, http.StatusOK, PageView{
+		Cfg: cfg, Kind: "reset", Tenant: tenantSlug, Title: "Sign in", ResetStep: "link",
+		ResetToken: token, LoginCSRF: csrf,
+	})
+}
+
+func (h *OIDCHandler) renderEmailLinkExpired(w http.ResponseWriter, r *http.Request, tenantSlug string) {
+	var tid string
+	if tenant, terr := h.tenants.TenantBySlug(r.Context(), tenantSlug); terr == nil && tenant != nil {
+		tid = tenant.ID
+	}
+	cfg := h.resolvePageForRealm(r, tid, "signin", "", "", "")
+	h.renderer.Render(w, http.StatusBadRequest, PageView{
+		Cfg: cfg, Kind: "reset", Tenant: tenantSlug, Title: "This link has expired", ResetStep: "expired",
+		Error:     "Sign-in links work once, within 15 minutes. Go back to the sign-in page and ask for a new one.",
+		SigninURL: "/p/" + tenantSlug + "/signin/default",
+	})
+}
+
+// EmailLinkConfirm spends the link. The token proves the person and the flow
+// it carried says where they were going; from there it is a first factor
+// like a password, and the same factor policy decides what comes next — an
+// enrolled authenticator is asked for, an overdue enrolment is required, and
+// only then is there a session (amr email_link) and a code.
+func (h *OIDCHandler) EmailLinkConfirm(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		apihttp.WriteError(w, r, apperr.ErrInvalidArgument)
 		return
 	}
-	f := done.Flow
-	if f["client_id"] == "" {
+	tenantSlug, token := r.PostFormValue("tenant"), r.PostFormValue("token")
+	if !h.checkLoginCSRF(r, r.PostFormValue("csrf")) {
+		// Nothing was spent: show the button again rather than a dead end.
+		h.renderEmailLinkConfirm(w, r, tenantSlug, token)
+		return
+	}
+	done, err := h.emailLink.Complete(r.Context(), token)
+	if err != nil {
+		h.renderEmailLinkExpired(w, r, tenantSlug)
+		return
+	}
+	// Every step below reads the flow from the form, as it does after a
+	// password; here the flow travelled inside the token, so it is put there.
+	r.PostForm.Set("tenant", done.Tenant.Slug)
+	r.PostForm.Set("realm", done.Realm.Code)
+	for k, v := range done.Flow {
+		r.PostForm.Set(k, v)
+	}
+	tenantSlug, realmCode := done.Tenant.Slug, done.Realm.Code
+
+	d := h.auth.FactorPolicy(r.Context(), done.Tenant, done.Realm, done.Identity, signin.SurfaceBrowser)
+	switch {
+	case d.Step == signin.StepDeny:
+		h.renderLogin(w, r, done.Tenant.ID, h.resubmit(r, tenantSlug, realmCode,
+			"Sign-in is temporarily unavailable. Please try again."))
+		return
+	case d.Step == signin.StepEnrol:
+		h.promptForEnrolment(w, r, tenantSlug, realmCode, d, enrolmentMessage(d.Missing), "")
+		return
+	case d.Step == signin.StepFactor:
+		h.promptForFactor(w, r, d.Tenant, d.Identity, d.Realm, emaillink.Factor, "")
+		return
+	case d.Due:
+		h.warnEnrolmentDue(w, r, tenantSlug, realmCode, d, []string{emaillink.Factor}, emaillink.Factor)
+		return
+	}
+	if done.Flow["client_id"] == "" {
 		// Signed in with nowhere to go: the sign-in page will find the
 		// cookie and say so.
-		http.Redirect(w, r, "/p/"+done.Tenant.Slug+"/signin/default?realm="+url.QueryEscape(done.Realm.Code), http.StatusSeeOther)
+		if h.openBrowserSession(w, r, done.Tenant, done.Realm, done.Identity, []string{emaillink.Factor}, emaillink.Factor) == "" {
+			return
+		}
+		http.Redirect(w, r, "/p/"+tenantSlug+"/signin/default?realm="+url.QueryEscape(realmCode), http.StatusSeeOther)
 		return
 	}
-	h.issueCode(w, r, done.Tenant, done.Identity.ID, sessionID,
-		f["client_id"], f["redirect_uri"], f["state"], f["code_challenge"], f["code_challenge_method"], f["nonce"])
+	h.establishBrowserSession(w, r, done.Tenant, done.Realm, done.Identity, []string{emaillink.Factor}, emaillink.Factor)
 }

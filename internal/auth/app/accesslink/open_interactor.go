@@ -89,6 +89,12 @@ func (u *openInteractor) OpenAccessLink(ctx context.Context, in OpenInput) (*aut
 		u.deny(ctx, tenant.ID, identity.ID, "unknown_application")
 		return nil, apperr.ErrTokenInvalid
 	}
+	// A record lives in a tenant's application, never in Anubis's own: a
+	// token for "anubis" or "console" is the audience self-service trusts.
+	if app.IsSystem {
+		u.deny(ctx, tenant.ID, identity.ID, "system_application")
+		return nil, apperr.ErrTokenInvalid
+	}
 
 	key, err := u.ring.Ring().ActiveAccess()
 	if err != nil {
