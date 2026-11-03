@@ -104,6 +104,20 @@ func (s *Repository) RolesForIdentity(ctx context.Context, tenantID, identityID 
 	return roles, nil
 }
 
+// RolesForIdentityInApp lists the live-grant role names that matter in one
+// application.
+func (s *Repository) RolesForIdentityInApp(ctx context.Context, tenantID, identityID, applicationID string) ([]string, error) {
+	rows, err := authzrquery.RolesForIdentityInApp.Query(ctx, s.rex(ctx), identityID, tenantID, applicationID)
+	if err != nil {
+		return nil, database.MapErr(err)
+	}
+	var roles []string
+	for _, r := range rows {
+		roles = append(roles, r.Name)
+	}
+	return roles, nil
+}
+
 // HoldsRoleInApp reports whether a person holds a live role giving
 // anything in the application.
 func (s *Repository) HoldsRoleInApp(ctx context.Context, tenantID, identityID, applicationID string) (bool, error) {

@@ -60,6 +60,27 @@ WHERE g.identity_id = $1 AND g.tenant_id = $2
   AND (g.valid_until IS NULL OR g.valid_until > now())
 ORDER BY r.name`)
 
+// RolesForIdentityInApp lists the live-grant role names that matter in one
+// application: a role the app's manifest owns, or a tenant role giving at
+// least one live permission of the app. A token issued for that app carries
+// these and no others, so one app never learns what a person may do in
+// another, and an app's roles are not crowded out of the token's cap by
+// roles from elsewhere.
+var RolesForIdentityInApp = storm.SQL[RoleNameRow](`
+SELECT DISTINCT r.name
+FROM grants g
+JOIN roles r ON r.id = g.role_id
+WHERE g.identity_id = $1 AND g.tenant_id = $2
+  AND g.revoked_at IS NULL AND g.valid_from <= now()
+  AND (g.valid_until IS NULL OR g.valid_until > now())
+  AND (r.application_id = $3::uuid
+       OR EXISTS (SELECT 1 FROM role_permissions_effective rpe
+                    JOIN permissions p ON p.id = rpe.permission_id
+                   WHERE rpe.role_id = r.id
+                     AND p.application_id = $3::uuid
+                     AND p.deprecated_at IS NULL))
+ORDER BY r.name`)
+
 // HoldsRoleInAppRow answers whether a person has any business in an app.
 type HoldsRoleInAppRow struct {
 	Holds bool
