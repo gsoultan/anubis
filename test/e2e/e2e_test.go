@@ -795,6 +795,27 @@ func TestAppClosedToRoleHolders(t *testing.T) {
 	}
 }
 
+// refreshed rotates a refresh token, waiting out the per-IP limiter the
+// way signIn does: a refused request is turned away before the token is
+// consumed, so the same token is good for the retry.
+func refreshed(t *testing.T, token string) *anubisv1.RefreshResponse {
+	t.Helper()
+	deadline := time.Now().Add(90 * time.Second)
+	for {
+		resp, err := authClient().Refresh(context.Background(), connect.NewRequest(&anubisv1.RefreshRequest{
+			RefreshToken: token,
+		}))
+		if connect.CodeOf(err) == connect.CodeResourceExhausted && time.Now().Before(deadline) {
+			time.Sleep(2 * time.Second)
+			continue
+		}
+		if err != nil {
+			t.Fatalf("refresh: %v", err)
+		}
+		return resp.Msg
+	}
+}
+
 // rolesOf reads the roles claim out of a v4.public token body.
 func rolesOf(t *testing.T, token string) []string {
 	t.Helper()
@@ -865,13 +886,8 @@ func TestTokenCarriesOnlyTheAppsRoles(t *testing.T) {
 		if got := rolesOf(t, in.GetTokens().GetAccessToken()); !slices.Equal(got, want) {
 			t.Fatalf("token for %s carries roles %v, want %v", slug, got, want)
 		}
-		again, err := authClient().Refresh(ctx, connect.NewRequest(&anubisv1.RefreshRequest{
-			RefreshToken: in.GetTokens().GetRefreshToken(),
-		}))
-		if err != nil {
-			t.Fatalf("refresh %s: %v", slug, err)
-		}
-		if got := rolesOf(t, again.Msg.GetTokens().GetAccessToken()); !slices.Equal(got, want) {
+		again := refreshed(t, in.GetTokens().GetRefreshToken())
+		if got := rolesOf(t, again.GetTokens().GetAccessToken()); !slices.Equal(got, want) {
 			t.Fatalf("refreshed token for %s carries roles %v, want %v", slug, got, want)
 		}
 	}
