@@ -10,6 +10,9 @@ import (
 // migrations/0013; Go never re-implements them on the online path.
 type AuthzRepository interface {
 	Authorize(ctx context.Context, identityID, tenantID, permission string, targets []byte) (bool, error)
+	// AuthorizeGated is Authorize plus the permission's step-up requirements,
+	// read in the same round trip: the online decision path needs both.
+	AuthorizeGated(ctx context.Context, identityID, tenantID, permission string, targets []byte) (bool, authzdomain.PermissionRequirements, error)
 	AuthorizeExplain(ctx context.Context, identityID, tenantID, permission string, targets []byte) (string, error)
 	AuthorizeStrictSim(ctx context.Context, identityID, tenantID, permission string, targets []byte, strictAxis string) (bool, error)
 	PermissionByKey(ctx context.Context, tenantID, key string) (*authzdomain.PermissionMeta, error)

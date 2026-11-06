@@ -23,7 +23,7 @@ import "github.com/gsoultan/storm"
 func Queries() []storm.RawDecl {
 	return []storm.RawDecl{
 		// authz.go
-		Authorize, AuthorizeExplain, GetPermissionByKey, RolesForIdentity,
+		Authorize, AuthorizeGated, AuthorizeExplain, GetPermissionByKey, RolesForIdentity,
 		EffectivePermissionsForIdentity, AuthorizeStrictSim, SampleAuthorizeDecisions,
 		HoldsRoleInApp,
 		// role.go

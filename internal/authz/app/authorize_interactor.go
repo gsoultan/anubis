@@ -62,7 +62,9 @@ func (u *authorizeInteractor) Execute(ctx context.Context, in AuthorizeInput) (*
 		return nil, apperr.ErrInvalidArgument.Wrap(err)
 	}
 
-	allow, err := u.authz.Authorize(ctx, in.Subject, p.TenantID, in.Permission, targets)
+	// One round trip: the decision and the permission's step-up requirements
+	// together, because an allow needs both.
+	allow, req, err := u.authz.AuthorizeGated(ctx, in.Subject, p.TenantID, in.Permission, targets)
 	if err != nil {
 		return nil, apperr.ErrInternal.Wrap(err)
 	}
@@ -71,7 +73,7 @@ func (u *authorizeInteractor) Execute(ctx context.Context, in AuthorizeInput) (*
 	if allow {
 		// Step-up gates AFTER the grant check: holding the permission with
 		// weak/stale authentication is "yes, but not like this".
-		if step := u.stepUp(ctx, p.TenantID, in); step != nil {
+		if step := u.stepUp(req, in); step != nil {
 			d = step
 		}
 	} else {
@@ -82,12 +84,7 @@ func (u *authorizeInteractor) Execute(ctx context.Context, in AuthorizeInput) (*
 	return d, nil
 }
 
-func (u *authorizeInteractor) stepUp(ctx context.Context, tenantID string, in AuthorizeInput) *authzdomain.Decision {
-	perm, err := u.authz.PermissionByKey(ctx, tenantID, in.Permission)
-	if err != nil || perm == nil {
-		return nil
-	}
-	req := authzdomain.PermissionRequirements{RequiresAMR: perm.RequiresAMR, MaxAuthAge: perm.MaxAuthAge}
+func (u *authorizeInteractor) stepUp(req authzdomain.PermissionRequirements, in AuthorizeInput) *authzdomain.Decision {
 	var authTime time.Time
 	if in.AuthTime > 0 {
 		authTime = time.Unix(in.AuthTime, 0)
