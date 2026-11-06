@@ -65,3 +65,19 @@ func (p *Principal) FirstParty() bool {
 	}
 	return false
 }
+
+// MayAskAbout reports whether this caller may ask the decision API about
+// subject.
+//
+// A person's own sign-in (a session, not an operator) answers for that person
+// and nobody else: otherwise any member of a tenant, a self-registered public
+// user included, could map everybody's roles and grants. The tenant's systems
+// — an API key, an application's client-credentials token — and the
+// installation's operators ask about anyone, because answering for others is
+// what the decision API is for.
+func (p *Principal) MayAskAbout(subject string) bool {
+	if p.Service || p.Platform || p.SessionID == "" {
+		return true
+	}
+	return subject == p.IdentityID
+}

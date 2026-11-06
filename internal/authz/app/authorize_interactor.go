@@ -57,6 +57,12 @@ func (u *authorizeInteractor) Execute(ctx context.Context, in AuthorizeInput) (*
 		u.auditDecision(ctx, p, in, d)
 		return d, nil
 	}
+	if !p.MayAskAbout(in.Subject) {
+		d := &authzdomain.Decision{Allow: false, Reason: "subject_not_caller",
+			Message: "A person's sign-in can ask only about that person; ask about others with the tenant's API key"}
+		u.auditDecision(ctx, p, in, d)
+		return d, nil
+	}
 	targets, err := json.Marshal(in.Scopes)
 	if err != nil {
 		return nil, apperr.ErrInvalidArgument.Wrap(err)

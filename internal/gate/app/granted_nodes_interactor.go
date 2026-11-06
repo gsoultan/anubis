@@ -41,6 +41,9 @@ func (u *GrantedNodesInteractor) Execute(ctx context.Context, in authzreach.Node
 	if in.Subject == "" || in.Permission == "" || !validate.ValidCode(in.Axis) {
 		return nil, apperr.ErrInvalidArgument.With("hint", "subject, permission and axis are required")
 	}
+	if !p.MayAskAbout(in.Subject) {
+		return nil, apperr.ErrPermissionDenied.With("hint", "a person's sign-in can list only their own places")
+	}
 	if len(in.Scopes) > 16 {
 		return nil, apperr.ErrInvalidArgument.With("scopes", "too many axes")
 	}
