@@ -58,7 +58,7 @@ func (s *Repository) APIKeyByLookup(ctx context.Context, lookup string) (*authdo
 	return &authdomain.APIKeyAuth{
 		ID: row.ID, TenantID: row.TenantID, TenantSlug: row.TenantSlug,
 		TenantStatus: row.TenantStatus, SecretHash: row.SecretHash,
-		ExpiresAt: tptr(row.ExpiresAt),
+		ExpiresAt: tptr(row.ExpiresAt), LastUsedAt: tptr(row.LastUsedAt),
 	}, nil
 }
 

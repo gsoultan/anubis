@@ -716,7 +716,7 @@ SELECT id::text AS id, username, email, status, token_epoch, last_login_at,
 	storm.RegisterStatement(`
 SELECT k.id::text AS id, k.platform_user_id::text AS platform_user_id,
        k.secret_hash, k.expires_at, k.revoked_at,
-       u.username, u.status AS owner_status, u.token_epoch
+       u.username, u.status AS owner_status, u.token_epoch, k.last_used_at
 FROM platform_api_keys k
 JOIN platform_users u ON u.id = k.platform_user_id
 WHERE k.lookup = $1 AND k.revoked_at IS NULL`)
@@ -787,6 +787,7 @@ func scanAPIKeyLookupRow(rv [][]byte, r *controlrquery.APIKeyLookupRow, sl *runt
 	r.Username = sl.Str(rv[5])
 	r.OwnerStatus = sl.Str(rv[6])
 	r.TokenEpoch = runtime.Int4(rv[7])
+	r.LastUsedAt = runtime.Nullable(rv[8], runtime.Timestamptz)
 	return nil
 }
 

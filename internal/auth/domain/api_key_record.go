@@ -29,4 +29,7 @@ type APIKeyAuth struct {
 	TenantStatus string
 	SecretHash   string
 	ExpiresAt    *time.Time
+	// LastUsedAt is when a use was last recorded, so the request path can
+	// skip writing it again within the same minute.
+	LastUsedAt *time.Time
 }

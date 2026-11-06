@@ -39,4 +39,7 @@ type PlatformAPIKeyAuth struct {
 	// key was minted: disabling an operator must stop their automation now.
 	OwnerStatus string
 	TokenEpoch  int
+	// LastUsedAt is when a use was last recorded, so the request path can
+	// skip writing it again within the same minute.
+	LastUsedAt *time.Time
 }

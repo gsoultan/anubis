@@ -20,11 +20,13 @@ type APIKeyAuthRow struct {
 	RevokedAt    runtime.Null[time.Time]
 	TenantSlug   string
 	TenantStatus string
+	LastUsedAt   runtime.Null[time.Time]
 }
 
 var GetAPIKeyByLookup = storm.SQL[APIKeyAuthRow](`
 SELECT k.id::text AS id, k.tenant_id::text AS tenant_id, k.label, k.secret_hash,
-       k.expires_at, k.revoked_at, t.slug AS tenant_slug, t.status AS tenant_status
+       k.expires_at, k.revoked_at, t.slug AS tenant_slug, t.status AS tenant_status,
+       k.last_used_at
   FROM api_keys k
   JOIN tenants t ON t.id = k.tenant_id
  WHERE k.lookup = $1 AND k.revoked_at IS NULL`)
