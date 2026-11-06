@@ -26,7 +26,9 @@ func (s ccTenants) TenantBySlug(_ context.Context, slug string) (*tenancydomain.
 	return &tenancydomain.TenantRef{ID: "t1", Slug: slug, Status: s.status}, nil
 }
 
-type ccApps struct{ tenancyport.ApplicationRepository }
+type ccApps struct {
+	tenancyport.ApplicationRepository
+}
 
 func (ccApps) ApplicationBySlug(_ context.Context, _, slug string) (*tenancydomain.ApplicationRecord, error) {
 	return &tenancydomain.ApplicationRecord{ID: "app-1", Slug: slug, Status: "active",
