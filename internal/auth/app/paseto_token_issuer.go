@@ -72,6 +72,17 @@ func (t *pasetoTokenIssuer) Issue(ctx context.Context, in IssueInput) (*TokenPai
 		in.ClientID = in.RotateFrom.ClientID
 	}
 
+	// Every way to a token comes through here (sign-in, refresh, scope
+	// switch), so this is where a tenant that is no longer serving stops
+	// issuing. Read on every issue, so suspending a tenant ends refreshes too.
+	tenant, err := t.tenants.TenantByID(ctx, s.TenantID)
+	if err != nil {
+		return nil, apperr.ErrInternal.Wrap(err)
+	}
+	if !tenant.Serving() {
+		return nil, apperr.ErrPermissionDenied.With("reason", "this organisation is not active")
+	}
+
 	accessTTL, refreshTTL, aud, appID, format, signIn, err := t.ttls(ctx, s, in.ClientID)
 	if err != nil {
 		return nil, err

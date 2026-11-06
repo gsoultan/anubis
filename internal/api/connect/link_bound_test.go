@@ -25,7 +25,7 @@ func (linkTenants) TenantBySlug(_ context.Context, slug string) (*tenancydomain.
 	if slug != "acme" {
 		return nil, errors.New("no")
 	}
-	return &tenancydomain.TenantRef{ID: "t1", Slug: "acme"}, nil
+	return &tenancydomain.TenantRef{ID: "t1", Slug: "acme", Status: "active"}, nil
 }
 
 type fixedClock struct{ t time.Time }

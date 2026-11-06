@@ -160,7 +160,8 @@ func (i *AuthnInterceptor) principalFromToken(ctx context.Context, token, wantTe
 	}
 
 	tenant, err := i.tenants.TenantBySlug(ctx, claims.Tenant)
-	if err != nil || tenant == nil {
+	// A suspended or archived tenant's tokens stop here, not when they expire.
+	if err != nil || !tenant.Serving() {
 		return nil
 	}
 
