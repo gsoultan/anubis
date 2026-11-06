@@ -205,3 +205,49 @@ func TestHoldsRoleInApp(t *testing.T) {
 		}
 	})
 }
+
+// A token for one app carries RolesForIdentityInApp: a tenant role giving
+// something in the app, or a role the app owns, and nothing granted for any
+// other app. A revoked grant drops out.
+func TestRolesForIdentityInApp(t *testing.T) {
+	inRolledBackTx(t, func(ctx context.Context, repo *authzpg.Repository, q database.Querier) {
+		w := build(t, ctx, q)
+		var roleName string
+		must(t, "role name", q.QueryRow(ctx, `SELECT name FROM roles WHERE id = $1`, w.role).Scan(&roleName))
+		before, err := repo.RolesForIdentity(ctx, w.tenant, w.person)
+		must(t, "roles before", err)
+
+		// A second app, and a role it owns that the person also holds.
+		var other, otherRole string
+		must(t, "other application", q.QueryRow(ctx, `INSERT INTO applications (tenant_id, kind, slug, name)
+			VALUES ($1, 'service', $2, 'Other app') RETURNING id::text`, w.tenant, "ot-"+w.axis[3:]).Scan(&other))
+		must(t, "other role", q.QueryRow(ctx, `INSERT INTO roles (tenant_id, application_id, name)
+			VALUES ($1, $2, $3) RETURNING id::text`, w.tenant, other, "ot-"+w.axis[3:]+".viewer").Scan(&otherRole))
+		_, err = q.Exec(ctx, `INSERT INTO grants (tenant_id, identity_id, role_id, granted_by)
+			VALUES ($1, $2, $3, $2)`, w.tenant, w.person, otherRole)
+		must(t, "other grant", err)
+		g := w.grant(t, ctx, q, "Org A")
+
+		inApp, err := repo.RolesForIdentityInApp(ctx, w.tenant, w.person, w.app)
+		must(t, "in app", err)
+		if len(inApp) != 1 || inApp[0] != roleName {
+			t.Fatalf("roles in the app = %v, want [%s]", inApp, roleName)
+		}
+		inOther, err := repo.RolesForIdentityInApp(ctx, w.tenant, w.person, other)
+		must(t, "in other", err)
+		if len(inOther) != 1 || inOther[0] != "ot-"+w.axis[3:]+".viewer" {
+			t.Fatalf("roles in the other app = %v, want only its own role", inOther)
+		}
+		all, err := repo.RolesForIdentity(ctx, w.tenant, w.person)
+		must(t, "all", err)
+		if len(all) != len(before)+2 {
+			t.Fatalf("every role = %d, want %d (the person's earlier roles plus the two granted here)", len(all), len(before)+2)
+		}
+
+		_, err = q.Exec(ctx, `UPDATE grants SET revoked_at = now() WHERE id = $1`, g)
+		must(t, "revoke", err)
+		if inApp, _ = repo.RolesForIdentityInApp(ctx, w.tenant, w.person, w.app); len(inApp) != 0 {
+			t.Fatalf("revoked: roles in the app = %v, want none", inApp)
+		}
+	})
+}

@@ -173,7 +173,7 @@ rendered — so the inventory, not the feature, was the thing out of date.
   "jti": "jti_...",                // targeted denylisting
   "sid": "ses_01HXY...",           // enables per-session revocation
   "tid": "tnt_impack",             // tenant
-  "roles": ["finance.approver"],
+  "roles": ["finance.approver"],   // only roles that matter in the aud app
   "scp": "invoice:read invoice:approve",
   "scopes": {                      // active scope context, one key per axis.
     "org": "01a027ff-...",         // A MAP, never fixed fields — adding an axis

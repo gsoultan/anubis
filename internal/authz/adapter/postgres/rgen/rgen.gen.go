@@ -281,6 +281,20 @@ JOIN roles r ON r.id = g.role_id
 WHERE g.identity_id = $1 AND g.tenant_id = $2
   AND g.revoked_at IS NULL AND g.valid_from <= now()
   AND (g.valid_until IS NULL OR g.valid_until > now())
+  AND (r.application_id = $3::uuid
+       OR EXISTS (SELECT 1 FROM role_permissions_effective rpe
+                    JOIN permissions p ON p.id = rpe.permission_id
+                   WHERE rpe.role_id = r.id
+                     AND p.application_id = $3::uuid
+                     AND p.deprecated_at IS NULL))
+ORDER BY r.name`)
+	storm.RegisterStatement(`
+SELECT DISTINCT r.name
+FROM grants g
+JOIN roles r ON r.id = g.role_id
+WHERE g.identity_id = $1 AND g.tenant_id = $2
+  AND g.revoked_at IS NULL AND g.valid_from <= now()
+  AND (g.valid_until IS NULL OR g.valid_until > now())
 ORDER BY r.name`)
 	storm.RegisterStatement(`
 SELECT DISTINCT rp.role_id::text AS role_id

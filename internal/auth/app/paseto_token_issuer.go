@@ -92,7 +92,16 @@ func (t *pasetoTokenIssuer) Issue(ctx context.Context, in IssueInput) (*TokenPai
 		}
 	}
 
-	roles, err := t.authz.RolesForIdentity(ctx, s.TenantID, s.IdentityID)
+	// A token for an application carries the roles that matter in it and
+	// no others: the billing app has no business reading what a person may
+	// do in HR, and other apps' roles must not push this app's past the cap.
+	// A token Anubis issues for itself (no client) still carries every role.
+	var roles []string
+	if appID != "" {
+		roles, err = t.authz.RolesForIdentityInApp(ctx, s.TenantID, s.IdentityID, appID)
+	} else {
+		roles, err = t.authz.RolesForIdentity(ctx, s.TenantID, s.IdentityID)
+	}
 	if err != nil {
 		return nil, apperr.ErrInternal.Wrap(err)
 	}

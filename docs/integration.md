@@ -203,6 +203,12 @@ p.Claims.Subject  // usr_…       p.Claims.Tenant // tnt_…
 p.Claims.Roles    // ["billing.clerk"]            p.Claims.AMR // ["pwd","otp"]
 ```
 
+`roles` holds only the roles that matter in **your** application: ones your
+manifest declares, and tenant roles that give at least one of your
+permissions. A person who is also an HR admin does not carry `hr.admin` into
+billing's token. The decision is still `Authorize`'s — the claim is a hint
+for display, not a permission check.
+
 `pkg/anubis` is a **zero-dependency module** — importing it pulls in nothing
 but stdlib. Non-Go services verify the same way with any PASETO `v4.public`
 library plus the two claims checks (`iss`, `aud`); the signing `kid` rides in
