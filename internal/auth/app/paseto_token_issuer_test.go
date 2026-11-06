@@ -59,7 +59,7 @@ func TestNoTokenIsIssuedForATenantThatIsNotActive(t *testing.T) {
 			nil, nil, nil, nil, issuerRoles{}, issuerTenants{status: status}, issuerClock{now})
 		return iss.Issue(context.Background(), IssueInput{
 			Session: &authdomain.SessionView{
-				ID: "s1", IdentityID: "rudi", TenantID: "t1",
+				ID: "s1", IdentityID: "rudi", TenantID: "t1", IdentityStatus: "active",
 				AMR: []string{"pwd"}, AuthTime: now,
 			},
 			TenantSlug: "acme",
@@ -78,6 +78,44 @@ func TestNoTokenIsIssuedForATenantThatIsNotActive(t *testing.T) {
 		}
 		if apperr.AsError(err).Code != "permission_denied" {
 			t.Errorf("%s tenant: want permission denied, got %v", status, err)
+		}
+	}
+}
+
+// A person who is no longer active gets no token, however live their session.
+//
+// Root cause: the session read re-reads the identity's status on every call
+// precisely so that it can outrank the session, and nothing looked at it.
+// Disabling somebody also revokes their sessions, so that path was covered by
+// accident; erasure and the retention sweep only disable and bump the epoch,
+// and a refresh then minted a fresh token carrying the NEW epoch for a person
+// who had been erased.
+func TestNoTokenIsIssuedForAPersonWhoIsNotActive(t *testing.T) {
+	now := time.Unix(1_700_000_000, 0)
+	pub, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ring, err := keyring.NewRing([]*keyring.Key{{
+		Kid: "k1", Purpose: keyring.PurposeAccess, Status: keyring.StatusActive,
+		Public: pub, Private: priv, NotBefore: now.Add(-time.Hour),
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	iss := NewPasetoTokenIssuer("https://id.example.test", keyring.NewManager(ring),
+		nil, nil, nil, nil, issuerRoles{}, issuerTenants{status: "active"}, issuerClock{now})
+	for _, status := range []string{"disabled", "locked", ""} {
+		pair, err := iss.Issue(context.Background(), IssueInput{
+			Session: &authdomain.SessionView{
+				ID: "s1", IdentityID: "rudi", TenantID: "t1", IdentityStatus: status,
+				AMR: []string{"pwd"}, AuthTime: now,
+			},
+			TenantSlug: "acme",
+			AccessOnly: true,
+		})
+		if err == nil {
+			t.Errorf("identity status %q was issued a token: %+v", status, pair)
 		}
 	}
 }
