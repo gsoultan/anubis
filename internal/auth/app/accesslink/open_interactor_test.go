@@ -27,10 +27,14 @@ import (
 type stubTenants struct{ tenancyport.TenantRepository }
 
 func (stubTenants) TenantBySlug(_ context.Context, slug string) (*tenancydomain.TenantRef, error) {
-	if slug != "acme" {
-		return nil, errors.New("no")
+	switch slug {
+	case "acme":
+		return &tenancydomain.TenantRef{ID: "t1", Slug: "acme", Status: "active"}, nil
+	case "frozen":
+		// The same tenant, seen after it was suspended.
+		return &tenancydomain.TenantRef{ID: "t1", Slug: "frozen", Status: "suspended"}, nil
 	}
-	return &tenancydomain.TenantRef{ID: "t1", Slug: "acme"}, nil
+	return nil, errors.New("no")
 }
 
 type stubApps struct {
@@ -199,5 +203,16 @@ func TestEveryWrongLinkIsTheSameRefusal(t *testing.T) {
 		if len(shares.touched) != 0 {
 			t.Errorf("%s: a refused open was counted", name)
 		}
+	}
+}
+
+// A link into a suspended tenant opens nothing.
+//
+// Root cause: the link's tenant was resolved by slug and only its id was
+// compared, so a suspended tenant's links kept minting tokens.
+func TestALinkIntoASuspendedTenantOpensNothing(t *testing.T) {
+	uc, token, _, _, _ := probe(t, liveShare("rudi"))
+	if pair, err := uc.OpenAccessLink(context.Background(), OpenInput{Tenant: "frozen", ClientID: "ats", Token: token}); err == nil {
+		t.Fatalf("a suspended tenant's link minted a token: %+v", pair)
 	}
 }

@@ -70,6 +70,10 @@ func (u *openInteractor) OpenAccessLink(ctx context.Context, in OpenInput) (*aut
 	if err != nil || tenant == nil {
 		return nil, apperr.ErrTokenInvalid
 	}
+	if !tenant.Serving() {
+		u.deny(ctx, tenant.ID, "", "tenant_not_active")
+		return nil, apperr.ErrTokenInvalid
+	}
 	sh, err := u.shares.ShareByLinkHash(ctx, secret.Hash(in.Token))
 	if err != nil || sh == nil || sh.TenantID != tenant.ID {
 		u.deny(ctx, tenant.ID, "", "no_such_link")
