@@ -46,7 +46,9 @@ func NewClientCredentialsInteractor(
 
 func (u *clientCredentialsInteractor) Execute(ctx context.Context, in ClientCredentialsInput) (*ClientCredentialsOutput, error) {
 	tenant, err := u.tenants.TenantBySlug(ctx, in.Tenant)
-	if err != nil || tenant == nil {
+	// A suspended tenant's systems stop with it, as its people and its API
+	// keys do. Same answer as an unknown tenant: this endpoint names nothing.
+	if err != nil || !tenant.Serving() {
 		return nil, apperr.ErrInvalidCredentials
 	}
 	app, err := u.apps.ApplicationBySlug(ctx, tenant.ID, in.ClientID)

@@ -160,7 +160,8 @@ func (i *AuthnInterceptor) principalFromToken(ctx context.Context, token, wantTe
 	}
 
 	tenant, err := i.tenants.TenantBySlug(ctx, claims.Tenant)
-	if err != nil || tenant == nil {
+	// A suspended or archived tenant's tokens stop here, not when they expire.
+	if err != nil || !tenant.Serving() {
 		return nil
 	}
 
@@ -200,7 +201,9 @@ func (i *AuthnInterceptor) principalFromAPIKey(ctx context.Context, key string) 
 	if !secret.Equal(secret.Hash(secretPart), mustHexOrRaw(k.SecretHash)) {
 		return nil
 	}
-	i.apiKeys.TouchAPIKeyUsed(ctx, k.ID)
+	if usageStale(k.LastUsedAt, i.clock.Now()) {
+		i.apiKeys.TouchAPIKeyUsed(ctx, k.ID)
+	}
 	return &authctx.Principal{
 		// The key's own id is the subject, so audit names WHICH credential
 		// acted without pretending a person did.
@@ -239,7 +242,9 @@ func (i *AuthnInterceptor) principalFromPlatformKey(ctx context.Context, key, wa
 	if !secret.Equal(secret.Hash(secretPart), mustHexOrRaw(k.SecretHash)) {
 		return nil
 	}
-	i.platformKeys.TouchPlatformAPIKeyUsed(ctx, k.ID)
+	if usageStale(k.LastUsedAt, i.clock.Now()) {
+		i.platformKeys.TouchPlatformAPIKeyUsed(ctx, k.ID)
+	}
 	p := &authctx.Principal{
 		IdentityID: k.PlatformUserID,
 		Epoch:      k.TokenEpoch,
@@ -254,6 +259,20 @@ func (i *AuthnInterceptor) principalFromPlatformKey(ctx context.Context, key, wa
 		}
 	}
 	return p
+}
+
+// usageResolution is how fresh a key's "last used" must already be for a
+// request to leave it alone.
+//
+// Recording every use was an UPDATE of the key's row on every request, and
+// every request presenting the same key queued on that row's lock: one
+// gateway's key, thirty-two callers, and the decision API ran at a third of
+// its speed with a p50 near 22 ms. "Last used" is read by a person on a
+// listing screen, to the minute.
+const usageResolution = time.Minute
+
+func usageStale(last *time.Time, now time.Time) bool {
+	return last == nil || now.Sub(*last) >= usageResolution
 }
 
 // mustHexOrRaw accepts the stored sha256 either hex-encoded or raw base64;

@@ -27,6 +27,11 @@ func (u *explainInteractor) Execute(ctx context.Context, in AuthorizeInput) (*au
 	if in.Subject == "" || in.Permission == "" {
 		return nil, apperr.ErrInvalidArgument
 	}
+	// The narration names the subject's roles and grants, so it is for the
+	// subject themselves or for the tenant's systems, never for a colleague.
+	if !p.MayAskAbout(in.Subject) {
+		return nil, apperr.ErrPermissionDenied.With("hint", "a person's sign-in can explain only their own access")
+	}
 	targets, err := json.Marshal(in.Scopes)
 	if err != nil {
 		return nil, apperr.ErrInvalidArgument.Wrap(err)

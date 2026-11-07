@@ -90,7 +90,8 @@ SELECT k.id::text AS id, k.label, k.lookup, k.created_at, k.last_used_at,
  ORDER BY k.created_at DESC`)
 	storm.RegisterStatement(`
 SELECT k.id::text AS id, k.tenant_id::text AS tenant_id, k.label, k.secret_hash,
-       k.expires_at, k.revoked_at, t.slug AS tenant_slug, t.status AS tenant_status
+       k.expires_at, k.revoked_at, t.slug AS tenant_slug, t.status AS tenant_status,
+       k.last_used_at
   FROM api_keys k
   JOIN tenants t ON t.id = k.tenant_id
  WHERE k.lookup = $1 AND k.revoked_at IS NULL`)
@@ -323,6 +324,7 @@ func scanAPIKeyAuthRow(rv [][]byte, r *authrquery.APIKeyAuthRow, sl *runtime.Sla
 	r.RevokedAt = runtime.Nullable(rv[5], runtime.Timestamptz)
 	r.TenantSlug = sl.Str(rv[6])
 	r.TenantStatus = sl.Str(rv[7])
+	r.LastUsedAt = runtime.Nullable(rv[8], runtime.Timestamptz)
 	return nil
 }
 

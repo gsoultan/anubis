@@ -44,6 +44,23 @@ func (s *Repository) Authorize(ctx context.Context, identityID, tenantID, permis
 	return row.Allow, nil
 }
 
+// AuthorizeGated is Authorize with the permission's step-up requirements read
+// in the same statement, so an allow costs one round trip instead of two.
+func (s *Repository) AuthorizeGated(ctx context.Context, identityID, tenantID, permission string, targets []byte) (bool, authzdomain.PermissionRequirements, error) {
+	row, ok, err := authzrquery.AuthorizeGated.One(ctx, s.rex(ctx),
+		identityID, tenantID, permission, decisionTargets(targets))
+	if err != nil {
+		return false, authzdomain.PermissionRequirements{}, database.MapErr(err)
+	}
+	if !ok {
+		return false, authzdomain.PermissionRequirements{}, apperr.ErrNotFound
+	}
+	return row.Allow, authzdomain.PermissionRequirements{
+		RequiresAMR: row.RequiresAmr,
+		MaxAuthAge:  time.Duration(row.MaxAuthAgeSecs) * time.Second,
+	}, nil
+}
+
 func (s *Repository) AuthorizeExplain(ctx context.Context, identityID, tenantID, permission string, targets []byte) (string, error) {
 	row, ok, err := authzrquery.AuthorizeExplain.One(ctx, s.rex(ctx),
 		identityID, tenantID, permission, decisionTargets(targets))
@@ -82,11 +99,7 @@ func (s *Repository) PermissionByKey(ctx context.Context, tenantID, key string) 
 		ID: row.ID, Key: row.Key.V, Risk: row.Risk,
 		MinAssurance: int(row.MinAssurance), RequiresAMR: row.RequiresAmr,
 		Deprecated: row.DeprecatedAt.Valid,
-	}
-	if row.MaxAuthAge != "" {
-		if d, perr := parsePgInterval(row.MaxAuthAge); perr == nil {
-			meta.MaxAuthAge = d
-		}
+		MaxAuthAge: time.Duration(row.MaxAuthAgeSecs) * time.Second,
 	}
 	return meta, nil
 }
@@ -152,34 +165,4 @@ func (s *Repository) SampleAuthorizeDecisions(ctx context.Context, tenantID stri
 		out = append(out, []byte(r.Detail))
 	}
 	return out, nil
-}
-
-// parsePgInterval understands the interval::text renderings the queries emit
-// ("00:05:00", "2 days 01:00:00"). Postgres text intervals for auth-age use
-// are hours/minutes/seconds and optional days.
-func parsePgInterval(s string) (time.Duration, error) {
-	var days int
-	var hh, mm int
-	var sec float64
-	n, _ := fmtSscanf(s, "%d days %d:%d:%f", &days, &hh, &mm, &sec)
-	if n < 4 {
-		n, _ = fmtSscanf(s, "%d day %d:%d:%f", &days, &hh, &mm, &sec)
-	}
-	if n < 4 {
-		days = 0
-		if n2, err := fmtSscanf(s, "%d:%d:%f", &hh, &mm, &sec); n2 < 3 {
-			return 0, errInvalidInterval(err)
-		}
-	}
-	return time.Duration(days)*24*time.Hour +
-		time.Duration(hh)*time.Hour +
-		time.Duration(mm)*time.Minute +
-		time.Duration(sec*float64(time.Second)), nil
-}
-
-func errInvalidInterval(err error) error {
-	if err != nil {
-		return err
-	}
-	return apperr.ErrInternal
 }

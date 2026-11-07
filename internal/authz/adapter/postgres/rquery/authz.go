@@ -17,6 +17,31 @@ type AuthorizeRow struct {
 var Authorize = storm.SQL[AuthorizeRow](`
 SELECT authorize($1, $2, $3, $4::jsonb) AS allow`)
 
+// GatedRow is the engine's answer together with the step-up requirements of
+// the permission it was asked about.
+type GatedRow struct {
+	Allow          bool
+	RequiresAmr    []string
+	MaxAuthAgeSecs int64
+}
+
+// AuthorizeGated is Authorize plus the permission's step-up metadata in the
+// SAME round trip. An allow always needs both, and asking for them one after
+// the other made every allowed decision cost two statements. The decision is
+// still authorize() and nothing else; the join only reads what step-up
+// evaluates afterwards. (tenant_id, key) is unique, so this is one row, and an
+// unknown permission yields empty requirements, as PermissionByKey's miss did.
+//
+// max_auth_age is read as SECONDS, as the gate's snapshot reads it. Its text
+// form has no clock part for a whole number of days ("1 day", "7 days"), and
+// parsing that text in Go is how every whole-day requirement went unenforced.
+var AuthorizeGated = storm.SQL[GatedRow](`
+SELECT authorize($1, $2, $3, $4::jsonb) AS allow,
+       COALESCE(p.requires_amr, '{}'::text[]) AS requires_amr,
+       COALESCE(extract(epoch FROM p.max_auth_age), 0)::bigint AS max_auth_age_secs
+FROM (SELECT 1) AS one
+LEFT JOIN permissions p ON p.tenant_id = $2 AND p.key = $3`)
+
 // ExplainRow is the engine's narrated decision.
 type ExplainRow struct {
 	Detail string
@@ -28,20 +53,21 @@ SELECT authorize_explain($1, $2, $3, $4::jsonb)::text AS detail`)
 
 // PermissionMetaRow is the step-up metadata the middleware reads per request.
 type PermissionMetaRow struct {
-	ID           string
-	Key          runtime.Null[string]
-	Risk         string
-	MinAssurance int16
-	RequiresAmr  []string
-	MaxAuthAge   string
-	DeprecatedAt runtime.Null[time.Time]
+	ID             string
+	Key            runtime.Null[string]
+	Risk           string
+	MinAssurance   int16
+	RequiresAmr    []string
+	MaxAuthAgeSecs int64
+	DeprecatedAt   runtime.Null[time.Time]
 }
 
 // GetPermissionByKey feeds PermissionByKey; key is a generated column and
 // nullable in the descriptor even though a hit always has one.
 var GetPermissionByKey = storm.SQL[PermissionMetaRow](`
 SELECT id::text AS id, key, risk, min_assurance, requires_amr,
-       COALESCE(max_auth_age::text, '')::text AS max_auth_age, deprecated_at
+       COALESCE(extract(epoch FROM max_auth_age), 0)::bigint AS max_auth_age_secs,
+       deprecated_at
 FROM permissions
 WHERE tenant_id = $1 AND key = $2`)
 

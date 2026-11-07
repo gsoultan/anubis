@@ -35,6 +35,7 @@ func NewUnit() *runtime.Unit { return runtime.NewUnit(FlushOrder) }
 // statements listed here run; see storm.RegisterStatement.
 func init() {
 	storm.RegisterScanner(scanAuthorizeRow)
+	storm.RegisterScanner(scanGatedRow)
 	storm.RegisterScanner(scanExplainRow)
 	storm.RegisterScanner(scanPermissionMetaRow)
 	storm.RegisterScanner(scanRoleNameRow)
@@ -314,6 +315,12 @@ SELECT EXISTS (
 	storm.RegisterStatement(`
 SELECT authorize($1, $2, $3, $4::jsonb) AS allow`)
 	storm.RegisterStatement(`
+SELECT authorize($1, $2, $3, $4::jsonb) AS allow,
+       COALESCE(p.requires_amr, '{}'::text[]) AS requires_amr,
+       COALESCE(extract(epoch FROM p.max_auth_age), 0)::bigint AS max_auth_age_secs
+FROM (SELECT 1) AS one
+LEFT JOIN permissions p ON p.tenant_id = $2 AND p.key = $3`)
+	storm.RegisterStatement(`
 SELECT authorize_explain($1, $2, $3, $4::jsonb)::text AS detail`)
 	storm.RegisterStatement(`
 SELECT ax.default_effect = 'deny' AS deny, root.id::text AS root_id
@@ -441,7 +448,8 @@ WHERE tenant_id = $1 AND key = $2
   AND deprecated_at IS NULL`)
 	storm.RegisterStatement(`
 SELECT id::text AS id, key, risk, min_assurance, requires_amr,
-       COALESCE(max_auth_age::text, '')::text AS max_auth_age, deprecated_at
+       COALESCE(extract(epoch FROM max_auth_age), 0)::bigint AS max_auth_age_secs,
+       deprecated_at
 FROM permissions
 WHERE tenant_id = $1 AND key = $2`)
 	storm.RegisterStatement(`
@@ -927,6 +935,17 @@ func scanAuthorizeRow(rv [][]byte, r *authzrquery.AuthorizeRow, sl *runtime.Slab
 	return nil
 }
 
+func scanGatedRow(rv [][]byte, r *authzrquery.GatedRow, sl *runtime.Slab) error {
+	var decErr error
+	r.Allow = runtime.Bool(rv[0])
+	r.RequiresAmr, decErr = runtime.TextArray(rv[1], sl)
+	if decErr != nil {
+		return decErr
+	}
+	r.MaxAuthAgeSecs = runtime.Int8(rv[2])
+	return nil
+}
+
 func scanExplainRow(rv [][]byte, r *authzrquery.ExplainRow, sl *runtime.Slab) error {
 	r.Detail = sl.Str(rv[0])
 	return nil
@@ -942,7 +961,7 @@ func scanPermissionMetaRow(rv [][]byte, r *authzrquery.PermissionMetaRow, sl *ru
 	if decErr != nil {
 		return decErr
 	}
-	r.MaxAuthAge = sl.Str(rv[5])
+	r.MaxAuthAgeSecs = runtime.Int8(rv[5])
 	r.DeprecatedAt = runtime.Nullable(rv[6], runtime.Timestamptz)
 	return nil
 }

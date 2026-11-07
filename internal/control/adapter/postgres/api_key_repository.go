@@ -56,6 +56,7 @@ func (s *Repository) PlatformAPIKeyByLookup(ctx context.Context, lookup string) 
 		ID: row.ID, PlatformUserID: row.PlatformUserID, Username: row.Username,
 		SecretHash: row.SecretHash, ExpiresAt: row.ExpiresAt,
 		OwnerStatus: row.OwnerStatus, TokenEpoch: int(row.TokenEpoch),
+		LastUsedAt: tptr(row.LastUsedAt),
 	}, nil
 }
 

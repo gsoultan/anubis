@@ -26,8 +26,9 @@ func (s *stubEngine) Authorize(_ context.Context, identityID, _, permission stri
 	return true, nil
 }
 
-func (s *stubEngine) PermissionByKey(context.Context, string, string) (*authzdomain.PermissionMeta, error) {
-	return &authzdomain.PermissionMeta{}, nil
+func (s *stubEngine) AuthorizeGated(ctx context.Context, identityID, tenantID, permission string, targets []byte) (bool, authzdomain.PermissionRequirements, error) {
+	allow, err := s.Authorize(ctx, identityID, tenantID, permission, targets)
+	return allow, authzdomain.PermissionRequirements{}, err
 }
 
 type linkClock struct{}

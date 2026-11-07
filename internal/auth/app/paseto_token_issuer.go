@@ -72,6 +72,26 @@ func (t *pasetoTokenIssuer) Issue(ctx context.Context, in IssueInput) (*TokenPai
 		in.ClientID = in.RotateFrom.ClientID
 	}
 
+	// Every way to a token comes through here (sign-in, refresh, scope
+	// switch), so this is where a person or a tenant that is no longer
+	// active stops getting them. Both are read fresh on every issue: the
+	// session's identity status comes from the same query as the session,
+	// and suspending a tenant ends refreshes too.
+	switch s.IdentityStatus {
+	case "active":
+	case "locked":
+		return nil, apperr.ErrIdentityLocked
+	default:
+		return nil, apperr.ErrIdentityDisabled
+	}
+	tenant, err := t.tenants.TenantByID(ctx, s.TenantID)
+	if err != nil {
+		return nil, apperr.ErrInternal.Wrap(err)
+	}
+	if !tenant.Serving() {
+		return nil, apperr.ErrPermissionDenied.With("reason", "this organisation is not active")
+	}
+
 	accessTTL, refreshTTL, aud, appID, format, signIn, err := t.ttls(ctx, s, in.ClientID)
 	if err != nil {
 		return nil, err

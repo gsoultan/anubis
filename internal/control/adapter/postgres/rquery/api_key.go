@@ -17,6 +17,7 @@ type APIKeyLookupRow struct {
 	Username       string
 	OwnerStatus    string
 	TokenEpoch     int32
+	LastUsedAt     runtime.Null[time.Time]
 }
 
 // PlatformAPIKeyByLookup joins the owner so a disabled operator's key stops
@@ -25,7 +26,7 @@ type APIKeyLookupRow struct {
 var PlatformAPIKeyByLookup = storm.SQL[APIKeyLookupRow](`
 SELECT k.id::text AS id, k.platform_user_id::text AS platform_user_id,
        k.secret_hash, k.expires_at, k.revoked_at,
-       u.username, u.status AS owner_status, u.token_epoch
+       u.username, u.status AS owner_status, u.token_epoch, k.last_used_at
 FROM platform_api_keys k
 JOIN platform_users u ON u.id = k.platform_user_id
 WHERE k.lookup = $1 AND k.revoked_at IS NULL`)

@@ -93,3 +93,21 @@ func TestTheListRefusesWhatItCannotAnswer(t *testing.T) {
 		t.Fatalf("unknown subject: want not_found, got %v", err)
 	}
 }
+
+// A person's sign-in lists their own places and nobody else's: the list is
+// a map of where another person holds what.
+func TestAPersonsTokenListsOnlyTheirOwnPlaces(t *testing.T) {
+	u := NewGrantedNodesInteractor(fixedSnapshots{data: grantedSnapshot(), fresh: true}, grantedClock{})
+	in := authzreach.NodesInput{Subject: "dewi", Permission: "training:request:approve", Axis: "org"}
+	as := func(id string) context.Context {
+		return authctx.With(context.Background(), &authctx.Principal{
+			IdentityID: id, TenantID: "t1", TenantSlug: "acme", SessionID: "s1",
+		})
+	}
+	if _, err := u.Execute(as("dewi"), in); err != nil {
+		t.Fatalf("dewi could not list her own places: %v", err)
+	}
+	if _, err := u.Execute(as("rudi"), in); apperr.AsError(err).Code != "permission_denied" {
+		t.Fatalf("rudi listed dewi's places: %v", err)
+	}
+}

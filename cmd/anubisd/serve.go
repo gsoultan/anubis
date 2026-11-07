@@ -24,7 +24,16 @@ import (
 	"github.com/gsoultan/anubis/internal/platform/migrate"
 	"github.com/gsoultan/anubis/internal/platform/ratelimit"
 	"github.com/gsoultan/anubis/internal/shared/authctx"
+	tenancycache "github.com/gsoultan/anubis/internal/tenancy/adapter/cache"
 	"github.com/gsoultan/anubis/migrations"
+)
+
+// tenantLookupWindow and tenantLookupBound size the request path's tenant
+// cache: long enough to take the lookup off nearly every request, short
+// enough that a suspension reaches live tokens within seconds.
+const (
+	tenantLookupWindow = 5 * time.Second
+	tenantLookupBound  = 4096
 )
 
 func runServe(ctx context.Context, logger *slog.Logger) error {
@@ -160,9 +169,12 @@ func runServe(ctx context.Context, logger *slog.Logger) error {
 	}
 
 	limiter := ratelimit.New()
+	// Every tenant token resolves its tenant by slug. The few seconds it is
+	// held for are how long a suspension takes to stop a token already out.
+	requestTenants := tenancycache.New(app.tenancy, app.clock, tenantLookupWindow, tenantLookupBound)
 	opts := connect.WithInterceptors(
 		apiconnect.NewMetaInterceptor(trust),
-		apiconnect.NewAuthnInterceptor(cfg.Issuer, app.ring, app.tenancy, app.auth, app.control, app.clock),
+		apiconnect.NewAuthnInterceptor(cfg.Issuer, app.ring, requestTenants, app.auth, app.control, app.clock),
 	)
 
 	rpc := http.NewServeMux()

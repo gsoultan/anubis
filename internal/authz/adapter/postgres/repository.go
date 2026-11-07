@@ -2,7 +2,6 @@ package authzpg
 
 import (
 	"context"
-	"fmt"
 	_ "github.com/gsoultan/anubis/internal/authz/adapter/postgres/rgen"
 	"github.com/gsoultan/anubis/internal/platform/database"
 	"github.com/gsoultan/storm/runtime"
@@ -25,7 +24,3 @@ func (s *Repository) rex(ctx context.Context) runtime.Executor { return s.StormE
 func parseUUID(s string) ([16]byte, error) { return database.ParseUUID(s) }
 
 func uuidStr(u [16]byte) string { return database.UUIDStr(u) }
-
-func fmtSscanf(s, format string, args ...any) (int, error) {
-	return fmt.Sscanf(s, format, args...)
-}
