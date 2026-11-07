@@ -73,6 +73,16 @@ nfpms:
         type: dir
         file_info:
           mode: 0700
+      # postinstall.sh sends the operator here for the runbook, so it must
+      # exist on the host. scripts/ci/package-contents.sh checks it does.
+      - src: README.md
+        dst: /usr/share/doc/anubisd/README.md
+      - src: LICENSE
+        dst: /usr/share/doc/anubisd/LICENSE
+      - src: docs/*.md
+        dst: /usr/share/doc/anubisd/
+      - src: packaging/anubis.rules.yml
+        dst: /usr/share/doc/anubisd/anubis.rules.yml
     scripts:
       postinstall: packaging/postinstall.sh
       preremove: packaging/preremove.sh
