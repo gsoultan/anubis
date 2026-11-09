@@ -244,7 +244,7 @@ migrations/
 | :--- | :--- |
 | `internal/domain` | 100% unit tested, no database |
 | Token parser | **Go fuzz target.** `FuzzVerifyToken` against malformed input. |
-| PAE encoder | Property tests against the PASETO spec vectors |
+| PAE encoder | PAE golden vectors, plus the official `v4.public` token vectors (4-S-1 to 4-S-3 and the expect-fail ones) in `paseto/spec_vectors_test.go` |
 | Path normaliser | Shared adversarial corpus run against **both** the gate and the app router, plus a fuzz target |
 | `authorize` | The fail-closed case is the most important regression test in the project |
 | Snapshot loader | Must assert `REPEATABLE READ`; a torn read is otherwise unreproducible |
