@@ -83,23 +83,17 @@ func TestLoginTimingDoesNotRevealUserExistence(t *testing.T) {
 		t.Skipf("no password identity seeded: %v", err)
 	}
 
-	const samples = 24
-	measure := func(username string) []time.Duration {
-		out := make([]time.Duration, 0, samples)
-		for i := 0; i < samples; i++ {
-			start := time.Now()
+	attempt := func(username string) func() {
+		return func() {
 			_, _ = login.Execute(ctx, signin.LoginInput{
 				Tenant: slug, Realm: "internal",
 				Username: username, Password: "definitely-not-the-password",
 			})
-			out = append(out, time.Since(start))
 		}
-		sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
-		return out
 	}
-
-	real := measure(existing)
-	fake := measure("no-such-user-anywhere-" + fmt.Sprint(time.Now().UnixNano()))
+	real, fake := measurePair(timingSamples,
+		attempt(existing),
+		attempt("no-such-user-anywhere-"+fmt.Sprint(time.Now().UnixNano())))
 
 	median := func(d []time.Duration) time.Duration { return d[len(d)/2] }
 	p90 := func(d []time.Duration) time.Duration { return d[(len(d)*9)/10] }
@@ -127,6 +121,75 @@ func TestLoginTimingDoesNotRevealUserExistence(t *testing.T) {
 	}
 	if ratio := float64(hi-lo) / float64(hi); ratio > 0.30 {
 		t.Fatalf("median gap %.1f%% (existing=%v unknown=%v) is a timing oracle", ratio*100, mr, mf)
+	}
+}
+
+// timingSamples is how many attempts each side of a timing comparison gets.
+const timingSamples = 24
+
+// measurePair times a and b n times each and returns both sets sorted.
+//
+// The two are interleaved, and which goes first swaps every round, so that
+// anything else happening on the machine while this runs lands on both sides
+// alike. Run one side to the end and then the other, and a busy stretch at
+// the start is charged to the first side only: it then looks slower for
+// reasons that have nothing to do with the code being measured. One untimed
+// call of each comes first, so a cold connection or cache is not counted
+// either.
+func measurePair(n int, a, b func()) (da, db []time.Duration) {
+	da = make([]time.Duration, 0, n)
+	db = make([]time.Duration, 0, n)
+	timed := func(f func()) time.Duration {
+		start := time.Now()
+		f()
+		return time.Since(start)
+	}
+	a()
+	b()
+	for i := 0; i < n; i++ {
+		if i%2 == 0 {
+			da = append(da, timed(a))
+			db = append(db, timed(b))
+		} else {
+			db = append(db, timed(b))
+			da = append(da, timed(a))
+		}
+	}
+	sort.Slice(da, func(i, j int) bool { return da[i] < da[j] })
+	sort.Slice(db, func(i, j int) bool { return db[i] < db[j] })
+	return da, db
+}
+
+// A timing comparison must not be decided by which side went first.
+//
+// Both sides here do exactly the same work. The machine is busy for the first
+// third of the run and quiet after that, as a CI runner is while it is still
+// compiling and linking the other test packages next to this one. A harness
+// that measured one side to the end and then the other gave the whole busy
+// stretch to whichever it measured first, and reported a gap that the code
+// under test did not have: the existing user, measured first, came out 31%
+// slower on dev from acb6f6c on, and measuring the unknown user first turned
+// the same gap around.
+func TestTimingComparisonDoesNotDependOnOrder(t *testing.T) {
+	const n = 24
+	calls := 0
+	busy := func() {
+		calls++
+		if calls <= (2*n)/3 {
+			time.Sleep(4 * time.Millisecond)
+			return
+		}
+		time.Sleep(time.Millisecond)
+	}
+	a, b := measurePair(n, busy, busy)
+	ma, mb := a[len(a)/2], b[len(b)/2]
+	hi, lo := ma, mb
+	if lo > hi {
+		hi, lo = mb, ma
+	}
+	if ratio := float64(hi-lo) / float64(hi); ratio > 0.30 {
+		t.Fatalf("two identical operations differ by %.0f%% at the median (first=%v second=%v): "+
+			"the harness is measuring the order it ran them in", ratio*100, ma, mb)
 	}
 }
 
@@ -180,19 +243,11 @@ func TestPlatformLoginTimingDoesNotRevealOperatorExistence(t *testing.T) {
 		t.Skipf("no platform user seeded: %v", err)
 	}
 
-	const samples = 24
-	measure := func(username string) []time.Duration {
-		out := make([]time.Duration, 0, samples)
-		for i := 0; i < samples; i++ {
-			start := time.Now()
-			_, _ = auth.Login(ctx, username, "definitely-not-the-password")
-			out = append(out, time.Since(start))
-		}
-		sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
-		return out
+	attempt := func(username string) func() {
+		return func() { _, _ = auth.Login(ctx, username, "definitely-not-the-password") }
 	}
-	real := measure(existing)
-	fake := measure(fmt.Sprintf("nobody-%d", time.Now().UnixNano()))
+	real, fake := measurePair(timingSamples,
+		attempt(existing), attempt(fmt.Sprintf("nobody-%d", time.Now().UnixNano())))
 	mr, mf := real[len(real)/2], fake[len(fake)/2]
 	pct90 := func(d []time.Duration) time.Duration { return d[(len(d)*9)/10] }
 
