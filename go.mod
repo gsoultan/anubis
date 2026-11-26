@@ -5,7 +5,7 @@ go 1.27
 require (
 	connectrpc.com/connect v1.21.1
 	github.com/go-kit/kit v0.13.0
-	github.com/go-sql-driver/mysql v1.10.1
+	github.com/go-sql-driver/mysql v1.10.2
 	github.com/gsoultan/anubis/pkg/anubis v0.0.0-20260919144503-066ef809be2f
 	github.com/gsoultan/storm v1.6.0
 	github.com/jackc/pgx/v5 v5.12.0
